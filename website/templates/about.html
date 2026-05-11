@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}关于 - {{ site_title }}{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about" class="active"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<main class="page-content">
+    <div class="page-container">
+        <h1>关于本站</h1>
+
+        <section class="about-section">
+            <h2><i class="fas fa-bullseye"></i> 项目目标</h2>
+            <p>
+                本网站旨在记录和整理喜爱的演艺人员的公开信息。通过整合网络上的公开视频资源，
+                利用 AI 技术（LLM）对视频转录文本进行分析和问答，让粉丝能够快速检索到
+                演艺人员在直播和节目中提到的重要信息。
+            </p>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-cogs"></i> 技术架构</h2>
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <i class="fas fa-server"></i>
+                    <h3>后端框架</h3>
+                    <p>FastAPI (Python)</p>
+                </div>
+                <div class="tech-card">
+                    <i class="fas fa-database"></i>
+                    <h3>向量数据库</h3>
+                    <p>ChromaDB</p>
+                </div>
+                <div class="tech-card">
+                    <i class="fas fa-brain"></i>
+                    <h3>语义检索</h3>
+                    <p>text2vec + BM25</p>
+                </div>
+                <div class="tech-card">
+                    <i class="fas fa-robot"></i>
+                    <h3>LLM 问答</h3>
+                    <p>DeepSeek / OpenAI API</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-link"></i> 功能特色</h2>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> 全屏背景 + 动态滚动文本展示</li>
+                <li><i class="fas fa-check-circle"></i> 基于视频转录文本的 AI 智能问答</li>
+                <li><i class="fas fa-check-circle"></i> 向量 + BM25 混合检索，精准召回</li>
+                <li><i class="fas fa-check-circle"></i> LLM 分析筛选 + 引用溯源</li>
+                <li><i class="fas fa-check-circle"></i> 链接外部网站的多媒体资源</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-tasks"></i> 开发状态</h2>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">网站框架</span>
+                    <span class="status-dot done"></span> 已完成
+                </div>
+                <div class="status-item">
+                    <span class="status-label">AI 问答 API</span>
+                    <span class="status-dot done"></span> 已完成
+                </div>
+                <div class="status-item">
+                    <span class="status-label">知识库构建</span>
+                    <span class="status-dot pending"></span> 待部署后执行
+                </div>
+                <div class="status-item">
+                    <span class="status-label">域名/SSL</span>
+                    <span class="status-dot pending"></span> 备案中
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

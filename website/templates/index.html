@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── Dynamic scrolling text lines ── */
+    .scroll-text { position: fixed; font-size: clamp(14px, 2.2vw, 32px); font-weight: 400;
+        white-space: nowrap; will-change: transform; pointer-events: none;
+        text-shadow: 2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5);
+        opacity: 0.9; z-index: 10; }
+    /* Random colors assigned via JS */
+</style>
+{% endblock %}
+
+{% block header %}
+<!-- Navigation Bar -->
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/" class="active"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+        </div>
+        <!-- Mobile menu toggle -->
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<!-- Fullscreen background -->
+<div class="hero-bg" id="heroBg">
+    <div class="hero-overlay"></div>
+</div>
+
+<!-- Scrolling text container -->
+<div id="scrollContainer"></div>
+
+<!-- Center content -->
+<div class="hero-content" id="heroContent">
+    <h1 class="hero-title">{{ site_title }}</h1>
+    <p class="hero-subtitle">{{ site_description }}</p>
+    <div class="hero-actions">
+        <a href="/qa" class="btn btn-primary">
+            <i class="fas fa-robot"></i> AI 问答
+        </a>
+        <a href="/about" class="btn btn-outline">
+            <i class="fas fa-info-circle"></i> 了解更多
+        </a>
+    </div>
+    <div class="hero-footer">
+        <span><i class="fas fa-video"></i> 演艺视频转录</span>
+        <span><i class="fas fa-brain"></i> LLM 智能分析</span>
+        <span><i class="fas fa-link"></i> 多媒体链接</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+<!-- Minimal footer -->
+<footer class="site-footer">
+    <p>
+        <i class="far fa-copyright"></i> {{ site_title }} ·
+        <span class="footer-heart"><i class="fas fa-heart" style="color: #ff6b9d;"></i></span>
+        建设中
+    </p>
+</footer>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/scroller.js"></script>
+{% endblock %}

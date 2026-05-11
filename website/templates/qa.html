@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}AI 问答 - {{ site_title }}{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/qa" class="active"><i class="fas fa-robot"></i> AI 问答</a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<main class="qa-page">
+    <div class="qa-container">
+        <div class="qa-header">
+            <h1><i class="fas fa-robot"></i> AI 智能问答</h1>
+            <p>基于视频转录文本的知识库问答系统，向 AI 询问演艺人员的相关信息</p>
+        </div>
+
+        <!-- Knowledge Base Status -->
+        <div id="kbStatus" class="qa-status">
+            <i class="fas fa-spinner fa-pulse"></i> 正在检查知识库状态...
+        </div>
+
+        <!-- Input -->
+        <div class="qa-input-area">
+            <input type="text"
+                   id="qaInput"
+                   class="qa-input"
+                   placeholder="输入您的问题，例如：视频中提到了哪些关于宠物狗顺顺的内容？"
+                   disabled>
+            <button id="qaSubmit" class="qa-submit" disabled>
+                <i class="fas fa-paper-plane"></i> 提问
+            </button>
+        </div>
+
+        <!-- Result -->
+        <div id="qaResult" class="qa-result"></div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/qa.js"></script>
+{% endblock %}

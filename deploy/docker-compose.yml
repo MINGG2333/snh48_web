@@ -1,0 +1,38 @@
+version: "3.8"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SNH48 演艺信息站 - Docker Compose (可选)
+# ═══════════════════════════════════════════════════════════════════════════
+# 使用方式：
+#   1. 将项目放在 /home/snh48_web/
+#   2. 在 deploy/ 目录下执行: docker-compose up -d
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: snh48-web
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../download_records.json:/app/download_records.json:ro
+      - ../firered_output_batch:/app/firered_output_batch:ro
+      - ../video_knowledge_db:/app/video_knowledge_db
+      - qa_archive:/app/video_knowledge_db/qa_archive
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - LLM_MODEL=${LLM_MODEL:-deepseek-v4-flash}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  qa_archive:
