@@ -1,21 +1,98 @@
 /**
  * SNH48 Q&A System - Frontend Interaction
  *
- * Handles the AI Q&A page: checks KB status, sends questions, displays results.
+ * Handles the AI Q&A page: password login, KB status check, sends questions, displays results.
  */
 (function() {
   'use strict';
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let sitePassword = sessionStorage.getItem('site_password') || '';
+  let kbReady = false;
 
   const statusEl = document.getElementById('kbStatus');
   const inputEl = document.getElementById('qaInput');
   const submitEl = document.getElementById('qaSubmit');
   const resultEl = document.getElementById('qaResult');
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginInput = document.getElementById('loginPassword');
+  const loginBtn = document.getElementById('loginSubmit');
+  const loginError = document.getElementById('loginError');
 
   if (!statusEl || !inputEl || !submitEl || !resultEl) return;
 
-  // ── Check KB Status on Load ───────────────────────────────────────────
-  let kbReady = false;
+  // ── Password Login ────────────────────────────────────────────────────
+  async function verifyPassword(password) {
+    try {
+      const resp = await fetch('/api/qa/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || '密码错误');
+      }
+      const data = await resp.json();
+      return data.verified;
+    } catch (err) {
+      throw err;
+    }
+  }
 
+  // Check if password is needed and handle login
+  async function checkPassword() {
+    // First check if a password is even configured
+    try {
+      const resp = await fetch('/api/qa/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: '' }),
+      });
+      const data = await resp.json();
+      if (data.verified) {
+        // No password set or empty password works → proceed
+        return true;
+      }
+    } catch (e) {
+      // Password is configured
+    }
+
+    // Try stored password
+    if (sitePassword) {
+      try {
+        const ok = await verifyPassword(sitePassword);
+        if (ok) return true;
+      } catch (e) {
+        // Stored password is invalid, clear it
+        sessionStorage.removeItem('site_password');
+        sitePassword = '';
+      }
+    }
+
+    // Show login prompt
+    if (loginOverlay) {
+      loginOverlay.style.display = 'flex';
+      loginInput.value = '';
+      loginInput.focus();
+    }
+    return false;
+  }
+
+  function getStoredPassword() {
+    return sitePassword;
+  }
+
+  // ── Auth Header Helper ────────────────────────────────────────────────
+  function authHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sitePassword) {
+      headers['X-Site-Password'] = sitePassword;
+    }
+    return headers;
+  }
+
+  // ── Check KB Status on Load ───────────────────────────────────────────
   async function checkStatus() {
     try {
       const resp = await fetch('/api/qa/status');
@@ -30,9 +107,15 @@
                   onclick="window.location.reload()">
             <i class="fas fa-sync"></i> 刷新
           </button>`;
-        inputEl.disabled = false;
-        submitEl.disabled = false;
-        inputEl.focus();
+
+        // Now check if password verification is needed
+        const authed = await checkPassword();
+        if (authed) {
+          inputEl.disabled = false;
+          submitEl.disabled = false;
+          inputEl.focus();
+          inputEl.placeholder = '输入您的问题，例如：视频中提到了哪些关于宠物狗顺顺的内容？';
+        }
       } else {
         kbReady = false;
         statusEl.className = 'qa-status not-ready';
@@ -62,9 +145,22 @@
     try {
       const resp = await fetch('/api/qa/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ question }),
       });
+
+      if (resp.status === 401 || resp.status === 403) {
+        // Password expired or invalid
+        sessionStorage.removeItem('site_password');
+        sitePassword = '';
+        if (loginOverlay) {
+          loginOverlay.style.display = 'flex';
+          loginError.textContent = '密码已过期或无效，请重新输入';
+          loginInput.value = '';
+          loginInput.focus();
+        }
+        return;
+      }
 
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
@@ -127,6 +223,44 @@
     }
 
     resultEl.innerHTML = html;
+  }
+
+  // ── Login Event Handlers ─────────────────────────────────────────────
+  if (loginBtn && loginInput && loginOverlay) {
+    loginBtn.addEventListener('click', async () => {
+      const pwd = loginInput.value.trim();
+      if (!pwd) {
+        loginError.textContent = '请输入密码';
+        return;
+      }
+      loginBtn.disabled = true;
+      loginBtn.textContent = '验证中...';
+      loginError.textContent = '';
+
+      try {
+        const ok = await verifyPassword(pwd);
+        if (ok) {
+          sitePassword = pwd;
+          sessionStorage.setItem('site_password', pwd);
+          loginOverlay.style.display = 'none';
+          inputEl.disabled = false;
+          submitEl.disabled = false;
+          inputEl.focus();
+          inputEl.placeholder = '输入您的问题，例如：视频中提到了哪些关于宠物狗顺顺的内容？';
+        }
+      } catch (err) {
+        loginError.textContent = '密码错误，请重试';
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = '确认';
+      }
+    });
+
+    loginInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        loginBtn.click();
+      }
+    });
   }
 
   // ── Event Listeners ──────────────────────────────────────────────────

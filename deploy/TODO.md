@@ -110,19 +110,63 @@ ls /root/.cache/huggingface/hub/models--shibing624--text2vec-base-chinese/snapsh
 ```bash
 cd /home/snh48_web
 source venv/bin/activate
-python transcript_analyze/run_kb_qa.py build
+python transcript_analyze/run_kb_qa.py \
+  --records download_records.json \
+  --subtitle-root firered_output_batch \
+  --kb-dir video_knowledge_db \
+  --debug \
+  build
 ```
 
 ---
 
-## 第7步：设置 API Key 并启动
+## 第7步：创建 .env 配置文件
+
+> **⚠️ 不要把密码写在代码里！** 代码里的密码会进入 Git 历史，谁都能查到。
+> 正确做法是把密码写在 `.env` 文件中（`.gitignore` 已排除 `.env`，不会进 Git）。
+
+```bash
+cd /home/snh48_web
+
+# 创建 .env 文件，写入密码和 API Key
+cat > .env << 'EOF'
+# 网站密码：访问者必须输入此密码才能使用 AI 问答
+SITE_PASSWORD=xxxxxxxxx
+
+# DeepSeek API Key（问答系统必须）
+DEEPSEEK_API_KEY=你的真实DeepSeekKey
+EOF
+
+# 重要：限制权限，防止其他用户读取
+chmod 600 .env
+
+# 确认
+ls -la .env
+```
+
+> **安全性说明**：
+> - 密码写在 `.env` 中，此文件已被 `.gitignore` 排除，**不会进入 Git 仓库**
+> - `.env` 可同时存放 `SITE_PASSWORD` 和 `DEEPSEEK_API_KEY`，一劳永逸
+> - 即使 SSH 断开、重启服务器，只要 `.env` 文件还在，密码就不会丢失
+> - `chmod 600` 确保只有 root 能读取该文件
+> - 前端 Q&A 页面会自动弹出密码输入框，输入正确前无法提问
+
+## 第8步：启动服务
 
 ```bash
 cd /home/snh48_web
 source venv/bin/activate
 
+# 后端测试
+python transcript_analyze/run_kb_qa.py \
+  --records download_records.json \
+  --subtitle-root firered_output_batch \
+  --kb-dir video_knowledge_db \
+  --debug \
+  ask \
+  --question "陈嘉仪和北舞的关联是什么？"
+
 # 前台测试
-export DEEPSEEK_API_KEY="你的真实Key"
 python -m website.main
 ```
 
@@ -136,10 +180,9 @@ yum install -y screen
 # 创建新会话
 screen -S snh48
 
-# 在 screen 中启动
+# 在 screen 中启动（.env 文件会自动加载，无需再 export）
 cd /home/snh48_web
 source venv/bin/activate
-export DEEPSEEK_API_KEY="your_real_api_key_here"
 python -m website.main
 ```
 
@@ -150,8 +193,7 @@ python -m website.main
 ```bash
 cd /home/snh48_web
 source venv/bin/activate
-# 设置 API Key 并启动
-export DEEPSEEK_API_KEY="你的真实Key"
+# 无需 export，.env 文件会自动加载
 nohup python -m website.main > /var/log/snh48.log 2>&1 &
 echo "服务已启动，PID: $!"
 
@@ -161,7 +203,7 @@ tail -f /var/log/snh48.log
 
 ---
 
-## 第8步：验证
+## 第9步：验证
 
 浏览器打开 **http://124.222.72.203:8000**
 - 首页：星空背景 + 彩色滚动文字
@@ -187,11 +229,10 @@ cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xx
 cd /home/snh48_web && git pull                    # 更新 website/ + deploy/
 cd /home/snh48_web/transcript_analyze && git pull  # 更新问答系统
 
-# 重启服务
+# 重启服务（密码和 API Key 已存在 .env 中，无需再 export）
 pkill -f "website.main"
 cd /home/snh48_web
 source venv/bin/activate
-export DEEPSEEK_API_KEY="你的Key"
 nohup python -m website.main > /var/log/snh48.log 2>&1 &
 ```
 
@@ -207,5 +248,5 @@ nohup python -m website.main > /var/log/snh48.log 2>&1 &
 
 ## ⚠️ 注意事项
 - **安全组**必须放行 TCP:8000 才能从浏览器访问
-- **API Key** 每次 SSH 断开后需要重新设置（或在 `.bashrc` 中永久保存）
+- **密码和 API Key** 写在 `.env` 文件中，重启服务器也不会丢失（无需每次 SSH 都重新设置）
 - 建议服务器至少有 **2GB 内存**

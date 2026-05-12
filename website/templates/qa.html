@@ -48,9 +48,32 @@
         <!-- Result -->
         <div id="qaResult" class="qa-result"></div>
     </div>
+
+    <!-- ── Password Login Overlay ─────────────────────────────────── -->
+    <div id="loginOverlay" class="login-overlay" style="display:none;">
+        <div class="login-modal">
+            <div class="login-modal-header">
+                <i class="fas fa-lock"></i>
+                <h2>密码验证</h2>
+            </div>
+            <p style="color: var(--text-dim); margin-bottom: 16px;">
+                该功能需要密码才能访问，请输入网站密码
+            </p>
+            <input type="password"
+                   id="loginPassword"
+                   class="login-input"
+                   placeholder="请输入密码"
+                   autocomplete="off">
+            <p id="loginError" class="login-error"></p>
+            <button id="loginSubmit" class="login-submit">
+                <i class="fas fa-check"></i> 确认
+            </button>
+        </div>
+    </div>
 </main>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="/static/js/qa.js"></script>
 {% endblock %}
+

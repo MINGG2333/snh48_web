@@ -13,8 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
+
+from website.auth import verify_password
 
 # ── Import transcript_analyze (add parent to path) ──
 _KB_QA_DIR = Path(__file__).resolve().parent.parent.parent / "transcript_analyze"
@@ -105,6 +107,31 @@ class AskResponse(BaseModel):
     archive_path: str = ""
 
 
+# ── Password Verification (frontend helper) ────────────────────────────────
+
+
+class PasswordVerifyRequest(BaseModel):
+    password: str
+
+
+@router.post("/verify-password")
+def verify_site_password(req: PasswordVerifyRequest):
+    """
+    Frontend uses this to verify the site password.
+    Returns success if password matches (or if no password is configured).
+    """
+    if not cfg.SITE_PASSWORD:
+        return {"verified": True, "message": "未设置密码，无需验证"}
+
+    if cfg.SITE_PASSWORD == req.password:
+        return {"verified": True, "message": "密码正确"}
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="密码错误",
+    )
+
+
 # ── Status Endpoint ────────────────────────────────────────────────────────
 
 
@@ -119,7 +146,7 @@ def get_status():
 
 
 @router.post("/ask", response_model=AskResponse)
-def ask_question(req: AskRequest):
+def ask_question(req: AskRequest, _=Depends(verify_password)):
     """Ask a question against the video transcript knowledge base."""
     engine = _get_qa_engine()
     if engine is None:
@@ -160,7 +187,7 @@ def ask_question(req: AskRequest):
 
 
 @router.post("/build")
-def build_knowledge_base(background_tasks: BackgroundTasks):
+def build_knowledge_base(background_tasks: BackgroundTasks, _=Depends(verify_password)):
     """Trigger knowledge base build / update."""
     records_path = Path(cfg.RECORDS_PATH)
     subtitle_root = Path(cfg.SUBTITLE_ROOT)
