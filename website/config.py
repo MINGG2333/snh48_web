@@ -16,7 +16,12 @@ TEMPLATES_DIR = WEBSITE_DIR / "templates"
 # ── Transcript Knowledge Base ──────────────────────────────────────────────
 RECORDS_PATH = os.getenv("RECORDS_PATH", str(PROJECT_ROOT / "download_records.json"))
 SUBTITLE_ROOT = os.getenv("SUBTITLE_ROOT", str(PROJECT_ROOT / "firered_output_batch"))
-KB_DIR = os.getenv("KB_DIR", str(PROJECT_ROOT / "video_knowledge_db"))
+# 知识库目录：优先取环境变量，否则自动检测（兼容项目根目录或 transcript_analyze 下）
+_default_kb_dir = str(PROJECT_ROOT / "video_knowledge_db")
+_fallback_kb_dir = str(PROJECT_ROOT / "transcript_analyze" / "video_knowledge_db")
+if not Path(_default_kb_dir).exists() and Path(_fallback_kb_dir).exists():
+    _default_kb_dir = _fallback_kb_dir
+KB_DIR = os.getenv("KB_DIR", _default_kb_dir)
 
 # ── LLM / AI ───────────────────────────────────────────────────────────────
 LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-flash")
