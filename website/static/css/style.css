@@ -229,6 +229,10 @@ body {
   padding-top: calc(var(--nav-height) + 40px);
   padding-bottom: 60px;
   min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(255, 107, 157, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(192, 132, 252, 0.08) 0%, transparent 50%),
+    var(--bg-dark);
 }
 
 .page-container {
@@ -386,6 +390,10 @@ body {
   padding-top: calc(var(--nav-height) + 20px);
   padding-bottom: 80px;
   min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(255, 107, 157, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(192, 132, 252, 0.08) 0%, transparent 50%),
+    var(--bg-dark);
 }
 
 .qa-container {

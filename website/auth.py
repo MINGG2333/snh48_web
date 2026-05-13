@@ -30,7 +30,7 @@ async def verify_password(x_site_password: str = Header(None, alias="X-Site-Pass
     if not cfg.SITE_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="AI 问答功能未启用。请在 .env 中设置 SITE_PASSWORD 以启用此功能。",
+            detail="AI 问答功能未启用。请通知管理员设置以启用此功能。",
         )
 
     if not x_site_password:

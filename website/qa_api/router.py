@@ -123,7 +123,7 @@ def verify_site_password(req: PasswordVerifyRequest):
     if not cfg.SITE_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="AI 问答功能未启用。请在 .env 中设置 SITE_PASSWORD 以启用此功能。",
+            detail="AI 问答功能未启用。请通知管理员设置以启用此功能。",
         )
 
     if cfg.SITE_PASSWORD == req.password:

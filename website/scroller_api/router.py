@@ -88,7 +88,7 @@ async def verify_scroller_password(x_scroller_password: str = Header(None, alias
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="背景词管理功能未启用。请在 .env 中设置 SCROLLER_PASSWORD 以启用此功能。",
+            detail="背景词管理功能未启用。请通知管理员设置以启用此功能。",
         )
 
     if not x_scroller_password:
