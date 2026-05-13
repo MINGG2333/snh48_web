@@ -251,6 +251,7 @@ tail -f /var/log/snh48/snh48_screen.log
 | 查看保存的日志 | `tail -f /var/log/snh48/snh48_screen.log` |
 | 停止服务 | 重新连接后 `Ctrl+C`；或 `pkill -f "website.main"`（在 screen 外执行） |
 | **退出/关闭 screen 会话** | 先在 screen 内按 `Ctrl+C` 停止服务，然后输入 `exit` 或按 `Ctrl+D`，会话即被彻底关闭，自动回到主终端 |
+| 结束 screen 会话（外部） | `screen -S snh48 -X quit`（在 screen 外执行，直接杀掉会话） |
 | 强制结束 screen 会话（外部） | `screen -X -S snh48 kill`（在 screen 外执行，直接杀掉会话） |
 | 清除已死的 screen 会话 | `screen -wipe`（清理已断开或已结束的僵死会话） |
 
