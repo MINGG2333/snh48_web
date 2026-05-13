@@ -84,6 +84,60 @@
             </button>
         </div>
     </div>
+
+    <!-- ── Refresh Recovery Overlay ──────────────────────────────── -->
+    <div id="refreshOverlay" class="login-overlay" style="display:none;">
+        <div class="login-modal" style="max-width:520px;">
+            <div class="login-modal-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                <i class="fas fa-history"></i>
+                <h2>检测到未完成的问题</h2>
+            </div>
+            <div id="refreshOverlayContent">
+                <p style="color: var(--text-dim); margin-bottom: 12px;">
+                    您之前提交的问题可能还在处理中。
+                </p>
+                <div id="refreshTaskInfo" style="
+                    background: var(--surface2);
+                    border-radius: 8px;
+                    padding: 12px;
+                    margin-bottom: 16px;
+                    font-size: 0.95rem;
+                ">
+                    <div style="margin-bottom:6px;">
+                        <strong>问题：</strong>
+                        <span id="refreshQuestionText"></span>
+                    </div>
+                    <div>
+                        <strong>状态：</strong>
+                        <span id="refreshTaskStatus">
+                            <i class="fas fa-spinner fa-pulse"></i> 正在查询...
+                        </span>
+                    </div>
+                </div>
+                <div class="qa-email-section" style="margin-bottom:12px;">
+                    <label for="refreshEmail">如需获取最终处理结果，请留下您的邮箱：</label>
+                    <div class="qa-email-row">
+                        <input type="email" id="refreshEmail" class="qa-input" placeholder="example@email.com"
+                               style="flex:1; margin-right:8px;">
+                        <button class="qa-submit" onclick="window._qaRefreshLeaveEmail()" id="refreshEmailBtn">
+                            <i class="fas fa-paper-plane"></i> 提交
+                        </button>
+                    </div>
+                    <p class="qa-email-hint">提交后，处理完成时会通过存档路径获取结果。</p>
+                    <div id="refreshEmailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
+                </div>
+                <div style="display:flex; gap:8px; justify-content:center;">
+                    <button class="btn" onclick="window._qaRefreshRetryPoll()" id="refreshRetryBtn">
+                        <i class="fas fa-redo"></i> 检查完成状态
+                    </button>
+                    <button class="btn" onclick="window._qaRefreshDismiss()" style="background:var(--surface2);color:var(--text-dim);">
+                        <i class="fas fa-times"></i> 关闭
+                    </button>
+                </div>
+            </div>
+            <div id="refreshResultContent" style="display:none;"></div>
+        </div>
+    </div>
 </main>
 {% endblock %}
 

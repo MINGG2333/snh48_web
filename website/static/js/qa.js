@@ -13,7 +13,7 @@
   const WARN_SECONDS = 240;          // show warning at 4 minutes
 
   // ── State ────────────────────────────────────────────────────────────────
-  let sitePassword = sessionStorage.getItem('site_password') || '';
+  let sitePassword = '';       // 仅内存变量，刷新后需重新输入密码
   let kbReady = false;
   let timerInterval = null;
   let pollInterval = null;
@@ -83,29 +83,13 @@
       // Password is configured (normal case)
     }
 
-    // Try stored password
-    if (sitePassword) {
-      try {
-        const ok = await verifyPassword(sitePassword);
-        if (ok) return true;
-      } catch (e) {
-        // Stored password is invalid, clear it
-        sessionStorage.removeItem('site_password');
-        sitePassword = '';
-      }
-    }
-
-    // Show login prompt
+    // Always show login prompt — password is not stored across refreshes
     if (loginOverlay) {
       loginOverlay.style.display = 'flex';
       loginInput.value = '';
       loginInput.focus();
     }
     return false;
-  }
-
-  function getStoredPassword() {
-    return sitePassword;
   }
 
   // ── Client ID ──────────────────────────────────────────────────────────
@@ -360,7 +344,6 @@
       });
 
       if (submitResp.status === 401 || submitResp.status === 403) {
-        sessionStorage.removeItem('site_password');
         sitePassword = '';
         if (loginOverlay) {
           loginOverlay.style.display = 'flex';
@@ -379,7 +362,15 @@
       const submitData = await submitResp.json();
       const taskId = submitData.task_id;
 
-      // Step 2: Start timer and polling
+      // Step 2: Persist task info to sessionStorage for refresh recovery
+      const pendingTask = {
+        taskId: taskId,
+        question: question,
+        timestamp: Date.now(),
+      };
+      sessionStorage.setItem('pending_task', JSON.stringify(pendingTask));
+
+      // Step 3: Start timer and polling
       let timedOut = false;
       startTime = Date.now();
 
@@ -401,6 +392,7 @@
           stopTimers();
           const finalElapsed = Math.round((Date.now() - startTime) / 1000);
           updateTimer(finalElapsed);
+          sessionStorage.removeItem('pending_task');
         }
       }, POLL_INTERVAL_MS);
 
@@ -410,6 +402,7 @@
         stopTimers();
         const finalElapsed = Math.round((Date.now() - startTime) / 1000);
         updateTimer(finalElapsed);
+        sessionStorage.removeItem('pending_task');
       }
 
     } catch (err) {
@@ -483,12 +476,16 @@
         const ok = await verifyPassword(pwd);
         if (ok) {
           sitePassword = pwd;
-          sessionStorage.setItem('site_password', pwd);
           loginOverlay.style.display = 'none';
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.focus();
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
+          // 如果登录前有待处理任务，登录完成后自动检查
+          if (window._qaPendingOnLogin) {
+            window._qaPendingOnLogin = false;
+            setTimeout(checkPendingTask, 100);
+          }
         }
       } catch (err) {
         loginError.textContent = '密码错误，请重试';
@@ -518,6 +515,179 @@
     }
   });
 
+  // ── Refresh Recovery: Detect Pending Tasks on Page Load ──────────────
+  function checkPendingTask() {
+    const pendingRaw = sessionStorage.getItem('pending_task');
+    if (!pendingRaw) return;
+
+    let pending;
+    try {
+      pending = JSON.parse(pendingRaw);
+    } catch (e) {
+      sessionStorage.removeItem('pending_task');
+      return;
+    }
+
+    const overlay = document.getElementById('refreshOverlay');
+    const questionText = document.getElementById('refreshQuestionText');
+    const statusEl_ = document.getElementById('refreshTaskStatus');
+    if (!overlay || !questionText || !statusEl_) return;
+
+    // Show the question
+    questionText.textContent = escapeHtml(pending.question || '未知');
+
+    // If login overlay is also showing, defer refresh overlay until after login
+    if (loginOverlay && loginOverlay.style.display === 'flex') {
+      window._qaPendingOnLogin = true;
+      return;
+    }
+
+    // Show overlay
+    overlay.style.display = 'flex';
+
+    // Immediately poll the server to check status
+    (async function pollPending() {
+      try {
+        const resp = await fetch(`/api/qa/ask-async/${pending.taskId}`);
+        if (!resp.ok) {
+          throw new Error(`查询失败 (${resp.status})`);
+        }
+        const data = await resp.json();
+
+        if (data.status === 'completed') {
+          // Task completed! Show result directly in overlay
+          statusEl_.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已完成！</span>';
+          // Hide the email/retry section, show result in overlay
+          document.getElementById('refreshOverlayContent').style.display = 'none';
+          const resultContent = document.getElementById('refreshResultContent');
+          resultContent.style.display = 'block';
+          // Build a mini result view inside the overlay
+          const answer = data.answer || '未返回有效答案。';
+          resultContent.innerHTML = `
+            <div style="padding:12px 0;">
+              <h3 style="margin-bottom:8px;"><i class="fas fa-comment-dots"></i> 回答</h3>
+              <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;max-height:300px;overflow-y:auto;">${escapeHtml(answer)}</div>
+              <button class="btn" onclick="window._qaRefreshDismiss()" style="width:100%;">
+                <i class="fas fa-check"></i> 查看完毕
+              </button>
+            </div>
+          `;
+          // Also update main page result area
+          displayResult(data);
+          sessionStorage.removeItem('pending_task');
+          return;
+        }
+
+        if (data.status === 'error') {
+          statusEl_.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> 处理失败</span>';
+          document.querySelector('#refreshOverlay .qa-email-section')?.remove();
+          document.getElementById('refreshRetryBtn')?.remove();
+          return;
+        }
+
+        // Still processing
+        const elapsed = data.created_at
+          ? Math.round((Date.now() - new Date(data.created_at).getTime()) / 1000)
+          : 0;
+        statusEl_.innerHTML = `<i class="fas fa-spinner fa-pulse"></i> 处理中...（已耗时 ${formatElapsed(elapsed)}）`;
+
+        // Poll again after interval
+        setTimeout(pollPending, POLL_INTERVAL_MS);
+      } catch (err) {
+        statusEl_.innerHTML = `<span style="color:#fbbf24;"><i class="fas fa-exclamation-triangle"></i> 查询失败：${escapeHtml(err.message)}</span>`;
+        // Still retry
+        setTimeout(pollPending, POLL_INTERVAL_MS);
+      }
+    })();
+  }
+
+  // ── Refresh Overlay: Global Functions ────────────────────────────────
+  window._qaRefreshLeaveEmail = function() {
+    const pendingRaw = sessionStorage.getItem('pending_task');
+    if (!pendingRaw) return;
+    let pending;
+    try { pending = JSON.parse(pendingRaw); } catch (e) { return; }
+
+    const emailInput = document.getElementById('refreshEmail');
+    const feedback = document.getElementById('refreshEmailFeedback');
+    const btn = document.getElementById('refreshEmailBtn');
+    const email = emailInput ? emailInput.value.trim() : '';
+
+    if (!email) {
+      if (feedback) feedback.innerHTML = '<span style="color:#fbbf24;">请输入邮箱地址</span>';
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (feedback) feedback.innerHTML = '<span style="color:#ef4444;">邮箱格式不正确</span>';
+      return;
+    }
+
+    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后可通过存档路径获取结果。</span>';
+    if (btn) btn.disabled = true;
+
+    fetch('/api/qa/archive-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: pending.taskId, email }),
+    }).catch(() => {});
+  };
+
+  window._qaRefreshRetryPoll = function() {
+    const pendingRaw = sessionStorage.getItem('pending_task');
+    if (!pendingRaw) return;
+    let pending;
+    try { pending = JSON.parse(pendingRaw); } catch (e) { return; }
+
+    const statusEl_ = document.getElementById('refreshTaskStatus');
+    if (statusEl_) statusEl_.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在重新查询...';
+
+    fetch(`/api/qa/ask-async/${pending.taskId}`).then(resp => {
+      if (!resp.ok) throw new Error(`查询失败 (${resp.status})`);
+      return resp.json();
+    }).then(data => {
+      if (data.status === 'completed') {
+        if (statusEl_) statusEl_.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已完成！</span>';
+        document.getElementById('refreshOverlayContent').style.display = 'none';
+        const resultContent = document.getElementById('refreshResultContent');
+        resultContent.style.display = 'block';
+        resultContent.innerHTML = `
+          <div style="padding:12px 0;">
+            <h3 style="margin-bottom:8px;"><i class="fas fa-comment-dots"></i> 回答</h3>
+            <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;max-height:300px;overflow-y:auto;">${escapeHtml(data.answer || '未返回有效答案。')}</div>
+            <button class="btn" onclick="window._qaRefreshDismiss()" style="width:100%;">
+              <i class="fas fa-check"></i> 查看完毕
+            </button>
+          </div>
+        `;
+        displayResult(data);
+        sessionStorage.removeItem('pending_task');
+      } else if (data.status === 'error') {
+        if (statusEl_) statusEl_.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> 处理失败</span>';
+        document.querySelector('#refreshOverlay .qa-email-section')?.remove();
+      } else {
+        const elapsed = data.created_at
+          ? Math.round((Date.now() - new Date(data.created_at).getTime()) / 1000)
+          : 0;
+        if (statusEl_) statusEl_.innerHTML = `<i class="fas fa-spinner fa-pulse"></i> 处理中...（已耗时 ${formatElapsed(elapsed)}）`;
+      }
+    }).catch(err => {
+      if (statusEl_) statusEl_.innerHTML = `<span style="color:#fbbf24;"><i class="fas fa-exclamation-triangle"></i> 查询失败：${escapeHtml(err.message)}</span>`;
+    });
+  };
+
+  window._qaRefreshDismiss = function() {
+    const overlay = document.getElementById('refreshOverlay');
+    if (overlay) overlay.style.display = 'none';
+    sessionStorage.removeItem('pending_task');
+  };
+
   // ── Init ──────────────────────────────────────────────────────────────
-  checkStatus();
+  checkStatus().then(() => {
+    // After checking KB status, check if there's a pending task from before refresh
+    checkPendingTask();
+  }, () => {
+    // Even if checkStatus fails, still look for pending tasks
+    checkPendingTask();
+  });
 })();

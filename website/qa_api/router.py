@@ -386,6 +386,48 @@ def get_ask_async_result(task_id: str):
     }
 
 
+# ── Archive Email Endpoint ──────────────────────────────────────────────────
+
+
+class ArchiveEmailRequest(BaseModel):
+    task_id: str
+    email: str
+
+
+@router.post("/archive-email")
+def archive_email(req: ArchiveEmailRequest):
+    """
+    Store an email address associated with an async task.
+    This allows notifying users when a long-running task completes.
+    """
+    from website.logging_setup import get_session_dir
+    session_dir = get_session_dir()
+    email_log_path = session_dir / "email_requests.jsonl"
+
+    record = {
+        "task_id": req.task_id,
+        "email": req.email,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    with open(email_log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    # Also log via standard interaction log
+    log_interaction(
+        client_id="email_collection",
+        question=f"email_for_task_{req.task_id}",
+        answer="",
+        citations=[],
+        video_results=[],
+        stats={},
+        archive_path="",
+        extra={"type": "email_collection", "task_id": req.task_id, "email": req.email},
+    )
+
+    return {"success": True, "message": "邮箱已记录"}
+
+
 # ── Build KB Endpoint ──────────────────────────────────────────────────────
 
 
