@@ -249,7 +249,29 @@ tail -f /var/log/snh48/snh48_screen.log
 | 重新连接会话 | `screen -r snh48` |
 | 列出所有会话 | `screen -ls` |
 | 查看保存的日志 | `tail -f /var/log/snh48/snh48_screen.log` |
-| 停止服务 | 重新连接后 `Ctrl+C`；或 `pkill -f "website.main"` |
+| 停止服务 | 重新连接后 `Ctrl+C`；或 `pkill -f "website.main"`（在 screen 外执行） |
+| **退出/关闭 screen 会话** | 先在 screen 内按 `Ctrl+C` 停止服务，然后输入 `exit` 或按 `Ctrl+D`，会话即被彻底关闭，自动回到主终端 |
+| 强制结束 screen 会话（外部） | `screen -X -S snh48 kill`（在 screen 外执行，直接杀掉会话） |
+| 清除已死的 screen 会话 | `screen -wipe`（清理已断开或已结束的僵死会话） |
+
+> **💡 实战场景提示：**
+> - **不想让服务继续运行？** → 进入 screen，`Ctrl+C` 停止服务 → `exit` 关闭会话
+> - **想让服务在后台继续运行？** → `Ctrl+A` → `D` detach，断开但不停止
+> - **重新回来查看？** → `screen -r snh48`
+
+### ⚠️ Screen 常见问题：退出后 bash 提示符未正常显示
+
+如果 `Ctrl+C` 返回主终端后，出现以下错误：
+```
+bash: __vsc_prompt_cmd_original: command not found
+```
+
+**原因：**
+- `__vsc_prompt_cmd_original` 是 VS Code 的 Shell Integration 功能设置的钩子，在普通 SSH 终端中没有这个命令
+
+**解决方法：**
+- 按一次 **回车键** → 提示符恢复
+- 或输入 `reset` 回车 → 彻底重置终端
 
 ---
 
