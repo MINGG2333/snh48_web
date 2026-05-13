@@ -58,7 +58,13 @@
     const el = document.createElement('div');
     el.className = 'scroll-text';
     el.textContent = pick(CONFIG.texts);
-    el.style.color = pick(CONFIG.colors);
+    // Special glow for "陈嘉仪"
+    if (el.textContent === '陈嘉仪') {
+      el.style.color = '#ffb3c6';
+      el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
+    } else {
+      el.style.color = pick(CONFIG.colors);
+    }
     // Random font size
     const fontSize = CONFIG.minFontSize + Math.random() * (CONFIG.maxFontSize - CONFIG.minFontSize);
     el.style.fontSize = fontSize + 'px';
@@ -126,7 +132,13 @@
           line.x = -line.textWidth - 50 - Math.random() * 100;
           // Optionally change text/color when looping
           line.el.textContent = pick(CONFIG.texts);
-          line.el.style.color = pick(CONFIG.colors);
+          if (line.el.textContent === '陈嘉仪') {
+            line.el.style.color = '#ffb3c6';
+            line.el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
+          } else {
+            line.el.style.color = pick(CONFIG.colors);
+            line.el.style.textShadow = '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)';
+          }
           // Re-measure after text change
           line.textWidth = line.el.offsetWidth;
         }
@@ -137,7 +149,13 @@
         if (line.x + line.textWidth < -50) {
           line.x = vw + 50 + Math.random() * 100;
           line.el.textContent = pick(CONFIG.texts);
-          line.el.style.color = pick(CONFIG.colors);
+          if (line.el.textContent === '陈嘉仪') {
+            line.el.style.color = '#ffb3c6';
+            line.el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
+          } else {
+            line.el.style.color = pick(CONFIG.colors);
+            line.el.style.textShadow = '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)';
+          }
           line.textWidth = line.el.offsetWidth;
         }
       }

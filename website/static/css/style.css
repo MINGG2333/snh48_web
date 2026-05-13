@@ -351,6 +351,20 @@ body {
 .status-dot.pending { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   HIGHLIGHT "陈嘉仪"
+   ═══════════════════════════════════════════════════════════════════════════*/
+
+.highlight-cjy {
+  color: #fbbfbb;
+  background: linear-gradient(180deg, transparent 55%, rgba(255, 107, 157, 0.18) 55%);
+  font-weight: 500;
+  padding: 0 3px;
+  border-radius: 3px;
+  text-shadow: 0 0 14px rgba(255, 107, 157, 0.25);
+  transition: text-shadow 0.3s;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    FOOTER
    ═══════════════════════════════════════════════════════════════════════════*/
 
