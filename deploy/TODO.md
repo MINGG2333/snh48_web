@@ -388,9 +388,9 @@ nohup python -m website.main > /var/log/snh48/snh48.log 2>&1 &
 
 ## 备案完成后
 
-1. 腾讯云 DNS 解析添加 A 记录：`www.xxx.com` → `124.222.72.203`
-2. 用 `deploy/deploy.sh` 配置 Nginx + SSL（详见 `deploy/README.md`）
-3. 添加备案号到页面底部
+- [x] 腾讯云 DNS 解析添加 A 记录：`www.xxx.com` → `124.222.72.203`
+- [x] 用 `deploy/deploy.sh` 配置 Nginx + SSL（详见 `deploy/README.md`）
+- [x] 添加备案号到页面底部（配置 `SITE_ICP` 环境变量即可显示）
 
 ---
 

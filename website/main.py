@@ -38,6 +38,7 @@ async def index(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_description": cfg.SITE_DESCRIPTION,
+            "site_icp": cfg.SITE_ICP,
         },
     )
 
@@ -50,6 +51,7 @@ async def about(request: Request):
         {
             "request": request,
             "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
         },
     )
 
@@ -63,6 +65,7 @@ async def qa_page(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_description": cfg.SITE_DESCRIPTION,
+            "site_icp": cfg.SITE_ICP,
         },
     )
 

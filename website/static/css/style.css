@@ -361,6 +361,23 @@ body {
   background: linear-gradient(0deg, rgba(10,10,26,0.9) 60%, transparent);
 }
 
+.footer-icp {
+  margin-top: 4px;
+  font-size: 0.75rem;
+}
+
+.footer-icp a {
+  color: var(--text-dim);
+  text-decoration: none;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.footer-icp a:hover {
+  opacity: 1;
+  color: var(--primary);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Q&A PAGE
    ═══════════════════════════════════════════════════════════════════════════*/

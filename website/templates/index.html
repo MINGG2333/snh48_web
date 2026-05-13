@@ -70,6 +70,11 @@
         <span class="footer-heart"><i class="fas fa-heart" style="color: #ff6b9d;"></i></span>
         建设中
     </p>
+    {% if site_icp %}
+    <p class="footer-icp">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">{{ site_icp }}</a>
+    </p>
+    {% endif %}
 </footer>
 {% endblock %}
 
