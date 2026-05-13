@@ -114,7 +114,7 @@
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.focus();
-          inputEl.placeholder = '输入您的问题，例如：视频中提到了哪些关于宠物狗顺顺的内容？';
+          inputEl.placeholder = '为什么房间名叫藏爱家族？';
         }
       } else {
         kbReady = false;
@@ -139,7 +139,7 @@
     resultEl.innerHTML = `
       <div class="qa-loading">
         <div class="spinner"></div>
-        <span>正在思考中，请稍候...</span>
+        <span>正在检索并思考中，请稍候（每个问题花费约5分钟）...</span>
       </div>`;
 
     try {
@@ -246,7 +246,7 @@
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.focus();
-          inputEl.placeholder = '输入您的问题，例如：视频中提到了哪些关于宠物狗顺顺的内容？';
+          inputEl.placeholder = '为什么房间名叫藏爱家族？';
         }
       } catch (err) {
         loginError.textContent = '密码错误，请重试';
