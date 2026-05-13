@@ -4,7 +4,9 @@ SNH48 演艺信息站 - FastAPI Application
 """
 from __future__ import annotations
 
+import os
 import sys
+import time
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -26,6 +28,15 @@ app.mount("/static", StaticFiles(directory=str(cfg.STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))
 
 
+# ── Cache Busting Helper ──────────────────────────────────────────────────
+def static_version(filename: str) -> str:
+    """Return version string based on file modification time for cache busting."""
+    filepath = cfg.STATIC_DIR / filename.lstrip("/")
+    if filepath.exists():
+        return str(int(os.path.getmtime(filepath)))
+    return "1"
+
+
 # ── Frontend Page Routes ───────────────────────────────────────────────────
 
 
@@ -39,6 +50,7 @@ async def index(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_description": cfg.SITE_DESCRIPTION,
             "site_icp": cfg.SITE_ICP,
+            "static_version": static_version,
         },
     )
 
