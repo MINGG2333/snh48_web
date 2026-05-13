@@ -21,13 +21,15 @@ snh48_web/
 ├── transcript_analyze/         # 已有的问答引擎
 │   ├── run_kb_qa.py
 │   ├── kb_qa/
-│   └── requirements_kb_qa.txt
+│   ├── requirements_kb_qa.txt
+│   ├── download_records.json   # 视频下载记录（需要您自己准备）
+│   ├── firered_output_batch/   # 字幕文件目录
+│   └── video_knowledge_db/     # 知识库持久化目录
 ├── deploy/
 │   ├── deploy.sh               # 一键部署脚本
 │   ├── nginx.conf              # Nginx 配置
 │   ├── supervisord.conf        # 进程守护配置
 │   └── docker-compose.yml      # Docker 部署（可选）
-└── download_records.json       # 视频下载记录（需要您自己准备）
 ```
 
 ## 🚀 部署步骤

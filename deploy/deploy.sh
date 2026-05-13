@@ -67,7 +67,7 @@ echo ""
 echo "[4/6] 创建必要的目录..."
 
 mkdir -p /var/log/$SERVICE_NAME
-mkdir -p $PROJECT_DIR/video_knowledge_db
+mkdir -p $PROJECT_DIR/transcript_analyze/video_knowledge_db
 
 echo "✓ 目录创建完成"
 

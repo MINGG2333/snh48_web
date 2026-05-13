@@ -17,10 +17,10 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ../download_records.json:/app/download_records.json:ro
-      - ../firered_output_batch:/app/firered_output_batch:ro
-      - ../video_knowledge_db:/app/video_knowledge_db
-      - qa_archive:/app/video_knowledge_db/qa_archive
+      - ../transcript_analyze/download_records.json:/app/transcript_analyze/download_records.json:ro
+      - ../transcript_analyze/firered_output_batch:/app/transcript_analyze/firered_output_batch:ro
+      - ../transcript_analyze/video_knowledge_db:/app/transcript_analyze/video_knowledge_db
+      - qa_archive:/app/transcript_analyze/video_knowledge_db/qa_archive
     environment:
       - HOST=0.0.0.0
       - PORT=8000

@@ -6,8 +6,8 @@
 |---|---|---|
 | 网站代码 `website/` + `deploy/` | GitHub（`git clone snh48_web`） | ~200KB |
 | 问答系统 `transcript_analyze/` | GitHub（`git clone transcript_analyze`） | ~300KB |
-| 源数据 `download_records.json` | SCP 上传 | 114KB |
-| 字幕文件 `firered_output_batch/` | SCP 上传 | 124MB |
+| 源数据 `transcript_analyze/download_records.json` | SCP 上传 | 114KB |
+| 字幕文件 `transcript_analyze/firered_output_batch/` | SCP 上传 | 124MB |
 | HuggingFace 模型缓存 | SCP 上传 | 391MB |
 
 ---
@@ -74,7 +74,7 @@ pip install -r transcript_analyze/requirements_kb_qa.txt
 # 上传源数据（download_records.json + 字幕文件）
 cd /mnt/zhitainew/snh48
 tar czf /tmp/snh48_data.tar.gz download_records.json firered_output_batch
-scp /tmp/snh48_data.tar.gz root@124.222.72.203:/home/snh48_web/
+scp /tmp/snh48_data.tar.gz root@124.222.72.203:/home/snh48_web/transcript_analyze/
 rm /tmp/snh48_data.tar.gz
 
 # 上传 huggingface 模型缓存
@@ -87,8 +87,8 @@ rm /tmp/hf_model.tar.gz
 **然后在 SSH 终端：**
 
 ```bash
-# 解压源数据（已在 /home/snh48_web 目录下）
-cd /home/snh48_web
+# 解压源数据到 transcript_analyze/ 目录下
+cd /home/snh48_web/transcript_analyze
 tar xzf snh48_data.tar.gz
 rm snh48_data.tar.gz
 # 确认
@@ -108,8 +108,10 @@ ls /root/.cache/huggingface/hub/models--shibing624--text2vec-base-chinese/snapsh
 ## 第6步：构建知识库
 
 ```bash
+git config core.filemode false
 chmod +x ./script/run_kb_qa_build.sh
 nohup ./script/run_kb_qa_build.sh & echo "下载任务已启动，PID: $!"
+tail -20 kb_qa.log
 ```
 
 ---
@@ -151,11 +153,13 @@ ls -la .env
 cd /home/snh48_web
 source venv/bin/activate
 
-# 后端测试
+# 后端测试（默认路径已指向 transcript_analyze/ 下，可省略不传参数）
+python transcript_analyze/run_kb_qa.py --debug ask --question "陈嘉仪和北舞的关联是什么？"
+# 也可显式指定（等价）：
 python transcript_analyze/run_kb_qa.py \
-  --records download_records.json \
-  --subtitle-root firered_output_batch \
-  --kb-dir video_knowledge_db \
+  --records transcript_analyze/download_records.json \
+  --subtitle-root transcript_analyze/firered_output_batch \
+  --kb-dir transcript_analyze/video_knowledge_db \
   --debug \
   ask \
   --question "陈嘉仪和北舞的关联是什么？"
@@ -220,8 +224,10 @@ cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xx
 
 ```bash
 # SSH
-cd /home/snh48_web && git pull                    # 更新 website/ + deploy/
-cd /home/snh48_web/transcript_analyze && git pull  # 更新问答系统
+# 更新 website/ + deploy/
+cd /home/snh48_web && git pull
+# 更新问答系统
+cd /home/snh48_web/transcript_analyze && git pull
 
 # 重启服务（密码和 API Key 已存在 .env 中，无需再 export）
 pkill -f "website.main"

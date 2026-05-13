@@ -31,11 +31,12 @@ if _env_file.exists():
                 os.environ[key] = val
 
 # ── Transcript Knowledge Base ──────────────────────────────────────────────
-RECORDS_PATH = os.getenv("RECORDS_PATH", str(PROJECT_ROOT / "download_records.json"))
-SUBTITLE_ROOT = os.getenv("SUBTITLE_ROOT", str(PROJECT_ROOT / "firered_output_batch"))
-# 知识库目录：优先取环境变量，否则自动检测（兼容项目根目录或 transcript_analyze 下）
-_default_kb_dir = str(PROJECT_ROOT / "video_knowledge_db")
-_fallback_kb_dir = str(PROJECT_ROOT / "transcript_analyze" / "video_knowledge_db")
+# 数据文件/目录默认放在 transcript_analyze/ 下（与 run_kb_qa.py 同目录）
+RECORDS_PATH = os.getenv("RECORDS_PATH", str(PROJECT_ROOT / "transcript_analyze" / "download_records.json"))
+SUBTITLE_ROOT = os.getenv("SUBTITLE_ROOT", str(PROJECT_ROOT / "transcript_analyze" / "firered_output_batch"))
+# 知识库目录：优先取环境变量，否则自动检测（兼容 transcript_analyze 下或项目根目录）
+_default_kb_dir = str(PROJECT_ROOT / "transcript_analyze" / "video_knowledge_db")
+_fallback_kb_dir = str(PROJECT_ROOT / "video_knowledge_db")
 if not Path(_default_kb_dir).exists() and Path(_fallback_kb_dir).exists():
     _default_kb_dir = _fallback_kb_dir
 KB_DIR = os.getenv("KB_DIR", _default_kb_dir)
