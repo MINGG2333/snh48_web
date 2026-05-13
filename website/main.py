@@ -5,11 +5,12 @@ SNH48 演艺信息站 - FastAPI Application
 from __future__ import annotations
 
 import os
+import random
 import sys
 import time
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -35,6 +36,28 @@ def static_version(filename: str) -> str:
     if filepath.exists():
         return str(int(os.path.getmtime(filepath)))
     return "1"
+
+
+# ── Favicon (random rotation) ──────────────────────────────────────────────
+
+FAVICON_DIR = cfg.STATIC_DIR / "images" / "favicons"
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Randomly pick one favicon from the favicons directory each request."""
+    if not FAVICON_DIR.is_dir():
+        # 无图标时不报错
+        return HTMLResponse(status_code=204)
+    icons = sorted(FAVICON_DIR.glob("favicon*.png"))
+    if not icons:
+        return HTMLResponse(status_code=204)
+    chosen = random.choice(icons)
+    return FileResponse(
+        chosen,
+        media_type="image/png",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 # ── Frontend Page Routes ───────────────────────────────────────────────────
