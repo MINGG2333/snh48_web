@@ -168,36 +168,151 @@ python transcript_analyze/run_kb_qa.py \
 python -m website.main
 ```
 
-看到 `Uvicorn running on http://0.0.0.0:8000` 说明成功。`Ctrl+C` 停止后，后台运行：
+看到 `Uvicorn running on http://0.0.0.0:8000` 说明成功。`Ctrl+C` 停止后，以**后台方式**运行并**保存日志到文件**（见下方说明）。
 
-### 方式 A：使用 screen（推荐，简单）
+---
+
+### 📋 日志保存说明
+
+启动服务时，日志默认打印到终端。要让日志持久保存到文件，请从以下三种方式中选择一种。
+
+---
+
+### 方式 A：使用 nohup（⭐ 推荐，最简单）
+
+日志自动保存到 `/var/log/snh48/snh48.log`，会**同时记录标准输出和错误输出**：
+
 ```bash
-# 安装 screen
+# 确保日志目录存在
+mkdir -p /var/log/snh48
+chmod 755 /var/log/snh48
+
+# 后台启动，日志写入文件
+cd /home/snh48_web
+source venv/bin/activate
+nohup python -m website.main > /var/log/snh48/snh48.log 2>&1 &
+echo "服务已启动，PID: $!"
+
+# ── 查看实时日志 ──
+tail -f /var/log/snh48/snh48.log
+
+# ── 查看最近 50 行 ──
+tail -50 /var/log/snh48/snh48.log
+
+# ── 查看日志文件大小 ──
+ls -lh /var/log/snh48/snh48.log
+
+# ── 清空日志文件（不重启服务） ──
+> /var/log/snh48/snh48.log
+
+# ── 停止服务 ──
+pkill -f "website.main"
+```
+
+---
+
+### 方式 B：使用 screen（适合需要交互操作的场景）
+
+screen 会在断开 SSH 后继续运行，适合需要偶尔手动操作或调试的场景。
+
+```bash
+# 1. 安装 screen（首次只需一次）
 yum install -y screen
 
-# 创建新会话
+# 2. 创建新会话
 screen -S snh48
 
-# 在 screen 中启动（.env 文件会自动加载，无需再 export）
+# 3. 在 screen 中启动
 cd /home/snh48_web
 source venv/bin/activate
 python -m website.main
 ```
 
-按 `Ctrl+A` 然后按 `D` 断开（服务后台继续运行）
-重新连接：`screen -r snh48`
+**screen 相关操作：**
 
-### 方式 B：使用 nohup（最简单）
+| 操作 | 快捷键 / 命令 |
+|---|---|
+| 启用日志写入文件 | `Ctrl+A` → 然后按 `H`（大写），screen 开始将输出写入 `screenlog.0` |
+| 停止日志写入文件 | 再次按 `Ctrl+A` → `H`，关闭日志写入 |
+| 进入滚动/复制模式 | `Ctrl+A` → `[`，用方向键/PageUp/PageDown 翻看历史输出，`Esc` 退出 |
+| 断开（detach）会话 | `Ctrl+A` → `D`，服务在后台继续运行 |
+| 重新连接会话 | `screen -r snh48` |
+| 列出所有会话 | `screen -ls` |
+| 查看保存的日志 | `tail -f screenlog.0` |
+
+---
+
+### 方式 C：使用 systemd 服务（最专业，支持开机自启 + 自动日志轮转）
+
+创建一个 systemd 服务文件，由系统管理服务生命周期和日志：
+
 ```bash
-cd /home/snh48_web
-source venv/bin/activate
-# 无需 export，.env 文件会自动加载
-nohup python -m website.main > /var/log/snh48.log 2>&1 &
-echo "服务已启动，PID: $!"
+# 1. 创建服务文件
+cat > /etc/systemd/system/snh48.service << 'EOF'
+[Unit]
+Description=SNH48 Website Service
+After=network.target
 
-# 查看日志
-tail -f /var/log/snh48.log
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/snh48_web
+EnvironmentFile=/home/snh48_web/.env
+ExecStart=/home/snh48_web/venv/bin/python -m website.main
+Restart=always
+RestartSec=10
+
+# 日志配置（自动轮转，保留 7 天）
+StandardOutput=append:/var/log/snh48/snh48.log
+StandardError=append:/var/log/snh48/snh48.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 2. 重载配置并启动
+systemctl daemon-reload
+systemctl enable snh48    # 设置开机自启
+systemctl start snh48     # 启动服务
+
+# 3. 常用管理命令
+systemctl status snh48              # 查看服务状态
+journalctl -u snh48 -f              # 查看实时日志（journal 方式）
+tail -f /var/log/snh48/snh48.log         # 查看文件日志
+systemctl restart snh48             # 重启服务
+systemctl stop snh48                # 停止服务
+systemctl disable snh48             # 取消开机自启
 ```
+
+> **systemd 优势**：自动重启崩溃的服务、开机自启、日志自动轮转不会撑爆磁盘。
+
+---
+
+### 📊 日志管理速查
+
+| 启动方式 | 日志位置 | 自动重启 | 开机自启 | 推荐场景 |
+|---|---|---|---|---|
+| **nohup** (推荐) | `/var/log/snh48/snh48.log` | ❌ | ❌ | 快速启动、临时运行 |
+| **screen** | `screenlog.0`（当前目录） | ❌ | ❌ | 调试、手动维护 |
+| **systemd** | `/var/log/snh48/snh48.log` + `journalctl` | ✅ | ✅ | 生产环境长期运行 |
+
+**日志轮转（可选）：** 如果使用 nohup 或 screen 长期运行，建议配置 logrotate 防止日志文件过大：
+
+```bash
+cat > /etc/logrotate.d/snh48 << 'EOF'
+/var/log/snh48/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+EOF
+```
+
+logrotate 配置完成后会自动每天轮转，保留 7 天日志，自动压缩旧日志。
 
 ---
 
@@ -233,7 +348,7 @@ cd /home/snh48_web/transcript_analyze && git pull
 pkill -f "website.main"
 cd /home/snh48_web
 source venv/bin/activate
-nohup python -m website.main > /var/log/snh48.log 2>&1 &
+nohup python -m website.main > /var/log/snh48/snh48.log 2>&1 &
 ```
 
 ---
