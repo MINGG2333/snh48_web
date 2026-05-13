@@ -61,8 +61,8 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # ── Website Metadata ───────────────────────────────────────────────────────
-SITE_TITLE = os.getenv("SITE_TITLE", "SNH48 演艺信息站")
+SITE_TITLE = os.getenv("SITE_TITLE", "心上珍藏集")
 SITE_DESCRIPTION = os.getenv(
     "SITE_DESCRIPTION",
-    "记录喜爱的演艺人员公开信息，基于 AI 的视频内容问答",
+    "记录 SNH48陈嘉仪 的公开信息，提供基于 LLM 的 AI 问答",
 )
