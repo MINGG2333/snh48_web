@@ -114,7 +114,7 @@
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.focus();
-          inputEl.placeholder = '为什么房间名叫藏爱家族？';
+          inputEl.placeholder = '为什么房间名叫葬爱家族？';
         }
       } else {
         kbReady = false;
@@ -246,7 +246,7 @@
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.focus();
-          inputEl.placeholder = '为什么房间名叫藏爱家族？';
+          inputEl.placeholder = '为什么房间名叫葬爱家族？';
         }
       } catch (err) {
         loginError.textContent = '密码错误，请重试';
