@@ -1,14 +1,23 @@
 /**
  * SNH48 Q&A System - Frontend Interaction
  *
- * Handles the AI Q&A page: password login, KB status check, sends questions, displays results.
+ * Handles the AI Q&A page: password login, KB status check, async polling for results.
+ * Shows real-time timer, gracefully handles nginx timeout with email collection.
  */
 (function() {
   'use strict';
 
-  // ── State ──────────────────────────────────────────────────────────────
+  // ── Config ──────────────────────────────────────────────────────────────
+  const TIMEOUT_SECONDS = 300;       // nginx proxy_read_timeout
+  const POLL_INTERVAL_MS = 3000;     // poll every 3 seconds
+  const WARN_SECONDS = 240;          // show warning at 4 minutes
+
+  // ── State ────────────────────────────────────────────────────────────────
   let sitePassword = sessionStorage.getItem('site_password') || '';
   let kbReady = false;
+  let timerInterval = null;
+  let pollInterval = null;
+  let startTime = null;
 
   const statusEl = document.getElementById('kbStatus');
   const inputEl = document.getElementById('qaInput');
@@ -150,55 +159,94 @@
     }
   }
 
-  // ── Send Question ────────────────────────────────────────────────────
-  async function askQuestion(question) {
-    resultEl.innerHTML = `
-      <div class="qa-loading">
-        <div class="spinner"></div>
-        <span>正在检索并思考中，请稍候（每个问题花费约5分钟）...</span>
-      </div>`;
+  // ── Timer Display ─────────────────────────────────────────────────────
+  function formatElapsed(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}分${s}秒`;
+  }
 
-    try {
-      const resp = await fetch('/api/qa/ask', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ question }),
-      });
+  function updateTimer(seconds) {
+    const timerEl = document.getElementById('qaTimer');
+    if (!timerEl) return;
+    timerEl.textContent = formatElapsed(seconds);
 
-      if (resp.status === 401 || resp.status === 403) {
-        // Password expired or invalid
-        sessionStorage.removeItem('site_password');
-        sitePassword = '';
-        if (loginOverlay) {
-          loginOverlay.style.display = 'flex';
-          loginError.textContent = '密码已过期或无效，请重新输入';
-          loginInput.value = '';
-          loginInput.focus();
-        }
-        return;
-      }
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.detail || `请求失败 (${resp.status})`);
-      }
-
-      const data = await resp.json();
-      displayResult(data);
-    } catch (err) {
-      resultEl.innerHTML = `
-        <div class="qa-status error">
-          <i class="fas fa-times-circle"></i> 问答失败：${err.message}
-        </div>`;
+    if (seconds >= TIMEOUT_SECONDS) {
+      timerEl.className = 'qa-timer timeout';
+    } else if (seconds >= WARN_SECONDS) {
+      timerEl.className = 'qa-timer warn';
+    } else {
+      timerEl.className = 'qa-timer';
     }
+  }
+
+  function stopTimers() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  // ── Show Timeout / Email Form ─────────────────────────────────────────
+  function showTimeoutForm(taskId, question, elapsed) {
+    const timerWrap = document.getElementById('qaTimerWrap');
+    if (timerWrap) timerWrap.style.display = 'none';
+
+    resultEl.innerHTML = `
+      <div class="qa-timeout-card">
+        <div class="qa-timeout-icon">
+          <i class="fas fa-hourglass-end"></i>
+        </div>
+        <h3>处理超时提示</h3>
+        <p>您的提问「<strong>${escapeHtml(question)}</strong>」处理已超过 <strong>${formatElapsed(elapsed)}</strong>。</p>
+        <p><strong>原因：</strong>LLM 分析耗时较长（超过 nginx 代理的超时限制 5 分钟），所以页面无法直接显示结果。</p>
+        <p><strong>但服务端仍在继续处理中！</strong>处理完成后，结果会自动保存。</p>
+        <div class="qa-email-section">
+          <label for="timeoutEmail">如需获取最终处理结果，请留下您的邮箱：</label>
+          <div class="qa-email-row">
+            <input type="email" id="timeoutEmail" class="qa-input" placeholder="example@email.com"
+                   style="flex:1; margin-right:8px;">
+            <button class="qa-submit" onclick="window._qaLeaveEmail('${taskId}')" id="emailSubmitBtn">
+              <i class="fas fa-paper-plane"></i> 提交
+            </button>
+          </div>
+          <p class="qa-email-hint">提交后，处理完成时会通过存档路径获取结果。</p>
+          <div id="emailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
+        </div>
+        <div class="qa-poll-again" style="margin-top:16px;">
+          <button class="btn" onclick="window._qaRetryPoll('${taskId}')">
+            <i class="fas fa-redo"></i> 再次尝试获取结果
+          </button>
+          <span style="color:var(--text-dim);font-size:0.85rem;margin-left:8px;">结果可能随时返回</span>
+        </div>
+      </div>`;
+  }
+
+  // ── Escape HTML ───────────────────────────────────────────────────────
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   // ── Display Result ───────────────────────────────────────────────────
   function displayResult(data) {
+    stopTimers();
     const hasAnswer = data.answer && data.answer.length > 0;
     const hasCitations = data.citations && data.citations.length > 0;
+    const elapsed = data.completed_at && data.created_at
+      ? Math.round((new Date(data.completed_at) - new Date(data.created_at)) / 1000)
+      : 0;
 
     let html = '';
+
+    // Elapsed time info
+    html += `<div style="text-align:right;font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">
+      <i class="fas fa-clock"></i> 处理耗时：${formatElapsed(elapsed)}</div>`;
 
     // Answer
     html += `<div class="qa-answer">`;
@@ -239,7 +287,174 @@
     }
 
     resultEl.innerHTML = html;
+    resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+
+  // ── Poll for Result ──────────────────────────────────────────────────
+  async function pollResult(taskId, question) {
+    try {
+      const resp = await fetch(`/api/qa/ask-async/${taskId}`);
+      if (!resp.ok) {
+        throw new Error(`轮询失败 (${resp.status})`);
+      }
+      const data = await resp.json();
+
+      if (data.status === 'completed') {
+        displayResult(data);
+        return true;  // done
+      }
+
+      if (data.status === 'error') {
+        resultEl.innerHTML = `
+          <div class="qa-status error">
+            <i class="fas fa-times-circle"></i> 问答处理失败：${escapeHtml(data.error || '未知错误')}
+          </div>`;
+        stopTimers();
+        return true;
+      }
+
+      return false;  // still processing
+    } catch (err) {
+      // Could be a network error (e.g., nginx timeout), ignore and keep polling
+      console.warn('Poll error:', err);
+      return false;
+    }
+  }
+
+  // ── Send Question (Async) ────────────────────────────────────────────
+  async function askQuestionAsync(question) {
+    stopTimers();
+
+    // Show loading with timer
+    resultEl.innerHTML = `
+      <div class="qa-loading">
+        <div class="spinner"></div>
+        <div>
+          <span>正在检索并思考中，请稍候...</span>
+          <div id="qaTimerWrap" style="margin-top:8px;">
+            <span id="qaTimer" class="qa-timer">0分0秒</span>
+            <span style="color:var(--text-dim);font-size:0.85rem;margin-left:8px;">
+              （每个问题预计需要约 5 分钟，超过 5 分钟将不在页面直接回复）
+            </span>
+          </div>
+        </div>
+      </div>`;
+
+    try {
+      // Step 1: Submit async task
+      const submitResp = await fetch('/api/qa/ask-async', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ question }),
+      });
+
+      if (submitResp.status === 401 || submitResp.status === 403) {
+        sessionStorage.removeItem('site_password');
+        sitePassword = '';
+        if (loginOverlay) {
+          loginOverlay.style.display = 'flex';
+          loginError.textContent = '密码已过期或无效，请重新输入';
+          loginInput.value = '';
+          loginInput.focus();
+        }
+        return;
+      }
+
+      if (!submitResp.ok) {
+        const errData = await submitResp.json().catch(() => ({}));
+        throw new Error(errData.detail || `请求失败 (${submitResp.status})`);
+      }
+
+      const submitData = await submitResp.json();
+      const taskId = submitData.task_id;
+
+      // Step 2: Start timer and polling
+      let timedOut = false;
+      startTime = Date.now();
+
+      // Timer: update every second
+      timerInterval = setInterval(() => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        updateTimer(elapsed);
+
+        if (elapsed >= TIMEOUT_SECONDS && !timedOut) {
+          timedOut = true;
+          showTimeoutForm(taskId, question, elapsed);
+        }
+      }, 1000);
+
+      // Poll: check every POLL_INTERVAL_MS
+      pollInterval = setInterval(async () => {
+        const done = await pollResult(taskId, question);
+        if (done) {
+          stopTimers();
+          const finalElapsed = Math.round((Date.now() - startTime) / 1000);
+          updateTimer(finalElapsed);
+        }
+      }, POLL_INTERVAL_MS);
+
+      // Also do an immediate first poll
+      const done = await pollResult(taskId, question);
+      if (done) {
+        stopTimers();
+        const finalElapsed = Math.round((Date.now() - startTime) / 1000);
+        updateTimer(finalElapsed);
+      }
+
+    } catch (err) {
+      stopTimers();
+      resultEl.innerHTML = `
+        <div class="qa-status error">
+          <i class="fas fa-times-circle"></i> 问答失败：${escapeHtml(err.message)}
+        </div>`;
+    }
+  }
+
+  // ── Global Functions (for inline onclick) ──────────────────────────────
+  window._qaLeaveEmail = function(taskId) {
+    const emailInput = document.getElementById('timeoutEmail');
+    const feedback = document.getElementById('emailFeedback');
+    const btn = document.getElementById('emailSubmitBtn');
+    const email = emailInput ? emailInput.value.trim() : '';
+
+    if (!email) {
+      if (feedback) feedback.innerHTML = '<span style="color:#fbbf24;">请输入邮箱地址</span>';
+      return;
+    }
+
+    // Simple email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (feedback) feedback.innerHTML = '<span style="color:#ef4444;">邮箱格式不正确</span>';
+      return;
+    }
+
+    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后可通过存档路径获取结果。</span>';
+    if (btn) btn.disabled = true;
+
+    // Log the email request (server can pick this up later)
+    console.log(`[Email Request] task=${taskId}, email=${email}`);
+    // Also try to send to server if available
+    fetch('/api/qa/archive-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, email }),
+    }).catch(() => {});
+  };
+
+  window._qaRetryPoll = function(taskId) {
+    const feedback = document.getElementById('emailFeedback');
+    if (feedback) feedback.innerHTML = '<span style="color:var(--text-dim);"><i class="fas fa-spinner fa-pulse"></i> 正在重试...</span>';
+
+    pollResult(taskId, '').then(done => {
+      if (done) {
+        stopTimers();
+      } else {
+        if (feedback) feedback.innerHTML = '<span style="color:#fbbf24;">尚未完成，请稍后再试</span>';
+      }
+    }).catch(() => {
+      if (feedback) feedback.innerHTML = '<span style="color:#ef4444;">重试失败，请稍后再试</span>';
+    });
+  };
 
   // ── Login Event Handlers ─────────────────────────────────────────────
   if (loginBtn && loginInput && loginOverlay) {
@@ -283,7 +498,7 @@
   submitEl.addEventListener('click', () => {
     const question = inputEl.value.trim();
     if (!question) return;
-    askQuestion(question);
+    askQuestionAsync(question);
   });
 
   inputEl.addEventListener('keydown', (e) => {

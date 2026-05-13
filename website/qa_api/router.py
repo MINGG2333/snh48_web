@@ -8,7 +8,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import traceback
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -135,6 +137,24 @@ def verify_site_password(req: PasswordVerifyRequest):
     )
 
 
+# ── Async Task Registry ────────────────────────────────────────────────────
+
+
+class AsyncTask:
+    """Represents an async QA task running in background thread."""
+    def __init__(self, task_id: str, question: str):
+        self.task_id = task_id
+        self.question = question
+        self.status = "processing"  # processing | completed | error
+        self.result: Optional[Dict[str, Any]] = None
+        self.error: Optional[str] = None
+        self.created_at = datetime.now().isoformat()
+        self.completed_at: Optional[str] = None
+
+
+_tasks: Dict[str, AsyncTask] = {}
+
+
 # ── Status Endpoint ────────────────────────────────────────────────────────
 
 
@@ -145,12 +165,103 @@ def get_status():
     return _qa_status
 
 
-# ── Q&A Endpoint ───────────────────────────────────────────────────────────
+# ── Async Q&A Endpoints ────────────────────────────────────────────────────
+
+
+@router.post("/ask-async")
+def ask_question_async(req: AskRequest, _=Depends(verify_password)):
+    """Submit question for async processing. Returns immediately with a task_id."""
+    engine = _get_qa_engine()
+    if engine is None:
+        raise HTTPException(
+            status_code=503,
+            detail=_qa_status.get("message", "知识库不可用"),
+        )
+
+    task_id = uuid.uuid4().hex[:12]
+    task = AsyncTask(task_id=task_id, question=req.question)
+    _tasks[task_id] = task
+
+    def _run():
+        try:
+            result = engine.ask(
+                question=req.question,
+                vector_top_k=req.vector_top_k,
+                bm25_top_k=req.bm25_top_k,
+                context_window=req.context_window,
+                vector_score_threshold=req.vector_score_threshold,
+                bm25_score_threshold=req.bm25_score_threshold,
+                analysis_batch_size=req.analysis_batch_size,
+                synthesis_context_window=req.synthesis_context_window,
+                synthesis_batch_trigger_count=req.synthesis_batch_trigger_count,
+                synthesis_batch_size=req.synthesis_batch_size,
+            )
+            task.status = "completed"
+            task.result = result
+            task.completed_at = datetime.now().isoformat()
+        except Exception as e:
+            task.status = "error"
+            task.error = str(e)
+            task.completed_at = datetime.now().isoformat()
+            traceback.print_exc()
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return {
+        "task_id": task_id,
+        "status": "processing",
+        "message": "任务已提交，请通过 task_id 轮询结果",
+    }
+
+
+@router.get("/ask-async/{task_id}")
+def get_ask_async_result(task_id: str):
+    """Poll the status/result of an async QA task."""
+    task = _tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="任务不存在或已过期")
+
+    if task.status == "processing":
+        return {
+            "task_id": task.task_id,
+            "status": "processing",
+            "question": task.question,
+            "created_at": task.created_at,
+        }
+
+    if task.status == "error":
+        return {
+            "task_id": task.task_id,
+            "status": "error",
+            "question": task.question,
+            "error": task.error,
+            "created_at": task.created_at,
+            "completed_at": task.completed_at,
+        }
+
+    # completed
+    result = task.result
+    return {
+        "task_id": task.task_id,
+        "status": "completed",
+        "question": task.question,
+        "answer": result.get("answer", ""),
+        "citations": result.get("citations", []),
+        "video_results": result.get("video_results", []),
+        "stats": result.get("retrieval", {}),
+        "archive_path": result.get("archive_path", ""),
+        "created_at": task.created_at,
+        "completed_at": task.completed_at,
+    }
+
+
+# ── Sync Q&A Endpoint (kept for backward compat) ───────────────────────────
 
 
 @router.post("/ask", response_model=AskResponse)
 def ask_question(req: AskRequest, _=Depends(verify_password)):
-    """Ask a question against the video transcript knowledge base."""
+    """Ask a question against the video transcript knowledge base (synchronous)."""
     engine = _get_qa_engine()
     if engine is None:
         raise HTTPException(
