@@ -118,10 +118,13 @@ class PasswordVerifyRequest(BaseModel):
 def verify_site_password(req: PasswordVerifyRequest):
     """
     Frontend uses this to verify the site password.
-    Returns success if password matches (or if no password is configured).
+    If SITE_PASSWORD is not set, the feature is disabled.
     """
     if not cfg.SITE_PASSWORD:
-        return {"verified": True, "message": "未设置密码，无需验证"}
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI 问答功能未启用。请在 .env 中设置 SITE_PASSWORD 以启用此功能。",
+        )
 
     if cfg.SITE_PASSWORD == req.password:
         return {"verified": True, "message": "密码正确"}

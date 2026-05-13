@@ -48,13 +48,19 @@ LLM_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "shibing624/text2vec-base-chinese")
 
 # ── Security ────────────────────────────────────────────────────────────────
-# 网站密码保护：设置后访问 API 需要提供此密码（环境变量 SITE_PASSWORD）
-# 留空则不做密码验证（仅建议在开发/内网环境留空）
+# AI 问答功能必须设置密码才能使用（环境变量 SITE_PASSWORD）
+# 留空则 AI 问答功能将被禁用
 #
 # 推荐做法：在项目根目录创建 .env 文件（会被 .gitignore 排除，不会进 Git）：
 #   SITE_PASSWORD=xxxxxxxxx
 #   同时可在 .env 中设置 DEEPSEEK_API_KEY 等其他敏感变量
 SITE_PASSWORD = os.getenv("SITE_PASSWORD", "")
+
+# 背景词管理密码（独立于 AI 问答密码，环境变量 SCROLLER_PASSWORD）
+# 留空则背景词管理功能将被禁用
+# 可在 .env 中设置：
+#   SCROLLER_PASSWORD=xxxxxxxxx
+SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
 
 # ── Server ─────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")

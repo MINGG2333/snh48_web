@@ -42,20 +42,36 @@
 
   // Check if password is needed and handle login
   async function checkPassword() {
-    // First check if a password is even configured
+    // First check if the feature is enabled and if password is configured
     try {
       const resp = await fetch('/api/qa/verify-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: '' }),
       });
-      const data = await resp.json();
-      if (data.verified) {
-        // No password set or empty password works → proceed
-        return true;
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.verified) {
+          // No password set → proceed
+          return true;
+        }
+      }
+      // If we get here with status code, it means password is required
+      const errData = await resp.json().catch(() => ({}));
+      if (resp.status === 403 && resp.statusText) {
+        // Feature disabled or password wrong
+        throw { status: resp.status, detail: errData.detail || '' };
       }
     } catch (e) {
-      // Password is configured
+      if (e && e.detail && e.detail.includes('功能未启用')) {
+        // Feature is disabled – show a clear message
+        if (statusEl) {
+          statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#fbbf24;"></i> ' + e.detail;
+          statusEl.style.display = 'block';
+        }
+        return false; // Feature disabled, don't show login
+      }
+      // Password is configured (normal case)
     }
 
     // Try stored password

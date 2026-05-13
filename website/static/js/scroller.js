@@ -22,13 +22,7 @@
       '#ff6b9d', '#c084fc', '#60a5fa', '#34d399',
       '#fbbf24', '#f472b6', '#a78bfa', '#2dd4bf',
     ],
-    texts: [
-      'SNH48', '偶像', '舞台', '梦想', '闪耀',
-      '23期', 'B Rise', '梦之门', 'Team HII', '赫兹共振', '1&1', 'ANYONE',
-      '陈嘉仪', '甲鱼', '甲鱼不吃鱼', '萨卡班甲鱼', 'x+1', '楚简儿', 'cjy',
-      '仪嘉人', '葬爱家族',
-      '顺顺',
-    ],
+    texts: [],                  // will be loaded from API
   };
 
   // ── DOM Setup ─────────────────────────────────────────────────────────
@@ -155,11 +149,27 @@
     }
   });
 
-  // ── Start ─────────────────────────────────────────────────────────────
-  // Use requestAnimationFrame to ensure layout is complete
-  requestAnimationFrame(() => {
-    // Small delay to let font loading finish
-    setTimeout(measureLines, 100);
-  });
+  // ── Fetch texts from API, then start ───────────────────────────────────
+  async function init() {
+    try {
+      const resp = await fetch('/api/scroller/texts');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.texts && data.texts.length > 0) {
+          CONFIG.texts = data.texts;
+        }
+      }
+    } catch (_e) {
+      // fallback: keep default empty, no crash
+    }
+
+    // Use requestAnimationFrame to ensure layout is complete
+    requestAnimationFrame(() => {
+      // Small delay to let font loading finish
+      setTimeout(measureLines, 100);
+    });
+  }
+
+  init();
 
 })();

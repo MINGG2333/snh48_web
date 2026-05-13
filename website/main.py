@@ -82,6 +82,19 @@ async def qa_page(request: Request):
     )
 
 
+@app.get("/scroller-admin", response_class=HTMLResponse)
+async def scroller_admin_page(request: Request):
+    """Scroller text management page."""
+    return templates.TemplateResponse(
+        "scroller_admin.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "static_version": static_version,
+        },
+    )
+
+
 # ── API Routes ─────────────────────────────────────────────────────────────
 
 
@@ -100,6 +113,9 @@ async def startup():
 # Must be imported last to avoid circular imports
 from website.qa_api.router import router as qa_router
 app.include_router(qa_router)
+
+from website.scroller_api.router import router as scroller_router
+app.include_router(scroller_router)
 
 
 if __name__ == "__main__":
