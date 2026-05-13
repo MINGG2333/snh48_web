@@ -108,9 +108,20 @@
     return sitePassword;
   }
 
+  // ── Client ID ──────────────────────────────────────────────────────────
+  // Generate a random client_id to identify this user session
+  let clientId = sessionStorage.getItem('client_id');
+  if (!clientId) {
+    clientId = 'user_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+    sessionStorage.setItem('client_id', clientId);
+  }
+
   // ── Auth Header Helper ────────────────────────────────────────────────
   function authHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Client-Id': clientId,
+    };
     if (sitePassword) {
       headers['X-Site-Password'] = sitePassword;
     }

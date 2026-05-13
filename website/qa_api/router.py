@@ -15,10 +15,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 
 from website.auth import verify_password
+from website.logging_setup import log_interaction, log_llm_call, log_api_error, get_session_start_time
 
 # ── Import transcript_analyze (add parent to path) ──
 _KB_QA_DIR = Path(__file__).resolve().parent.parent.parent / "transcript_analyze"
@@ -169,18 +170,39 @@ def get_status():
 
 
 @router.post("/ask-async")
-def ask_question_async(req: AskRequest, _=Depends(verify_password)):
+def ask_question_async(
+    req: AskRequest,
+    _=Depends(verify_password),
+    x_client_id: Optional[str] = Header(None, alias="X-Client-Id"),
+):
     """Submit question for async processing. Returns immediately with a task_id."""
     engine = _get_qa_engine()
     if engine is None:
+        log_api_error(x_client_id or "unknown", "/ask-async", "知识库不可用")
         raise HTTPException(
             status_code=503,
             detail=_qa_status.get("message", "知识库不可用"),
         )
 
+    client_id = x_client_id or f"unknown_{uuid.uuid4().hex[:8]}"
     task_id = uuid.uuid4().hex[:12]
     task = AsyncTask(task_id=task_id, question=req.question)
+    task.client_id = client_id
     _tasks[task_id] = task
+
+    # Log the question submission
+    from website.logging_setup import get_session_dir
+    session_dir = get_session_dir()
+    log_interaction(
+        client_id=client_id,
+        question=req.question,
+        answer="",
+        citations=[],
+        video_results=[],
+        stats={"status": "submitted", "session_dir": str(session_dir)},
+        archive_path="",
+        extra={"task_id": task_id, "endpoint": "ask-async"},
+    )
 
     def _run():
         try:
@@ -199,11 +221,47 @@ def ask_question_async(req: AskRequest, _=Depends(verify_password)):
             task.status = "completed"
             task.result = result
             task.completed_at = datetime.now().isoformat()
+
+            # Log completed interaction with full detail
+            log_interaction(
+                client_id=client_id,
+                question=req.question,
+                answer=result.get("answer", ""),
+                citations=result.get("citations", []),
+                video_results=result.get("video_results", []),
+                stats=result.get("retrieval", {}),
+                archive_path=result.get("archive_path", ""),
+                extra={
+                    "task_id": task_id,
+                    "endpoint": "ask-async",
+                    "answer_generated": bool(result.get("answer")),
+                    "citation_count": len(result.get("citations", [])),
+                    "useful_segment_count": result.get("useful_segment_count", 0),
+                    "status": "completed",
+                },
+            )
         except Exception as e:
             task.status = "error"
             task.error = str(e)
             task.completed_at = datetime.now().isoformat()
             traceback.print_exc()
+
+            # Log the error
+            log_interaction(
+                client_id=client_id,
+                question=req.question,
+                answer="",
+                citations=[],
+                video_results=[],
+                stats={},
+                archive_path="",
+                error=str(e),
+                extra={
+                    "task_id": task_id,
+                    "endpoint": "ask-async",
+                    "status": "error",
+                },
+            )
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -213,6 +271,78 @@ def ask_question_async(req: AskRequest, _=Depends(verify_password)):
         "status": "processing",
         "message": "任务已提交，请通过 task_id 轮询结果",
     }
+
+
+@router.post("/ask")
+def ask_question_sync(
+    req: AskRequest,
+    _=Depends(verify_password),
+    x_client_id: Optional[str] = Header(None, alias="X-Client-Id"),
+):
+    """Synchronous ask endpoint — kept for backward compatibility."""
+    engine = _get_qa_engine()
+    if engine is None:
+        log_api_error(x_client_id or "unknown", "/ask", "知识库不可用")
+        raise HTTPException(
+            status_code=503,
+            detail=_qa_status.get("message", "知识库不可用"),
+        )
+
+    client_id = x_client_id or f"unknown_{uuid.uuid4().hex[:8]}"
+
+    try:
+        result = engine.ask(
+            question=req.question,
+            vector_top_k=req.vector_top_k,
+            bm25_top_k=req.bm25_top_k,
+            context_window=req.context_window,
+            vector_score_threshold=req.vector_score_threshold,
+            bm25_score_threshold=req.bm25_score_threshold,
+            analysis_batch_size=req.analysis_batch_size,
+            synthesis_context_window=req.synthesis_context_window,
+            synthesis_batch_trigger_count=req.synthesis_batch_trigger_count,
+            synthesis_batch_size=req.synthesis_batch_size,
+        )
+
+        # Log the interaction
+        log_interaction(
+            client_id=client_id,
+            question=req.question,
+            answer=result.get("answer", ""),
+            citations=result.get("citations", []),
+            video_results=result.get("video_results", []),
+            stats=result.get("retrieval", {}),
+            archive_path=result.get("archive_path", ""),
+            extra={
+                "endpoint": "ask-sync",
+                "answer_generated": bool(result.get("answer")),
+                "citation_count": len(result.get("citations", [])),
+            },
+        )
+
+        return AskResponse(
+            success=True,
+            question=req.question,
+            answer=result.get("answer", ""),
+            citations=result.get("citations", []),
+            video_results=result.get("video_results", []),
+            stats=result.get("retrieval", {}),
+            archive_path=result.get("archive_path", ""),
+        )
+    except Exception as e:
+        traceback.print_exc()
+        log_interaction(
+            client_id=client_id,
+            question=req.question,
+            answer="",
+            citations=[],
+            video_results=[],
+            stats={},
+            archive_path="",
+            error=str(e),
+            extra={"endpoint": "ask-sync", "status": "error"},
+        )
+        raise HTTPException(status_code=500, detail=f"问答处理失败: {e}")
 
 
 @router.get("/ask-async/{task_id}")
@@ -254,47 +384,6 @@ def get_ask_async_result(task_id: str):
         "created_at": task.created_at,
         "completed_at": task.completed_at,
     }
-
-
-# ── Sync Q&A Endpoint (kept for backward compat) ───────────────────────────
-
-
-@router.post("/ask", response_model=AskResponse)
-def ask_question(req: AskRequest, _=Depends(verify_password)):
-    """Ask a question against the video transcript knowledge base (synchronous)."""
-    engine = _get_qa_engine()
-    if engine is None:
-        raise HTTPException(
-            status_code=503,
-            detail=_qa_status.get("message", "知识库不可用"),
-        )
-
-    try:
-        result = engine.ask(
-            question=req.question,
-            vector_top_k=req.vector_top_k,
-            bm25_top_k=req.bm25_top_k,
-            context_window=req.context_window,
-            vector_score_threshold=req.vector_score_threshold,
-            bm25_score_threshold=req.bm25_score_threshold,
-            analysis_batch_size=req.analysis_batch_size,
-            synthesis_context_window=req.synthesis_context_window,
-            synthesis_batch_trigger_count=req.synthesis_batch_trigger_count,
-            synthesis_batch_size=req.synthesis_batch_size,
-        )
-
-        return AskResponse(
-            success=True,
-            question=req.question,
-            answer=result.get("answer", ""),
-            citations=result.get("citations", []),
-            video_results=result.get("video_results", []),
-            stats=result.get("retrieval", {}),
-            archive_path=result.get("archive_path", ""),
-        )
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"问答处理失败: {e}")
 
 
 # ── Build KB Endpoint ──────────────────────────────────────────────────────

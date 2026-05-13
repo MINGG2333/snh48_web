@@ -123,7 +123,33 @@ async def scroller_admin_page(request: Request):
 
 @app.on_event("startup")
 async def startup():
-    """Try to load the QA engine on startup (non-blocking on failure)."""
+    """
+    On startup:
+    1. Back up old qa_archive, video_knowledge_db, transcript_analyze (if configured)
+    2. Initialize interaction log session
+    3. Try to load the QA engine (non-blocking on failure)
+    """
+    # ── Backup qa_archive ────────────────────────────────────────────────
+    kb_dir = Path(cfg.KB_DIR)
+    if kb_dir.exists():
+        from website.logging_setup import backup_and_recreate_qa_archive
+        backed_up = backup_and_recreate_qa_archive(kb_dir)
+        if backed_up:
+            print(f"✓ qa_archive backed up successfully at {kb_dir}")
+    else:
+        print(f"  KB directory {kb_dir} does not exist yet, skipping qa_archive backup.")
+
+    # ── Backup transcript_analyze log files ──────────────────────────────
+    transcript_dir = Path(__file__).resolve().parent.parent / "transcript_analyze"
+    if transcript_dir.exists():
+        _backup_log_files(transcript_dir)
+
+    # ── Initialize session log ──────────────────────────────────────────
+    from website.logging_setup import get_session_dir
+    session_dir = get_session_dir()
+    print(f"✓ Interaction log session started: {session_dir}")
+
+    # ── Load QA engine (non-blocking) ───────────────────────────────────
     try:
         from website.qa_api.router import _get_qa_engine
         _get_qa_engine()
@@ -131,6 +157,43 @@ async def startup():
     except Exception as e:
         print(f"! QA engine not available at startup: {e}")
         print("  You can still serve the frontend. Build the KB later via API.")
+
+
+def _backup_log_files(transcript_dir: Path) -> None:
+    """Backup existing log files (kb_qa.log, server logs) in various locations."""
+    import shutil
+    from datetime import datetime
+
+    # Collect all log files to back up (both local and server)
+    log_files = [
+        transcript_dir / "kb_qa.log",               # transcript_analyze/kb_qa.log
+        transcript_dir.parent / "kb_qa.log",        # project root /kb_qa.log
+        transcript_dir.parent / "snh48_screen.log", # project root screen log
+    ]
+
+    # Also check server log directory /var/log/snh48/ (used in production)
+    server_log_dir = Path("/var/log/snh48")
+    if server_log_dir.exists():
+        for f in server_log_dir.iterdir():
+            if f.is_file() and f.suffix in (".log", ""):
+                log_files.append(f)
+
+    backup_dir = transcript_dir / "logs_backup"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for log_file in log_files:
+        if log_file.exists() and log_file.stat().st_size > 0:
+            try:
+                backup_name = f"{log_file.name}_{timestamp}"
+                backup_path = backup_dir / backup_name
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(log_file), str(backup_path))
+                # Truncate original log file
+                log_file.write_text("")
+                print(f"✓ Backed up {log_file.name} → logs_backup/{backup_name}")
+            except OSError as e:
+                print(f"  ! Failed to backup {log_file.name}: {e}")
+
 
 
 # Must be imported last to avoid circular imports
