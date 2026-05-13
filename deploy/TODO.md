@@ -108,14 +108,8 @@ ls /root/.cache/huggingface/hub/models--shibing624--text2vec-base-chinese/snapsh
 ## 第6步：构建知识库
 
 ```bash
-cd /home/snh48_web
-source venv/bin/activate
-python transcript_analyze/run_kb_qa.py \
-  --records download_records.json \
-  --subtitle-root firered_output_batch \
-  --kb-dir video_knowledge_db \
-  --debug \
-  build
+chmod +x ./script/run_kb_qa_build.sh
+nohup ./script/run_kb_qa_build.sh & echo "下载任务已启动，PID: $!"
 ```
 
 ---
