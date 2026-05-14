@@ -254,6 +254,12 @@
       ? `预估相关片段共约 ${surveyTotal} 段，当前分析使用了其中 ${usedCount} 段`
       : `当前分析使用了 ${usedCount} 段相关片段`;
 
+    // Use the actual query keywords for the "high-frequency keywords" explanation
+    const bm25Query = comp.bm25_query || '';
+    const keywordHint = bm25Query
+      ? `对于包含高频关键词"${escapeHtml(bm25Query)}"的问题，可能因数据量过大而未能全面覆盖所有相关片段。`
+      : '对于包含高频关键词的问题，可能因数据量过大而未能全面覆盖所有相关片段。';
+
     // Generate a stable email subject / identifier
     const questionForEmail = encodeURIComponent(question || '未指定问题');
 
@@ -265,7 +271,7 @@
         </div>
         <div class="qa-comp-body">
           <p><strong>本回答仅分析了预估相关内容的 ${pct}%</strong>，${summaryText}。</p>
-          <p>对于包含高频关键词（如“陈嘉仪”“顺顺”）的问题，可能因数据量过大而未能全面覆盖所有相关片段。</p>
+          <p>${keywordHint}</p>
         </div>
         <div class="qa-email-section">
           <label for="compEmail">如需获取更全面的回答，请留下您的邮箱和问题：</label>
@@ -340,11 +346,6 @@
     }
     html += `</div>`;
 
-    // Comprehensiveness warning banner
-    if (data.comprehensiveness) {
-      html += buildComprehensivenessBanner(data.comprehensiveness, data.question || '');
-    }
-
     // Citations
     if (hasCitations) {
       html += `<div class="qa-citations">`;
@@ -363,6 +364,11 @@
         html += `</div>`;
       }
       html += `</div>`;
+    }
+
+    // Comprehensiveness warning banner (after the citation list)
+    if (data.comprehensiveness) {
+      html += buildComprehensivenessBanner(data.comprehensiveness, data.question || '');
     }
 
     resultEl.innerHTML = html;
