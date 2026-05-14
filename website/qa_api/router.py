@@ -136,9 +136,11 @@ def verify_site_password(
 
     Includes IP-based rate limiting to prevent brute-force attacks.
     """
-    # Anti brute-force: rate limit password attempts per IP
     ip = get_client_ip(request)
-    check_password_rate_limit(ip)
+
+    # ── 空密码 = 前端探测请求，不消耗限速次数 ────────────────────────
+    if req.password:
+        check_password_rate_limit(ip)
 
     if not cfg.SITE_PASSWORD:
         raise HTTPException(

@@ -479,6 +479,8 @@
 
   // ── Convert backend rate-limit messages to user-friendly text ────────
   function friendlyLimitHint(msg) {
+    // 普通密码错误 → 直接显示
+    if (msg === '密码错误') return '密码错误，请重试';
     // 用户冷却 → 提取剩余秒数
     let m = msg.match(/请\s*(\d+)\s*秒/);
     if (m) return `提问速度太快了，请 ${m[1]} 秒后再试 🕐`;
@@ -486,10 +488,10 @@
     if (msg.includes('已达上限')) return `今天已经问了够多啦，明天再来吧 😊`;
     // 并发限制 → 友好提示
     if (msg.includes('正在处理')) return `您有一个问题还在处理中，请稍等片刻 ⏳`;
-    // IP 级限速（请求过于频繁）
-    if (msg.includes('请求过于频繁')) return `访问太频繁了，请稍后再试 🙏`;
-    // 密码限速
-    if (msg.includes('密码')) return `密码验证次数过多，请过一会儿再试 🔒`;
+    // IP 级限速（纯"请求过于频繁"）
+    if (msg === '请求过于频繁，请稍后再试' || msg.includes('请求过于频繁') && !msg.includes('密码')) return `访问太频繁了，请稍后再试 🙏`;
+    // 密码限速 — 包含"密码"且包含"频繁"
+    if (msg.includes('密码') && msg.includes('频繁')) return `密码验证次数过多，请过一会儿再试 🔒`;
     // 兜底
     return '操作太频繁了，请稍后重试';
   }
@@ -521,7 +523,14 @@
           }
         }
       } catch (err) {
-        loginError.textContent = friendlyLimitHint(err.message || '');
+        const msg = err.message || '';
+        loginError.textContent = friendlyLimitHint(msg);
+        // 限速用黄色警告，密码错误用红色
+        if (msg.includes('密码') && !msg.includes('过频繁')) {
+          loginError.className = 'login-error';           // red
+        } else {
+          loginError.className = 'login-error login-error--warn';  // yellow
+        }
       } finally {
         loginBtn.disabled = false;
         loginBtn.textContent = '确认';
