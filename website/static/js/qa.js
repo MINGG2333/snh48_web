@@ -357,14 +357,18 @@
     }
 
     try {
-      // Create a wrapper element to capture
+      // ── Step 1: Build an off-screen wrapper with larger base font ──
       const wrapper = document.createElement('div');
+      // Use a slightly narrower width so text stacks more compactly
+      // and larger base font for readability when zoomed out
       wrapper.style.cssText = `
         background: #0a0a1a;
-        padding: 24px;
+        padding: 28px;
         border-radius: 16px;
         font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
         color: #f0f0f0;
+        font-size: 17px;
+        line-height: 1.9;
         position: absolute;
         left: -9999px;
         top: 0;
@@ -372,29 +376,45 @@
       `;
       document.body.appendChild(wrapper);
 
-      // Clone the result content into the wrapper
+      // ── Step 2: Clone result content (keep all info, no truncation) ──
       const clone = resultEl.cloneNode(true);
-      // Remove the share button area from the clone (if it was included)
+
+      // Remove the share button area from the clone
       const shareArea = clone.querySelector('.qa-share-area');
       if (shareArea) shareArea.remove();
+
+      // Remove comprehensiveness banner (email form is interactive)
+      const compBanner = clone.querySelector('.qa-comp-banner');
+      if (compBanner) compBanner.remove();
+
+      // Fix link-based citation refs to static styled text (can't click in image)
+      const citationRefs = clone.querySelectorAll('.citation-ref');
+      citationRefs.forEach(el => {
+        el.style.color = '#ff6b9d';
+        el.style.fontWeight = '700';
+        el.style.textDecoration = 'none';
+        el.style.cursor = 'default';
+        el.removeAttribute('href');
+      });
+
       wrapper.appendChild(clone);
 
-      // Build footer with QR code
+      // ── Step 3: Build footer with QR code ──
       const footer = document.createElement('div');
       footer.style.cssText = `
-        margin-top: 24px;
-        padding-top: 20px;
+        margin-top: 28px;
+        padding-top: 22px;
         border-top: 1px solid rgba(255,255,255,0.12);
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 20px;
         text-align: left;
       `;
 
-      // QR code
+      // QR code - slightly bigger for easier scanning
       const qrContainer = document.createElement('div');
       const siteUrl = getSiteUrl();
-      const qrHtml = generateQRCode(siteUrl, 100);
+      const qrHtml = generateQRCode(siteUrl, 110);
       qrContainer.innerHTML = qrHtml;
       qrContainer.style.flexShrink = '0';
       footer.appendChild(qrContainer);
@@ -409,7 +429,7 @@
       `;
       const question = document.getElementById('qaInput')?.value?.trim() || '';
       info.innerHTML = `
-        <div style="font-size:0.95rem;color:rgba(255,255,255,0.7);font-weight:500;margin-bottom:4px;">
+        <div style="font-size:1rem;color:rgba(255,255,255,0.75);font-weight:500;margin-bottom:6px;">
           <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答
         </div>
         <div>${question ? 'Q: ' + escapeHtml(question) : ''}</div>
@@ -420,24 +440,27 @@
 
       wrapper.appendChild(footer);
 
-      // Wait for fonts/images to render
-      await new Promise(r => setTimeout(r, 300));
+      // ── Step 4: Wait for fonts and layout to settle ──
+      await new Promise(r => setTimeout(r, 400));
 
-      // Capture the wrapper
+      // ── Step 5: Capture at high DPI for crisp text on any screen ──
+      // scale=3 means 3 physical pixels per CSS pixel =  very sharp text
       const canvas = await html2canvas(wrapper, {
-        scale: 2, // 2x for retina
+        scale: 3,
         useCORS: true,
         backgroundColor: '#0a0a1a',
         allowTaint: true,
         logging: false,
         width: wrapper.scrollWidth,
         height: wrapper.scrollHeight,
+        windowWidth: wrapper.scrollWidth,
+        windowHeight: wrapper.scrollHeight,
       });
 
       // Clean up the temporary wrapper
       document.body.removeChild(wrapper);
 
-      // Convert canvas to PNG and download
+      // ── Step 6: Download PNG ──
       const link = document.createElement('a');
       link.download = `AI问答_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.png`;
       link.href = canvas.toDataURL('image/png');
