@@ -228,6 +228,85 @@
     return div.innerHTML;
   }
 
+  // ── Comprehensiveness Banner ──────────────────────────────────────────
+  function buildComprehensivenessBanner(comp, question) {
+    if (!comp || comp.ratio === undefined) return '';
+    const ratio = comp.ratio;
+    const pct = Math.round(ratio * 100);
+    const surveyTotal = comp.survey_total_relevant || 0;
+    const usedCount = comp.used_base_count || 0;
+
+    // Only show warning if ratio is significantly below 100%
+    if (ratio >= 0.95) return '';
+
+    // Severity classes for styling
+    let severity = 'low';
+    let icon = 'fa-info-circle';
+    if (pct < 30) {
+      severity = 'high';
+      icon = 'fa-exclamation-triangle';
+    } else if (pct < 60) {
+      severity = 'medium';
+      icon = 'fa-exclamation-circle';
+    }
+
+    const summaryText = surveyTotal > 0
+      ? `预估相关片段共约 ${surveyTotal} 段，当前分析使用了其中 ${usedCount} 段`
+      : `当前分析使用了 ${usedCount} 段相关片段`;
+
+    // Generate a stable email subject / identifier
+    const questionForEmail = encodeURIComponent(question || '未指定问题');
+
+    return `
+      <div class="qa-comp-banner qa-comp-banner--${severity}">
+        <div class="qa-comp-header">
+          <i class="fas ${icon}"></i>
+          <span>回答全面性提醒</span>
+        </div>
+        <div class="qa-comp-body">
+          <p><strong>本回答仅分析了预估相关内容的 ${pct}%</strong>，${summaryText}。</p>
+          <p>对于包含高频关键词（如“陈嘉仪”“顺顺”）的问题，可能因数据量过大而未能全面覆盖所有相关片段。</p>
+        </div>
+        <div class="qa-email-section">
+          <label for="compEmail">如需获取更全面的回答，请留下您的邮箱和问题：</label>
+          <div class="qa-email-row">
+            <input type="email" id="compEmail" class="qa-input" placeholder="your@email.com"
+                   style="flex:1; margin-right:8px;">
+            <button class="qa-submit" onclick="window._qaCompRequest('${questionForEmail}')">
+              <i class="fas fa-paper-plane"></i> 提交请求
+            </button>
+          </div>
+          <p class="qa-email-hint">提交后，管理员会尽快为您提供更全面的回答。</p>
+          <div id="compEmailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
+        </div>
+      </div>`;
+  }
+
+  // Global: handle comprehensiveness email request
+  window._qaCompRequest = function(encodedQuestion) {
+    const emailInput = document.getElementById('compEmail');
+    const feedback = document.getElementById('compEmailFeedback');
+    const email = emailInput ? emailInput.value.trim() : '';
+    const question = decodeURIComponent(encodedQuestion);
+
+    if (!email) {
+      if (feedback) feedback.innerHTML = '<span style="color:#fbbf24;">请输入邮箱地址</span>';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (feedback) feedback.innerHTML = '<span style="color:#ef4444;">邮箱格式不正确</span>';
+      return;
+    }
+
+    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！感谢您的反馈。</span>';
+
+    fetch('/api/qa/archive-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: 'comprehensiveness_request', email, question }),
+    }).catch(() => {});
+  };
+
   // ── Display Result ───────────────────────────────────────────────────
   function displayResult(data) {
     stopTimers();
@@ -260,6 +339,11 @@
       html += `<p style="color: var(--text-dim);">未返回有效答案。</p>`;
     }
     html += `</div>`;
+
+    // Comprehensiveness warning banner
+    if (data.comprehensiveness) {
+      html += buildComprehensivenessBanner(data.comprehensiveness, data.question || '');
+    }
 
     // Citations
     if (hasCitations) {

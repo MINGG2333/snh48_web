@@ -34,6 +34,7 @@ _KB_QA_DIR = Path(__file__).resolve().parent.parent.parent / "transcript_analyze
 if str(_KB_QA_DIR) not in sys.path:
     sys.path.insert(0, str(_KB_QA_DIR))
 
+from kb_qa.config import KB_QA_DEFAULTS
 from website import config as cfg
 
 router = APIRouter(prefix="/api/qa", tags=["知识库问答"])
@@ -97,15 +98,15 @@ def _get_qa_engine():
 
 class AskRequest(BaseModel):
     question: str
-    vector_top_k: int = 1000
-    bm25_top_k: int = 1000
-    context_window: int = 3
-    vector_score_threshold: float = 0.3
-    bm25_score_threshold: float = 15.0
-    analysis_batch_size: int = 20
-    synthesis_context_window: int = 6
-    synthesis_batch_trigger_count: int = 100
-    synthesis_batch_size: int = 50
+    vector_top_k: int = KB_QA_DEFAULTS.vector_top_k
+    bm25_top_k: int = KB_QA_DEFAULTS.bm25_top_k
+    context_window: int = KB_QA_DEFAULTS.context_window
+    vector_score_threshold: float = KB_QA_DEFAULTS.vector_score_threshold
+    bm25_score_threshold: float = KB_QA_DEFAULTS.bm25_score_threshold
+    analysis_batch_size: int = KB_QA_DEFAULTS.analysis_batch_size
+    synthesis_context_window: int = KB_QA_DEFAULTS.synthesis_context_window
+    synthesis_batch_trigger_count: int = KB_QA_DEFAULTS.synthesis_batch_trigger_count
+    synthesis_batch_size: int = KB_QA_DEFAULTS.synthesis_batch_size
 
 
 class AskResponse(BaseModel):
@@ -116,6 +117,7 @@ class AskResponse(BaseModel):
     video_results: List[Dict[str, Any]]
     stats: Dict[str, Any]
     archive_path: str = ""
+    comprehensiveness: Optional[Dict[str, Any]] = None
 
 
 # ── Password Verification (frontend helper) ────────────────────────────────
@@ -364,14 +366,18 @@ def ask_question_sync(
             },
         )
 
+        retrieval = result.get("retrieval", {})
+        comprehensiveness = retrieval.get("comprehensiveness") if isinstance(retrieval, dict) else None
+
         return AskResponse(
             success=True,
             question=req.question,
             answer=result.get("answer", ""),
             citations=result.get("citations", []),
             video_results=result.get("video_results", []),
-            stats=result.get("retrieval", {}),
+            stats=retrieval,
             archive_path=result.get("archive_path", ""),
+            comprehensiveness=comprehensiveness,
         )
     except Exception as e:
         traceback.print_exc()
@@ -416,6 +422,8 @@ def get_ask_async_result(task_id: str):
 
     # completed
     result = task.result
+    retrieval = result.get("retrieval", {})
+    comprehensiveness = retrieval.get("comprehensiveness") if isinstance(retrieval, dict) else None
     return {
         "task_id": task.task_id,
         "status": "completed",
@@ -423,8 +431,9 @@ def get_ask_async_result(task_id: str):
         "answer": result.get("answer", ""),
         "citations": result.get("citations", []),
         "video_results": result.get("video_results", []),
-        "stats": result.get("retrieval", {}),
+        "stats": retrieval,
         "archive_path": result.get("archive_path", ""),
+        "comprehensiveness": comprehensiveness,
         "created_at": task.created_at,
         "completed_at": task.completed_at,
     }
@@ -436,6 +445,7 @@ def get_ask_async_result(task_id: str):
 class ArchiveEmailRequest(BaseModel):
     task_id: str
     email: str
+    question: Optional[str] = None
 
 
 @router.post("/archive-email")
@@ -453,6 +463,8 @@ def archive_email(req: ArchiveEmailRequest):
         "email": req.email,
         "timestamp": datetime.now().isoformat(),
     }
+    if req.question:
+        record["question"] = req.question
 
     with open(email_log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -466,7 +478,7 @@ def archive_email(req: ArchiveEmailRequest):
         video_results=[],
         stats={},
         archive_path="",
-        extra={"type": "email_collection", "task_id": req.task_id, "email": req.email},
+        extra={"type": "email_collection", "task_id": req.task_id, "email": req.email, "question": req.question or ""},
     )
 
     return {"success": True, "message": "邮箱已记录"}
