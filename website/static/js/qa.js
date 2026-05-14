@@ -325,6 +325,134 @@
     }).catch(() => {});
   };
 
+  // ── QR Code Generation ──────────────────────────────────────────────
+  function generateQRCode(url, size) {
+    try {
+      const typeNumber = 0; // auto-detect
+      const errorCorrectionLevel = 'H'; // High error correction
+      const qr = qrcode(typeNumber, errorCorrectionLevel);
+      qr.addData(url);
+      qr.make();
+      return qr.createImgTag(size, size, ' margin: 0 auto; display: block;');
+    } catch (e) {
+      console.warn('QR generation failed:', e);
+      return '';
+    }
+  }
+
+  // ── Download as Image (Screenshot) ──────────────────────────────────
+  function getSiteUrl() {
+    return window.location.protocol + '//' + window.location.host;
+  }
+
+  async function downloadAsImage() {
+    const resultEl = document.getElementById('qaResult');
+    const shareBtn = document.getElementById('qaShareBtn');
+    if (!resultEl || resultEl.children.length === 0) return;
+
+    // Show loading state
+    if (shareBtn) {
+      shareBtn.disabled = true;
+      shareBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 生成中...';
+    }
+
+    try {
+      // Create a wrapper element to capture
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = `
+        background: #0a0a1a;
+        padding: 24px;
+        border-radius: 16px;
+        font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #f0f0f0;
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        width: 780px;
+      `;
+      document.body.appendChild(wrapper);
+
+      // Clone the result content into the wrapper
+      const clone = resultEl.cloneNode(true);
+      // Remove the share button area from the clone (if it was included)
+      const shareArea = clone.querySelector('.qa-share-area');
+      if (shareArea) shareArea.remove();
+      wrapper.appendChild(clone);
+
+      // Build footer with QR code
+      const footer = document.createElement('div');
+      footer.style.cssText = `
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        text-align: left;
+      `;
+
+      // QR code
+      const qrContainer = document.createElement('div');
+      const siteUrl = getSiteUrl();
+      const qrHtml = generateQRCode(siteUrl, 100);
+      qrContainer.innerHTML = qrHtml;
+      qrContainer.style.flexShrink = '0';
+      footer.appendChild(qrContainer);
+
+      // Text info
+      const info = document.createElement('div');
+      info.style.cssText = `
+        flex: 1;
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.5);
+        line-height: 1.6;
+      `;
+      const question = document.getElementById('qaInput')?.value?.trim() || '';
+      info.innerHTML = `
+        <div style="font-size:0.95rem;color:rgba(255,255,255,0.7);font-weight:500;margin-bottom:4px;">
+          <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答
+        </div>
+        <div>${question ? 'Q: ' + escapeHtml(question) : ''}</div>
+        <div style="margin-top:4px;">扫描二维码访问网站 · ${siteUrl}</div>
+        <div style="margin-top:2px;font-size:0.78rem;">生成时间：${new Date().toLocaleString('zh-CN')}</div>
+      `;
+      footer.appendChild(info);
+
+      wrapper.appendChild(footer);
+
+      // Wait for fonts/images to render
+      await new Promise(r => setTimeout(r, 300));
+
+      // Capture the wrapper
+      const canvas = await html2canvas(wrapper, {
+        scale: 2, // 2x for retina
+        useCORS: true,
+        backgroundColor: '#0a0a1a',
+        allowTaint: true,
+        logging: false,
+        width: wrapper.scrollWidth,
+        height: wrapper.scrollHeight,
+      });
+
+      // Clean up the temporary wrapper
+      document.body.removeChild(wrapper);
+
+      // Convert canvas to PNG and download
+      const link = document.createElement('a');
+      link.download = `AI问答_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      console.error('Screenshot failed:', err);
+      alert('截图保存失败，请重试。错误信息：' + err.message);
+    } finally {
+      if (shareBtn) {
+        shareBtn.disabled = false;
+        shareBtn.innerHTML = '<i class="fas fa-download"></i> 保存为图片';
+      }
+    }
+  }
+
   // ── Display Result ───────────────────────────────────────────────────
   function displayResult(data) {
     stopTimers();
@@ -383,9 +511,19 @@
       html += buildComprehensivenessBanner(data.comprehensiveness, data.question || '');
     }
 
+    // ── Share / Save as Image button ──
+    html += `<div class="qa-share-area">
+      <button id="qaShareBtn" class="qa-share-btn" onclick="window._qaDownloadImage()">
+        <i class="fas fa-download"></i> 保存为图片
+      </button>
+    </div>`;
+
     resultEl.innerHTML = html;
     resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+
+  // ── Global: Download Image ────────────────────────────────────────────
+  window._qaDownloadImage = downloadAsImage;
 
   // ── Poll for Result ──────────────────────────────────────────────────
   async function pollResult(taskId, question) {

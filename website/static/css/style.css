@@ -894,3 +894,43 @@ body {
   font-size: 0.9rem;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHARE / SAVE AS IMAGE BUTTON
+   ═══════════════════════════════════════════════════════════════════════════*/
+.qa-share-area {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+.qa-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 32px;
+  border-radius: 50px;
+  border: 1.5px solid var(--glass-border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.qa-share-btn:hover {
+  background: rgba(255, 107, 157, 0.15);
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(255, 107, 157, 0.2);
+}
+.qa-share-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.qa-share-btn i {
+  font-size: 1.1rem;
+}
+
