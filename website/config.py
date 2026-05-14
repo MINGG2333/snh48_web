@@ -26,6 +26,9 @@ if _env_file.exists():
             key, _, val = line.partition("=")
             key = key.strip()
             val = val.strip().strip("\"'")
+            # 去掉行内 # 注释（避免 "10           # 注释" 导致 int() 解析失败）
+            if "#" in val:
+                val = val.partition("#")[0].strip()
             # 环境变量优先，.env 里的值仅当未设置环境变量时生效
             if key not in os.environ:
                 os.environ[key] = val

@@ -356,7 +356,24 @@
 
       if (!submitResp.ok) {
         const errData = await submitResp.json().catch(() => ({}));
-        throw new Error(errData.detail || `请求失败 (${submitResp.status})`);
+        const errMsg = errData.detail || `请求失败 (${submitResp.status})`;
+        // 429 限速提示用温和友好的风格展示
+        if (submitResp.status === 429) {
+          stopTimers();
+          const friendly = friendlyLimitHint(errMsg);
+          resultEl.innerHTML = `
+            <div class="qa-rate-limited" style="
+              background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.3);
+              border-radius: 12px; padding: 20px; text-align: center; margin: 16px 0;
+            ">
+              <div style="font-size: 2.5rem; margin-bottom: 8px;">⏳</div>
+              <div style="font-size: 1.05rem; color: #fcd34d; font-weight: 600; margin-bottom: 4px;">
+                ${escapeHtml(friendly)}
+              </div>
+            </div>`;
+          return;
+        }
+        throw new Error(errMsg);
       }
 
       const submitData = await submitResp.json();
@@ -460,6 +477,23 @@
     });
   };
 
+  // ── Convert backend rate-limit messages to user-friendly text ────────
+  function friendlyLimitHint(msg) {
+    // 用户冷却 → 提取剩余秒数
+    let m = msg.match(/请\s*(\d+)\s*秒/);
+    if (m) return `提问速度太快了，请 ${m[1]} 秒后再试 🕐`;
+    // 每日配额 → 友好提示
+    if (msg.includes('已达上限')) return `今天已经问了够多啦，明天再来吧 😊`;
+    // 并发限制 → 友好提示
+    if (msg.includes('正在处理')) return `您有一个问题还在处理中，请稍等片刻 ⏳`;
+    // IP 级限速（请求过于频繁）
+    if (msg.includes('请求过于频繁')) return `访问太频繁了，请稍后再试 🙏`;
+    // 密码限速
+    if (msg.includes('密码')) return `密码验证次数过多，请过一会儿再试 🔒`;
+    // 兜底
+    return '操作太频繁了，请稍后重试';
+  }
+
   // ── Login Event Handlers ─────────────────────────────────────────────
   if (loginBtn && loginInput && loginOverlay) {
     loginBtn.addEventListener('click', async () => {
@@ -481,14 +515,13 @@
           submitEl.disabled = false;
           inputEl.focus();
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
-          // 如果登录前有待处理任务，登录完成后自动检查
           if (window._qaPendingOnLogin) {
             window._qaPendingOnLogin = false;
             setTimeout(checkPendingTask, 100);
           }
         }
       } catch (err) {
-        loginError.textContent = '密码错误，请重试';
+        loginError.textContent = friendlyLimitHint(err.message || '');
       } finally {
         loginBtn.disabled = false;
         loginBtn.textContent = '确认';

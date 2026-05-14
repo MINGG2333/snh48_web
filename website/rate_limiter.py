@@ -20,6 +20,7 @@ from typing import Deque, Dict, Optional, Set, Tuple
 from fastapi import HTTPException, Request, status
 
 from website import config as cfg
+from website.logging_setup import log_api_error
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Sliding-Window Rate Limiter (per IP)
@@ -131,6 +132,7 @@ def check_qa_rate_limit(ip: str) -> int:
     """
     allowed, count = qa_ip_limiter.check(ip)
     if not allowed:
+        log_api_error(ip, "/api/qa/ask", f"IP级限速拒绝（{count}/{cfg.QA_RATE_LIMIT_PER_WINDOW}）")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
@@ -154,6 +156,10 @@ def check_user_cooldown(client_id: str) -> None:
         elapsed = now - last
         if elapsed < cfg.QA_USER_COOLDOWN_SECONDS:
             remaining = int(cfg.QA_USER_COOLDOWN_SECONDS - elapsed)
+            log_api_error(
+                client_id, "/api/qa/ask",
+                f"用户冷却拒绝（还需等待 {remaining}s）",
+            )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"提问过于频繁，请 {remaining} 秒后再试",
@@ -171,6 +177,10 @@ def check_daily_quota(client_id: str) -> None:
     record = _daily_usage.get(client_id)
     if record and record[0] == today:
         if record[1] >= cfg.QA_DAILY_QUOTA_PER_USER:
+            log_api_error(
+                client_id, "/api/qa/ask",
+                f"日配额拒绝（{record[1]}/{cfg.QA_DAILY_QUOTA_PER_USER}）",
+            )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
@@ -195,6 +205,10 @@ def check_concurrent_tasks(client_id: str) -> None:
         1 for key in _active_tasks if key.startswith(f"{client_id}:")
     )
     if user_task_count >= cfg.QA_MAX_CONCURRENT_PER_USER:
+        log_api_error(
+            client_id, "/api/qa/ask",
+            f"并发限制拒绝（当前 {user_task_count} 个）",
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
@@ -240,6 +254,7 @@ def check_password_rate_limit(ip: str) -> None:
     """
     allowed, _ = password_limiter.check(ip)
     if not allowed:
+        log_api_error(ip, "/api/qa/verify-password", "密码暴力破解限速拒绝")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
