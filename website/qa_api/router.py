@@ -15,11 +15,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
 
 from website.auth import verify_password
 from website.logging_setup import log_interaction, log_llm_call, log_api_error, get_session_start_time
+from website.rate_limiter import (
+    check_all_qa_limits,
+    check_password_rate_limit,
+    get_client_ip,
+    get_rate_limiter_stats,
+    register_task,
+    unregister_task,
+)
 
 # ── Import transcript_analyze (add parent to path) ──
 _KB_QA_DIR = Path(__file__).resolve().parent.parent.parent / "transcript_analyze"
@@ -118,11 +126,20 @@ class PasswordVerifyRequest(BaseModel):
 
 
 @router.post("/verify-password")
-def verify_site_password(req: PasswordVerifyRequest):
+def verify_site_password(
+    req: PasswordVerifyRequest,
+    request: Request,
+):
     """
     Frontend uses this to verify the site password.
     If SITE_PASSWORD is not set, the feature is disabled.
+
+    Includes IP-based rate limiting to prevent brute-force attacks.
     """
+    # Anti brute-force: rate limit password attempts per IP
+    ip = get_client_ip(request)
+    check_password_rate_limit(ip)
+
     if not cfg.SITE_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -172,20 +189,37 @@ def get_status():
 @router.post("/ask-async")
 def ask_question_async(
     req: AskRequest,
+    request: Request,
     _=Depends(verify_password),
     x_client_id: Optional[str] = Header(None, alias="X-Client-Id"),
 ):
-    """Submit question for async processing. Returns immediately with a task_id."""
+    """
+    Submit question for async processing. Returns immediately with a task_id.
+
+    Enforces multiple rate-limit layers:
+      - IP-based: max N questions per time window
+      - User cooldown: minimum interval between questions
+      - Daily quota: max questions per user per day
+      - Concurrent task limit: max in-flight tasks per user
+    """
+    ip = get_client_ip(request)
+    client_id = x_client_id or f"unknown_{uuid.uuid4().hex[:8]}"
+
+    # ════════════════════════════════════════════════════════════════
+    #  Rate limiting: check all layers before any resource is used
+    # ════════════════════════════════════════════════════════════════
     engine = _get_qa_engine()
     if engine is None:
-        log_api_error(x_client_id or "unknown", "/ask-async", "知识库不可用")
+        log_api_error(client_id, "/ask-async", "知识库不可用")
         raise HTTPException(
             status_code=503,
             detail=_qa_status.get("message", "知识库不可用"),
         )
 
-    client_id = x_client_id or f"unknown_{uuid.uuid4().hex[:8]}"
+    check_all_qa_limits(ip, client_id)
+
     task_id = uuid.uuid4().hex[:12]
+    register_task(task_id, client_id)
     task = AsyncTask(task_id=task_id, question=req.question)
     task.client_id = client_id
     _tasks[task_id] = task
@@ -262,6 +296,9 @@ def ask_question_async(
                     "status": "error",
                 },
             )
+        finally:
+            # Release concurrent task slot regardless of outcome
+            unregister_task(task_id, client_id)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -276,19 +313,24 @@ def ask_question_async(
 @router.post("/ask")
 def ask_question_sync(
     req: AskRequest,
+    request: Request,
     _=Depends(verify_password),
     x_client_id: Optional[str] = Header(None, alias="X-Client-Id"),
 ):
     """Synchronous ask endpoint — kept for backward compatibility."""
+    ip = get_client_ip(request)
+    client_id = x_client_id or f"unknown_{uuid.uuid4().hex[:8]}"
+
     engine = _get_qa_engine()
     if engine is None:
-        log_api_error(x_client_id or "unknown", "/ask", "知识库不可用")
+        log_api_error(client_id, "/ask", "知识库不可用")
         raise HTTPException(
             status_code=503,
             detail=_qa_status.get("message", "知识库不可用"),
         )
 
-    client_id = x_client_id or f"unknown_{uuid.uuid4().hex[:8]}"
+    # Rate limiting for sync endpoint too
+    check_all_qa_limits(ip, client_id)
 
     try:
         result = engine.ask(

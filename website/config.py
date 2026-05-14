@@ -62,6 +62,26 @@ SITE_PASSWORD = os.getenv("SITE_PASSWORD", "")
 #   SCROLLER_PASSWORD=xxxxxxxxx
 SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
 
+# ── Rate Limiting (防滥用配置) ──────────────────────────────────────────────
+# 所有值均可通过 .env 文件或环境变量覆盖
+
+# 每个 IP 在时间窗口内最多允许多少次 QA 提问（默认：每 60 秒最多 5 次）
+QA_RATE_LIMIT_PER_WINDOW = int(os.getenv("QA_RATE_LIMIT_PER_WINDOW", "5"))
+QA_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("QA_RATE_LIMIT_WINDOW_SECONDS", "60"))
+
+# 每个用户在两次提问之间必须等待的最小间隔（秒）（默认：30 秒）
+QA_USER_COOLDOWN_SECONDS = int(os.getenv("QA_USER_COOLDOWN_SECONDS", "30"))
+
+# 每个用户每日最大提问次数（默认：50 次/天）
+QA_DAILY_QUOTA_PER_USER = int(os.getenv("QA_DAILY_QUOTA_PER_USER", "50"))
+
+# 每个用户最多同时处理的任务数（默认：2 个）
+QA_MAX_CONCURRENT_PER_USER = int(os.getenv("QA_MAX_CONCURRENT_PER_USER", "2"))
+
+# 密码验证限制：每个 IP 在时间窗口内最多尝试次数（防暴力破解）（默认：每 300 秒最多 10 次）
+PASSWORD_RATE_LIMIT_PER_WINDOW = int(os.getenv("PASSWORD_RATE_LIMIT_PER_WINDOW", "10"))
+PASSWORD_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("PASSWORD_RATE_LIMIT_WINDOW_SECONDS", "300"))
+
 # ── Server ─────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
