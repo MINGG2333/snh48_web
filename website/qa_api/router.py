@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import traceback
@@ -14,6 +15,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
@@ -93,11 +95,36 @@ def _get_qa_engine():
         return None
 
 
+# ── Question validation ────────────────────────────────────────────────────
+MAX_QUESTION_LENGTH = 20
+
+# Allowed chars: Chinese chars, English letters, digits, common punctuation
+_QUESTION_ALLOWED_RE = re.compile(
+    r'^[\u4e00-\u9fff a-zA-Z0-9'
+    r'，。！？、；：""''（）【】《》—…·'
+    r',\.\?!;:()\[\]{}\-～~\s]+$'
+)
+
+def validate_question(question: str) -> Optional[str]:
+    """
+    Validate a question. Returns an error message if invalid, None if OK.
+    """
+    if not question or not question.strip():
+        return "问题不能为空"
+    if len(question) > MAX_QUESTION_LENGTH:
+        return f"问题过长，请控制在 {MAX_QUESTION_LENGTH} 字以内（当前 {len(question)} 字）"
+    if not _QUESTION_ALLOWED_RE.match(question):
+        return "问题中包含不支持的特殊符号，请使用中文、英文字母、数字和常用标点符号"
+    return None
+
+
 # ── Request / Response Models ──────────────────────────────────────────────
+
 
 
 class AskRequest(BaseModel):
     question: str
+
     vector_top_k: int = KB_QA_DEFAULTS.vector_top_k
     bm25_top_k: int = KB_QA_DEFAULTS.bm25_top_k
     context_window: int = KB_QA_DEFAULTS.context_window
@@ -220,9 +247,17 @@ def ask_question_async(
             detail=_qa_status.get("message", "知识库不可用"),
         )
 
+    # ── Question validation ─────────────────────────────────────────────
+    err_msg = validate_question(req.question)
+    if err_msg:
+        log_api_error(client_id, "/ask-async", err_msg)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err_msg)
+
     check_all_qa_limits(ip, client_id)
 
     task_id = uuid.uuid4().hex[:12]
+
+
     register_task(task_id, client_id)
     task = AsyncTask(task_id=task_id, question=req.question)
     task.client_id = client_id
@@ -333,10 +368,18 @@ def ask_question_sync(
             detail=_qa_status.get("message", "知识库不可用"),
         )
 
+    # ── Question validation ─────────────────────────────────────────────
+    err_msg = validate_question(req.question)
+    if err_msg:
+        log_api_error(client_id, "/ask", err_msg)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err_msg)
+
     # Rate limiting for sync endpoint too
+
     check_all_qa_limits(ip, client_id)
 
     try:
+
         result = engine.ask(
             question=req.question,
             vector_top_k=req.vector_top_k,

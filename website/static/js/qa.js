@@ -11,6 +11,18 @@
   const TIMEOUT_SECONDS = 300;       // nginx proxy_read_timeout
   const POLL_INTERVAL_MS = 3000;     // poll every 3 seconds
   const WARN_SECONDS = 240;          // show warning at 4 minutes
+  const MAX_QUESTION_LENGTH = 20;    // max meaningful chars allowed
+  // Allowed characters in a question (whitelist)
+  const QUESTION_ALLOWED_RE = /^[\u4e00-\u9fff a-zA-Z0-9，。！？、；：""''（）【】《》—…·,.?!;:()\[\]{}\-～~\s]+$/;
+  // Count only meaningful chars: Chinese, English letters, digits
+  function countMeaningful(str) {
+    const m = str.match(/[\u4e00-\u9fffa-zA-Z0-9]/g);
+    return m ? m.length : 0;
+  }
+  // Check for disallowed special symbols
+  function hasBadChars(str) {
+    return !QUESTION_ALLOWED_RE.test(str);
+  }
 
   // ── State ────────────────────────────────────────────────────────────────
   let sitePassword = '';       // 仅内存变量，刷新后需重新输入密码
@@ -634,12 +646,55 @@
     });
   }
 
+  // ── Character Counter ────────────────────────────────────────────────
+  const charCountEl = document.getElementById('qaCharCount');
+
+  function updateCharCount() {
+    if (!charCountEl) return;
+    const str = inputEl.value;
+    const meaningful = countMeaningful(str);
+    const other = str.length - str.replace(/[\u4e00-\u9fff a-zA-Z0-9]/g, '').length;
+    const displayCount = meaningful + other;
+    charCountEl.textContent = meaningful + '/' + MAX_QUESTION_LENGTH;
+
+    charCountEl.classList.remove('warn', 'limit');
+    if (meaningful >= MAX_QUESTION_LENGTH) {
+      charCountEl.classList.add('limit');
+    } else if (meaningful >= MAX_QUESTION_LENGTH * 0.85) {
+      charCountEl.classList.add('warn');
+    }
+  }
+
+  inputEl.addEventListener('input', updateCharCount);
+
   // ── Event Listeners ──────────────────────────────────────────────────
   submitEl.addEventListener('click', () => {
     const question = inputEl.value.trim();
     if (!question) return;
+
+    // Check for disallowed special symbols
+    if (hasBadChars(question)) {
+      resultEl.innerHTML = `
+        <div class="qa-status error">
+          <i class="fas fa-exclamation-triangle"></i>
+          问题中包含不支持的特殊符号，请使用中文、英文字母、数字和常用标点符号
+        </div>`;
+      return;
+    }
+
+    // Check meaningful character count
+    const meaningful = countMeaningful(question);
+    if (meaningful > MAX_QUESTION_LENGTH) {
+      resultEl.innerHTML = `
+        <div class="qa-status error">
+          <i class="fas fa-exclamation-triangle"></i>
+          问题过长（有效字符 ${meaningful} 字），请控制在 ${MAX_QUESTION_LENGTH} 字以内
+        </div>`;
+      return;
+    }
     askQuestionAsync(question);
   });
+
 
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !submitEl.disabled) {

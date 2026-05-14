@@ -486,6 +486,36 @@ body {
   transform: none;
 }
 
+/* ── Character count ────────────────────────────────────────────── */
+.qa-input-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.qa-char-count {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  opacity: 0.6;
+  pointer-events: none;
+  transition: color 0.2s, opacity 0.2s;
+}
+
+.qa-char-count.warn {
+  color: #fbbf24;
+  opacity: 1;
+}
+
+.qa-char-count.limit {
+  color: #ef4444;
+  opacity: 1;
+  font-weight: 600;
+}
+
 /* ── KB status ─────────────────────────────────────────────────────────── */
 .qa-status {
   text-align: center;

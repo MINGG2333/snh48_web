@@ -49,11 +49,17 @@
 
         <!-- Input -->
         <div class="qa-input-area">
-            <input type="text"
-                   id="qaInput"
-                   class="qa-input"
-                   placeholder="为什么房间名叫葬爱家族？"
-                   disabled>
+            <div class="qa-input-wrap">
+                <input type="text"
+                       id="qaInput"
+                       class="qa-input"
+                       placeholder="为什么房间名叫葬爱家族？"
+                       maxlength="20"
+
+                       disabled>
+                <span id="qaCharCount" class="qa-char-count">0/20</span>
+
+            </div>
             <button id="qaSubmit" class="qa-submit" disabled>
                 <i class="fas fa-paper-plane"></i> 提问
             </button>
