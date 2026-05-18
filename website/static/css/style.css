@@ -378,19 +378,11 @@ body {
   margin-top: 40px;
 }
 
-.footer-icp {
-  margin-top: 4px;
-  font-size: 0.75rem;
-}
-
-.footer-icp a {
-  color: var(--text-dim);
-  text-decoration: none;
-  opacity: 0.6;
+.site-footer a {
   transition: opacity 0.2s;
 }
 
-.footer-icp a:hover {
+.site-footer a:hover {
   opacity: 1;
   color: var(--primary);
 }

@@ -25,29 +25,24 @@
     {% block content %}{% endblock %}
     {% block footer %}
     <footer class="site-footer">
-        <p>
-            <i class="far fa-copyright"></i> {{ site_title }}
-            <span class="footer-heart"><i class="fas fa-heart" style="color: #ff6b9d;"></i></span>
-        </p>
-        <p style="margin-top:6px;font-size:0.85rem;">
+        <p style="font-size:0.85rem;">
             <a href="/terms" style="color:var(--primary);">服务条款</a>
             <span style="color:var(--text-dim);margin:0 8px;">·</span>
             <a href="/privacy" style="color:var(--primary);">隐私政策</a>
             <span style="color:var(--text-dim);margin:0 8px;">·</span>
             <a href="/complaint" style="color:var(--primary);">投诉举报</a>
         </p>
+        <p style="margin-top:6px;font-size:0.82rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
+            <span><i class="far fa-copyright"></i> {{ site_title }}</span>
             {% if site_icp %}
-        <p class="footer-icp" style="margin-top:8px;font-size:0.85rem;color:var(--text-dim);">
-            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit;">{{ site_icp }}</a>
-        </p>
-        {% endif %}
-        {% if site_police_icp %}
-        <p class="footer-police" style="margin-top:4px;font-size:0.85rem;color:var(--text-dim);">
-            <a href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode={{ site_police_icp|replace('号', '') }}" target="_blank" rel="noopener noreferrer" style="color:inherit;">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">{{ site_icp }}</a>
+            {% endif %}
+            {% if site_police_icp %}
+            <a href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode={{ site_police_icp|replace('号', '') }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">
                 <i class="fas fa-shield-alt"></i> {{ site_police_icp }}
             </a>
+            {% endif %}
         </p>
-        {% endif %}
     </footer>
     {% endblock %}
 
