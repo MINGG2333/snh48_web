@@ -52,18 +52,46 @@
                     <label style="display:block;margin-bottom:6px;color:var(--text);font-weight:500;">
                         投诉类型 <span style="color:#ef4444;">*</span>
                     </label>
-                    <select id="complaintType" required
-                            style="width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid var(--glass-border);
-                                   background:var(--card-bg);color:var(--text);font-size:1rem;font-family:inherit;outline:none;">
-                        <option value="" style="background:var(--card-bg);color:var(--text-dim);">请选择投诉类型</option>
-                        <option value="illegal_content" style="background:var(--card-bg);color:var(--text);">违法信息</option>
-                        <option value="ai_error" style="background:var(--card-bg);color:var(--text);">AI 回答错误</option>
-                        <option value="privacy_concern" style="background:var(--card-bg);color:var(--text);">隐私问题</option>
-                        <option value="copyright" style="background:var(--card-bg);color:var(--text);">版权问题</option>
-                        <option value="abuse" style="background:var(--card-bg);color:var(--text);">功能滥用</option>
-                        <option value="technical" style="background:var(--card-bg);color:var(--text);">技术问题反馈</option>
-                        <option value="other" style="background:var(--card-bg);color:var(--text);">其他</option>
-                    </select>
+                    <div id="complaintTypeDropdown" class="custom-select" tabindex="0"
+                         style="position:relative;width:100%;cursor:pointer;user-select:none;">
+                        <div class="custom-select-trigger"
+                             style="width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid var(--glass-border);
+                                    background:var(--card-bg);color:var(--text-dim);font-size:1rem;font-family:inherit;
+                                    display:flex;align-items:center;justify-content:space-between;">
+                            <span id="complaintTypeLabel">请选择投诉类型</span>
+                            <i class="fas fa-chevron-down" style="font-size:0.8rem;color:var(--text-dim);transition:transform 0.2s;"></i>
+                        </div>
+                        <div class="custom-select-options"
+                             style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+                                    background:var(--card-bg);border:1px solid var(--glass-border);border-radius:10px;
+                                    z-index:100;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+                            <div class="custom-option" data-value=""
+                                 style="padding:12px 16px;color:var(--text-dim);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">请选择投诉类型</div>
+                            <div class="custom-option" data-value="illegal_content"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">违法信息</div>
+                            <div class="custom-option" data-value="ai_error"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">AI 回答错误</div>
+                            <div class="custom-option" data-value="privacy_concern"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">隐私问题</div>
+                            <div class="custom-option" data-value="copyright"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">版权问题</div>
+                            <div class="custom-option" data-value="abuse"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">功能滥用</div>
+                            <div class="custom-option" data-value="technical"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;border-bottom:1px solid rgba(255,255,255,0.05);">技术问题反馈</div>
+                            <div class="custom-option" data-value="other"
+                                 style="padding:12px 16px;color:var(--text);font-size:1rem;font-family:inherit;
+                                        transition:background 0.15s;">其他</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="complaintType" value="">
                 </div>
 
                 <div style="margin-bottom:16px;">
@@ -170,6 +198,62 @@ document.addEventListener('DOMContentLoaded', function() {
     const charCount = document.getElementById('complaintCharCount');
     const feedback = document.getElementById('complaintFeedback');
 
+    // ── Custom dropdown ──
+    const dropdown = document.getElementById('complaintTypeDropdown');
+    const trigger = dropdown.querySelector('.custom-select-trigger');
+    const optionsPanel = dropdown.querySelector('.custom-select-options');
+    const hiddenInput = document.getElementById('complaintType');
+    const labelSpan = document.getElementById('complaintTypeLabel');
+    const chevron = trigger.querySelector('.fa-chevron-down');
+
+    // Toggle dropdown
+    trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const isOpen = optionsPanel.style.display === 'block';
+        optionsPanel.style.display = isOpen ? 'none' : 'block';
+        chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+    });
+
+    // Select option
+    optionsPanel.querySelectorAll('.custom-option').forEach(function(opt) {
+        opt.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const value = this.getAttribute('data-value');
+            const text = this.textContent;
+            hiddenInput.value = value;
+            labelSpan.textContent = text;
+            trigger.style.color = value ? 'var(--text)' : 'var(--text-dim)';
+            optionsPanel.style.display = 'none';
+            chevron.style.transform = 'rotate(0deg)';
+
+            // Highlight selected
+            optionsPanel.querySelectorAll('.custom-option').forEach(function(o) {
+                o.style.background = 'transparent';
+            });
+            this.style.background = 'rgba(255,107,157,0.12)';
+        });
+
+        // Hover effect
+        opt.addEventListener('mouseenter', function() {
+            if (!this.style.background || this.style.background === 'transparent') {
+                this.style.background = 'rgba(255,255,255,0.06)';
+            }
+        });
+        opt.addEventListener('mouseleave', function() {
+            if (this.getAttribute('data-value') !== hiddenInput.value) {
+                this.style.background = 'transparent';
+            } else {
+                this.style.background = 'rgba(255,107,157,0.12)';
+            }
+        });
+    });
+
+    // Close dropdown on outside click
+    document.addEventListener('click', function() {
+        optionsPanel.style.display = 'none';
+        chevron.style.transform = 'rotate(0deg)';
+    });
+
     // Character count
     contentTextarea.addEventListener('input', function() {
         charCount.textContent = this.value.length;
@@ -179,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        const type = document.getElementById('complaintType').value;
+        const type = hiddenInput.value;
         const content = contentTextarea.value.trim();
         const email = document.getElementById('complaintEmail').value.trim();
         const captchaAnswer = document.getElementById('complaintCaptcha').value.trim();
@@ -224,6 +308,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 );
                 form.reset();
                 charCount.textContent = '0';
+                // Reset custom dropdown
+                hiddenInput.value = '';
+                labelSpan.textContent = '请选择投诉类型';
+                trigger.style.color = 'var(--text-dim)';
+                optionsPanel.querySelectorAll('.custom-option').forEach(function(o) {
+                    o.style.background = 'transparent';
+                });
             } else {
                 const err = await resp.json().catch(() => ({}));
                 showFeedback('提交失败：' + (err.detail || '请稍后重试'), 'error');

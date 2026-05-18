@@ -35,7 +35,7 @@
                 本网站在提供服务过程中，会收集以下信息：
             </p>
             <ul class="feature-list">
-                <li><i class="fas fa-check-circle"></i> <strong>交互日志：</strong>用户向 AI 提出的问题、AI 生成的回答、请求时间。这些信息存储在服务器本地，用于服务改进和问题排查。</li>
+                <li><i class="fas fa-check-circle"></i> <strong>交互日志：</strong>用户提出的问题、得到的回答、请求时间。这些信息存储在服务器本地，用于服务改进和问题排查。</li>
                 <li><i class="fas fa-check-circle"></i> <strong>临时标识符：</strong>浏览器生成的随机编号，用于区分用户会话和访问频率控制。</li>
                 <li><i class="fas fa-check-circle"></i> <strong>IP 地址：</strong>用于访问频率控制和访问统计。</li>
                 <li><i class="fas fa-check-circle"></i> <strong>邮箱地址（可选）：</strong>当用户主动提交邮箱时，用于通知 AI 问答处理结果。</li>
@@ -70,9 +70,7 @@
         <section class="about-section">
             <h2><i class="fas fa-clock"></i> 信息留存期限</h2>
             <p>
-                AI 问答交互日志按会话周期管理。每次服务重启时，
-                旧会话日志会自动备份并创建新的日志文件。
-                备份日志保留一定时间后由管理员定期清理。邮箱地址在任务完成后可删除。
+                问答交互日志按会话周期管理。备份日志保留一定时间后由管理员定期清理。邮箱地址在任务完成后可删除。
             </p>
         </section>
 
@@ -88,9 +86,8 @@
                 <li><i class="fas fa-check-circle"></i> 监管部门或执法部门依法要求</li>
             </ul>
             <p style="margin-top:12px;">
-                <strong>特别说明：</strong>AI 问答功能会将您的问题发送至国内人工智能服务商（如 DeepSeek）进行处理，
-                以生成回答。这些服务商仅接收您当前提出的问题文本，不会获取您的个人身份信息、
-                历史对话记录或其他网站数据。我们已与服务商签订数据保护协议，确保您的信息安全。
+                <strong>特别说明：</strong>AI 问答功能会将包含您的问题的文本发送至国内人工智能服务商（如 DeepSeek）进行处理，
+                以生成回答。这些服务商仅接收您当前提出的问题文本，不会获取您的个人身份信息、历史对话记录或其他网站数据。
             </p>
         </section>
 
@@ -100,9 +97,7 @@
                 本网站采取以下技术措施保护用户信息安全：
             </p>
             <ul class="feature-list">
-                <li><i class="fas fa-check-circle"></i> 全程加密传输（部署后）</li>
-                <li><i class="fas fa-check-circle"></i> 密码验证访问控制</li>
-                <li><i class="fas fa-check-circle"></i> 访问频率限制和暴力破解防护</li>
+                <li><i class="fas fa-check-circle"></i> HTTPS 加密传输</li>
                 <li><i class="fas fa-check-circle"></i> 日志存储在本地服务器，需管理员权限访问</li>
                 <li><i class="fas fa-check-circle"></i> 数据存储在中国大陆服务器</li>
             </ul>
