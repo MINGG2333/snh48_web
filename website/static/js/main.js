@@ -6,67 +6,16 @@
 document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('navToggle');
   const navLinks = document.querySelector('.nav-links');
-  let backdrop;
-
   if (toggle && navLinks) {
-    // Create backdrop element
-    backdrop = document.createElement('div');
-    backdrop.className = 'nav-backdrop';
-    document.body.appendChild(backdrop);
-
-    // Toggle menu
-    toggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleMenu();
+    toggle.addEventListener('click', () => {
+      navLinks.classList.toggle('open');
     });
-
-    // Close on backdrop click
-    backdrop.addEventListener('click', closeMenu);
-
-    // Close on Escape
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && navLinks.classList.contains('open')) {
-        closeMenu();
-      }
-    });
-
     // Close nav on link click
     navLinks.querySelectorAll('a').forEach(link => {
-      link.addEventListener('click', closeMenu);
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('open');
+      });
     });
-
-    function toggleMenu() {
-      const isOpen = navLinks.classList.contains('open');
-      if (isOpen) {
-        closeMenu();
-      } else {
-        openMenu();
-      }
-    }
-
-    function openMenu() {
-      navLinks.classList.add('open');
-      backdrop.classList.add('visible');
-      document.body.style.overflow = 'hidden';
-      // Switch to X icon
-      const icon = toggle.querySelector('i');
-      if (icon) {
-        icon.className = 'fas fa-times';
-        icon.style.transform = 'rotate(90deg)';
-      }
-    }
-
-    function closeMenu() {
-      navLinks.classList.remove('open');
-      backdrop.classList.remove('visible');
-      document.body.style.overflow = '';
-      // Switch back to bars icon
-      const icon = toggle.querySelector('i');
-      if (icon) {
-        icon.className = 'fas fa-bars';
-        icon.style.transform = 'rotate(0deg)';
-      }
-    }
   }
 
   // ── Highlight "陈嘉仪" in all text nodes ────────────────────────────────
@@ -87,7 +36,7 @@ function highlightCJY(root) {
     // Skip script, style, and other non-visible elements
     const parent = node.parentElement;
     if (!parent || parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' ||
-        parent.closest('.scroll-text') || parent.closest('.nav-backdrop') || parent.closest('.nav-links')) {
+        parent.closest('.scroll-text')) {
       continue;
     }
     if (node.textContent.includes('陈嘉仪')) {

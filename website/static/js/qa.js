@@ -487,18 +487,20 @@
 
     let html = '';
 
-    // ── AI Generated Content Disclaimer (生成内容标识, 办法第十二条) ──
-    html += `<div class="qa-answer-disclaimer">
-      <i class="fas fa-robot"></i> 以上内容由人工智能（AI）生成，仅供参考，不代表陈嘉仪本人立场。请结合其他信息源自行判断。
-    </div>`;
-
     // Elapsed time info
     html += `<div style="text-align:right;font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">
       <i class="fas fa-clock"></i> 处理耗时：${formatElapsed(elapsed)}</div>`;
 
+    // ── Compliance notice (below processing time, above answer) ──
+    html += `<div class="qa-compliance-notice" style="margin: 0 0 12px 0; padding: 10px 14px; background: rgba(255, 107, 157, 0.08); border: 1px solid rgba(255, 107, 157, 0.15); border-radius: 8px; font-size: 0.85rem; color: var(--text-dim); display: flex; align-items: flex-start; gap: 8px;">
+      <i class="fas fa-shield-alt" style="color: var(--primary); margin-top: 2px; flex-shrink: 0;"></i>
+      <span>本服务使用生成式人工智能技术，生成内容仅供参考，不代表陈嘉仪本人立场，请理性看待。</span>
+    </div>`;
+
     // Answer
     html += `<div class="qa-answer">`;
     html += `<h3><i class="fas fa-comment-dots"></i> 回答</h3>`;
+
     if (hasAnswer) {
       // Format citations: replace [#N] with styled spans
       let answerText = data.answer;
@@ -514,13 +516,8 @@
     }
     html += `</div>`;
 
-    // ── Compliance notice (relocated from page top to below answer) ──
-    html += `<div class="qa-compliance-notice" style="margin: 20px 0 12px 0; padding: 10px 14px; background: rgba(255, 107, 157, 0.08); border: 1px solid rgba(255, 107, 157, 0.15); border-radius: 8px; font-size: 0.85rem; color: var(--text-dim); display: flex; align-items: flex-start; gap: 8px;">
-      <i class="fas fa-shield-alt" style="color: var(--primary); margin-top: 2px; flex-shrink: 0;"></i>
-      <span>本服务使用生成式人工智能技术，生成内容仅供参考，不代表陈嘉仪本人立场，请理性看待。</span>
-    </div>`;
-
     // Citations
+
     if (hasCitations) {
       html += `<div class="qa-citations">`;
       html += `<h3><i class="fas fa-book-open"></i> 引用列表 (${data.citations.length})</h3>`;
@@ -545,7 +542,13 @@
       html += buildComprehensivenessBanner(data.comprehensiveness, data.question || '');
     }
 
+    // ── AI Generated Content Disclaimer (after citation list) ──
+    html += `<div class="qa-answer-disclaimer">
+      <i class="fas fa-robot"></i> 以上内容由人工智能（AI）生成，仅供参考，不代表陈嘉仪本人立场。请结合其他信息源自行判断。
+    </div>`;
+
     // ── Share / Save as Image button ──
+
     html += `<div class="qa-share-area">
       <button id="qaShareBtn" class="qa-share-btn" onclick="window._qaDownloadImage()">
         <i class="fas fa-download"></i> 保存为图片
