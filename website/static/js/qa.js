@@ -347,19 +347,16 @@
 
   // ── Trigger file download (cross-browser compatible) ────────────────
   function triggerDownload(blob, filename) {
-    // Use msSaveBlob for IE/Edge legacy
     if (window.navigator && window.navigator.msSaveBlob) {
       window.navigator.msSaveBlob(blob, filename);
       return;
     }
-    // Standard approach: create an object URL and click
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    // Clean up after a short delay
     setTimeout(() => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
@@ -377,25 +374,25 @@
       shareBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在生成截图...';
     }
 
-    // Use requestAnimationFrame to let the UI update before heavy work
-    await new Promise(r => requestAnimationFrame(r));
+    // Let the UI update before heavy work
+    await new Promise(r => setTimeout(r, 50));
 
     try {
       // ── Step 1: Build an off-screen wrapper ──
       const wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        background: #0a0a1a;
-        padding: 24px;
-        border-radius: 16px;
-        font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #f0f0f0;
-        font-size: 16px;
-        line-height: 1.8;
-        position: absolute;
-        left: -9999px;
-        top: 0;
-        width: 780px;
-      `;
+      wrapper.style.cssText = [
+        'background: #0a0a1a;',
+        'padding: 24px;',
+        'border-radius: 16px;',
+        "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
+        'color: #f0f0f0;',
+        'font-size: 16px;',
+        'line-height: 1.8;',
+        'position: absolute;',
+        'left: -9999px;',
+        'top: 0;',
+        'width: 780px;',
+      ].join(' ');
       document.body.appendChild(wrapper);
 
       // ── Step 2: Clone result content (keep all info, no truncation) ──
@@ -423,51 +420,49 @@
 
       // ── Step 3: Build footer with QR code ──
       const footer = document.createElement('div');
-      footer.style.cssText = `
-        margin-top: 24px;
-        padding-top: 18px;
-        border-top: 1px solid rgba(255,255,255,0.12);
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        text-align: left;
-      `;
-
-      // QR code - compact size
+      footer.style.cssText = [
+        'margin-top: 24px;',
+        'padding-top: 18px;',
+        'border-top: 1px solid rgba(255,255,255,0.12);',
+        'display: flex;',
+        'align-items: center;',
+        'gap: 14px;',
+        'text-align: left;',
+      ].join(' ');
       const qrContainer = document.createElement('div');
       const siteUrl = getSiteUrl();
       const qrHtml = generateQRCode(siteUrl, 80);
       qrContainer.innerHTML = qrHtml;
       qrContainer.style.flexShrink = '0';
       footer.appendChild(qrContainer);
-
-      // Text info
       const info = document.createElement('div');
-      info.style.cssText = `
-        flex: 1;
-        font-size: 0.8rem;
-        color: rgba(255,255,255,0.5);
-        line-height: 1.5;
-      `;
+      info.style.cssText = [
+        'flex: 1;',
+        'font-size: 0.8rem;',
+        'color: rgba(255,255,255,0.5);',
+        'line-height: 1.5;',
+      ].join(' ');
       const question = document.getElementById('qaInput')?.value?.trim() || '';
-      info.innerHTML = `
-        <div style="font-size:0.9rem;color:rgba(255,255,255,0.7);font-weight:500;margin-bottom:4px;">
-          <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答
-        </div>
-        <div>${question ? 'Q: ' + escapeHtml(question) : ''}</div>
-        <div style="margin-top:3px;">扫描二维码访问网站 · ${siteUrl}</div>
-        <div style="margin-top:1px;font-size:0.72rem;">生成时间：${new Date().toLocaleString('zh-CN')}</div>
-      `;
+      info.innerHTML = [
+        '<div style="font-size:0.9rem;color:rgba(255,255,255,0.7);font-weight:500;margin-bottom:4px;">',
+        '  <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答',
+        '</div>',
+        '<div>' + (question ? 'Q: ' + escapeHtml(question) : '') + '</div>',
+        '<div style="margin-top:3px;">扫描二维码访问网站 · ' + siteUrl + '</div>',
+        '<div style="margin-top:1px;font-size:0.72rem;">生成时间：' + new Date().toLocaleString('zh-CN') + '</div>',
+      ].join('');
       footer.appendChild(info);
-
       wrapper.appendChild(footer);
 
       // ── Step 4: Wait for layout to settle ──
       await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 5: Capture at 2x (good balance of quality & speed) ──
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
+      // ── Step 5: Capture at 1x to avoid exceeding browser canvas limits ──
+      // For very long content (82+ citations), higher scale values cause
+      // the canvas to exceed browser maximum dimensions (typically 16384px).
+      // We capture at 1x first, then upscale the result for crisp text.
+      const rawCanvas = await html2canvas(wrapper, {
+        scale: 1,
         useCORS: true,
         backgroundColor: '#0a0a1a',
         allowTaint: true,
@@ -481,24 +476,56 @@
       // Clean up the temporary wrapper
       document.body.removeChild(wrapper);
 
-      // ── Step 6: Download PNG via Blob (works on iOS Safari) ──
-      const filename = `AI问答_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.png`;
+      // ── Step 6: Upscale canvas 2x for crisp text ──
+      // Create a new canvas at 2x the dimensions and draw the original onto it
+      const upscaleFactor = 2;
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = rawCanvas.width * upscaleFactor;
+      finalCanvas.height = rawCanvas.height * upscaleFactor;
+      const ctx = finalCanvas.getContext('2d');
+      // Use image smoothing for better quality when upscaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.scale(upscaleFactor, upscaleFactor);
+      ctx.drawImage(rawCanvas, 0, 0);
 
-      // Use toBlob which is more reliable across browsers than toDataURL
-      canvas.toBlob(function(blob) {
-        if (blob) {
-          triggerDownload(blob, filename);
-        } else {
-          // Fallback: use toDataURL
-          const link = document.createElement('a');
-          link.download = filename;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-        }
-      }, 'image/png');
+      // ── Step 7: Download PNG ──
+      const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
+
+      // Wrap toBlob in a Promise to ensure it completes before finally block
+      await new Promise(function(resolve) {
+        finalCanvas.toBlob(function(blob) {
+          if (blob && blob.size > 0) {
+            triggerDownload(blob, filename);
+          } else {
+            // Fallback: try toDataURL
+            try {
+              var dataUrl = finalCanvas.toDataURL('image/png');
+              if (dataUrl && dataUrl.length > 100) {
+                var link = document.createElement('a');
+                link.download = filename;
+                link.href = dataUrl;
+                link.click();
+              } else {
+                console.error('Screenshot failed: empty canvas data');
+                alert('截图生成失败，图片内容为空。请尝试减少引用数量后重试。');
+              }
+            } catch (e) {
+              console.error('toDataURL fallback failed:', e);
+              alert('截图保存失败：浏览器画布尺寸超限。请尝试减少引用数量后重试。');
+            }
+          }
+          resolve();
+        }, 'image/png');
+      });
     } catch (err) {
       console.error('Screenshot failed:', err);
-      alert('截图保存失败，请重试。错误信息：' + err.message);
+      // Check for common canvas size errors
+      if (err.message && (err.message.indexOf('size') > -1 || err.message.indexOf('limit') > -1 || err.message.indexOf('maximum') > -1)) {
+        alert('截图保存失败：内容过长超出浏览器画布尺寸限制。');
+      } else {
+        alert('截图保存失败，请重试。错误信息：' + err.message);
+      }
     } finally {
       if (shareBtn) {
         shareBtn.disabled = false;
