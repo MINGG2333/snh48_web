@@ -487,6 +487,11 @@
 
     let html = '';
 
+    // ── AI Generated Content Disclaimer (生成内容标识, 办法第十二条) ──
+    html += `<div class="qa-answer-disclaimer">
+      <i class="fas fa-robot"></i> 以上内容由人工智能（AI）生成，仅供参考，不代表陈嘉仪本人立场。请结合其他信息源自行判断。
+    </div>`;
+
     // Elapsed time info
     html += `<div style="text-align:right;font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">
       <i class="fas fa-clock"></i> 处理耗时：${formatElapsed(elapsed)}</div>`;

@@ -486,6 +486,47 @@ body {
   transform: none;
 }
 
+/* ── AI生成内容标识（办法第十二条） ─────────────────────────── */
+.qa-answer-disclaimer {
+  background: rgba(192, 132, 252, 0.06);
+  border: 1px solid rgba(192, 132, 252, 0.12);
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.qa-answer-disclaimer i {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+/* ── Compliance notice (生成式AI服务合规标识) ───────────────── */
+.qa-compliance-notice {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(192, 132, 252, 0.08);
+  border: 1px solid rgba(192, 132, 252, 0.15);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.qa-compliance-notice i {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
 /* ── Character count ────────────────────────────────────────────── */
 .qa-input-wrap {
   flex: 1;
