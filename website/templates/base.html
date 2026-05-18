@@ -26,9 +26,14 @@
     {% block footer %}
     <footer class="site-footer" style="text-align:center;padding:20px;background:var(--glass-bg);border-top:1px solid var(--glass-border);margin-top:40px;">
         <p>
-            <i class="far fa-copyright"></i> {{ site_title }} ·
-            <a href="/terms" style="color:var(--primary);">服务条款</a> ·
-            <a href="/privacy" style="color:var(--primary);">隐私政策</a> ·
+            <i class="far fa-copyright"></i> {{ site_title }}
+            <span class="footer-heart"><i class="fas fa-heart" style="color: #ff6b9d;"></i></span>
+        </p>
+        <p style="margin-top:6px;font-size:0.85rem;">
+            <a href="/terms" style="color:var(--primary);">服务条款</a>
+            <span style="color:var(--text-dim);margin:0 8px;">·</span>
+            <a href="/privacy" style="color:var(--primary);">隐私政策</a>
+            <span style="color:var(--text-dim);margin:0 8px;">·</span>
             <a href="/complaint" style="color:var(--primary);">投诉举报</a>
         </p>
             {% if site_icp %}

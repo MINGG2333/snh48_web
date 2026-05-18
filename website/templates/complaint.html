@@ -16,7 +16,6 @@
             <a href="/"><i class="fas fa-home"></i> 首页</a>
             <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
             <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
-            <a href="/complaint" class="active"><i class="fas fa-flag"></i> 投诉举报</a>
         </div>
         <button class="nav-toggle" id="navToggle" aria-label="菜单">
             <i class="fas fa-bars"></i>
@@ -56,14 +55,14 @@
                     <select id="complaintType" required
                             style="width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid var(--glass-border);
                                    background:var(--card-bg);color:var(--text);font-size:1rem;font-family:inherit;outline:none;">
-                        <option value="">请选择投诉类型</option>
-                        <option value="illegal_content">违法信息（包括但不限于政治敏感、色情、暴力等）</option>
-                        <option value="ai_error">AI 回答错误/不准确</option>
-                        <option value="privacy_concern">隐私问题</option>
-                        <option value="copyright">版权/知识产权问题</option>
-                        <option value="abuse">功能滥用</option>
-                        <option value="technical">技术问题/Bug 反馈</option>
-                        <option value="other">其他</option>
+                        <option value="" style="background:var(--card-bg);color:var(--text-dim);">请选择投诉类型</option>
+                        <option value="illegal_content" style="background:var(--card-bg);color:var(--text);">违法信息</option>
+                        <option value="ai_error" style="background:var(--card-bg);color:var(--text);">AI 回答错误</option>
+                        <option value="privacy_concern" style="background:var(--card-bg);color:var(--text);">隐私问题</option>
+                        <option value="copyright" style="background:var(--card-bg);color:var(--text);">版权问题</option>
+                        <option value="abuse" style="background:var(--card-bg);color:var(--text);">功能滥用</option>
+                        <option value="technical" style="background:var(--card-bg);color:var(--text);">技术问题反馈</option>
+                        <option value="other" style="background:var(--card-bg);color:var(--text);">其他</option>
                     </select>
                 </div>
 
