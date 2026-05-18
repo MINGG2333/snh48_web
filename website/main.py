@@ -106,6 +106,7 @@ async def about(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "static_version": static_version,
         },
     )
 
@@ -121,6 +122,7 @@ async def qa_page(request: Request):
             "site_description": cfg.SITE_DESCRIPTION,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "static_version": static_version,
         },
     )
 
