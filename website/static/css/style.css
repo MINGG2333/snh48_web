@@ -878,6 +878,69 @@ body {
   color: var(--text);
 }
 
+.citation-back {
+  margin-top: 8px;
+  text-align: right;
+}
+
+.citation-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.citation-back-link:hover {
+  opacity: 1;
+  background: rgba(192, 132, 252, 0.1);
+}
+
+/* ── Citation ref highlight animation (in answer text) ───────────── */
+.citation-ref--highlight {
+  animation: citationHighlight 2s ease-out;
+}
+
+@keyframes citationHighlight {
+  0% {
+    background: rgba(255, 107, 157, 0.5);
+    box-shadow: 0 0 12px rgba(255, 107, 157, 0.6);
+    border-radius: 3px;
+    padding: 0 4px;
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+  }
+}
+
+/* ── Citation item highlight animation (in citation list) ────────── */
+.citation-item--highlight {
+  animation: citationItemHighlight 2s ease-out;
+}
+
+@keyframes citationItemHighlight {
+  0% {
+    background: rgba(255, 107, 157, 0.25);
+    border-left-color: #ff6b9d;
+    box-shadow: 0 0 16px rgba(255, 107, 157, 0.3);
+  }
+  100% {
+    background: rgba(255,255,255,0.03);
+    border-left-color: var(--primary);
+    box-shadow: none;
+  }
+}
+
+
+
+
 /* ═══════════════════════════════════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════════════════════════════════*/

@@ -535,13 +535,16 @@
     if (hasAnswer) {
       // Format citations: replace [#N] with styled spans
       let answerText = data.answer;
+      let citationRefIndex = 0;
       answerText = answerText.replace(/\[#(\d+)\]/g, (match, num) => {
-        return `<a href="#citation-${num}" class="citation-ref" style="
+        citationRefIndex++;
+        return `<a href="#citation-${num}" class="citation-ref" data-ref-index="${citationRefIndex}" style="
           color: var(--primary); font-weight: 700; text-decoration: none;
           cursor: pointer;
         " title="查看引用 #${num}">${match}</a>`;
       });
-      html += `<div>${answerText}</div>`;
+      html += `<div id="qaAnswerText">${answerText}</div>`;
+
     } else {
       html += `<p style="color: var(--text-dim);">未返回有效答案。</p>`;
     }
@@ -553,7 +556,8 @@
       html += `<div class="qa-citations">`;
       html += `<h3><i class="fas fa-book-open"></i> 引用列表 (${data.citations.length})</h3>`;
       for (const cit of data.citations) {
-        html += `<div class="citation-item" id="citation-${cit.citation_id?.replace('#', '') || '0'}">`;
+        const citId = cit.citation_id?.replace('#', '') || '0';
+        html += `<div class="citation-item" id="citation-${citId}">`;
         html += `<div class="citation-id">${cit.citation_id || '#'}</div>`;
         html += `<div class="citation-meta">`;
         html += `<span>${cit.source_type || ''}</span>`;
@@ -563,10 +567,13 @@
         if (cit.video_title) html += `<div class="citation-meta">📺 ${cit.video_title}</div>`;
         html += `<div class="citation-text">“${cit.quoted_text || ''}”</div>`;
         if (cit.reason) html += `<div class="citation-meta" style="margin-top:4px;font-style:italic;">📝 ${cit.reason}</div>`;
+        // Back-to-answer link
+        html += `<div class="citation-back"><a href="#qaAnswerText" class="citation-back-link" data-citation-id="${citId}"><i class="fas fa-arrow-up"></i> 回到回答</a></div>`;
         html += `</div>`;
       }
       html += `</div>`;
     }
+
 
     // Comprehensiveness warning banner (after the citation list)
     if (data.comprehensiveness) {
@@ -587,8 +594,56 @@
     </div>`;
 
     resultEl.innerHTML = html;
+
+    // Helper: smooth scroll to element with navbar offset
+    function smoothScrollTo(el) {
+      const navHeight = 80; // navbar height + some padding
+      const targetPos = el.getBoundingClientRect().top + window.scrollY - navHeight;
+      window.scrollTo({ top: targetPos, behavior: 'smooth' });
+    }
+
+    // Click handler for "back to answer" links — also highlight the corresponding citation ref
+    resultEl.querySelectorAll('.citation-back-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = link.getAttribute('href').substring(1);
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+          smoothScrollTo(targetEl);
+          // Highlight the corresponding citation ref in the answer
+          const citId = link.getAttribute('data-citation-id');
+          const refLink = targetEl.querySelector(`.citation-ref[href="#citation-${citId}"]`);
+          if (refLink) {
+            refLink.classList.add('citation-ref--highlight');
+            setTimeout(() => refLink.classList.remove('citation-ref--highlight'), 2000);
+          }
+        }
+      });
+    });
+
+
+    // Click handler for citation refs ([#N] links) — scroll to middle of viewport + highlight
+    resultEl.querySelectorAll('.citation-ref').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = link.getAttribute('href').substring(1);
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+          // Scroll to middle of viewport
+          const targetPos = targetEl.getBoundingClientRect().top + window.scrollY - (window.innerHeight / 2) + (targetEl.offsetHeight / 2);
+          window.scrollTo({ top: targetPos, behavior: 'smooth' });
+          // Highlight the citation item
+          targetEl.classList.add('citation-item--highlight');
+          setTimeout(() => targetEl.classList.remove('citation-item--highlight'), 2000);
+        }
+      });
+    });
+
+
     resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   }
+
 
   // ── Global: Download Image ────────────────────────────────────────────
   window._qaDownloadImage = downloadAsImage;
