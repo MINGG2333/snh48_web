@@ -93,29 +93,58 @@ python transcript_analyze/run_kb_qa.py build
 - **备案完成前**：访问 `http://124.222.72.203:8000`（使用非标准端口）
 - **备案完成后**：配置域名和 SSL（见下文）
 
-## 🌐 域名与 SSL 配置（备案完成后）
+## 🌐 域名与 SSL 配置（域名：cjy.plus）
 
 ### 1. 修改 Nginx 配置
 
-编辑 `deploy/nginx.conf`，将 `your-domain.com` 替换为您的域名，然后：
+`deploy/nginx.conf` 已配置好域名 `cjy.plus`。在服务器上执行：
 
 ```bash
+# 将 nginx 配置复制到 nginx 目录
 sudo cp deploy/nginx.conf /etc/nginx/conf.d/snh48.conf
+
+# 测试配置
+sudo nginx -t
+
+# 重载 nginx
+sudo systemctl reload nginx
+```
+
+### 2. 配置腾讯云 SSL 证书
+
+> ⚠️ 你购买的是腾讯云包年 SSL 证书，需手动下载上传。
+
+**2.1 下载证书**
+1. 登录 [腾讯云 SSL 证书控制台](https://console.cloud.tencent.com/ssl)
+2. 找到你的 `cjy.plus` 证书 → 点击**下载**
+3. 选择 **Nginx** 版 → 保存到本地
+
+**2.2 上传到服务器（在本地电脑执行）**
+```bash
+scp /本地路径/cjy.plus_nginx.zip root@124.222.72.203:/home/
+```
+
+**2.3 在服务器上解压并安装（在 SSH 终端执行）**
+```bash
+# 创建证书目录
+mkdir -p /etc/nginx/ssl/cjy.plus
+
+# 解压证书
+cd /home
+unzip cjy.plus_nginx.zip -d /etc/nginx/ssl/cjy.plus/
+# 或者手动上传 cert.pem 和 cert.key 到 /etc/nginx/ssl/cjy.plus/
+
+# 确认文件存在
+ls -l /etc/nginx/ssl/cjy.plus/
+
+# 重启 nginx
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 2. 申请 SSL 证书
+### 3. 验证
 
-```bash
-# 使用 certbot（需要先安装）
-yum install -y certbot python3-certbot-nginx
-certbot --nginx -d your-domain.com
-```
-
-### 3. 切换服务端口（可选）
-
-备案完成后，您可以改为 80/443 端口提供服务，修改 nginx.conf 中的 proxy_pass 即可。
+浏览器访问 https://cjy.plus 查看是否显示绿色小锁 🔒
 
 ## 🔧 开发环境本地运行
 

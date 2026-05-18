@@ -100,3 +100,6 @@ SITE_DESCRIPTION = os.getenv(
 # 备案完成后在此填写，会在页面底部显示备案号并链接到工信部
 # 可通过 .env 文件或环境变量设置
 SITE_ICP = os.getenv("SITE_ICP", "")
+
+# 公安联网备案号（可选，备案审核通过后填写）
+SITE_POLICE_ICP = os.getenv("SITE_POLICE_ICP", "")

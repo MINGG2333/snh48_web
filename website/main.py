@@ -47,7 +47,6 @@ FAVICON_DIR = cfg.STATIC_DIR / "images" / "favicons"
 async def favicon():
     """Randomly pick one favicon from the favicons directory each request."""
     if not FAVICON_DIR.is_dir():
-        # 无图标时不报错
         return HTMLResponse(status_code=204)
     icons = sorted(FAVICON_DIR.glob("favicon*.png"))
     if not icons:
@@ -65,7 +64,6 @@ async def favicon():
 
 def _generate_captcha() -> tuple[str, str]:
     """Generate a simple arithmetic CAPTCHA question and answer."""
-    import random
     a = random.randint(1, 20)
     b = random.randint(1, 9)
     op = random.choice(["+", "-"])
@@ -92,6 +90,7 @@ async def index(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_description": cfg.SITE_DESCRIPTION,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
             "static_version": static_version,
         },
     )
@@ -106,6 +105,7 @@ async def about(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
         },
     )
 
@@ -120,6 +120,7 @@ async def qa_page(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_description": cfg.SITE_DESCRIPTION,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
         },
     )
 
@@ -133,6 +134,7 @@ async def scroller_admin_page(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
             "static_version": static_version,
         },
     )
@@ -147,6 +149,7 @@ async def terms_page(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
             "static_version": static_version,
         },
     )
@@ -161,6 +164,7 @@ async def privacy_page(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
             "static_version": static_version,
         },
     )
@@ -176,6 +180,7 @@ async def complaint_page(request: Request):
             "request": request,
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
             "static_version": static_version,
             "captcha_question": captcha_question,
             "captcha_answer": captcha_answer,
@@ -194,7 +199,6 @@ async def startup():
     2. Initialize interaction log session
     3. Try to load the QA engine (non-blocking on failure)
     """
-    # ── Backup qa_archive ────────────────────────────────────────────────
     kb_dir = Path(cfg.KB_DIR)
     if kb_dir.exists():
         from website.logging_setup import backup_and_recreate_qa_archive
@@ -204,17 +208,14 @@ async def startup():
     else:
         print(f"  KB directory {kb_dir} does not exist yet, skipping qa_archive backup.")
 
-    # ── Backup transcript_analyze log files ──────────────────────────────
     transcript_dir = Path(__file__).resolve().parent.parent / "transcript_analyze"
     if transcript_dir.exists():
         _backup_log_files(transcript_dir)
 
-    # ── Initialize session log ──────────────────────────────────────────
     from website.logging_setup import get_session_dir
     session_dir = get_session_dir()
     print(f"✓ Interaction log session started: {session_dir}")
 
-    # ── Load QA engine (non-blocking) ───────────────────────────────────
     try:
         from website.qa_api.router import _get_qa_engine
         _get_qa_engine()
@@ -225,18 +226,16 @@ async def startup():
 
 
 def _backup_log_files(transcript_dir: Path) -> None:
-    """Backup existing log files (kb_qa.log, server logs) in various locations."""
+    """Backup existing log files in various locations."""
     import shutil
     from datetime import datetime
 
-    # Collect all log files to back up (both local and server)
     log_files = [
-        transcript_dir / "kb_qa.log",               # transcript_analyze/kb_qa.log
-        transcript_dir.parent / "kb_qa.log",        # project root /kb_qa.log
-        transcript_dir.parent / "snh48_screen.log", # project root screen log
+        transcript_dir / "kb_qa.log",
+        transcript_dir.parent / "kb_qa.log",
+        transcript_dir.parent / "snh48_screen.log",
     ]
 
-    # Also check server log directory /var/log/snh48/ (used in production)
     server_log_dir = Path("/var/log/snh48")
     if server_log_dir.exists():
         for f in server_log_dir.iterdir():
@@ -253,12 +252,10 @@ def _backup_log_files(transcript_dir: Path) -> None:
                 backup_path = backup_dir / backup_name
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(str(log_file), str(backup_path))
-                # Truncate original log file
                 log_file.write_text("")
                 print(f"✓ Backed up {log_file.name} → logs_backup/{backup_name}")
             except OSError as e:
                 print(f"  ! Failed to backup {log_file.name}: {e}")
-
 
 
 # Must be imported last to avoid circular imports
@@ -279,16 +276,10 @@ app.include_router(complaint_router)
 async def add_security_headers(request: Request, call_next):
     """Add security-related HTTP headers to all responses."""
     response = await call_next(request)
-    # Prevent MIME type sniffing
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # Prevent clickjacking
     response.headers["X-Frame-Options"] = "DENY"
-    # Enable XSS filter in older browsers
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    # Referrer policy
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    # HSTS (uncomment when HTTPS is enabled)
-    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 
