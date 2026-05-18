@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}隐私政策 - {{ site_title }}{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+            <a href="/privacy" class="active"><i class="fas fa-user-shield"></i> 隐私</a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<main class="page-content">
+    <div class="page-container">
+        <h1>隐私政策</h1>
+
+        <section class="about-section">
+            <h2><i class="fas fa-database"></i> 信息收集</h2>
+            <p>
+                本网站在提供服务过程中，会收集以下信息：
+            </p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> <strong>交互日志：</strong>用户向 AI 提出的问题、AI 生成的回答、请求时间戳。这些信息存储在服务器本地，用于服务改进和问题排查。</li>
+                <li><i class="fas fa-check-circle"></i> <strong>临时标识符：</strong>浏览器生成的随机 client_id（存储于 sessionStorage 中），用于区分用户会话和速率限制。</li>
+                <li><i class="fas fa-check-circle"></i> <strong>IP 地址：</strong>通过反向代理头（X-Forwarded-For）获取，用于速率限制和访问统计。</li>
+                <li><i class="fas fa-check-circle"></i> <strong>邮箱地址（可选）：</strong>当用户主动提交邮箱时，用于通知 AI 问答处理结果。</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-ban"></i> 不被收集的信息</h2>
+            <p>
+                本网站<strong>不收集</strong>以下信息：
+            </p>
+            <ul class="feature-list">
+                <li><i class="fas fa-times-circle" style="color:#ef4444;"></i> 用户真实姓名、身份证号、手机号</li>
+                <li><i class="fas fa-times-circle" style="color:#ef4444;"></i> 生物识别信息、健康信息</li>
+                <li><i class="fas fa-times-circle" style="color:#ef4444;"></i> 银行账户、支付信息</li>
+                <li><i class="fas fa-times-circle" style="color:#ef4444;"></i> 通讯录、位置信息</li>
+                <li><i class="fas fa-times-circle" style="color:#ef4444;"></i> Cookie 追踪信息（本网站不使用追踪型 Cookie）</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-tasks"></i> 信息使用目的</h2>
+            <p>收集的信息仅用于以下目的：</p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> 提供和优化 AI 问答服务</li>
+                <li><i class="fas fa-check-circle"></i> 防止 API 滥用和保障服务安全</li>
+                <li><i class="fas fa-check-circle"></i> 排查和解决技术问题</li>
+                <li><i class="fas fa-check-circle"></i> 在用户授权的情况下发送通知</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-clock"></i> 信息留存期限</h2>
+            <p>
+                AI 问答交互日志按服务器会话周期管理。每次服务器重启时，
+                旧会话日志会自动备份到 `logs_backup` 目录并创建新的日志文件。
+                备份日志保留一定时间后由管理员定期清理。邮箱地址在任务完成后可删除。
+            </p>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-share-alt"></i> 信息共享</h2>
+            <p>
+                本网站<strong>不会</strong>向任何第三方出售、共享或披露用户的个人信息，
+                除非：
+            </p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> 获得用户明确同意</li>
+                <li><i class="fas fa-check-circle"></i> 法律法规要求</li>
+                <li><i class="fas fa-check-circle"></i> 监管部门或执法部门依法要求</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-cog"></i> 技术安全措施</h2>
+            <p>
+                本网站采取以下技术措施保护用户信息安全：
+            </p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> 全程 HTTPS 加密传输（部署后）</li>
+                <li><i class="fas fa-check-circle"></i> 密码验证访问控制</li>
+                <li><i class="fas fa-check-circle"></i> IP 速率限制和暴力破解防护</li>
+                <li><i class="fas fa-check-circle"></i> 日志存储在本地服务器，需管理员权限访问</li>
+                <li><i class="fas fa-check-circle"></i> 数据存储在中国大陆服务器</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-user-cog"></i> 用户权利</h2>
+            <p>
+                根据《个人信息保护法》，用户享有以下权利：
+            </p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> <strong>知情权：</strong>了解本网站收集了哪些个人信息</li>
+                <li><i class="fas fa-check-circle"></i> <strong>删除权：</strong>联系管理员删除相关个人信息</li>
+                <li><i class="fas fa-check-circle"></i> <strong>投诉权：</strong>通过投诉举报渠道反映问题</li>
+            </ul>
+            <p style="margin-top:12px;">
+                如需行使上述权利，请通过<a href="/complaint" style="color:var(--primary);">投诉与举报</a>页面联系管理员。
+            </p>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-envelope"></i> 联系方式</h2>
+            <p>
+                如对隐私政策有任何疑问或需要帮助，请通过<a href="/complaint" style="color:var(--primary);">投诉与举报</a>页面与我们联系。
+            </p>
+        </section>
+
+        <section class="about-section" style="margin-top:40px;padding-top:20px;border-top:1px solid var(--glass-border);">
+            <p style="color:var(--text-dim);font-size:0.9rem;">
+                <i class="far fa-calendar-alt"></i> 最后更新日期：2026年5月
+            </p>
+        </section>
+    </div>
+</main>
+{% endblock %}

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}投诉与举报 - {{ site_title }}{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+            <a href="/complaint" class="active"><i class="fas fa-flag"></i> 投诉举报</a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<main class="page-content">
+    <div class="page-container">
+        <h1><i class="fas fa-flag"></i> 投诉与举报</h1>
+
+        <section class="about-section">
+            <h2><i class="fas fa-info-circle"></i> 投诉举报须知</h2>
+            <p>
+                如果您在使用本网站过程中发现任何违法信息、违规内容或其他问题，
+                欢迎通过以下方式向我们反映。我们承诺：
+            </p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> 在 24 小时内受理您的投诉</li>
+                <li><i class="fas fa-check-circle"></i> 在 7 个工作日内完成处理并反馈</li>
+                <li><i class="fas fa-check-circle"></i> 对投诉人的个人信息严格保密</li>
+                <li><i class="fas fa-check-circle"></i> 投诉提交后可获取受理编号用于查询进度</li>
+            </ul>
+        </section>
+
+        <section class="about-section">
+            <h2><i class="fas fa-edit"></i> 在线提交</h2>
+
+            <!-- Complaint Form -->
+            <form id="complaintForm" style="margin-top:16px;">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;color:var(--text);font-weight:500;">
+                        投诉类型 <span style="color:#ef4444;">*</span>
+                    </label>
+                    <select id="complaintType" required
+                            style="width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid var(--glass-border);
+                                   background:var(--card-bg);color:var(--text);font-size:1rem;font-family:inherit;outline:none;">
+                        <option value="">请选择投诉类型</option>
+                        <option value="illegal_content">违法信息（包括但不限于政治敏感、色情、暴力等）</option>
+                        <option value="ai_error">AI 回答错误/不准确</option>
+                        <option value="privacy_concern">隐私问题</option>
+                        <option value="copyright">版权/知识产权问题</option>
+                        <option value="abuse">功能滥用</option>
+                        <option value="technical">技术问题/Bug 反馈</option>
+                        <option value="other">其他</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;color:var(--text);font-weight:500;">
+                        投诉内容 <span style="color:#ef4444;">*</span>
+                    </label>
+                    <textarea id="complaintContent" rows="6" required
+                              style="width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid var(--glass-border);
+                                     background:var(--card-bg);color:var(--text);font-size:1rem;font-family:inherit;
+                                     outline:none;resize:vertical;min-height:120px;"
+                              maxlength="2000"
+                              placeholder="请详细描述您要反映的问题，包括时间、内容等信息，以便我们更快处理。"></textarea>
+                    <div style="text-align:right;font-size:0.8rem;color:var(--text-dim);margin-top:4px;">
+                        <span id="complaintCharCount">0</span>/2000
+                    </div>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;color:var(--text);font-weight:500;">
+                        联系邮箱
+                    </label>
+                    <input type="email" id="complaintEmail"
+                           style="width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid var(--glass-border);
+                                  background:var(--card-bg);color:var(--text);font-size:1rem;font-family:inherit;outline:none;"
+                           placeholder="选填，用于接收处理结果反馈"
+                           autocomplete="email">
+                </div>
+
+                <div style="margin-bottom:16px;position:relative;">
+                    <input type="text" id="complaintCaptcha"
+                           style="width:100%;padding:12px 16px;padding-right:120px;border-radius:10px;border:1.5px solid var(--glass-border);
+                                  background:var(--card-bg);color:var(--text);font-size:1rem;font-family:inherit;outline:none;"
+                           placeholder="请输入计算结果" autocomplete="off" maxlength="5">
+                    <span id="captchaLabel"
+                          style="position:absolute;right:16px;top:50%;transform:translateY(-50%);
+                                 color:var(--text-dim);font-size:0.9rem;user-select:none;pointer-events:none;">
+                        {{ captcha_question }}
+                    </span>
+                    <input type="hidden" id="complaintCaptchaAnswer" value="{{ captcha_answer }}">
+                </div>
+
+                <div id="complaintFeedback" style="margin-bottom:16px;display:none;"></div>
+
+                <button type="submit" id="complaintSubmit"
+                        style="width:100%;padding:14px;border:none;border-radius:12px;
+                               background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+                               color:#fff;font-size:1.05rem;font-weight:500;cursor:pointer;
+                               display:flex;align-items:center;justify-content:center;gap:8px;
+                               transition:all 0.2s;font-family:inherit;"
+                        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 20px rgba(255,107,157,0.3)'"
+                        onmouseout="this.style.transform='';this.style.boxShadow=''">
+                    <i class="fas fa-paper-plane"></i> 提交投诉
+                </button>
+            </form>
+        </section>
+
+        <section class="about-section" style="margin-top:40px;">
+            <h2><i class="fas fa-clipboard-list"></i> 处理流程</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;">
+                <div style="flex:1;min-width:150px;background:var(--card-bg);border:1px solid var(--glass-border);
+                            border-radius:12px;padding:20px;text-align:center;">
+                    <div style="font-size:2rem;color:var(--primary);margin-bottom:8px;">
+                        <i class="fas fa-file-signature"></i>
+                    </div>
+                    <div style="font-weight:500;margin-bottom:4px;">1. 提交</div>
+                    <div style="font-size:0.85rem;color:var(--text-dim);">填写投诉表单并提交</div>
+                </div>
+                <div style="flex:1;min-width:150px;background:var(--card-bg);border:1px solid var(--glass-border);
+                            border-radius:12px;padding:20px;text-align:center;">
+                    <div style="font-size:2rem;color:var(--accent);margin-bottom:8px;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div style="font-weight:500;margin-bottom:4px;">2. 受理</div>
+                    <div style="font-size:0.85rem;color:var(--text-dim);">管理员 24 小时内受理</div>
+                </div>
+                <div style="flex:1;min-width:150px;background:var(--card-bg);border:1px solid var(--glass-border);
+                            border-radius:12px;padding:20px;text-align:center;">
+                    <div style="font-size:2rem;color:#34d399;margin-bottom:8px;">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div style="font-weight:500;margin-bottom:4px;">3. 处理</div>
+                    <div style="font-size:0.85rem;color:var(--text-dim);">7 个工作日内处理完成</div>
+                </div>
+                <div style="flex:1;min-width:150px;background:var(--card-bg);border:1px solid var(--glass-border);
+                            border-radius:12px;padding:20px;text-align:center;">
+                    <div style="font-size:2rem;color:#60a5fa;margin-bottom:8px;">
+                        <i class="fas fa-reply"></i>
+                    </div>
+                    <div style="font-weight:500;margin-bottom:4px;">4. 反馈</div>
+                    <div style="font-size:0.85rem;color:var(--text-dim);">通过邮箱反馈处理结果</div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('complaintForm');
+    const submitBtn = document.getElementById('complaintSubmit');
+    const contentTextarea = document.getElementById('complaintContent');
+    const charCount = document.getElementById('complaintCharCount');
+    const feedback = document.getElementById('complaintFeedback');
+
+    // Character count
+    contentTextarea.addEventListener('input', function() {
+        charCount.textContent = this.value.length;
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const type = document.getElementById('complaintType').value;
+        const content = contentTextarea.value.trim();
+        const email = document.getElementById('complaintEmail').value.trim();
+        const captchaAnswer = document.getElementById('complaintCaptcha').value.trim();
+        const expectedAnswer = document.getElementById('complaintCaptchaAnswer').value;
+
+        // Validation
+        if (!type) {
+            showFeedback('请选择投诉类型', 'error');
+            return;
+        }
+        if (!content || content.length < 10) {
+            showFeedback('投诉内容不能少于10个字', 'error');
+            return;
+        }
+        if (!captchaAnswer || captchaAnswer !== expectedAnswer) {
+            showFeedback('验证码错误，请重新计算', 'error');
+            return;
+        }
+
+        // Submit
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 提交中...';
+
+        try {
+            const resp = await fetch('/api/complaint/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: type,
+                    content: content,
+                    email: email || undefined,
+                }),
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                showFeedback(
+                    '<i class="fas fa-check-circle"></i> 投诉已提交成功！' +
+                    (data.ticket_id ? ' 您的受理编号为：<strong>' + data.ticket_id + '</strong>' : '') +
+                    '，我们将尽快处理。',
+                    'success'
+                );
+                form.reset();
+                charCount.textContent = '0';
+            } else {
+                const err = await resp.json().catch(() => ({}));
+                showFeedback('提交失败：' + (err.detail || '请稍后重试'), 'error');
+            }
+        } catch (err) {
+            showFeedback('提交失败：网络错误，请稍后重试', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> 提交投诉';
+        }
+    });
+
+    function showFeedback(msg, type) {
+        feedback.style.display = 'block';
+        feedback.className = 'status-msg ' + type;
+        feedback.innerHTML = msg;
+        feedback.style.cssText += 'margin-bottom:16px;padding:12px 16px;border-radius:8px;';
+        if (type === 'error') {
+            feedback.style.background = 'rgba(239,68,68,0.15)';
+            feedback.style.color = '#ef4444';
+            feedback.style.border = '1px solid rgba(239,68,68,0.3)';
+        } else {
+            feedback.style.background = 'rgba(74,222,128,0.15)';
+            feedback.style.color = '#4ade80';
+            feedback.style.border = '1px solid rgba(74,222,128,0.3)';
+        }
+    }
+});
+</script>
+{% endblock %}

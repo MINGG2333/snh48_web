@@ -60,6 +60,25 @@ async def favicon():
     )
 
 
+# ── Simple CAPTCHA helper for complaint form ────────────────────────────────
+
+
+def _generate_captcha() -> tuple[str, str]:
+    """Generate a simple arithmetic CAPTCHA question and answer."""
+    import random
+    a = random.randint(1, 20)
+    b = random.randint(1, 9)
+    op = random.choice(["+", "-"])
+    if op == "-" and a < b:
+        a, b = b, a
+    if op == "+":
+        answer = str(a + b)
+    else:
+        answer = str(a - b)
+    question = f"{a} {op} {b} = ?"
+    return question, answer
+
+
 # ── Frontend Page Routes ───────────────────────────────────────────────────
 
 
@@ -113,7 +132,53 @@ async def scroller_admin_page(request: Request):
         {
             "request": request,
             "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
             "static_version": static_version,
+        },
+    )
+
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms_page(request: Request):
+    """Terms of Service page."""
+    return templates.TemplateResponse(
+        "terms.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "static_version": static_version,
+        },
+    )
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    """Privacy Policy page."""
+    return templates.TemplateResponse(
+        "privacy.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "static_version": static_version,
+        },
+    )
+
+
+@app.get("/complaint", response_class=HTMLResponse)
+async def complaint_page(request: Request):
+    """Complaint & Report page."""
+    captcha_question, captcha_answer = _generate_captcha()
+    return templates.TemplateResponse(
+        "complaint.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "static_version": static_version,
+            "captcha_question": captcha_question,
+            "captcha_answer": captcha_answer,
         },
     )
 
@@ -202,6 +267,29 @@ app.include_router(qa_router)
 
 from website.scroller_api.router import router as scroller_router
 app.include_router(scroller_router)
+
+from website.complaint_api.router import router as complaint_router
+app.include_router(complaint_router)
+
+
+# ── Security Headers Middleware ─────────────────────────────────────────────
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security-related HTTP headers to all responses."""
+    response = await call_next(request)
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+    # Enable XSS filter in older browsers
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Referrer policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # HSTS (uncomment when HTTPS is enabled)
+    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 if __name__ == "__main__":
