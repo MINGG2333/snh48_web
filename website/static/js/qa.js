@@ -345,30 +345,52 @@
     return window.location.protocol + '//' + window.location.host;
   }
 
+  // ── Trigger file download (cross-browser compatible) ────────────────
+  function triggerDownload(blob, filename) {
+    // Use msSaveBlob for IE/Edge legacy
+    if (window.navigator && window.navigator.msSaveBlob) {
+      window.navigator.msSaveBlob(blob, filename);
+      return;
+    }
+    // Standard approach: create an object URL and click
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    // Clean up after a short delay
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+
   async function downloadAsImage() {
     const resultEl = document.getElementById('qaResult');
     const shareBtn = document.getElementById('qaShareBtn');
     if (!resultEl || resultEl.children.length === 0) return;
 
-    // Show loading state
+    // ── Show immediate loading feedback ──
     if (shareBtn) {
       shareBtn.disabled = true;
-      shareBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 生成中...';
+      shareBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在生成截图...';
     }
 
+    // Use requestAnimationFrame to let the UI update before heavy work
+    await new Promise(r => requestAnimationFrame(r));
+
     try {
-      // ── Step 1: Build an off-screen wrapper with larger base font ──
+      // ── Step 1: Build an off-screen wrapper ──
       const wrapper = document.createElement('div');
-      // Use a slightly narrower width so text stacks more compactly
-      // and larger base font for readability when zoomed out
       wrapper.style.cssText = `
         background: #0a0a1a;
-        padding: 28px;
+        padding: 24px;
         border-radius: 16px;
         font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
         color: #f0f0f0;
-        font-size: 17px;
-        line-height: 1.9;
+        font-size: 16px;
+        line-height: 1.8;
         position: absolute;
         left: -9999px;
         top: 0;
@@ -402,19 +424,19 @@
       // ── Step 3: Build footer with QR code ──
       const footer = document.createElement('div');
       footer.style.cssText = `
-        margin-top: 28px;
-        padding-top: 22px;
+        margin-top: 24px;
+        padding-top: 18px;
         border-top: 1px solid rgba(255,255,255,0.12);
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 14px;
         text-align: left;
       `;
 
-      // QR code - slightly bigger for easier scanning
+      // QR code - compact size
       const qrContainer = document.createElement('div');
       const siteUrl = getSiteUrl();
-      const qrHtml = generateQRCode(siteUrl, 110);
+      const qrHtml = generateQRCode(siteUrl, 80);
       qrContainer.innerHTML = qrHtml;
       qrContainer.style.flexShrink = '0';
       footer.appendChild(qrContainer);
@@ -423,30 +445,29 @@
       const info = document.createElement('div');
       info.style.cssText = `
         flex: 1;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: rgba(255,255,255,0.5);
-        line-height: 1.6;
+        line-height: 1.5;
       `;
       const question = document.getElementById('qaInput')?.value?.trim() || '';
       info.innerHTML = `
-        <div style="font-size:1rem;color:rgba(255,255,255,0.75);font-weight:500;margin-bottom:6px;">
+        <div style="font-size:0.9rem;color:rgba(255,255,255,0.7);font-weight:500;margin-bottom:4px;">
           <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答
         </div>
         <div>${question ? 'Q: ' + escapeHtml(question) : ''}</div>
-        <div style="margin-top:4px;">扫描二维码访问网站 · ${siteUrl}</div>
-        <div style="margin-top:2px;font-size:0.78rem;">生成时间：${new Date().toLocaleString('zh-CN')}</div>
+        <div style="margin-top:3px;">扫描二维码访问网站 · ${siteUrl}</div>
+        <div style="margin-top:1px;font-size:0.72rem;">生成时间：${new Date().toLocaleString('zh-CN')}</div>
       `;
       footer.appendChild(info);
 
       wrapper.appendChild(footer);
 
-      // ── Step 4: Wait for fonts and layout to settle ──
-      await new Promise(r => setTimeout(r, 400));
+      // ── Step 4: Wait for layout to settle ──
+      await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 5: Capture at high DPI for crisp text on any screen ──
-      // scale=3 means 3 physical pixels per CSS pixel =  very sharp text
+      // ── Step 5: Capture at 2x (good balance of quality & speed) ──
       const canvas = await html2canvas(wrapper, {
-        scale: 3,
+        scale: 2,
         useCORS: true,
         backgroundColor: '#0a0a1a',
         allowTaint: true,
@@ -460,11 +481,21 @@
       // Clean up the temporary wrapper
       document.body.removeChild(wrapper);
 
-      // ── Step 6: Download PNG ──
-      const link = document.createElement('a');
-      link.download = `AI问答_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      // ── Step 6: Download PNG via Blob (works on iOS Safari) ──
+      const filename = `AI问答_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.png`;
+
+      // Use toBlob which is more reliable across browsers than toDataURL
+      canvas.toBlob(function(blob) {
+        if (blob) {
+          triggerDownload(blob, filename);
+        } else {
+          // Fallback: use toDataURL
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+        }
+      }, 'image/png');
     } catch (err) {
       console.error('Screenshot failed:', err);
       alert('截图保存失败，请重试。错误信息：' + err.message);
