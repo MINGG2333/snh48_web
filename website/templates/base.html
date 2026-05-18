@@ -25,6 +25,7 @@
     {% block content %}{% endblock %}
     {% block footer %}
     <footer class="site-footer">
+        {% block footer_links %}
         <p style="font-size:0.85rem;">
             <a href="/terms" style="color:var(--primary);">服务条款</a>
             <span style="color:var(--text-dim);margin:0 8px;">·</span>
@@ -32,8 +33,9 @@
             <span style="color:var(--text-dim);margin:0 8px;">·</span>
             <a href="/complaint" style="color:var(--primary);">投诉举报</a>
         </p>
+        {% endblock %}
         <p style="margin-top:6px;font-size:0.82rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
-            <span><i class="far fa-copyright"></i> {{ site_title }}</span>
+            <span><i class="far fa-copyright"></i> {{ site_title }} <i class="fas fa-heart" style="color:#ff6b9d;"></i></span>
             {% if site_icp %}
             <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">{{ site_icp }}</a>
             {% endif %}
