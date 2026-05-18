@@ -11,9 +11,15 @@
         opacity: 0.9; z-index: 10; }
     /* Random colors assigned via JS */
 
-    /* ── Homepage: prevent scrollbar from footer overflow ── */
-    body { overflow: hidden; }
-    .hero-content { min-height: calc(100vh - 80px); }
+    /* ── Homepage: footer fixed at bottom, no scroll ── */
+    .site-footer {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 50;
+      margin-top: 0;
+      background: linear-gradient(0deg, rgba(10,10,26,0.9) 60%, transparent);
+    }
+    .hero-content { padding-bottom: 100px; }
 </style>
 {% endblock %}
 
