@@ -215,8 +215,7 @@
         <div class="qa-email-section">
           <label for="timeoutEmail">如需获取最终处理结果，请留下您的邮箱：</label>
           <div class="qa-email-row">
-            <input type="email" id="timeoutEmail" class="qa-input" placeholder="example@email.com"
-                   style="flex:1; margin-right:8px;">
+            <input type="email" id="timeoutEmail" class="qa-input" placeholder="example@email.com">
             <button class="qa-submit" onclick="window._qaLeaveEmail('${taskId}')" id="emailSubmitBtn">
               <i class="fas fa-paper-plane"></i> 提交
             </button>
@@ -288,8 +287,7 @@
         <div class="qa-email-section">
           <label for="compEmail">如需获取更全面的回答，请留下您的邮箱和问题：</label>
           <div class="qa-email-row">
-            <input type="email" id="compEmail" class="qa-input" placeholder="your@email.com"
-                   style="flex:1; margin-right:8px;">
+            <input type="email" id="compEmail" class="qa-input" placeholder="your@email.com">
             <button class="qa-submit" onclick="window._qaCompRequest('${questionForEmail}')">
               <i class="fas fa-paper-plane"></i> 提交请求
             </button>

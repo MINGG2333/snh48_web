@@ -817,6 +817,24 @@ body {
   gap: 8px;
   align-items: center;
 }
+
+/* Mobile: email row should stack vertically to prevent overflow */
+@media (max-width: 768px) {
+  .qa-email-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .qa-email-row .qa-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .qa-email-row .qa-submit {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+}
 .qa-email-hint {
   font-size: 0.85rem;
   color: var(--text-dim);
