@@ -101,7 +101,122 @@ body {
   font-size: 1.4rem;
   cursor: pointer;
   padding: 8px;
+  z-index: 1100;
+  position: relative;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE CIRCULAR MENU
+   ═══════════════════════════════════════════════════════════════════════════*/
+
+/* The ring container - positioned at the toggle button */
+.circular-menu {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1050;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.circular-menu.open {
+  pointer-events: auto;
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* The semi-transparent ring */
+.circular-menu-ring {
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center,
+    rgba(255, 107, 157, 0.03) 0%,
+    rgba(255, 107, 157, 0.08) 40%,
+    rgba(192, 132, 252, 0.12) 70%,
+    rgba(192, 132, 252, 0.06) 100%);
+  border: 1.5px solid rgba(255, 107, 157, 0.25);
+  box-shadow:
+    0 0 40px rgba(255, 107, 157, 0.15),
+    inset 0 0 40px rgba(192, 132, 252, 0.05);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.circular-menu.open .circular-menu-ring {
+  border-color: rgba(255, 107, 157, 0.4);
+  box-shadow:
+    0 0 60px rgba(255, 107, 157, 0.2),
+    inset 0 0 60px rgba(192, 132, 252, 0.08);
+}
+
+/* Center dot decoration */
+.circular-menu-ring::before {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.5;
+  box-shadow: 0 0 12px rgba(255, 107, 157, 0.4);
+}
+
+/* Menu items positioned around the ring */
+.circular-menu-item {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  gap: 2px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: scale(0.3);
+}
+
+.circular-menu.open .circular-menu-item {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.circular-menu-item i {
+  font-size: 1.2rem;
+  transition: transform 0.3s;
+}
+
+.circular-menu-item:hover,
+.circular-menu-item.active {
+  background: rgba(255, 107, 157, 0.15);
+  border-color: var(--primary);
+  color: var(--text);
+  box-shadow: 0 0 20px rgba(255, 107, 157, 0.2);
+}
+
+.circular-menu-item:hover i {
+  transform: scale(1.15);
+}
+
+/* Staggered animation delays for each item */
+.circular-menu-item:nth-child(1) { transition-delay: 0.05s; }
+.circular-menu-item:nth-child(2) { transition-delay: 0.1s; }
+.circular-menu-item:nth-child(3) { transition-delay: 0.15s; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    HERO / LANDING PAGE
@@ -730,19 +845,6 @@ body {
 @media (max-width: 768px) {
   .nav-links {
     display: none;
-    position: absolute;
-    top: var(--nav-height);
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    background: rgba(10,10,26,0.98);
-    border-bottom: 1px solid var(--glass-border);
-    padding: 12px;
-    gap: 4px;
-  }
-
-  .nav-links.open {
-    display: flex;
   }
 
   .nav-toggle {
@@ -766,6 +868,10 @@ body {
 @media (min-width: 769px) {
   .nav-toggle {
     display: none;
+  }
+
+  .circular-menu {
+    display: none !important;
   }
 }
 
@@ -965,4 +1071,3 @@ body {
 .qa-share-btn i {
   font-size: 1.1rem;
 }
-
