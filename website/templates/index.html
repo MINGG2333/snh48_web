@@ -45,17 +45,19 @@
 <!-- Mobile Circular Menu -->
 <div class="circular-menu" id="circularMenu">
     <div class="circular-menu-ring">
-        <a href="/" class="circular-menu-item" style="top: 18px; left: 108px;">
-            <i class="fas fa-home"></i>
-            <span>首页</span>
-        </a>
-        <a href="/about" class="circular-menu-item" style="top: 108px; right: 18px;">
-            <i class="fas fa-info-circle"></i>
-            <span>关于</span>
-        </a>
-        <a href="/qa" class="circular-menu-item" style="bottom: 18px; left: 108px;">
+        <!-- Center close button -->
+        <div class="circular-menu-close" id="circularMenuClose">
+            <i class="fas fa-times"></i>
+        </div>
+        <!-- AI 问答 at ~6:30 o'clock (bottom center) -->
+        <a href="/qa" class="circular-menu-item item-qa">
             <i class="fas fa-robot"></i>
             <span>AI 问答</span>
+        </a>
+        <!-- 关于 at ~8:30 o'clock (bottom-left) -->
+        <a href="/about" class="circular-menu-item item-about">
+            <i class="fas fa-info-circle"></i>
+            <span>关于</span>
         </a>
     </div>
 </div>

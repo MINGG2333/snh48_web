@@ -18,6 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
       circularMenu.style.top = (rect.top + rect.height / 2 - ringSize / 2) + 'px';
     }
 
+    function closeCircularMenu() {
+      circularMenu.classList.remove('open');
+      const icon = toggle.querySelector('i');
+      icon.className = 'fas fa-bars';
+    }
+
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
       positionCircularMenu();
@@ -32,12 +38,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // Close menu when clicking the center close button
+    const closeBtn = document.getElementById('circularMenuClose');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeCircularMenu();
+      });
+    }
+
+    // Close menu when clicking the ring background (not on items)
+    const ring = circularMenu.querySelector('.circular-menu-ring');
+    if (ring) {
+      ring.addEventListener('click', (e) => {
+        // Only close if clicking the ring itself or the close button
+        if (e.target === ring || e.target.closest('.circular-menu-close')) {
+          closeCircularMenu();
+        }
+      });
+    }
+
     // Close menu when clicking a link
     circularMenu.querySelectorAll('.circular-menu-item').forEach(link => {
       link.addEventListener('click', () => {
-        circularMenu.classList.remove('open');
-        const icon = toggle.querySelector('i');
-        icon.className = 'fas fa-bars';
+        closeCircularMenu();
       });
     });
 
@@ -47,9 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
           !circularMenu.contains(e.target) &&
           e.target !== toggle &&
           !toggle.contains(e.target)) {
-        circularMenu.classList.remove('open');
-        const icon = toggle.querySelector('i');
-        icon.className = 'fas fa-bars';
+        closeCircularMenu();
       }
     });
 
