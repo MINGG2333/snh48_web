@@ -76,6 +76,8 @@ echo ""
 echo "[5/6] 配置 Supervisor 进程守护..."
 
 # Create supervisor config
+# ⚠️ 注意：supervisor 不会自动读取 .env 文件，密码和 API Key 需额外注入
+# 推荐改用 systemd 方式（见 deploy/TODO.md → 方式 C），支持 EnvironmentFile 自动加载 .env
 cat > /etc/supervisord.d/${SERVICE_NAME}.ini << EOF
 [program:${SERVICE_NAME}]
 directory=${PROJECT_DIR}
@@ -126,5 +128,5 @@ echo "  查看日志: tail -f /var/log/${SERVICE_NAME}/output.log"
 echo "  重启服务: supervisorctl restart ${SERVICE_NAME}"
 echo "  停止服务: supervisorctl stop ${SERVICE_NAME}"
 echo ""
-echo "  如需配置 Nginx 代理和 SSL，请参考 deploy/README.md"
+echo "  如需配置 Nginx 代理和 SSL，请参考 deploy/TODO.md 的「备案完成后」章节"
 echo ""
