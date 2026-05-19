@@ -429,13 +429,22 @@
         'align-items: center;',
         'text-align: center;',
         'gap: 10px;',
+        'width: 50%;',
+        'margin-left: auto;',
+        'margin-right: auto;',
       ].join(' ');
       const siteUrl = getSiteUrl();
       // QR code at 28px — compact, roughly 1/3 the area of 80px
       const qrHtml = generateQRCode(siteUrl, 28);
       const qrContainer = document.createElement('div');
       qrContainer.innerHTML = qrHtml;
-      qrContainer.style.lineHeight = '0';
+      qrContainer.style.cssText = 'line-height: 0; max-width: 100%; overflow: hidden;';
+      // Constrain QR image to container width
+      const qrImg = qrContainer.querySelector('img');
+      if (qrImg) {
+        qrImg.style.maxWidth = '100%';
+        qrImg.style.height = 'auto';
+      }
       footer.appendChild(qrContainer);
       const info = document.createElement('div');
       info.style.cssText = [
@@ -458,37 +467,47 @@
       // ── Step 4: Wait for layout to settle ──
       await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 5: Capture at 1x to avoid exceeding browser canvas limits ──
-      // For very long content (82+ citations), higher scale values cause
-      // the canvas to exceed browser maximum dimensions (typically 16384px).
-      // We capture at 1x first, then upscale the result for crisp text.
+      // ── Step 5: Capture at scale 2 for crisp text ──
+      // Use scale 2 directly for sharp text. If canvas exceeds browser limits,
+      // fall back to scale 1 + upscale.
+      const MAX_CANVAS_DIM = 16384;
+      const wrapperW = wrapper.scrollWidth;
+      const wrapperH = wrapper.scrollHeight;
+      let captureScale = 2;
+      if (wrapperW * captureScale > MAX_CANVAS_DIM || wrapperH * captureScale > MAX_CANVAS_DIM) {
+        captureScale = 1;
+      }
+
       const rawCanvas = await html2canvas(wrapper, {
-        scale: 1,
+        scale: captureScale,
         useCORS: true,
         backgroundColor: '#0a0a1a',
         allowTaint: true,
         logging: false,
-        width: wrapper.scrollWidth,
-        height: wrapper.scrollHeight,
-        windowWidth: wrapper.scrollWidth,
-        windowHeight: wrapper.scrollHeight,
+        width: wrapperW,
+        height: wrapperH,
+        windowWidth: wrapperW,
+        windowHeight: wrapperH,
       });
 
       // Clean up the temporary wrapper
       document.body.removeChild(wrapper);
 
-      // ── Step 6: Upscale canvas 2x for crisp text ──
-      // Create a new canvas at 2x the dimensions and draw the original onto it
-      const upscaleFactor = 2;
-      const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = rawCanvas.width * upscaleFactor;
-      finalCanvas.height = rawCanvas.height * upscaleFactor;
-      const ctx = finalCanvas.getContext('2d');
-      // Use image smoothing for better quality when upscaling
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.scale(upscaleFactor, upscaleFactor);
-      ctx.drawImage(rawCanvas, 0, 0);
+      let finalCanvas = rawCanvas;
+
+      // ── Step 6: If captured at scale 1, upscale 2x for better quality ──
+      if (captureScale === 1) {
+        const upscaleFactor = 2;
+        finalCanvas = document.createElement('canvas');
+        finalCanvas.width = rawCanvas.width * upscaleFactor;
+        finalCanvas.height = rawCanvas.height * upscaleFactor;
+        const ctx = finalCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.scale(upscaleFactor, upscaleFactor);
+        ctx.drawImage(rawCanvas, 0, 0);
+      }
+
 
       // ── Step 7: Download PNG ──
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
@@ -620,11 +639,23 @@
         const segs = cit.segments || [];
 
         html += `<div class="citation-item" id="citation-${citId}">`;
-        // ── Citation header: ID + type badge ──
+        // ── Citation header: ID + type badge + video title/date ──
         html += `<div class="citation-header">`;
         html += `<span class="citation-id">${cit.citation_id || '#'}</span>`;
         if (cit.citation_type) {
           html += `<span class="citation-type-badge">${escapeHtml(cit.citation_type)}</span>`;
+        }
+        // Video title + date from first segment (if any)
+        if (segs.length > 0) {
+          const firstSeg = segs[0];
+          if (firstSeg.video_title) {
+            html += `<span class="citation-header-video">📺 ${escapeHtml(firstSeg.video_title)}`;
+            if (firstSeg.absolute_time) {
+              const dateStr = firstSeg.absolute_time.slice(0, 10);
+              html += ` <span class="segment-video-date">${escapeHtml(dateStr)}</span>`;
+            }
+            html += `</span>`;
+          }
         }
         html += `</div>`;
 
@@ -638,7 +669,7 @@
             const sameVideo = seg.video_title && seg.video_title === prevVideoTitle;
 
             html += `<div class="citation-segment">`;
-            // Source info row: anchor_name (dedup), source_type, video_title, offset
+            // Source info row: anchor_name (dedup), source_type, offset
             html += `<div class="segment-source">`;
             if (seg.anchor_name && !sameAnchor) {
               html += `<span class="segment-anchor">${escapeHtml(seg.anchor_name)}</span>`;
@@ -646,22 +677,12 @@
             if (seg.source_type) {
               html += `<span class="segment-type">${escapeHtml(seg.source_type)}</span>`;
             }
-            // Video title (only if differs from previous segment)
-            if (seg.video_title && !sameVideo) {
-              html += `<span class="segment-video">📺 ${escapeHtml(seg.video_title)}`;
-              // Append formatted date from absolute_time if available
-              if (seg.absolute_time) {
-                const dateStr = seg.absolute_time.slice(0, 10); // "2024-05-19"
-                html += ` <span class="segment-video-date">${escapeHtml(dateStr)}</span>`;
-              }
-              html += `</span>`;
-            }
-
 
             if (seg.video_offset) {
               html += `<span class="segment-offset">⏱ ${escapeHtml(seg.video_offset)}</span>`;
             }
             html += `</div>`;
+
 
             // Quoted text
             html += `<div class="segment-text">“${escapeHtml(seg.quoted_text || '')}”</div>`;

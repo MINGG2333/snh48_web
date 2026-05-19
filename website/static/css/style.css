@@ -883,7 +883,15 @@ body {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+  flex-wrap: wrap;
 }
+
+.citation-header-video {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
 
 .citation-item .citation-id {
   font-weight: 700;
