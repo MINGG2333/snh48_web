@@ -377,15 +377,17 @@
 
     try {
       // ── Step 1: Build an off-screen wrapper ──
+      // Use larger base font (20px) so text is crisp even at 1x capture.
+      // After 2x upscale, text will be very sharp.
       const wrapper = document.createElement('div');
       wrapper.style.cssText = [
         'background: #0a0a1a;',
-        'padding: 24px;',
+        'padding: 28px;',
         'border-radius: 16px;',
         "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
         'color: #f0f0f0;',
-        'font-size: 16px;',
-        'line-height: 1.8;',
+        'font-size: 20px;',
+        'line-height: 1.7;',
         'position: absolute;',
         'left: -9999px;',
         'top: 0;',
@@ -420,18 +422,20 @@
       const footer = document.createElement('div');
       footer.style.cssText = [
         'margin-top: 24px;',
-        'padding-top: 18px;',
+        'padding-top: 16px;',
         'border-top: 1px solid rgba(255,255,255,0.12);',
         'display: flex;',
         'align-items: center;',
-        'gap: 14px;',
+        'gap: 12px;',
         'text-align: left;',
       ].join(' ');
       const qrContainer = document.createElement('div');
       const siteUrl = getSiteUrl();
-      const qrHtml = generateQRCode(siteUrl, 80);
+      // QR code at 40px — compact, roughly 1/4 the area of 80px
+      const qrHtml = generateQRCode(siteUrl, 40);
       qrContainer.innerHTML = qrHtml;
       qrContainer.style.flexShrink = '0';
+      qrContainer.style.lineHeight = '0';
       footer.appendChild(qrContainer);
       const info = document.createElement('div');
       info.style.cssText = [
@@ -558,17 +562,22 @@
     html += `<h3><i class="fas fa-comment-dots"></i> 回答</h3>`;
 
     if (hasAnswer) {
-      // Format citations: replace [#N] with styled spans
+      // Format citations: match any [#...] containing #digits
+      // e.g. [#1], [#2-#5], [#1, #2, #3], [#1, #3, #5-7]
       let answerText = data.answer;
       let citationRefIndex = 0;
-      answerText = answerText.replace(/\[#(\d+)\]/g, (match, num) => {
+      answerText = answerText.replace(/\[([^\]]*?#\d+[^\]]*?)\]/g, (match, inner) => {
         citationRefIndex++;
-        return `<a href="#citation-${num}" class="citation-ref" data-ref-index="${citationRefIndex}" style="
+        // Extract the first #number as the link target
+        const firstNum = (inner.match(/#(\d+)/) || [])[1] || '0';
+        return `<a href="#citation-${firstNum}" class="citation-ref" data-ref-index="${citationRefIndex}" style="
           color: var(--primary); font-weight: 700; text-decoration: none;
           cursor: pointer;
-        " title="查看引用 #${num}">${match}</a>`;
+        " title="查看引用 ${inner.trim()}">${match}</a>`;
       });
+
       html += `<div id="qaAnswerText">${answerText}</div>`;
+
 
     } else {
       html += `<p style="color: var(--text-dim);">未返回有效答案。</p>`;
