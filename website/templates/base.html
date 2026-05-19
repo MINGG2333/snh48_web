@@ -40,8 +40,8 @@
             <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">{{ site_icp }}</a>
             {% endif %}
             {% if site_police_icp %}
-            <a href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode={{ site_police_icp|replace('号', '') }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">
-                <i class="fas fa-shield-alt"></i> {{ site_police_icp }}
+            <a href="https://beian.mps.gov.cn/#/query/webSearch?code={{ site_police_icp_code }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+                <img src="/static/images/beian_icon.png" alt="公安备案" style="width:16px;height:16px;vertical-align:middle;"> {{ site_police_icp }}
             </a>
             {% endif %}
         </p>

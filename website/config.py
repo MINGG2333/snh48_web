@@ -103,3 +103,13 @@ SITE_ICP = os.getenv("SITE_ICP", "")
 
 # 公安联网备案号（可选，备案审核通过后填写）
 SITE_POLICE_ICP = os.getenv("SITE_POLICE_ICP", "")
+
+# 从公安备案号中提取 code（用于链接到公安部查询页面）
+# 例如 "京公网安备11010602202601号" → "11010602202601"
+SITE_POLICE_ICP_CODE = os.getenv("SITE_POLICE_ICP_CODE", "")
+if not SITE_POLICE_ICP_CODE and SITE_POLICE_ICP:
+    # 自动提取：去掉"京公网安备"前缀和"号"后缀
+    import re
+    match = re.search(r"(\d+)", SITE_POLICE_ICP)
+    if match:
+        SITE_POLICE_ICP_CODE = match.group(1)

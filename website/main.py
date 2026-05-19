@@ -91,6 +91,7 @@ async def index(request: Request):
             "site_description": cfg.SITE_DESCRIPTION,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
     )
@@ -106,6 +107,7 @@ async def about(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
     )
@@ -122,6 +124,7 @@ async def qa_page(request: Request):
             "site_description": cfg.SITE_DESCRIPTION,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
     )
@@ -137,6 +140,7 @@ async def scroller_admin_page(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
     )
@@ -152,6 +156,7 @@ async def terms_page(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
     )
@@ -167,6 +172,7 @@ async def privacy_page(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
     )
@@ -183,6 +189,7 @@ async def complaint_page(request: Request):
             "site_title": cfg.SITE_TITLE,
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
             "captcha_question": captcha_question,
             "captcha_answer": captcha_answer,
