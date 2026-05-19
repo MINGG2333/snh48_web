@@ -35,16 +35,20 @@
         </p>
         {% endblock %}
         <p style="margin-top:6px;font-size:0.85rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
-            {% if site_police_icp %}
-            <a href="https://beian.mps.gov.cn/#/query/webSearch?code={{ site_police_icp_code }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
-                <img src="/static/images/beian_icon.png" alt="公安备案" style="width:0.85rem;height:0.85rem;"> {{ site_police_icp }}
-            </a>
-            {% endif %}
-            {% if site_icp %}
-            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">{{ site_icp }}</a>
-            {% endif %}
+            <span style="display:inline-flex;align-items:center;gap:12px;flex-wrap:nowrap;">
+                {% if site_police_icp %}
+                <a href="https://beian.mps.gov.cn/#/query/webSearch?code={{ site_police_icp_code }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+                    <img src="/static/images/beian_icon.png" alt="公安备案" style="width:16px;height:16px;vertical-align:middle;"> {{ site_police_icp }}
+                </a>
+                {% endif %}
+                {% if site_icp %}
+                <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">{{ site_icp }}</a>
+                {% endif %}
+            </span>
             <span><i class="far fa-copyright"></i> {{ site_title }} <i class="fas fa-heart" style="color:#ff6b9d;"></i></span>
         </p>
+
+
 
 
 
