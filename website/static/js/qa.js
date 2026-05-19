@@ -418,28 +418,27 @@
 
       wrapper.appendChild(clone);
 
-      // ── Step 3: Build footer with QR code ──
+      // ── Step 3: Build footer with QR code (centered, compact) ──
       const footer = document.createElement('div');
       footer.style.cssText = [
         'margin-top: 24px;',
         'padding-top: 16px;',
         'border-top: 1px solid rgba(255,255,255,0.12);',
         'display: flex;',
+        'flex-direction: column;',
         'align-items: center;',
-        'gap: 12px;',
-        'text-align: left;',
+        'text-align: center;',
+        'gap: 10px;',
       ].join(' ');
-      const qrContainer = document.createElement('div');
       const siteUrl = getSiteUrl();
-      // QR code at 40px — compact, roughly 1/4 the area of 80px
-      const qrHtml = generateQRCode(siteUrl, 40);
+      // QR code at 28px — compact, roughly 1/3 the area of 80px
+      const qrHtml = generateQRCode(siteUrl, 28);
+      const qrContainer = document.createElement('div');
       qrContainer.innerHTML = qrHtml;
-      qrContainer.style.flexShrink = '0';
       qrContainer.style.lineHeight = '0';
       footer.appendChild(qrContainer);
       const info = document.createElement('div');
       info.style.cssText = [
-        'flex: 1;',
         'font-size: 0.8rem;',
         'color: rgba(255,255,255,0.5);',
         'line-height: 1.5;',
@@ -450,7 +449,7 @@
         '  <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答',
         '</div>',
         '<div>' + (question ? 'Q: ' + escapeHtml(question) : '') + '</div>',
-        '<div style="margin-top:3px;">扫描二维码访问网站 · ' + siteUrl + '</div>',
+        '<div style="margin-top:3px;">' + siteUrl + '</div>',
         '<div style="margin-top:1px;font-size:0.72rem;">生成时间：' + new Date().toLocaleString('zh-CN') + '</div>',
       ].join('');
       footer.appendChild(info);
@@ -629,11 +628,6 @@
         }
         html += `</div>`;
 
-        // ── Reason (if any) ──
-        if (cit.reason) {
-          html += `<div class="citation-reason">📝 ${escapeHtml(cit.reason)}</div>`;
-        }
-
         // ── Segments list ──
         if (segs.length > 0) {
           html += `<div class="citation-segments">`;
@@ -644,7 +638,7 @@
             const sameVideo = seg.video_title && seg.video_title === prevVideoTitle;
 
             html += `<div class="citation-segment">`;
-            // Source info row: anchor_name (dedup), source_type, offset
+            // Source info row: anchor_name (dedup), source_type, video_title, offset
             html += `<div class="segment-source">`;
             if (seg.anchor_name && !sameAnchor) {
               html += `<span class="segment-anchor">${escapeHtml(seg.anchor_name)}</span>`;
@@ -652,14 +646,23 @@
             if (seg.source_type) {
               html += `<span class="segment-type">${escapeHtml(seg.source_type)}</span>`;
             }
+            // Video title (only if differs from previous segment)
+            if (seg.video_title && !sameVideo) {
+              html += `<span class="segment-video">📺 ${escapeHtml(seg.video_title)}`;
+              // Append formatted date from absolute_time if available
+              if (seg.absolute_time) {
+                const dateStr = seg.absolute_time.slice(0, 10); // "2024-05-19"
+                html += ` <span class="segment-video-date">${escapeHtml(dateStr)}</span>`;
+              }
+              html += `</span>`;
+            }
+
+
             if (seg.video_offset) {
               html += `<span class="segment-offset">⏱ ${escapeHtml(seg.video_offset)}</span>`;
             }
             html += `</div>`;
-            // Video title (only if differs from previous segment)
-            if (seg.video_title && !sameVideo) {
-              html += `<div class="segment-video">📺 ${escapeHtml(seg.video_title)}</div>`;
-            }
+
             // Quoted text
             html += `<div class="segment-text">“${escapeHtml(seg.quoted_text || '')}”</div>`;
             html += `</div>`;
@@ -670,9 +673,15 @@
           html += `</div>`;
         }
 
+        // ── Reason (at the bottom of each citation) ──
+        if (cit.reason) {
+          html += `<div class="citation-reason">📝 ${escapeHtml(cit.reason)}</div>`;
+        }
+
         // Back-to-answer link
         html += `<div class="citation-back"><a href="#qaAnswerText" class="citation-back-link" data-citation-id="${citId}"><i class="fas fa-arrow-up"></i> 回到回答</a></div>`;
         html += `</div>`;
+
       }
       html += `</div>`;
     }
@@ -718,7 +727,8 @@
           const refLink = targetEl.querySelector(`.citation-ref[href="#citation-${citId}"]`);
           if (refLink) {
             refLink.classList.add('citation-ref--highlight');
-            setTimeout(() => refLink.classList.remove('citation-ref--highlight'), 2000);
+            setTimeout(() => refLink.classList.remove('citation-ref--highlight'), 5000);
+
           }
         }
       });
@@ -737,7 +747,8 @@
           window.scrollTo({ top: targetPos, behavior: 'smooth' });
           // Highlight the citation item
           targetEl.classList.add('citation-item--highlight');
-          setTimeout(() => targetEl.classList.remove('citation-item--highlight'), 2000);
+          setTimeout(() => targetEl.classList.remove('citation-item--highlight'), 5000);
+
         }
       });
     });
