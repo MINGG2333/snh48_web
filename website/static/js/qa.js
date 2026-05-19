@@ -618,16 +618,58 @@
       html += `<h3><i class="fas fa-book-open"></i> 引用列表 (${data.citations.length})</h3>`;
       for (const cit of data.citations) {
         const citId = cit.citation_id?.replace('#', '') || '0';
+        const segs = cit.segments || [];
+
         html += `<div class="citation-item" id="citation-${citId}">`;
-        html += `<div class="citation-id">${cit.citation_id || '#'}</div>`;
-        html += `<div class="citation-meta">`;
-        html += `<span>${cit.source_type || ''}</span>`;
-        if (cit.video_offset) html += ` · 视频内: ${cit.video_offset}`;
-        if (cit.absolute_time) html += ` · ${cit.absolute_time}`;
+        // ── Citation header: ID + type badge ──
+        html += `<div class="citation-header">`;
+        html += `<span class="citation-id">${cit.citation_id || '#'}</span>`;
+        if (cit.citation_type) {
+          html += `<span class="citation-type-badge">${escapeHtml(cit.citation_type)}</span>`;
+        }
         html += `</div>`;
-        if (cit.video_title) html += `<div class="citation-meta">📺 ${cit.video_title}</div>`;
-        html += `<div class="citation-text">“${cit.quoted_text || ''}”</div>`;
-        if (cit.reason) html += `<div class="citation-meta" style="margin-top:4px;font-style:italic;">📝 ${cit.reason}</div>`;
+
+        // ── Reason (if any) ──
+        if (cit.reason) {
+          html += `<div class="citation-reason">📝 ${escapeHtml(cit.reason)}</div>`;
+        }
+
+        // ── Segments list ──
+        if (segs.length > 0) {
+          html += `<div class="citation-segments">`;
+          let prevAnchor = '';
+          let prevVideoTitle = '';
+          for (const seg of segs) {
+            const sameAnchor = seg.anchor_name && seg.anchor_name === prevAnchor;
+            const sameVideo = seg.video_title && seg.video_title === prevVideoTitle;
+
+            html += `<div class="citation-segment">`;
+            // Source info row: anchor_name (dedup), source_type, offset
+            html += `<div class="segment-source">`;
+            if (seg.anchor_name && !sameAnchor) {
+              html += `<span class="segment-anchor">${escapeHtml(seg.anchor_name)}</span>`;
+            }
+            if (seg.source_type) {
+              html += `<span class="segment-type">${escapeHtml(seg.source_type)}</span>`;
+            }
+            if (seg.video_offset) {
+              html += `<span class="segment-offset">⏱ ${escapeHtml(seg.video_offset)}</span>`;
+            }
+            html += `</div>`;
+            // Video title (only if differs from previous segment)
+            if (seg.video_title && !sameVideo) {
+              html += `<div class="segment-video">📺 ${escapeHtml(seg.video_title)}</div>`;
+            }
+            // Quoted text
+            html += `<div class="segment-text">“${escapeHtml(seg.quoted_text || '')}”</div>`;
+            html += `</div>`;
+
+            prevAnchor = seg.anchor_name || prevAnchor;
+            prevVideoTitle = seg.video_title || prevVideoTitle;
+          }
+          html += `</div>`;
+        }
+
         // Back-to-answer link
         html += `<div class="citation-back"><a href="#qaAnswerText" class="citation-back-link" data-citation-id="${citId}"><i class="fas fa-arrow-up"></i> 回到回答</a></div>`;
         html += `</div>`;
