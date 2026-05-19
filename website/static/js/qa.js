@@ -562,19 +562,46 @@
     html += `<h3><i class="fas fa-comment-dots"></i> 回答</h3>`;
 
     if (hasAnswer) {
-      // Format citations: match any [#...] containing #digits
-      // e.g. [#1], [#2-#5], [#1, #2, #3], [#1, #3, #5-7]
+      // Format citations: expand [#...] into individual clickable refs
+      // Supports: [#1], [#2-#5], [#1, #2, #3], [#1, #3, #5-7], etc.
+      // Rules:
+      //   - Comma-separated items each become their own link (e.g. [#1, #2, #3])
+      //   - Range like #2-#5 stays as one link pointing to the first citation
       let answerText = data.answer;
       let citationRefIndex = 0;
       answerText = answerText.replace(/\[([^\]]*?#\d+[^\]]*?)\]/g, (match, inner) => {
-        citationRefIndex++;
-        // Extract the first #number as the link target
-        const firstNum = (inner.match(/#(\d+)/) || [])[1] || '0';
-        return `<a href="#citation-${firstNum}" class="citation-ref" data-ref-index="${citationRefIndex}" style="
-          color: var(--primary); font-weight: 700; text-decoration: none;
-          cursor: pointer;
-        " title="查看引用 ${inner.trim()}">${match}</a>`;
+        const trimmed = inner.trim();
+        // Parse all #number and #number-number tokens
+        const parts = trimmed.split(/[,，\s]+/).filter(Boolean);
+        const links = [];
+        for (const part of parts) {
+          const rangeMatch = part.match(/^#(\d+)\s*-\s*#?(\d+)$/);
+          if (rangeMatch) {
+            // Range like #2-#5 — keep as one link, point to first citation
+            citationRefIndex++;
+            const firstNum = rangeMatch[1];
+            links.push(`<a href="#citation-${firstNum}" class="citation-ref" data-ref-index="${citationRefIndex}" style="
+              color: var(--primary); font-weight: 700; text-decoration: none;
+              cursor: pointer;
+            " title="查看引用 #${firstNum} 到 #${rangeMatch[2]}">${part}</a>`);
+          } else {
+            // Single #number
+            const numMatch = part.match(/#(\d+)/);
+            if (numMatch) {
+              citationRefIndex++;
+              const num = numMatch[1];
+              links.push(`<a href="#citation-${num}" class="citation-ref" data-ref-index="${citationRefIndex}" style="
+                color: var(--primary); font-weight: 700; text-decoration: none;
+                cursor: pointer;
+              " title="查看引用 #${num}">${part}</a>`);
+            }
+          }
+        }
+        // Wrap in brackets, join with comma+space
+        return '[' + links.join(', ') + ']';
       });
+
+
 
       html += `<div id="qaAnswerText">${answerText}</div>`;
 
