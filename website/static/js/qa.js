@@ -285,7 +285,7 @@
           <p>${keywordHint}</p>
         </div>
         <div class="qa-email-section">
-          <label for="compEmail">如需获取更全面的回答，请留下您的邮箱和问题：</label>
+          <label for="compEmail">如需获取更全面的回答，请留下您的邮箱：</label>
           <div class="qa-email-row">
             <input type="email" id="compEmail" class="qa-input" placeholder="your@email.com">
             <button class="qa-submit" onclick="window._qaCompRequest('${questionForEmail}')">
@@ -635,16 +635,16 @@
       html += `</div>`;
     }
 
+    // ── AI Generated Content Disclaimer (after citation list) ──
+    html += `<div class="qa-answer-disclaimer">
+      <i class="fas fa-robot"></i> 以上内容由人工智能（AI）生成，仅供参考，不代表陈嘉仪本人立场。请结合其他信息源自行判断。
+    </div>`;
+
 
     // Comprehensiveness warning banner (after the citation list)
     if (data.comprehensiveness) {
       html += buildComprehensivenessBanner(data.comprehensiveness, data.question || '');
     }
-
-    // ── AI Generated Content Disclaimer (after citation list) ──
-    html += `<div class="qa-answer-disclaimer">
-      <i class="fas fa-robot"></i> 以上内容由人工智能（AI）生成，仅供参考，不代表陈嘉仪本人立场。请结合其他信息源自行判断。
-    </div>`;
 
     // ── Share / Save as Image button ──
 
