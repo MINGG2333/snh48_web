@@ -308,6 +308,15 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: 'comprehensiveness_request', email, question }),
     }).catch(() => {});
+
+    // Track event
+    if (window._trackEvent) {
+      window._trackEvent('email_submit', {
+        action: 'comprehensiveness_request',
+        email: email,
+        question: question,
+      }, true);
+    }
   };
 
   // Global: handle content safety email request
@@ -523,6 +532,15 @@
       }
 
 
+      // Track screenshot event
+      if (window._trackEvent) {
+        window._trackEvent('screenshot', {
+          question: document.getElementById('qaInput')?.value?.trim() || '',
+          citation_count: document.querySelectorAll('.citation-item').length,
+          capture_scale: captureScale,
+        }, true);
+      }
+
       // ── Step 7: Download PNG ──
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
 
@@ -571,6 +589,20 @@
   // ── Display Result ───────────────────────────────────────────────────
   function displayResult(data) {
     stopTimers();
+
+    // Track Q&A complete event
+    if (window._trackEvent) {
+      window._trackEvent('qa_complete', {
+        question: data.question || '',
+        has_answer: !!(data.answer && data.answer.length > 0),
+        has_citations: !!(data.citations && data.citations.length > 0),
+        citation_count: (data.citations || []).length,
+        content_safety_flagged: !!data.content_safety_flagged,
+        elapsed_seconds: data.completed_at && data.created_at
+          ? Math.round((new Date(data.completed_at) - new Date(data.created_at)) / 1000) : 0,
+      }, true);
+    }
+
     const hasAnswer = data.answer && data.answer.length > 0;
     const hasCitations = data.citations && data.citations.length > 0;
     const elapsed = data.completed_at && data.created_at
@@ -867,6 +899,13 @@
   async function askQuestionAsync(question) {
     stopTimers();
 
+    // Track Q&A submit event
+    if (window._trackEvent) {
+      window._trackEvent('qa_submit', {
+        question: question,
+      }, true);
+    }
+
     // Show loading with timer
     resultEl.innerHTML = `
       <div class="qa-loading">
@@ -1055,6 +1094,13 @@
       loginBtn.textContent = '验证中...';
       loginError.textContent = '';
 
+      // Track login attempt
+      if (window._trackEvent) {
+        window._trackEvent('login_attempt', {
+          action: 'attempt',
+        }, true);
+      }
+
       try {
         const ok = await verifyPassword(pwd);
         if (ok) {
@@ -1068,6 +1114,13 @@
             window._qaPendingOnLogin = false;
             setTimeout(checkPendingTask, 100);
           }
+
+          // Track successful login
+          if (window._trackEvent) {
+            window._trackEvent('login_attempt', {
+              action: 'success',
+            }, true);
+          }
         }
       } catch (err) {
         const msg = err.message || '';
@@ -1077,6 +1130,14 @@
           loginError.className = 'login-error';           // red
         } else {
           loginError.className = 'login-error login-error--warn';  // yellow
+        }
+
+        // Track failed login
+        if (window._trackEvent) {
+          window._trackEvent('login_attempt', {
+            action: 'failed',
+            reason: msg.includes('频繁') ? 'rate_limited' : 'wrong_password',
+          }, true);
         }
       } finally {
         loginBtn.disabled = false;

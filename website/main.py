@@ -277,6 +277,9 @@ app.include_router(scroller_router)
 from website.complaint_api.router import router as complaint_router
 app.include_router(complaint_router)
 
+from website.track_api.router import router as track_router
+app.include_router(track_router)
+
 
 # ── Security Headers Middleware ─────────────────────────────────────────────
 
