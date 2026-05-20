@@ -137,6 +137,16 @@ def _build_md_entry(record: dict[str, Any]) -> str:
     if action:
         details.append(f"操作：{action}")
 
+    # Show ticket_id for complaint submissions
+    ticket_id = data.get("ticket_id", "")
+    if ticket_id:
+        details.append(f"受理编号：`{ticket_id}`")
+
+    # Show complaint_type for complaint submissions
+    complaint_type = data.get("complaint_type", "")
+    if complaint_type:
+        details.append(f"投诉类型：{complaint_type}")
+
     detail = data.get("detail", "")
     if detail:
         # Convert file references to Markdown links
@@ -157,7 +167,11 @@ def _build_md_entry(record: dict[str, Any]) -> str:
     if event_type == "complaint_submit":
         complaint_file = data.get("complaint_file", "")
         if complaint_file:
-            action_links.append(f"[{complaint_file}]({complaint_file})")
+            # Convert web path (/data/complaints/xxx.md) to relative path
+            # from session dir (../complaints/xxx.md)
+            display_name = Path(complaint_file).name
+            rel_path = "../complaints/" + display_name
+            action_links.append(f"[{display_name}]({rel_path})")
 
     elif event_type == "email_submit":
         action_links.append("[email_requests.md](email_requests.md)")

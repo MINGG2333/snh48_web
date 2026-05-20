@@ -338,10 +338,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Track complaint submit event with ticket_id and complaint file reference
                 if (window._trackEvent) {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
                     window._trackEvent('complaint_submit', {
                         ticket_id: data.ticket_id || '',
                         complaint_type: type,
-                        complaint_file: '../../complaints/complaints_' + new Date().toISOString().slice(0, 7) + '.md',
+                        complaint_file: '/data/complaints/complaints_' + year + month + '.md',
                     }, true);
                 }
             } else {

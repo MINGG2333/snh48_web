@@ -210,7 +210,7 @@
         </div>
         <h3>处理超时提示</h3>
         <p>您的提问「<strong>${escapeHtml(question)}</strong>」处理已超过 <strong>${formatElapsed(elapsed)}</strong>。</p>
-        <p><strong>原因：</strong>LLM 分析耗时较长，页面暂时无法显示结果。</p>
+        <p><strong>原因：</strong>分析耗时较长，页面暂时无法显示结果。</p>
         <p><strong>但处理仍在继续！</strong>完成后结果会自动保存。</p>
         <div class="qa-email-section">
           <label for="timeoutEmail">如需获取最终答复，请留下您的邮箱：</label>
@@ -341,6 +341,15 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: 'content_safety_review', email, question: '内容安全审核' }),
     }).catch(() => {});
+
+    // Track event
+    if (window._trackEvent) {
+      window._trackEvent('email_submit', {
+        action: 'safety_review',
+        email: email,
+        question: '内容安全审核',
+      }, true);
+    }
   };
 
   // ── QR Code Generation ──────────────────────────────────────────────
@@ -599,33 +608,56 @@
       }
 
       // ── Step 7: Download PNG ──
+      // If the stitched canvas is too large for toBlob/toDataURL, fall back to
+      // downloading each segment as a separate image.
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
 
-      await new Promise(function(resolve) {
+      const downloaded = await new Promise(function(resolve) {
         finalCanvas.toBlob(function(blob) {
           if (blob && blob.size > 0) {
             triggerDownload(blob, filename);
+            resolve(true);
           } else {
-            // Fallback: try toDataURL
-            try {
-              var dataUrl = finalCanvas.toDataURL('image/png');
-              if (dataUrl && dataUrl.length > 100) {
-                var link = document.createElement('a');
-                link.download = filename;
-                link.href = dataUrl;
-                link.click();
-              } else {
-                console.error('Screenshot failed: empty canvas data');
-                alert('截图生成失败，图片内容为空。请尝试减少引用数量后重试。');
-              }
-            } catch (e) {
-              console.error('toDataURL fallback failed:', e);
-              alert('截图保存失败：浏览器画布尺寸超限。请尝试减少引用数量后重试。');
-            }
+            resolve(false);
           }
-          resolve();
         }, 'image/png');
+        // Timeout: if toBlob doesn't call back within 5s, treat as failure
+        setTimeout(function() { resolve(false); }, 5000);
       });
+
+      if (!downloaded) {
+        // Fallback: try toDataURL
+        try {
+          var dataUrl = finalCanvas.toDataURL('image/png');
+          if (dataUrl && dataUrl.length > 100) {
+            var link = document.createElement('a');
+            link.download = filename;
+            link.href = dataUrl;
+            link.click();
+          } else {
+            throw new Error('empty data URL');
+          }
+        } catch (e) {
+          console.warn('Stitched canvas download failed, falling back to segment-by-segment download:', e);
+          // Fallback: download each segment as a separate image
+          if (segmentCanvases.length > 1) {
+            var zipFilename = filename.replace('.png', '');
+            for (var si = 0; si < segmentCanvases.length; si++) {
+              (function(segCanvas, idx) {
+                var segFilename = zipFilename + '_part' + (idx + 1) + '.png';
+                segCanvas.toBlob(function(segBlob) {
+                  if (segBlob && segBlob.size > 0) {
+                    triggerDownload(segBlob, segFilename);
+                  }
+                }, 'image/png');
+              })(segmentCanvases[si], si);
+            }
+            alert('内容较长，已分段保存为多张图片（共 ' + segmentCanvases.length + ' 张），请按文件名顺序查看。');
+          } else {
+            alert('截图生成失败，图片内容为空。请尝试减少引用数量后重试。');
+          }
+        }
+      }
     } catch (err) {
       console.error('Screenshot failed:', err);
       if (err.message && (err.message.indexOf('size') > -1 || err.message.indexOf('limit') > -1 || err.message.indexOf('maximum') > -1)) {
@@ -1102,6 +1134,15 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: taskId, email }),
     }).catch(() => {});
+
+    // Track event
+    if (window._trackEvent) {
+      window._trackEvent('email_submit', {
+        action: 'timeout_email',
+        task_id: taskId,
+        email: email,
+      }, true);
+    }
   };
 
   window._qaRetryPoll = function(taskId) {
@@ -1380,6 +1421,15 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: pending.taskId, email }),
     }).catch(() => {});
+
+    // Track event
+    if (window._trackEvent) {
+      window._trackEvent('email_submit', {
+        action: 'refresh_email',
+        task_id: pending.taskId,
+        email: email,
+      }, true);
+    }
   };
 
   window._qaRefreshRetryPoll = function() {
