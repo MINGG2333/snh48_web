@@ -177,11 +177,14 @@ def _build_md_entry(record: dict[str, Any]) -> str:
         complaint_file = data.get("complaint_file", "")
         if ticket_id and complaint_file:
             display_name = Path(complaint_file).name
-            rel_path = "../complaints/" + display_name
+            # User events file is at: interaction_logs/session_xxx/user_xxx_events.md
+            # Complaints file is at: data/complaints/complaints_yyyymm.md
+            # Relative path: ../../complaints/display_name
+            rel_path = "../../complaints/" + display_name
             action_col = f"`{ticket_id}` → [{display_name}]({rel_path})"
         elif complaint_file:
             display_name = Path(complaint_file).name
-            rel_path = "../complaints/" + display_name
+            rel_path = "../../complaints/" + display_name
             action_col = f"[{display_name}]({rel_path})"
 
     elif event_type == "email_submit":
