@@ -386,7 +386,9 @@ def _push_to_global_notification_center(
             events_start = 0
             for i, line in enumerate(lines[1:], 1):
                 if line.startswith("> 会话启动时间："):
-                    start_time = line.replace("> 会话启动时间：", "").strip()
+                    # Extract only the time portion (before " — 查看完整通知：")
+                    raw_start = line.replace("> 会话启动时间：", "").strip()
+                    start_time = raw_start.split(" — ")[0].strip()
                 elif line.startswith("### "):
                     events_start = i
                     break
