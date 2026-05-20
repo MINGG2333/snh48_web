@@ -56,6 +56,12 @@ def record_user_event(
     """
     Record a user behavior event.
 
+    Writes to:
+      1. user_events.jsonl       — 所有用户混合的机器可读日志
+      2. user_{client_id}_events.jsonl — 按用户分开的机器可读日志
+      3. user_events.md          — 所有用户混合的人类可读汇总
+      4. notification_center.md  — 重要事件的通知中心（可选）
+
     Args:
         session_dir: The session log directory (from get_session_dir())
         client_id: The client identifier (from X-Client-Id header or generated)
@@ -75,17 +81,22 @@ def record_user_event(
         "data": event_data,
     }
 
-    # 1. Write to JSONL (machine-readable)
+    # 1. Write to combined JSONL (all users mixed, machine-readable)
     jsonl_path = session_dir / "user_events.jsonl"
     with open(jsonl_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    # 2. Write to Markdown (human-readable)
+    # 2. Write to per-user JSONL (one file per user, machine-readable)
+    user_jsonl_path = session_dir / f"user_{client_id}_events.jsonl"
+    with open(user_jsonl_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    # 3. Write to combined Markdown (all users mixed, human-readable)
     md_path = session_dir / "user_events.md"
     md_entry = _build_md_entry(record)
     _prepend_to_file(md_path, md_entry)
 
-    # 3. Optionally push to notification center
+    # 4. Optionally push to notification center
     if push_to_notification:
         _push_to_notification_center(session_dir, record)
 
@@ -143,6 +154,61 @@ def _build_md_entry(record: dict[str, Any]) -> str:
     return "".join(lines)
 
 
+# ── Notification Center Usage Guide ────────────────────────────────────────
+
+NOTIFICATION_USAGE_GUIDE = """\
+## 📋 使用说明
+
+### 通知中心是什么？
+通知中心是网站所有**需要管理员关注的事件**的统一汇总页面。当用户进行以下操作时，会自动生成一条通知：
+- 🤖 **提交问答**（qa_submit）— 用户向 AI 提问
+- 🤖 **问答完成**（qa_complete）— AI 返回了回答
+- 🤖 **问答超时**（qa_timeout）— 问题处理超时
+- 📧 **提交邮箱**（email_submit）— 用户留下邮箱等待结果
+- 📋 **提交投诉**（complaint_submit）— 用户提交投诉举报
+- 🔑 **登录尝试**（login_attempt）— 用户尝试登录（含成功/失败）
+- 📸 **截图保存**（screenshot）— 用户保存了问答截图
+
+### 如何处理通知？
+
+每条通知包含以下字段：
+
+| 字段 | 说明 |
+|------|------|
+| **时间** | 事件发生的具体时间 |
+| **类型** | 事件类型（见上方列表） |
+| **用户** | 用户的唯一标识符（`client_id`） |
+| **页面** | 事件发生的页面路径 |
+| **问题** | 用户提出的问题内容 |
+| **答复摘要** | AI 回答的摘要（前 100 字） |
+| **邮箱** | 用户留下的联系邮箱 |
+| **操作** | 具体操作描述 |
+| **详情** | 补充信息 |
+| **处理状态** | ⏳ 待处理 / ✅ 已处理 / ❌ 已忽略 |
+| **处理备注** | 管理员填写的处理备注 |
+
+### 处理流程
+
+1. **查看通知** — 浏览通知列表，了解需要处理的事件
+2. **标记状态** — 将 `处理状态` 从 `⏳ 待处理` 改为 `✅ 已处理` 或 `❌ 已忽略`
+3. **填写备注** — 在 `处理备注` 中记录处理结果或说明
+4. **处理邮箱请求** — 如果用户留下了邮箱，请及时回复
+5. **处理投诉** — 投诉事件请参考 `complaints/` 目录下的详细投诉记录
+
+### 关联文件
+
+| 文件 | 说明 |
+|------|------|
+| `user_events.jsonl` | 所有事件的机器可读日志（JSONL 格式，每行一个事件） |
+| `user_events.md` | 所有事件的人类可读汇总（含页面浏览等非通知事件） |
+| `notification_center.md` | **本文件**，仅包含需要处理的重要事件 |
+| `email_requests.md` | 用户邮箱请求汇总（由 qa_api 生成） |
+| `complaints/` | 投诉记录目录（由 complaint_api 生成） |
+
+> 💡 **提示：** 建议每天查看一次通知中心，及时处理用户请求和投诉。
+"""
+
+
 def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> None:
     """Push an event to the notification center."""
     notification_path = session_dir / "notification_center.md"
@@ -194,7 +260,7 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
 
     entry = "".join(lines)
 
-    # Prepend to notification center
+    # ── 1. Write to per-session notification center ──
     existing = ""
     if notification_path.exists():
         existing = notification_path.read_text(encoding="utf-8")
@@ -202,9 +268,101 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
     with open(notification_path, "w", encoding="utf-8") as f:
         f.write("# 🔔 通知中心\n\n")
         f.write("> 所有需要管理员关注的事件汇总。按时间倒序排列，请及时处理。\n\n")
+        f.write(NOTIFICATION_USAGE_GUIDE)
+        f.write("\n\n---\n\n")
         f.write("## 待处理事件\n\n")
         f.write(entry)
         f.write(existing)
+
+    # ── 2. Write to global notification center (across all sessions) ──
+    _push_to_global_notification_center(session_dir, record, entry)
+
+
+def _push_to_global_notification_center(
+    session_dir: Path, record: dict[str, Any], entry: str
+) -> None:
+    """Push an event to the global notification center (across all sessions).
+
+    The global notification center lives at ``interaction_logs/_all_notifications.md``.
+    It organizes notifications by session, with the newest session first.
+    Within each session section, events are listed newest first.
+    """
+    global_path = session_dir.parent / "_all_notifications.md"
+    session_name = session_dir.name  # e.g. "session_20260521_033000"
+    session_start_time = session_name.replace("session_", "")
+
+    # ── Parse existing file into session blocks ──
+    # Each block is a dict: {"session": str, "start_time": str, "events": [str]}
+    # Blocks are ordered newest session first.
+    blocks: list[dict] = []
+
+    if global_path.exists():
+        raw = global_path.read_text(encoding="utf-8")
+        # Split by session headers (## 📁 session_...)
+        parts = raw.split("\n## 📁 ")
+        for part in parts[1:]:  # Skip the header part (before first session)
+            lines = part.split("\n")
+            sess_name = lines[0].strip()
+            # Find start time
+            start_time = ""
+            events_start = 0
+            for i, line in enumerate(lines[1:], 1):
+                if line.startswith("> 会话启动时间："):
+                    start_time = line.replace("> 会话启动时间：", "").strip()
+                elif line.startswith("### "):
+                    events_start = i
+                    break
+            # Collect all events (### ... --- ...)
+            events_text = "\n".join(lines[events_start:]) if events_start > 0 else ""
+            blocks.append({
+                "session": sess_name,
+                "start_time": start_time,
+                "events": events_text,
+            })
+
+    # ── Find or create the block for this session ──
+    target_block = None
+    for block in blocks:
+        if block["session"] == session_name:
+            target_block = block
+            break
+
+    if target_block is None:
+        # New session — insert at the beginning (newest first)
+        blocks.insert(0, {
+            "session": session_name,
+            "start_time": session_start_time,
+            "events": "",
+        })
+        target_block = blocks[0]
+
+    # ── Prepend the new event to the session's events ──
+    new_event = f"### {record['event_type_label']}\n\n{entry}"
+    if target_block["events"]:
+        target_block["events"] = new_event + "\n" + target_block["events"]
+    else:
+        target_block["events"] = new_event
+
+    # ── Write the file ──
+    with open(global_path, "w", encoding="utf-8") as f:
+        f.write("# 📋 总通知中心\n\n")
+        f.write("> 所有会话的通知汇总。按会话倒序排列（最新会话在上），每个会话内按时间倒序排列。\n\n")
+
+        # Table of contents
+        f.write("## 目录\n\n")
+        f.write("| 会话 | 启动时间 |\n")
+        f.write("|------|----------|\n")
+        for block in blocks:
+            anchor = block["session"].lower().replace("_", "").replace(" ", "")
+            f.write(f"| [{block['session']}](#{anchor}) | {block['start_time']} |\n")
+        f.write("\n---\n\n")
+
+        # Session blocks
+        for block in blocks:
+            f.write(f"## 📁 {block['session']}\n\n")
+            f.write(f"> 会话启动时间：{block['start_time']}\n\n")
+            f.write(block["events"])
+            f.write("\n\n---\n\n")
 
 
 def _prepend_to_file(path: Path, entry: str) -> None:
