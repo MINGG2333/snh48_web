@@ -148,9 +148,36 @@ def _build_md_entry(record: dict[str, Any]) -> str:
         )
         details.append(f"详情：{detail}")
 
+    # ── Add links to specific event files based on event type ──
+    event_type = record["event_type"]
+
+    if event_type == "complaint_submit":
+        ticket_id = data.get("ticket_id", "")
+        complaint_file = data.get("complaint_file", "")
+        if ticket_id and complaint_file:
+            details.append(f"投诉单：{ticket_id} → [{complaint_file}]({complaint_file})")
+        elif ticket_id:
+            details.append(f"投诉单：{ticket_id}")
+
+    elif event_type == "email_submit":
+        email_request_id = data.get("email_request_id", "")
+        if email_request_id:
+            details.append(f"邮箱请求：{email_request_id} → [email_requests.md](email_requests.md)")
+
+    elif event_type in ("qa_complete", "qa_submit"):
+        archive_path = data.get("archive_path", "")
+        if archive_path:
+            # archive_path is like "transcript_analyze/video_knowledge_db/qa_archive/20260520_180232_6371b67b.json"
+            # Make it a relative link from the session dir
+            archive_rel = archive_path
+            details.append(f"LLM存档：[{archive_rel}]({archive_rel})")
+
+    # Add link to the user's own event log file
+    user_log_link = f"[user_{client_id}_events.md](user_{client_id}_events.md)"
+
     content = " | ".join(details) if details else "-"
 
-    return f"| {time_str} | {event_type_label} | `{client_id}` | {content} |\n"
+    return f"| {time_str} | {event_type_label} | `{client_id}` | {content} | {user_log_link} |\n"
 
 
 # ── Notification Center Usage Guide ────────────────────────────────────────
@@ -261,6 +288,9 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
         )
         lines.append(f"| **详情** | {detail} |\n")
 
+    # Add link to user event file
+    user_events_link = f"[user_{client_id}_events.md](user_{client_id}_events.md)"
+    lines.append(f"| **用户操作记录** | {user_events_link} |\n")
     lines.append(f"| **处理状态** | ⏳ 待处理 |\n")
     lines.append(f"| **处理备注** | |\n")
     lines.append("\n")
@@ -269,11 +299,24 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
 
     # ── 1. Write to per-session notification center ──
     if notification_path.exists():
-        # File exists — just prepend the new entry (no header/guide duplication)
+        # File exists — insert new entry after "## 待处理事件" header
         existing = notification_path.read_text(encoding="utf-8")
-        with open(notification_path, "w", encoding="utf-8") as f:
-            f.write(entry)
-            f.write(existing)
+        # Find the "## 待处理事件" section and insert after it
+        marker = "## 待处理事件\n\n"
+        marker_pos = existing.find(marker)
+        if marker_pos != -1:
+            after_marker = marker_pos + len(marker)
+            before = existing[:after_marker]
+            after = existing[after_marker:]
+            with open(notification_path, "w", encoding="utf-8") as f:
+                f.write(before)
+                f.write(entry)
+                f.write(after)
+        else:
+            # Fallback: prepend to beginning
+            with open(notification_path, "w", encoding="utf-8") as f:
+                f.write(entry)
+                f.write(existing)
     else:
         # First event — create file with header
         with open(notification_path, "w", encoding="utf-8") as f:
@@ -356,20 +399,32 @@ def _push_to_global_notification_center(
         f.write("# 📋 总通知中心\n\n")
         f.write("> 所有会话的通知汇总。按会话倒序排列（最新会话在上），每个会话内按时间倒序排列。\n\n")
 
-        # Table of contents
+        # Table of contents — link to each session's notification_center.md
         f.write("## 目录\n\n")
-        f.write("| 会话 | 启动时间 |\n")
-        f.write("|------|----------|\n")
+        f.write("| 会话 | 启动时间 | 通知中心 |\n")
+        f.write("|------|----------|----------|\n")
         for block in blocks:
-            anchor = block["session"].lower().replace("_", "").replace(" ", "")
-            f.write(f"| [{block['session']}](#{anchor}) | {block['start_time']} |\n")
+            sess_dir_name = block["session"]
+            nc_link = f"[notification_center.md]({sess_dir_name}/notification_center.md)"
+            f.write(f"| {block['session']} | {block['start_time']} | {nc_link} |\n")
         f.write("\n---\n\n")
 
         # Session blocks
         for block in blocks:
+            sess_dir_name = block["session"]
+            nc_link = f"[notification_center.md]({sess_dir_name}/notification_center.md)"
             f.write(f"## 📁 {block['session']}\n\n")
-            f.write(f"> 会话启动时间：{block['start_time']}\n\n")
-            f.write(block["events"])
+            f.write(f"> 会话启动时间：{block['start_time']} — 查看完整通知：{nc_link}\n\n")
+            # Fix detail links in events: they are relative to session dir,
+            # but in global file they need to be prefixed with session dir name
+            events_fixed = block["events"]
+            import re
+            events_fixed = re.sub(
+                r'(\[user_[a-zA-Z0-9_]+_events\.md\]\()(user_[a-zA-Z0-9_]+_events\.md)\)',
+                lambda m: f"{m.group(1)}{sess_dir_name}/{m.group(2)})",
+                events_fixed
+            )
+            f.write(events_fixed)
             f.write("\n\n---\n\n")
 
 
@@ -382,8 +437,8 @@ def _append_to_file(path: Path, entry: str) -> None:
         # Create file with table header
         with open(path, "w", encoding="utf-8") as f:
             f.write("# 📋 用户操作记录\n\n")
-            f.write("| 时间 | 类型 | 用户 | 内容 |\n")
-            f.write("|------|------|------|------|\n")
+            f.write("| 时间 | 类型 | 用户 | 内容 | 操作记录 |\n")
+            f.write("|------|------|------|------|----------|\n")
 
     with open(path, "a", encoding="utf-8") as f:
         f.write(entry)

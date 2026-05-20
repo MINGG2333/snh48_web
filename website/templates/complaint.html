@@ -335,6 +335,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 optionsPanel.querySelectorAll('.custom-option').forEach(function(o) {
                     o.style.background = 'transparent';
                 });
+
+                // Track complaint submit event with ticket_id and complaint file reference
+                if (window._trackEvent) {
+                    window._trackEvent('complaint_submit', {
+                        ticket_id: data.ticket_id || '',
+                        complaint_type: type,
+                        complaint_file: 'complaints/complaints_' + new Date().toISOString().slice(0, 7) + '.jsonl',
+                    }, true);
+                }
             } else {
                 const err = await resp.json().catch(() => ({}));
                 showFeedback('提交失败：' + (err.detail || '请稍后重试'), 'error');

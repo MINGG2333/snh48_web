@@ -655,6 +655,7 @@
         content_safety_flagged: !!data.content_safety_flagged,
         elapsed_seconds: data.completed_at && data.created_at
           ? Math.round((new Date(data.completed_at) - new Date(data.created_at)) / 1000) : 0,
+        archive_path: data.archive_path || '',
       }, true);
     }
 
