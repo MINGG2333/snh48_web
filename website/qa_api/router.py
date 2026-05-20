@@ -489,6 +489,7 @@ class ArchiveEmailRequest(BaseModel):
     task_id: str
     email: str
     question: Optional[str] = None
+    client_id: Optional[str] = None
 
 
 @router.post("/archive-email")
@@ -540,6 +541,14 @@ def archive_email(req: ArchiveEmailRequest):
     }
     task_type = task_type_map.get(req.task_id, "❓ 其他请求")
 
+    # Generate a unique event_id for cross-referencing with user events
+    # Uses client_id (from frontend) or email prefix as fallback
+    id_prefix = req.client_id[:6] if req.client_id else (req.email[:6] if req.email else "unknown")
+    event_id = f"EVT-{datetime.fromisoformat(timestamp).strftime('%Y%m%d-%H%M%S')}-{id_prefix}"
+
+    # Escape pipe characters in user input to avoid breaking markdown table columns
+    safe_question = req.question.replace("|", "\\|") if req.question else ""
+    safe_email = req.email.replace("|", "\\|") if req.email else ""
     md_entry = (
         f"---\n"
         f"### 📧 邮箱请求 #{datetime.fromisoformat(timestamp).strftime('%H%M%S')}\n\n"
@@ -547,11 +556,12 @@ def archive_email(req: ArchiveEmailRequest):
         f"|------|------|\n"
         f"| **时间** | {time_str} |\n"
         f"| **类型** | {task_type} |\n"
-        f"| **邮箱** | `{req.email}` |\n"
+        f"| **邮箱** | `{safe_email}` |\n"
+        f"| **事件ID** | `{event_id}` |\n"
         f"| **任务ID** | `{req.task_id}` |\n"
     )
-    if req.question:
-        md_entry += f"| **问题** | {req.question} |\n"
+    if safe_question:
+        md_entry += f"| **问题** | {safe_question} |\n"
     if archive_path:
         md_entry += f"| **存档路径** | `{archive_path}` |\n"
     md_entry += "\n"
@@ -576,11 +586,11 @@ def archive_email(req: ArchiveEmailRequest):
         f"|------|------|\n"
         f"| **时间** | {time_str} |\n"
         f"| **类型** | {task_type} |\n"
-        f"| **邮箱** | `{req.email}` |\n"
+        f"| **邮箱** | `{safe_email}` |\n"
         f"| **任务ID** | `{req.task_id}` |\n"
     )
-    if req.question:
-        notification_entry += f"| **问题** | {req.question} |\n"
+    if safe_question:
+        notification_entry += f"| **问题** | {safe_question} |\n"
     if archive_path:
         notification_entry += f"| **存档路径** | `{archive_path}` |\n"
     notification_entry += (

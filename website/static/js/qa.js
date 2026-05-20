@@ -306,7 +306,7 @@
     fetch('/api/qa/archive-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: 'comprehensiveness_request', email, question }),
+      body: JSON.stringify({ task_id: 'comprehensiveness_request', email, question, client_id: clientId }),
     }).catch(() => {});
 
     // Track event
@@ -339,7 +339,7 @@
     fetch('/api/qa/archive-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: 'content_safety_review', email, question: '内容安全审核' }),
+      body: JSON.stringify({ task_id: 'content_safety_review', email, question: '内容安全审核', client_id: clientId }),
     }).catch(() => {});
 
     // Track event
@@ -1132,7 +1132,7 @@
     fetch('/api/qa/archive-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId, email }),
+      body: JSON.stringify({ task_id: taskId, email, client_id: clientId }),
     }).catch(() => {});
 
     // Track event
@@ -1419,7 +1419,7 @@
     fetch('/api/qa/archive-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: pending.taskId, email }),
+      body: JSON.stringify({ task_id: pending.taskId, email, client_id: clientId }),
     }).catch(() => {});
 
     // Track event

@@ -123,11 +123,15 @@ def _build_md_entry(record: dict[str, Any]) -> str:
 
     question = data.get("question", "")
     if question:
-        details.append(f"问题：{question}")
+        # Escape pipe characters to avoid breaking markdown table columns
+        safe_question = question.replace("|", "\\|")
+        details.append(f"问题：{safe_question}")
 
     answer_preview = data.get("answer_preview", "")
     if answer_preview:
-        details.append(f"答复摘要：{answer_preview[:100]}")
+        # Escape pipe characters to avoid breaking markdown table columns
+        safe_preview = answer_preview[:100].replace("|", "\\|")
+        details.append(f"答复摘要：{safe_preview}")
 
     email = data.get("email", "")
     if email:
@@ -158,30 +162,44 @@ def _build_md_entry(record: dict[str, Any]) -> str:
         )
         details.append(f"详情：{detail}")
 
-    content = " | ".join(details) if details else "-"
+    # Use arrow separator to avoid breaking markdown table columns
+    # The " | " separator would create additional columns in the table
+    content = " → ".join(details) if details else "-"
 
-    # ── Build "操作记录" column with links to related files ──
+    # ── Build "操作记录" column: identifier → [file_link] ──
+    # Keep it simple: just a key identifier + markdown link to the file,
+    # so you can search for the identifier in the linked file to locate the record.
     event_type = record["event_type"]
-    action_links = []
+    action_col = "-"
 
     if event_type == "complaint_submit":
+        ticket_id = data.get("ticket_id", "")
         complaint_file = data.get("complaint_file", "")
-        if complaint_file:
-            # Convert web path (/data/complaints/xxx.md) to relative path
-            # from session dir (../complaints/xxx.md)
+        if ticket_id and complaint_file:
             display_name = Path(complaint_file).name
             rel_path = "../complaints/" + display_name
-            action_links.append(f"[{display_name}]({rel_path})")
+            action_col = f"`{ticket_id}` → [{display_name}]({rel_path})"
+        elif complaint_file:
+            display_name = Path(complaint_file).name
+            rel_path = "../complaints/" + display_name
+            action_col = f"[{display_name}]({rel_path})"
 
     elif event_type == "email_submit":
-        action_links.append("[email_requests.md](email_requests.md)")
+        # Generate a unique event_id from timestamp + email/client_id
+        # This matches the format used in email_requests.md (事件ID field)
+        # and ensures each entry can be uniquely identified even if multiple
+        # users send the same type of request.
+        ts = datetime.fromisoformat(record["timestamp"])
+        email_val = data.get("email", "")
+        id_prefix = email_val[:6] if email_val else client_id[:6]
+        event_id = f"EVT-{ts.strftime('%Y%m%d-%H%M%S')}-{id_prefix}"
+        action_col = f"`{event_id}` → [email_requests.md](email_requests.md)"
 
     elif event_type in ("qa_complete", "qa_submit"):
         archive_path = data.get("archive_path", "")
         if archive_path:
-            action_links.append(f"[{archive_path}]({archive_path})")
-
-    action_col = " | ".join(action_links) if action_links else "-"
+            archive_name = Path(archive_path).name
+            action_col = f"`{archive_name}` → [{archive_path}]({archive_path})"
 
     return f"| {time_str} | {event_type_label} | `{client_id}` | {content} | {action_col} |\n"
 
@@ -269,11 +287,13 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
 
     question = data.get("question", "")
     if question:
-        lines.append(f"| **问题** | {question} |\n")
+        safe_q = question.replace("|", "\\|")
+        lines.append(f"| **问题** | {safe_q} |\n")
 
     answer_preview = data.get("answer_preview", "")
     if answer_preview:
-        lines.append(f"| **答复摘要** | {answer_preview[:100]} |\n")
+        safe_a = answer_preview[:100].replace("|", "\\|")
+        lines.append(f"| **答复摘要** | {safe_a} |\n")
 
     email = data.get("email", "")
     if email:
@@ -281,7 +301,8 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
 
     action = data.get("action", "")
     if action:
-        lines.append(f"| **操作** | {action} |\n")
+        safe_act = action.replace("|", "\\|")
+        lines.append(f"| **操作** | {safe_act} |\n")
 
     detail = data.get("detail", "")
     if detail:
@@ -419,11 +440,13 @@ def _push_to_global_notification_center(
 
     question = data.get("question", "")
     if question:
-        global_lines.append(f"| **问题** | {question} |\n")
+        safe_q = question.replace("|", "\\|")
+        global_lines.append(f"| **问题** | {safe_q} |\n")
 
     answer_preview = data.get("answer_preview", "")
     if answer_preview:
-        global_lines.append(f"| **答复摘要** | {answer_preview[:100]} |\n")
+        safe_a = answer_preview[:100].replace("|", "\\|")
+        global_lines.append(f"| **答复摘要** | {safe_a} |\n")
 
     email = data.get("email", "")
     if email:
@@ -431,7 +454,8 @@ def _push_to_global_notification_center(
 
     action = data.get("action", "")
     if action:
-        global_lines.append(f"| **操作** | {action} |\n")
+        safe_act = action.replace("|", "\\|")
+        global_lines.append(f"| **操作** | {safe_act} |\n")
 
     detail = data.get("detail", "")
     if detail:
