@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     window._trackEvent('complaint_submit', {
                         ticket_id: data.ticket_id || '',
                         complaint_type: type,
-                        complaint_file: 'complaints/complaints_' + new Date().toISOString().slice(0, 7) + '.jsonl',
+                        complaint_file: '../../complaints/complaints_' + new Date().toISOString().slice(0, 7) + '.md',
                     }, true);
                 }
             } else {

@@ -103,8 +103,9 @@ def submit_complaint(req: ComplaintRequest):
         "status": "pending",  # pending | processing | resolved | rejected
     }
 
-    # Write to daily complaint log
-    log_file = COMPLAINT_DIR / f"complaints_{datetime.now().strftime('%Y%m')}.jsonl"
+    # Write to daily complaint log (JSONL — machine readable)
+    month_str = datetime.now().strftime('%Y%m')
+    log_file = COMPLAINT_DIR / f"complaints_{month_str}.jsonl"
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -113,6 +114,37 @@ def submit_complaint(req: ComplaintRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"投诉提交失败: {e}",
         )
+
+    # Write to human-readable Markdown file (MD — human readable)
+    md_file = COMPLAINT_DIR / f"complaints_{month_str}.md"
+    try:
+        time_str = datetime.fromisoformat(now).strftime("%Y-%m-%d %H:%M:%S")
+        md_entry = (
+            f"---\n"
+            f"### 🎫 {ticket_id}\n\n"
+            f"| 字段 | 内容 |\n"
+            f"|------|------|\n"
+            f"| **时间** | {time_str} |\n"
+            f"| **类型** | {COMPLAINT_TYPES.get(req.type, req.type)} |\n"
+            f"| **邮箱** | {req.email or '（未提供）'} |\n"
+            f"| **状态** | ⏳ 待处理 |\n"
+            f"| **处理备注** | |\n\n"
+            f"**投诉内容：**\n\n"
+            f"> {req.content}\n\n"
+        )
+
+        existing = ""
+        if md_file.exists():
+            existing = md_file.read_text(encoding="utf-8")
+
+        with open(md_file, "w", encoding="utf-8") as f:
+            f.write(f"# 📋 投诉记录 - {month_str[:4]}年{month_str[4:]}月\n\n")
+            f.write("> 按时间倒序排列，最新的投诉在最前面。\n\n")
+            f.write(md_entry)
+            f.write(existing)
+    except OSError:
+        # MD file is supplementary; failure should not block the main flow
+        pass
 
     return {
         "success": True,

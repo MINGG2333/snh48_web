@@ -148,36 +148,28 @@ def _build_md_entry(record: dict[str, Any]) -> str:
         )
         details.append(f"详情：{detail}")
 
-    # ── Add links to specific event files based on event type ──
+    content = " | ".join(details) if details else "-"
+
+    # ── Build "操作记录" column with links to related files ──
     event_type = record["event_type"]
+    action_links = []
 
     if event_type == "complaint_submit":
-        ticket_id = data.get("ticket_id", "")
         complaint_file = data.get("complaint_file", "")
-        if ticket_id and complaint_file:
-            details.append(f"投诉单：{ticket_id} → [{complaint_file}]({complaint_file})")
-        elif ticket_id:
-            details.append(f"投诉单：{ticket_id}")
+        if complaint_file:
+            action_links.append(f"[{complaint_file}]({complaint_file})")
 
     elif event_type == "email_submit":
-        email_request_id = data.get("email_request_id", "")
-        if email_request_id:
-            details.append(f"邮箱请求：{email_request_id} → [email_requests.md](email_requests.md)")
+        action_links.append("[email_requests.md](email_requests.md)")
 
     elif event_type in ("qa_complete", "qa_submit"):
         archive_path = data.get("archive_path", "")
         if archive_path:
-            # archive_path is like "transcript_analyze/video_knowledge_db/qa_archive/20260520_180232_6371b67b.json"
-            # Make it a relative link from the session dir
-            archive_rel = archive_path
-            details.append(f"LLM存档：[{archive_rel}]({archive_rel})")
+            action_links.append(f"[{archive_path}]({archive_path})")
 
-    # Add link to the user's own event log file
-    user_log_link = f"[user_{client_id}_events.md](user_{client_id}_events.md)"
+    action_col = " | ".join(action_links) if action_links else "-"
 
-    content = " | ".join(details) if details else "-"
-
-    return f"| {time_str} | {event_type_label} | `{client_id}` | {content} | {user_log_link} |\n"
+    return f"| {time_str} | {event_type_label} | `{client_id}` | {content} | {action_col} |\n"
 
 
 # ── Notification Center Usage Guide ────────────────────────────────────────
@@ -387,8 +379,65 @@ def _push_to_global_notification_center(
         })
         target_block = blocks[0]
 
+    # ── Build the global event entry directly from record (not from per-session entry) ──
+    # This avoids duplicating the per-session notification format (---, ### EVT-..., etc.)
+    event_type_label = record["event_type_label"]
+    time_str = record["time_str"]
+    client_id = record["client_id"]
+    data = record["data"]
+
+    ts = datetime.fromisoformat(record["timestamp"])
+    event_id = f"EVT-{ts.strftime('%Y%m%d-%H%M%S')}-{client_id[:6]}"
+
+    global_lines = [
+        f"### {event_type_label}\n\n",
+        f"| 字段 | 内容 |\n",
+        f"|------|------|\n",
+        f"| **事件ID** | {event_id} |\n",
+        f"| **时间** | {time_str} |\n",
+        f"| **类型** | {event_type_label} |\n",
+        f"| **用户** | `{client_id}` |\n",
+    ]
+
+    page = data.get("page", "")
+    if page:
+        global_lines.append(f"| **页面** | `{page}` |\n")
+
+    question = data.get("question", "")
+    if question:
+        global_lines.append(f"| **问题** | {question} |\n")
+
+    answer_preview = data.get("answer_preview", "")
+    if answer_preview:
+        global_lines.append(f"| **答复摘要** | {answer_preview[:100]} |\n")
+
+    email = data.get("email", "")
+    if email:
+        global_lines.append(f"| **邮箱** | `{email}` |\n")
+
+    action = data.get("action", "")
+    if action:
+        global_lines.append(f"| **操作** | {action} |\n")
+
+    detail = data.get("detail", "")
+    if detail:
+        import re
+        detail = re.sub(
+            r'`(user_[a-zA-Z0-9_]+_events\.md)`',
+            r'[\1](\1)',
+            detail
+        )
+        global_lines.append(f"| **详情** | {detail} |\n")
+
+    user_events_link = f"[user_{client_id}_events.md](user_{client_id}_events.md)"
+    global_lines.append(f"| **用户操作记录** | {user_events_link} |\n")
+    global_lines.append(f"| **处理状态** | ⏳ 待处理 |\n")
+    global_lines.append(f"| **处理备注** | |\n")
+    global_lines.append("\n")
+
+    new_event = "".join(global_lines)
+
     # ── Prepend the new event to the session's events ──
-    new_event = f"### {record['event_type_label']}\n\n{entry}"
     if target_block["events"]:
         target_block["events"] = new_event + "\n" + target_block["events"]
     else:
