@@ -426,20 +426,15 @@
 
     try {
       // ── Strategy: Segment + Stitch ──
-      // Instead of capturing the entire content at once (which can exceed browser
-      // canvas limits when content is long), we split the content into segments
-      // of at most MAX_SEGMENT_HEIGHT logical pixels. Each segment is captured
-      // independently at 3x scale, then stitched together into one final canvas.
-      //
-      // This guarantees 3x capture quality regardless of content length.
+      // The wrapper and segWrapper have identical width and NO padding,
+      // so content reflows identically in both, and scroll positions
+      // calculated from wrapper.scrollHeight match exactly where content
+      // appears in each segment. No padding gaps between segments.
       const MAX_SEGMENT_HEIGHT = 4000;  // logical px per segment
       const CAPTURE_SCALE = 3;          // always 3x for crisp text
       const BG_COLOR = '#0a0a1a';
 
-      // ── Step 1: Build off-screen wrapper with all content ──
-      // IMPORTANT: The wrapper has NO padding. Padding is added by the segment
-      // containers instead. This way, when we offset content with top/margin,
-      // we don't have to account for padding offsets.
+      // ── Step 1: Build off-screen wrapper with ALL content ──
       const wrapper = document.createElement('div');
       wrapper.style.cssText = [
         'background: ' + BG_COLOR + ';',
@@ -454,7 +449,53 @@
       ].join(' ');
       document.body.appendChild(wrapper);
 
-      // ── Step 2: Clone result content ──
+      // ── Step 2: Build all content sections ──
+      const question = document.getElementById('qaInput')?.value?.trim() || '';
+
+      // 2a: Page header (title + subtitle)
+      const header = document.createElement('div');
+      header.style.cssText = 'text-align: center; margin-bottom: 32px; padding: 0 20px;';
+      header.innerHTML = [
+        '<div style="font-size:42px;font-weight:700;margin-bottom:8px;color:#ff6b9d;">AI 智能问答</div>',
+        '<div style="color:rgba(255,255,255,0.6);font-size:20px;">基于知识库的问答系统</div>',
+      ].join('');
+      wrapper.appendChild(header);
+
+      // 2b: KB status (show what was actually displayed on the page)
+      const kbStatus = document.getElementById('kbStatus');
+      if (kbStatus) {
+        const isReady = kbStatus.classList.contains('ready');
+        const statusDiv = document.createElement('div');
+        statusDiv.style.cssText = [
+          'text-align:center;',
+          'margin-bottom:24px;',
+          'padding:12px;',
+          'border-radius:10px;',
+          'font-size:20px;',
+          isReady
+            ? 'background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.2);'
+            : 'background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);',
+        ].join(' ');
+        statusDiv.innerHTML = kbStatus.innerHTML;
+        wrapper.appendChild(statusDiv);
+      }
+
+      // 2c: Question input area (showing what was asked, static)
+      if (question) {
+        const inputArea = document.createElement('div');
+        inputArea.style.cssText = 'display:flex;gap:12px;margin-bottom:24px;';
+        inputArea.innerHTML = [
+          '<div style="flex:1;padding:14px 20px;border-radius:12px;border:1.5px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.08);color:#f0f0f0;font-size:24px;">',
+          escapeHtml(question),
+          '</div>',
+          '<div style="padding:14px 28px;border-radius:12px;background:linear-gradient(135deg,#ff6b9d,#e0558a);color:#fff;font-size:24px;white-space:nowrap;display:flex;align-items:center;gap:8px;">',
+          '<i class="fas fa-paper-plane"></i> 提问',
+          '</div>',
+        ].join('');
+        wrapper.appendChild(inputArea);
+      }
+
+      // 2d: Clone result content (from "处理耗时" onward)
       const clone = resultEl.cloneNode(true);
 
       // Remove interactive elements from clone
@@ -475,11 +516,12 @@
 
       wrapper.appendChild(clone);
 
-      // ── Step 3: Build footer with QR code ──
+      // 2e: Build footer with QR code
       const footer = document.createElement('div');
       footer.style.cssText = [
         'margin-top: 24px;',
         'padding-top: 16px;',
+        'padding-bottom: 40px;',
         'border-top: 1px solid rgba(255,255,255,0.12);',
         'display: flex;',
         'flex-direction: column;',
@@ -507,7 +549,6 @@
         'color: rgba(255,255,255,0.5);',
         'line-height: 1.5;',
       ].join(' ');
-      const question = document.getElementById('qaInput')?.value?.trim() || '';
       info.innerHTML = [
         '<div style="font-size:0.9rem;color:rgba(255,255,255,0.7);font-weight:500;margin-bottom:4px;">',
         '  <i class="fas fa-star" style="color:#ff6b9d;"></i> AI 智能问答',
@@ -519,13 +560,12 @@
       footer.appendChild(info);
       wrapper.appendChild(footer);
 
-      // ── Step 4: Wait for layout ──
+      // ── Step 3: Wait for layout ──
       await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 5: Segment and capture ──
-      // Measure the full content height (wrapper has no padding, so this is exact)
+      // ── Step 4: Segment and capture ──
+      // Measure the full content height
       const totalHeight = wrapper.scrollHeight;
-      const wrapperWidth = wrapper.scrollWidth;
       const numSegments = Math.ceil(totalHeight / MAX_SEGMENT_HEIGHT);
 
       const segmentCanvases = [];
@@ -534,15 +574,11 @@
         const startY = i * MAX_SEGMENT_HEIGHT;
         const segHeight = Math.min(MAX_SEGMENT_HEIGHT, totalHeight - startY);
 
-        // Create a segment container with padding and overflow:hidden.
-        // The content (cloned from wrapper) is placed inside, and we use
-        // scrollTop to scroll to the correct position. This is more reliable
-        // than CSS transforms because html2canvas respects scroll position.
+        // IMPORTANT: segWrapper has NO padding — same content-box width as wrapper.
+        // This ensures content reflows identically and scroll positions align.
         const segWrapper = document.createElement('div');
         segWrapper.style.cssText = [
           'background: ' + BG_COLOR + ';',
-          'padding: 28px;',
-          'border-radius: 16px;',
           "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
           'color: #f0f0f0;',
           'font-size: 24px;',
@@ -552,11 +588,10 @@
           'top: 0;',
           'width: 780px;',
           'overflow: hidden;',
-          'height: ' + (segHeight + 56) + 'px;',  // segHeight + top/bottom padding
+          'height: ' + segHeight + 'px;',
         ].join(' ');
 
-        // Clone the wrapper content and place it inside the segment container.
-        // The wrapper has no padding, so the content starts at the padding box origin.
+        // Clone the full wrapper content and place inside segWrapper
         const contentClone = wrapper.cloneNode(true);
         contentClone.style.position = 'static';  // normal flow
         contentClone.style.margin = '0';
@@ -564,9 +599,7 @@
         contentClone.style.top = 'auto';
         segWrapper.appendChild(contentClone);
 
-        // Scroll to show the correct segment.
-        // Since the wrapper has no padding, startY directly corresponds to
-        // the scroll position of the content inside the padding box.
+        // Scroll to show the correct segment
         segWrapper.scrollTop = startY;
 
         document.body.appendChild(segWrapper);
@@ -582,7 +615,7 @@
       // Clean up the full wrapper
       document.body.removeChild(wrapper);
 
-      // ── Step 6: Stitch segments together ──
+      // ── Step 5: Stitch segments together ──
       const finalWidth = segmentCanvases[0].width;
       const finalHeight = segmentCanvases.reduce((sum, c) => sum + c.height, 0);
 
@@ -607,9 +640,7 @@
         }, true);
       }
 
-      // ── Step 7: Download PNG ──
-      // If the stitched canvas is too large for toBlob/toDataURL, fall back to
-      // downloading each segment as a separate image.
+      // ── Step 6: Download PNG ──
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
 
       const downloaded = await new Promise(function(resolve) {
