@@ -381,6 +381,26 @@
     }, 100);
   }
 
+  /**
+   * Capture a single page segment at the given scale.
+   * Returns a canvas for that segment.
+   */
+  async function captureSegment(element, scale, bgColor) {
+    const w = element.scrollWidth;
+    const h = element.scrollHeight;
+    return await html2canvas(element, {
+      scale: scale,
+      useCORS: true,
+      backgroundColor: bgColor,
+      allowTaint: true,
+      logging: false,
+      width: w,
+      height: h,
+      windowWidth: w,
+      windowHeight: h,
+    });
+  }
+
   async function downloadAsImage() {
     const resultEl = document.getElementById('qaResult');
     const shareBtn = document.getElementById('qaShareBtn');
@@ -396,14 +416,24 @@
     await new Promise(r => setTimeout(r, 50));
 
     try {
-      // ── Step 1: Build an off-screen wrapper ──
-      // Use larger base font (24px) so text is crisp even at 1x capture.
-      // After 3x upscale, text will be very sharp.
+      // ── Strategy: Segment + Stitch ──
+      // Instead of capturing the entire content at once (which can exceed browser
+      // canvas limits when content is long), we split the content into segments
+      // of at most MAX_SEGMENT_HEIGHT logical pixels. Each segment is captured
+      // independently at 3x scale, then stitched together into one final canvas.
+      //
+      // This guarantees 3x capture quality regardless of content length.
+      const MAX_SEGMENT_HEIGHT = 4000;  // logical px per segment
+      const CAPTURE_SCALE = 3;          // always 3x for crisp text
+      const BG_COLOR = '#0a0a1a';
+
+      // ── Step 1: Build off-screen wrapper with all content ──
+      // IMPORTANT: The wrapper has NO padding. Padding is added by the segment
+      // containers instead. This way, when we offset content with top/margin,
+      // we don't have to account for padding offsets.
       const wrapper = document.createElement('div');
       wrapper.style.cssText = [
-        'background: #0a0a1a;',
-        'padding: 28px;',
-        'border-radius: 16px;',
+        'background: ' + BG_COLOR + ';',
         "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
         'color: #f0f0f0;',
         'font-size: 24px;',
@@ -415,18 +445,16 @@
       ].join(' ');
       document.body.appendChild(wrapper);
 
-      // ── Step 2: Clone result content (keep all info, no truncation) ──
+      // ── Step 2: Clone result content ──
       const clone = resultEl.cloneNode(true);
 
-      // Remove the share button area from the clone
+      // Remove interactive elements from clone
       const shareArea = clone.querySelector('.qa-share-area');
       if (shareArea) shareArea.remove();
-
-      // Remove comprehensiveness banner (email form is interactive)
       const compBanner = clone.querySelector('.qa-comp-banner');
       if (compBanner) compBanner.remove();
 
-      // Fix link-based citation refs to static styled text (can't click in image)
+      // Fix citation refs for static display
       const citationRefs = clone.querySelectorAll('.citation-ref');
       citationRefs.forEach(el => {
         el.style.color = '#ff6b9d';
@@ -438,7 +466,7 @@
 
       wrapper.appendChild(clone);
 
-      // ── Step 3: Build footer with QR code (centered, compact) ──
+      // ── Step 3: Build footer with QR code ──
       const footer = document.createElement('div');
       footer.style.cssText = [
         'margin-top: 24px;',
@@ -454,12 +482,10 @@
         'margin-right: auto;',
       ].join(' ');
       const siteUrl = getSiteUrl();
-      // QR code at 28px — compact, roughly 1/3 the area of 80px
       const qrHtml = generateQRCode(siteUrl, 28);
       const qrContainer = document.createElement('div');
       qrContainer.innerHTML = qrHtml;
       qrContainer.style.cssText = 'line-height: 0; max-width: 100%; overflow: hidden;';
-      // Constrain QR image to container width
       const qrImg = qrContainer.querySelector('img');
       if (qrImg) {
         qrImg.style.maxWidth = '100%';
@@ -484,67 +510,97 @@
       footer.appendChild(info);
       wrapper.appendChild(footer);
 
-      // ── Step 4: Wait for layout to settle ──
+      // ── Step 4: Wait for layout ──
       await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 5: Capture at scale 3 for crisp text ──
-      // Use scale 3 directly for sharp text. If canvas exceeds browser limits,
-      // fall back to scale 2, then scale 1 + upscale.
-      const MAX_CANVAS_DIM = 16384;
-      const wrapperW = wrapper.scrollWidth;
-      const wrapperH = wrapper.scrollHeight;
-      let captureScale = 3;
-      if (wrapperW * captureScale > MAX_CANVAS_DIM || wrapperH * captureScale > MAX_CANVAS_DIM) {
-        captureScale = 2;
-      }
-      if (wrapperW * captureScale > MAX_CANVAS_DIM || wrapperH * captureScale > MAX_CANVAS_DIM) {
-        captureScale = 1;
+      // ── Step 5: Segment and capture ──
+      // Measure the full content height (wrapper has no padding, so this is exact)
+      const totalHeight = wrapper.scrollHeight;
+      const wrapperWidth = wrapper.scrollWidth;
+      const numSegments = Math.ceil(totalHeight / MAX_SEGMENT_HEIGHT);
+
+      const segmentCanvases = [];
+
+      for (let i = 0; i < numSegments; i++) {
+        const startY = i * MAX_SEGMENT_HEIGHT;
+        const segHeight = Math.min(MAX_SEGMENT_HEIGHT, totalHeight - startY);
+
+        // Create a segment container with padding and overflow:hidden.
+        // The content (cloned from wrapper) is placed inside, and we use
+        // scrollTop to scroll to the correct position. This is more reliable
+        // than CSS transforms because html2canvas respects scroll position.
+        const segWrapper = document.createElement('div');
+        segWrapper.style.cssText = [
+          'background: ' + BG_COLOR + ';',
+          'padding: 28px;',
+          'border-radius: 16px;',
+          "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
+          'color: #f0f0f0;',
+          'font-size: 24px;',
+          'line-height: 1.7;',
+          'position: absolute;',
+          'left: -9999px;',
+          'top: 0;',
+          'width: 780px;',
+          'overflow: hidden;',
+          'height: ' + (segHeight + 56) + 'px;',  // segHeight + top/bottom padding
+        ].join(' ');
+
+        // Clone the wrapper content and place it inside the segment container.
+        // The wrapper has no padding, so the content starts at the padding box origin.
+        const contentClone = wrapper.cloneNode(true);
+        contentClone.style.position = 'static';  // normal flow
+        contentClone.style.margin = '0';
+        contentClone.style.left = 'auto';
+        contentClone.style.top = 'auto';
+        segWrapper.appendChild(contentClone);
+
+        // Scroll to show the correct segment.
+        // Since the wrapper has no padding, startY directly corresponds to
+        // the scroll position of the content inside the padding box.
+        segWrapper.scrollTop = startY;
+
+        document.body.appendChild(segWrapper);
+
+        // Capture this segment at 3x
+        const segCanvas = await captureSegment(segWrapper, CAPTURE_SCALE, BG_COLOR);
+        segmentCanvases.push(segCanvas);
+
+        // Clean up
+        document.body.removeChild(segWrapper);
       }
 
-      const rawCanvas = await html2canvas(wrapper, {
-        scale: captureScale,
-        useCORS: true,
-        backgroundColor: '#0a0a1a',
-        allowTaint: true,
-        logging: false,
-        width: wrapperW,
-        height: wrapperH,
-        windowWidth: wrapperW,
-        windowHeight: wrapperH,
-      });
-
-      // Clean up the temporary wrapper
+      // Clean up the full wrapper
       document.body.removeChild(wrapper);
 
-      let finalCanvas = rawCanvas;
+      // ── Step 6: Stitch segments together ──
+      const finalWidth = segmentCanvases[0].width;
+      const finalHeight = segmentCanvases.reduce((sum, c) => sum + c.height, 0);
 
-      // ── Step 6: If captured at scale 1, upscale 2x for better quality ──
-      if (captureScale === 1) {
-        const upscaleFactor = 2;
-        finalCanvas = document.createElement('canvas');
-        finalCanvas.width = rawCanvas.width * upscaleFactor;
-        finalCanvas.height = rawCanvas.height * upscaleFactor;
-        const ctx = finalCanvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.scale(upscaleFactor, upscaleFactor);
-        ctx.drawImage(rawCanvas, 0, 0);
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = finalWidth;
+      finalCanvas.height = finalHeight;
+      const ctx = finalCanvas.getContext('2d');
+
+      let yOffset = 0;
+      for (const segCanvas of segmentCanvases) {
+        ctx.drawImage(segCanvas, 0, yOffset);
+        yOffset += segCanvas.height;
       }
-
 
       // Track screenshot event
       if (window._trackEvent) {
         window._trackEvent('screenshot', {
           question: document.getElementById('qaInput')?.value?.trim() || '',
           citation_count: document.querySelectorAll('.citation-item').length,
-          capture_scale: captureScale,
+          capture_scale: CAPTURE_SCALE,
+          num_segments: numSegments,
         }, true);
       }
 
       // ── Step 7: Download PNG ──
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
 
-      // Wrap toBlob in a Promise to ensure it completes before finally block
       await new Promise(function(resolve) {
         finalCanvas.toBlob(function(blob) {
           if (blob && blob.size > 0) {
@@ -572,7 +628,6 @@
       });
     } catch (err) {
       console.error('Screenshot failed:', err);
-      // Check for common canvas size errors
       if (err.message && (err.message.indexOf('size') > -1 || err.message.indexOf('limit') > -1 || err.message.indexOf('maximum') > -1)) {
         alert('截图保存失败：内容过长超出浏览器画布尺寸限制。');
       } else {
