@@ -87,15 +87,16 @@ def track_event(
 
     # ── If new user, also push a "new_user" notification ─────────────────
     if is_new_user:
-        # The notification will include a link to the user's event log
+        # The notification will include a clickable link to the user's event log
+        user_log_file = f"user_{client_id}_events.md"
         record_user_event(
             session_dir=session_dir,
             client_id=client_id,
             event_type="new_user",
             event_data={
                 "page": req.data.get("page", ""),
-                "detail": f"新用户首次访问，操作记录见 `user_{client_id}_events.md`",
-                "user_log": f"user_{client_id}_events.md",
+                "detail": f"新用户首次访问，操作记录见 [{user_log_file}]({user_log_file})",
+                "user_log": user_log_file,
             },
             push_to_notification=True,
         )

@@ -94,9 +94,10 @@ def record_user_event(
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     # 3. Write to per-user Markdown (one file per user, human-readable)
+    #    Appended chronologically (oldest first, newest last)
     user_md_path = session_dir / f"user_{client_id}_events.md"
     md_entry = _build_md_entry(record)
-    _prepend_to_file(user_md_path, md_entry)
+    _append_to_file(user_md_path, md_entry)
 
     # 4. Optionally push to notification center
     if push_to_notification:
@@ -104,56 +105,52 @@ def record_user_event(
 
 
 def _build_md_entry(record: dict[str, Any]) -> str:
-    """Build a Markdown entry for a user event record."""
+    """Build a Markdown table row for a user event record.
+
+    Returns a single table row (without header) for chronological listing.
+    """
     event_type_label = record["event_type_label"]
     time_str = record["time_str"]
     client_id = record["client_id"]
     data = record["data"]
 
-    # Generate a short event ID
-    ts = datetime.fromisoformat(record["timestamp"])
-    event_id = f"EVT-{ts.strftime('%Y%m%d-%H%M%S')}-{client_id[:6]}"
+    # Build the "内容" column with event details
+    details = []
 
-    lines = [
-        f"---\n",
-        f"### {event_id}\n\n",
-        f"| 字段 | 内容 |\n",
-        f"|------|------|\n",
-        f"| **时间** | {time_str} |\n",
-        f"| **类型** | {event_type_label} |\n",
-        f"| **用户** | `{client_id}` |\n",
-    ]
-
-    # Add event-specific fields
     page = data.get("page", "")
     if page:
-        lines.append(f"| **页面** | `{page}` |\n")
+        details.append(f"页面：`{page}`")
 
     question = data.get("question", "")
     if question:
-        lines.append(f"| **问题** | {question} |\n")
+        details.append(f"问题：{question}")
 
     answer_preview = data.get("answer_preview", "")
     if answer_preview:
-        lines.append(f"| **答复摘要** | {answer_preview[:100]} |\n")
+        details.append(f"答复摘要：{answer_preview[:100]}")
 
     email = data.get("email", "")
     if email:
-        lines.append(f"| **邮箱** | `{email}` |\n")
+        details.append(f"邮箱：`{email}`")
 
     action = data.get("action", "")
     if action:
-        lines.append(f"| **操作** | {action} |\n")
+        details.append(f"操作：{action}")
 
     detail = data.get("detail", "")
     if detail:
-        lines.append(f"| **详情** | {detail} |\n")
+        # Convert file references to Markdown links
+        import re
+        detail = re.sub(
+            r'`(user_[a-zA-Z0-9_]+_events\.md)`',
+            r'[\1](\1)',
+            detail
+        )
+        details.append(f"详情：{detail}")
 
-    # Add reference to JSONL for machine-readable data
-    lines.append(f"| **机器日志** | `user_events.jsonl` |\n")
-    lines.append("\n")
+    content = " | ".join(details) if details else "-"
 
-    return "".join(lines)
+    return f"| {time_str} | {event_type_label} | `{client_id}` | {content} |\n"
 
 
 # ── Notification Center Usage Guide ────────────────────────────────────────
@@ -255,6 +252,13 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
 
     detail = data.get("detail", "")
     if detail:
+        # Convert file references to Markdown links
+        import re
+        detail = re.sub(
+            r'`(user_[a-zA-Z0-9_]+_events\.md)`',
+            r'[\1](\1)',
+            detail
+        )
         lines.append(f"| **详情** | {detail} |\n")
 
     lines.append(f"| **处理状态** | ⏳ 待处理 |\n")
@@ -264,18 +268,19 @@ def _push_to_notification_center(session_dir: Path, record: dict[str, Any]) -> N
     entry = "".join(lines)
 
     # ── 1. Write to per-session notification center ──
-    existing = ""
     if notification_path.exists():
+        # File exists — just prepend the new entry (no header/guide duplication)
         existing = notification_path.read_text(encoding="utf-8")
-
-    with open(notification_path, "w", encoding="utf-8") as f:
-        f.write("# 🔔 通知中心\n\n")
-        f.write("> 所有需要管理员关注的事件汇总。按时间倒序排列，请及时处理。\n\n")
-        f.write(NOTIFICATION_USAGE_GUIDE)
-        f.write("\n\n---\n\n")
-        f.write("## 待处理事件\n\n")
-        f.write(entry)
-        f.write(existing)
+        with open(notification_path, "w", encoding="utf-8") as f:
+            f.write(entry)
+            f.write(existing)
+    else:
+        # First event — create file with header
+        with open(notification_path, "w", encoding="utf-8") as f:
+            f.write("# 🔔 通知中心\n\n")
+            f.write("> 所有需要管理员关注的事件汇总。按时间倒序排列，请及时处理。\n\n")
+            f.write("## 待处理事件\n\n")
+            f.write(entry)
 
     # ── 2. Write to global notification center (across all sessions) ──
     _push_to_global_notification_center(session_dir, record, entry)
@@ -366,6 +371,22 @@ def _push_to_global_notification_center(
             f.write(f"> 会话启动时间：{block['start_time']}\n\n")
             f.write(block["events"])
             f.write("\n\n---\n\n")
+
+
+def _append_to_file(path: Path, entry: str) -> None:
+    """Append an entry to a file (chronological order, oldest first).
+
+    If the file doesn't exist yet, creates it with a table header first.
+    """
+    if not path.exists():
+        # Create file with table header
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("# 📋 用户操作记录\n\n")
+            f.write("| 时间 | 类型 | 用户 | 内容 |\n")
+            f.write("|------|------|------|------|\n")
+
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(entry)
 
 
 def _prepend_to_file(path: Path, entry: str) -> None:
