@@ -496,21 +496,108 @@ def archive_email(req: ArchiveEmailRequest):
     """
     Store an email address associated with an async task.
     This allows notifying users when a long-running task completes.
+
+    Writes to:
+      1. email_requests.jsonl  — 机器可读的 JSONL 日志
+      2. email_requests.md     — 人类可读的 Markdown 汇总文件（按时间倒序排列）
+      3. notification_center.md — 统一通知中心（汇总所有待处理事件，含处理状态）
     """
     from website.logging_setup import get_session_dir
     session_dir = get_session_dir()
     email_log_path = session_dir / "email_requests.jsonl"
+    email_md_path = session_dir / "email_requests.md"
+    notification_path = session_dir / "notification_center.md"
+
+    timestamp = datetime.now().isoformat()
+    time_str = datetime.fromisoformat(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+    # ── 尝试查找对应的存档路径 ──
+    # 如果是真实 task_id（非 comprehensiveness_request / content_safety_review 等特殊ID），
+    # 尝试从 _tasks 中获取 archive_path
+    archive_path = ""
+    if req.task_id not in ("comprehensiveness_request", "content_safety_review", "timeout"):
+        task = _tasks.get(req.task_id)
+        if task and task.status == "completed" and task.result:
+            archive_path = task.result.get("archive_path", "")
 
     record = {
         "task_id": req.task_id,
         "email": req.email,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": timestamp,
+        "archive_path": archive_path,
     }
     if req.question:
         record["question"] = req.question
 
+    # 1. 写入 JSONL（机器可读）
     with open(email_log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    # 2. 写入 Markdown（人类可读）
+    task_type_map = {
+        "comprehensiveness_request": "📋 全面性请求",
+        "content_safety_review": "🛡️ 内容安全审核",
+    }
+    task_type = task_type_map.get(req.task_id, "❓ 其他请求")
+
+    md_entry = (
+        f"---\n"
+        f"### 📧 邮箱请求 #{datetime.fromisoformat(timestamp).strftime('%H%M%S')}\n\n"
+        f"| 字段 | 内容 |\n"
+        f"|------|------|\n"
+        f"| **时间** | {time_str} |\n"
+        f"| **类型** | {task_type} |\n"
+        f"| **邮箱** | `{req.email}` |\n"
+        f"| **任务ID** | `{req.task_id}` |\n"
+    )
+    if req.question:
+        md_entry += f"| **问题** | {req.question} |\n"
+    if archive_path:
+        md_entry += f"| **存档路径** | `{archive_path}` |\n"
+    md_entry += "\n"
+
+    existing = ""
+    if email_md_path.exists():
+        existing = email_md_path.read_text(encoding="utf-8")
+
+    with open(email_md_path, "w", encoding="utf-8") as f:
+        f.write("# 📬 用户邮箱请求记录\n\n")
+        f.write("> 按时间倒序排列，最新的请求在最前面。\n\n")
+        f.write(md_entry)
+        f.write(existing)
+
+    # 3. 写入统一通知中心
+    # 通知中心汇总所有需要管理员关注的事件，包含处理状态跟踪
+    event_id = f"EVT-{datetime.fromisoformat(timestamp).strftime('%Y%m%d-%H%M%S')}"
+    notification_entry = (
+        f"---\n"
+        f"### {event_id}\n\n"
+        f"| 字段 | 内容 |\n"
+        f"|------|------|\n"
+        f"| **时间** | {time_str} |\n"
+        f"| **类型** | {task_type} |\n"
+        f"| **邮箱** | `{req.email}` |\n"
+        f"| **任务ID** | `{req.task_id}` |\n"
+    )
+    if req.question:
+        notification_entry += f"| **问题** | {req.question} |\n"
+    if archive_path:
+        notification_entry += f"| **存档路径** | `{archive_path}` |\n"
+    notification_entry += (
+        f"| **处理状态** | ⏳ 待处理 |\n"
+        f"| **处理备注** | |\n\n"
+    )
+
+    existing_notification = ""
+    if notification_path.exists():
+        existing_notification = notification_path.read_text(encoding="utf-8")
+
+    with open(notification_path, "w", encoding="utf-8") as f:
+        f.write("# 🔔 通知中心\n\n")
+        f.write("> 所有需要管理员关注的事件汇总。按时间倒序排列，请及时处理。\n\n")
+        f.write("## 待处理事件\n\n")
+        f.write(notification_entry)
+        f.write(existing_notification)
 
     # Also log via standard interaction log
     log_interaction(
@@ -520,7 +607,7 @@ def archive_email(req: ArchiveEmailRequest):
         citations=[],
         video_results=[],
         stats={},
-        archive_path="",
+        archive_path=archive_path,
         extra={"type": "email_collection", "task_id": req.task_id, "email": req.email, "question": req.question or ""},
     )
 

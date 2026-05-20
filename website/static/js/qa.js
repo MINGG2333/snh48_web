@@ -210,25 +210,25 @@
         </div>
         <h3>处理超时提示</h3>
         <p>您的提问「<strong>${escapeHtml(question)}</strong>」处理已超过 <strong>${formatElapsed(elapsed)}</strong>。</p>
-        <p><strong>原因：</strong>LLM 分析耗时较长（超过 nginx 代理的超时限制 5 分钟），所以页面无法直接显示结果。</p>
-        <p><strong>但服务端仍在继续处理中！</strong>处理完成后，结果会自动保存。</p>
+        <p><strong>原因：</strong>LLM 分析耗时较长，页面暂时无法显示结果。</p>
+        <p><strong>但处理仍在继续！</strong>完成后结果会自动保存。</p>
         <div class="qa-email-section">
-          <label for="timeoutEmail">如需获取最终处理结果，请留下您的邮箱：</label>
+          <label for="timeoutEmail">如需获取最终答复，请留下您的邮箱：</label>
           <div class="qa-email-row">
             <input type="email" id="timeoutEmail" class="qa-input" placeholder="example@email.com">
             <button class="qa-submit" onclick="window._qaLeaveEmail('${taskId}')" id="emailSubmitBtn">
               <i class="fas fa-paper-plane"></i> 提交
             </button>
           </div>
-          <p class="qa-email-hint">提交后，处理完成时会通过存档路径获取结果。</p>
+          <p class="qa-email-hint">提交后，处理完成时会通过邮箱发送答复。</p>
           <div id="emailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
         </div>
         <div class="qa-poll-again" style="margin-top:16px;">
           <button class="btn" onclick="window._qaRetryPoll('${taskId}')">
             <i class="fas fa-redo"></i> 再次尝试获取结果
           </button>
-          <span style="color:var(--text-dim);font-size:0.85rem;margin-left:8px;">结果可能随时返回</span>
         </div>
+        <div style="color:var(--text-dim);font-size:0.85rem;margin-top:8px;">结果可能随时返回</div>
       </div>`;
   }
 
@@ -243,9 +243,6 @@
   function buildComprehensivenessBanner(comp, question) {
     if (!comp || comp.ratio === undefined) return '';
     const ratio = comp.ratio;
-    const pct = Math.round(ratio * 100);
-    const surveyTotal = comp.survey_total_relevant || 0;
-    const usedCount = comp.used_base_count || 0;
 
     // Only show warning if ratio is significantly below 100%
     if (ratio >= 0.95) return '';
@@ -253,23 +250,13 @@
     // Severity classes for styling
     let severity = 'low';
     let icon = 'fa-info-circle';
-    if (pct < 30) {
+    if (ratio < 0.3) {
       severity = 'high';
       icon = 'fa-exclamation-triangle';
-    } else if (pct < 60) {
+    } else if (ratio < 0.6) {
       severity = 'medium';
       icon = 'fa-exclamation-circle';
     }
-
-    const summaryText = surveyTotal > 0
-      ? `预估相关片段共约 ${surveyTotal} 段，当前分析使用了其中 ${usedCount} 段`
-      : `当前分析使用了 ${usedCount} 段相关片段`;
-
-    // Use the actual query keywords for the "high-frequency keywords" explanation
-    const bm25Query = comp.bm25_query || '';
-    const keywordHint = bm25Query
-      ? `对于包含高频关键词"${escapeHtml(bm25Query)}"的问题，可能因数据量过大而未能全面覆盖所有相关片段。`
-      : '对于包含高频关键词的问题，可能因数据量过大而未能全面覆盖所有相关片段。';
 
     // Generate a stable email subject / identifier
     const questionForEmail = encodeURIComponent(question || '未指定问题');
@@ -281,8 +268,8 @@
           <span>回答全面性提醒</span>
         </div>
         <div class="qa-comp-body">
-          <p><strong>本回答仅分析了预估相关内容的 ${pct}%</strong>，${summaryText}。</p>
-          <p>${keywordHint}</p>
+          <p>当前回答可能未能覆盖所有相关内容。</p>
+          <p>如需获取更全面的回答，请留下您的邮箱，会尽快为您处理。</p>
         </div>
         <div class="qa-email-section">
           <label for="compEmail">如需获取更全面的回答，请留下您的邮箱：</label>
@@ -292,7 +279,7 @@
               <i class="fas fa-paper-plane"></i> 提交请求
             </button>
           </div>
-          <p class="qa-email-hint">提交后，管理员会尽快为您提供更全面的回答。</p>
+          <p class="qa-email-hint">提交后，会尽快为您提供更全面的回答。</p>
           <div id="compEmailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
         </div>
       </div>`;
@@ -320,6 +307,30 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: 'comprehensiveness_request', email, question }),
+    }).catch(() => {});
+  };
+
+  // Global: handle content safety email request
+  window._qaSafetyEmail = function() {
+    const emailInput = document.getElementById('safetyEmail');
+    const feedback = document.getElementById('safetyEmailFeedback');
+    const email = emailInput ? emailInput.value.trim() : '';
+
+    if (!email) {
+      if (feedback) feedback.innerHTML = '<span style="color:#fbbf24;">请输入邮箱地址</span>';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (feedback) feedback.innerHTML = '<span style="color:#ef4444;">邮箱格式不正确</span>';
+      return;
+    }
+
+    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！审核通过后会通过邮箱发送答复。</span>';
+
+    fetch('/api/qa/archive-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: 'content_safety_review', email, question: '内容安全审核' }),
     }).catch(() => {});
   };
 
@@ -377,8 +388,8 @@
 
     try {
       // ── Step 1: Build an off-screen wrapper ──
-      // Use larger base font (20px) so text is crisp even at 1x capture.
-      // After 2x upscale, text will be very sharp.
+      // Use larger base font (24px) so text is crisp even at 1x capture.
+      // After 3x upscale, text will be very sharp.
       const wrapper = document.createElement('div');
       wrapper.style.cssText = [
         'background: #0a0a1a;',
@@ -386,7 +397,7 @@
         'border-radius: 16px;',
         "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
         'color: #f0f0f0;',
-        'font-size: 20px;',
+        'font-size: 24px;',
         'line-height: 1.7;',
         'position: absolute;',
         'left: -9999px;',
@@ -467,13 +478,16 @@
       // ── Step 4: Wait for layout to settle ──
       await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 5: Capture at scale 2 for crisp text ──
-      // Use scale 2 directly for sharp text. If canvas exceeds browser limits,
-      // fall back to scale 1 + upscale.
+      // ── Step 5: Capture at scale 3 for crisp text ──
+      // Use scale 3 directly for sharp text. If canvas exceeds browser limits,
+      // fall back to scale 2, then scale 1 + upscale.
       const MAX_CANVAS_DIM = 16384;
       const wrapperW = wrapper.scrollWidth;
       const wrapperH = wrapper.scrollHeight;
-      let captureScale = 2;
+      let captureScale = 3;
+      if (wrapperW * captureScale > MAX_CANVAS_DIM || wrapperH * captureScale > MAX_CANVAS_DIM) {
+        captureScale = 2;
+      }
       if (wrapperW * captureScale > MAX_CANVAS_DIM || wrapperH * captureScale > MAX_CANVAS_DIM) {
         captureScale = 1;
       }
@@ -568,6 +582,41 @@
     // Elapsed time info
     html += `<div style="text-align:right;font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">
       <i class="fas fa-clock"></i> 处理耗时：${formatElapsed(elapsed)}</div>`;
+
+    // ── Content Safety Flagged ──────────────────────────────────────────
+    if (data.content_safety_flagged) {
+      html += `<div class="qa-content-safety-block" style="
+        background: rgba(251, 191, 36, 0.12);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        margin: 16px 0;
+      ">
+        <div style="font-size: 2.5rem; margin-bottom: 8px;">🛡️</div>
+        <div style="font-size: 1.05rem; color: #fcd34d; font-weight: 600; margin-bottom: 8px;">
+          该回答需要审核
+        </div>
+        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 16px;">
+          为保障网站合规与内容安全，该回答已进入人工审核流程，暂时无法直接显示。
+        </p>
+        <div class="qa-email-section">
+          <label for="safetyEmail">如需获取回复，请留下您的邮箱：</label>
+          <div class="qa-email-row">
+            <input type="email" id="safetyEmail" class="qa-input" placeholder="your@email.com">
+            <button class="qa-submit" onclick="window._qaSafetyEmail()">
+              <i class="fas fa-paper-plane"></i> 提交
+            </button>
+          </div>
+          <p class="qa-email-hint">提交后，审核通过后会通过邮箱发送答复。</p>
+          <div id="safetyEmailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
+        </div>
+      </div>`;
+
+      resultEl.innerHTML = html;
+      resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
 
     // ── Compliance notice (below processing time, above answer) ──
     html += `<div class="qa-compliance-notice" style="margin: 0 0 12px 0; padding: 10px 14px; background: rgba(255, 107, 157, 0.08); border: 1px solid rgba(255, 107, 157, 0.15); border-radius: 8px; font-size: 0.85rem; color: var(--text-dim); display: flex; align-items: flex-start; gap: 8px;">
@@ -947,7 +996,7 @@
       return;
     }
 
-    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后可通过存档路径获取结果。</span>';
+    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后会通过邮箱发送答复。</span>';
     if (btn) btn.disabled = true;
 
     // Log the email request (server can pick this up later)
@@ -1206,7 +1255,7 @@
       return;
     }
 
-    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后可通过存档路径获取结果。</span>';
+    if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后会通过邮箱发送答复。</span>';
     if (btn) btn.disabled = true;
 
     fetch('/api/qa/archive-email', {
