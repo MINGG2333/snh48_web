@@ -295,6 +295,22 @@ def ask_question_async(
             task.result = result
             task.completed_at = datetime.now().isoformat()
 
+            # ── Copy archive file to session directory ──
+            # This ensures the archive is accessible via relative links
+            # from user event logs and notification center.
+            archive_path = result.get("archive_path", "")
+            session_archive_path = ""
+            if archive_path:
+                src = Path(archive_path)
+                if src.exists():
+                    # Copy to session dir with same filename
+                    dst = session_dir / src.name
+                    import shutil
+                    shutil.copy2(str(src), str(dst))
+                    session_archive_path = dst.name  # relative to session dir
+                else:
+                    session_archive_path = archive_path
+
             # Log completed interaction with full detail
             log_interaction(
                 client_id=client_id,
@@ -303,7 +319,7 @@ def ask_question_async(
                 citations=result.get("citations", []),
                 video_results=result.get("video_results", []),
                 stats=result.get("retrieval", {}),
-                archive_path=result.get("archive_path", ""),
+                archive_path=session_archive_path,
                 extra={
                     "task_id": task_id,
                     "endpoint": "ask-async",
@@ -515,11 +531,18 @@ def archive_email(req: ArchiveEmailRequest):
     # ── 尝试查找对应的存档路径 ──
     # 如果是真实 task_id（非 comprehensiveness_request / content_safety_review 等特殊ID），
     # 尝试从 _tasks 中获取 archive_path
+    # 优先使用 session 目录下的副本（由 _run() 复制），否则使用原始路径
     archive_path = ""
     if req.task_id not in ("comprehensiveness_request", "content_safety_review", "timeout"):
         task = _tasks.get(req.task_id)
         if task and task.status == "completed" and task.result:
             archive_path = task.result.get("archive_path", "")
+            # Check if the archive was copied to session dir
+            if archive_path:
+                archive_name = Path(archive_path).name
+                session_copy = session_dir / archive_name
+                if session_copy.exists():
+                    archive_path = archive_name  # relative to session dir
 
     record = {
         "task_id": req.task_id,

@@ -29,14 +29,14 @@ class TrackEventRequest(BaseModel):
 
 
 # ── Events that should be pushed to notification center ────────────────────
+# Only events that require admin attention are included.
+# Other events (qa_complete, qa_timeout, login_attempt, screenshot, etc.)
+# are recorded in user event logs but do NOT generate notifications.
 NOTIFICATION_EVENTS = {
+    "new_user",        # New user first visit
     "qa_submit",       # User asked a question
-    "qa_complete",     # User got an answer
-    "qa_timeout",      # Question timed out
     "email_submit",    # User submitted email
     "complaint_submit", # User submitted complaint
-    "login_attempt",   # Login attempt (successful or failed)
-    "screenshot",      # User saved screenshot
 }
 
 

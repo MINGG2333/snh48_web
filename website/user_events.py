@@ -202,7 +202,9 @@ def _build_md_entry(record: dict[str, Any]) -> str:
         archive_path = data.get("archive_path", "")
         if archive_path:
             archive_name = Path(archive_path).name
-            action_col = f"`{archive_name}` → [{archive_path}]({archive_path})"
+            # archive_path is now relative to the session directory
+            # (copied from qa_archive to session dir by qa_api/router.py)
+            action_col = f"`{archive_name}` → [{archive_name}]({archive_name})"
 
     return f"| {time_str} | {event_type_label} | `{client_id}` | {content} | {action_col} |\n"
 
@@ -216,12 +218,10 @@ NOTIFICATION_USAGE_GUIDE = """\
 通知中心是网站所有**需要管理员关注的事件**的统一汇总页面。当用户进行以下操作时，会自动生成一条通知：
 - 🆕 **新用户登入**（new_user）— 新用户首次访问网站
 - 🤖 **提交问答**（qa_submit）— 用户向 AI 提问
-- 🤖 **问答完成**（qa_complete）— AI 返回了回答
-- 🤖 **问答超时**（qa_timeout）— 问题处理超时
 - 📧 **提交邮箱**（email_submit）— 用户留下邮箱等待结果
 - 📋 **提交投诉**（complaint_submit）— 用户提交投诉举报
-- 🔑 **登录尝试**（login_attempt）— 用户尝试登录（含成功/失败）
-- 📸 **截图保存**（screenshot）— 用户保存了问答截图
+
+> 其他事件（问答完成、问答超时、登录尝试、截图保存等）仅在用户操作记录中可见，不会生成通知。
 
 ### 如何处理通知？
 
