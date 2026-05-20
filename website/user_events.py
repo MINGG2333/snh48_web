@@ -9,9 +9,10 @@ Records all user browsing and interaction events on the website, including:
   - Any other custom events
 
 Outputs:
-  1. user_events.jsonl  — 机器可读的 JSONL 日志（每行一个事件）
-  2. user_events.md     — 人类可读的 Markdown 汇总文件（按时间倒序排列）
-  3. notification_center.md — 统一通知中心（汇总所有待处理事件，含处理状态）
+  1. user_events.jsonl              — 所有用户混合的机器可读 JSONL 日志
+  2. user_{client_id}_events.jsonl  — 按用户分开的机器可读 JSONL 日志
+  3. user_{client_id}_events.md     — 按用户分开的人类可读 Markdown 汇总
+  4. notification_center.md         — 统一通知中心（汇总所有待处理事件，含处理状态）
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from typing import Any, Optional
 
 EVENT_TYPES = {
     "page_view": "📄 页面浏览",
+    "new_user": "🆕 新用户登入",
     "qa_submit": "🤖 问答提交",
     "qa_complete": "🤖 问答完成",
     "qa_timeout": "🤖 问答超时",
@@ -57,10 +59,10 @@ def record_user_event(
     Record a user behavior event.
 
     Writes to:
-      1. user_events.jsonl       — 所有用户混合的机器可读日志
-      2. user_{client_id}_events.jsonl — 按用户分开的机器可读日志
-      3. user_events.md          — 所有用户混合的人类可读汇总
-      4. notification_center.md  — 重要事件的通知中心（可选）
+      1. user_events.jsonl              — 所有用户混合的机器可读日志
+      2. user_{client_id}_events.jsonl  — 按用户分开的机器可读日志
+      3. user_{client_id}_events.md     — 按用户分开的人类可读 Markdown 汇总
+      4. notification_center.md         — 重要事件的通知中心（可选）
 
     Args:
         session_dir: The session log directory (from get_session_dir())
@@ -91,10 +93,10 @@ def record_user_event(
     with open(user_jsonl_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    # 3. Write to combined Markdown (all users mixed, human-readable)
-    md_path = session_dir / "user_events.md"
+    # 3. Write to per-user Markdown (one file per user, human-readable)
+    user_md_path = session_dir / f"user_{client_id}_events.md"
     md_entry = _build_md_entry(record)
-    _prepend_to_file(md_path, md_entry)
+    _prepend_to_file(user_md_path, md_entry)
 
     # 4. Optionally push to notification center
     if push_to_notification:
@@ -161,6 +163,7 @@ NOTIFICATION_USAGE_GUIDE = """\
 
 ### 通知中心是什么？
 通知中心是网站所有**需要管理员关注的事件**的统一汇总页面。当用户进行以下操作时，会自动生成一条通知：
+- 🆕 **新用户登入**（new_user）— 新用户首次访问网站
 - 🤖 **提交问答**（qa_submit）— 用户向 AI 提问
 - 🤖 **问答完成**（qa_complete）— AI 返回了回答
 - 🤖 **问答超时**（qa_timeout）— 问题处理超时

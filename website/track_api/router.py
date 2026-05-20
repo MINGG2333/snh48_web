@@ -3,8 +3,9 @@ User Behavior Tracking API Router
 
 Provides an endpoint for the frontend tracker to send user behavior events.
 Events are recorded to:
-  - user_events.jsonl (machine-readable)
-  - user_events.md (human-readable)
+  - user_events.jsonl (machine-readable, all users mixed)
+  - user_{client_id}_events.jsonl (machine-readable, per user)
+  - user_{client_id}_events.md (human-readable, per user)
   - notification_center.md (for important events)
 """
 from __future__ import annotations
@@ -50,19 +51,24 @@ def track_event(
 
     Events are logged to:
       - user_events.jsonl (machine-readable, all events)
-      - user_events.md (human-readable, all events)
+      - user_{client_id}_events.jsonl/.md (per user)
       - notification_center.md (only important events like Q&A, email, etc.)
     """
     session_dir = get_session_dir()
     client_id = req.client_id
 
-    # Determine if this event should be pushed to notification center
+    # ── Detect new user ──────────────────────────────────────────────────
+    # A new user is detected when their per-user JSONL file doesn't exist yet.
+    # This means this is the first event ever received from this client_id.
+    user_jsonl_path = session_dir / f"user_{client_id}_events.jsonl"
+    is_new_user = not user_jsonl_path.exists()
+
+    # ── Determine if this event should be pushed to notification center ──
     push_to_notification = req.event_type in NOTIFICATION_EVENTS
 
     # Check for _push_to_notification override from frontend
     if req.data.get("_push_to_notification"):
         push_to_notification = True
-        # Remove the internal flag from data
         req.data.pop("_push_to_notification", None)
 
     # Add IP info for security-relevant events
@@ -70,6 +76,7 @@ def track_event(
         ip = x_forwarded_for or request.client.host if request.client else "unknown"
         req.data["ip"] = ip
 
+    # ── Record the actual event ──────────────────────────────────────────
     record_user_event(
         session_dir=session_dir,
         client_id=client_id,
@@ -77,5 +84,20 @@ def track_event(
         event_data=req.data,
         push_to_notification=push_to_notification,
     )
+
+    # ── If new user, also push a "new_user" notification ─────────────────
+    if is_new_user:
+        # The notification will include a link to the user's event log
+        record_user_event(
+            session_dir=session_dir,
+            client_id=client_id,
+            event_type="new_user",
+            event_data={
+                "page": req.data.get("page", ""),
+                "detail": f"新用户首次访问，操作记录见 `user_{client_id}_events.md`",
+                "user_log": f"user_{client_id}_events.md",
+            },
+            push_to_notification=True,
+        )
 
     return {"success": True}

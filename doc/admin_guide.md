@@ -22,10 +22,10 @@
 ```
 website/data/interaction_logs/
 ├── session_20260521_033000/    ← 一个会话目录
-│   ├── notification_center.md  ← 通知中心（重要事件汇总）
+│   ├── notification_center.md  ← 通知中心（重要事件汇总，有事件时才生成）
 │   ├── user_events.jsonl       ← 用户行为日志（所有用户混合，JSONL）
-│   ├── user_events.md          ← 用户行为日志（所有用户混合，Markdown）
-│   ├── user_xxx_events.jsonl   ← 按用户分开的行为日志（每个用户一个文件）
+│   ├── user_xxx_events.jsonl   ← 按用户分开的行为日志（JSONL）
+│   ├── user_xxx_events.md      ← 按用户分开的行为日志（Markdown，人类可读）
 │   ├── email_requests.md       ← 邮箱请求汇总
 │   ├── complaints/             ← 投诉记录目录
 │   ├── combined.jsonl          ← 所有用户的 QA 交互日志
@@ -41,10 +41,10 @@ website/data/interaction_logs/
 
 | 文件 | 说明 | 查看方式 |
 |------|------|----------|
-| `notification_center.md` | **通知中心** — 所有需要管理员关注的事件汇总 | 直接打开 Markdown 文件 |
+| `notification_center.md` | **通知中心** — 所有需要管理员关注的事件汇总（有事件时才生成） | 直接打开 Markdown 文件 |
 | `user_events.jsonl` | 所有用户行为的机器可读日志（JSONL 格式，所有用户混合） | 可用 `cat`、`less` 或脚本分析 |
 | `user_{client_id}_events.jsonl` | 按用户分开的机器可读日志（每个用户一个文件） | 可用 `cat`、`less` 或脚本分析 |
-| `user_events.md` | 所有用户行为的人类可读汇总 | 直接打开 Markdown 文件 |
+| `user_{client_id}_events.md` | 按用户分开的人类可读 Markdown 汇总（每个用户一个文件） | 直接打开 Markdown 文件 |
 | `email_requests.md` | 用户邮箱请求汇总（由 QA 问答系统生成） | 直接打开 Markdown 文件 |
 
 ### 其他相关目录
@@ -61,6 +61,7 @@ website/data/interaction_logs/
 ### 通知中心是什么？
 
 通知中心是网站所有**需要管理员关注的事件**的统一汇总页面。当用户进行以下操作时，会自动生成一条通知：
+- 🆕 **新用户登入**（new_user）— 新用户首次访问网站（自动检测）
 - 🤖 **提交问答**（qa_submit）— 用户向 AI 提问
 - 🤖 **问答完成**（qa_complete）— AI 返回了回答
 - 🤖 **问答超时**（qa_timeout）— 问题处理超时
@@ -145,6 +146,7 @@ less website/data/interaction_logs/_all_notifications.md
 
 | 事件类型 | 触发条件 | 建议处理方式 |
 |----------|----------|-------------|
+| 🆕 **新用户登入** | 新用户首次访问网站（自动检测） | 查看该用户的操作记录 `user_{client_id}_events.md` |
 | 🤖 **问答提交** | 用户向 AI 提问 | 关注问题内容，如有违规及时处理 |
 | 🤖 **问答完成** | AI 返回了回答 | 检查回答质量，如有问题可手动修正 |
 | 🤖 **问答超时** | 问题处理超过 5 分钟 | 检查服务器负载，确认 LLM 服务正常 |
@@ -209,9 +211,23 @@ for line in sys.stdin:
 "
 ```
 
-### user_events.md（人类可读）
+### user_{client_id}_events.md（按用户分开的人类可读日志）
 
-所有事件的 Markdown 汇总，按时间倒序排列。包含页面浏览等非通知事件，信息比通知中心更全面。
+每个用户一个 Markdown 文件，按时间倒序排列该用户的所有事件。方便查看特定用户的行为记录。
+
+```bash
+# 进入项目根目录
+cd /mnt/zhitainew/snh48_web
+
+# 找到最新会话目录
+SESSION_DIR=$(ls -t website/data/interaction_logs/ | head -1)
+
+# 查看特定用户的行为记录（替换 client_id 为实际值）
+less "website/data/interaction_logs/$SESSION_DIR/user_xxx_events.md"
+
+# 列出所有用户的 Markdown 日志文件
+ls "website/data/interaction_logs/$SESSION_DIR/"*_events.md
+```
 
 ---
 
