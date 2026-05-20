@@ -391,7 +391,12 @@ def _push_to_global_notification_center(
                     events_start = i
                     break
             # Collect all events (### ... --- ...)
+            # If no events found (events_start == 0), the session is empty
             events_text = "\n".join(lines[events_start:]) if events_start > 0 else ""
+            # Strip trailing --- separator (it will be re-added when writing)
+            events_text = events_text.rstrip("\n")
+            if events_text.endswith("---"):
+                events_text = events_text[:-3].rstrip("\n")
             blocks.append({
                 "session": sess_name,
                 "start_time": start_time,
