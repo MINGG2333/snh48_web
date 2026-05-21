@@ -393,20 +393,25 @@
   /**
    * Capture a single page segment at the given scale.
    * Returns a canvas for that segment.
+   * Uses element.clientWidth/clientHeight (the visible area) for the capture
+   * dimensions, and passes the full content scroll dimensions via
+   * windowWidth/windowHeight so html2canvas renders all content at full res.
    */
   async function captureSegment(element, scale, bgColor) {
-    const w = element.scrollWidth;
-    const h = element.scrollHeight;
+    const visibleW = element.clientWidth;
+    const visibleH = element.clientHeight;
+    const contentW = element.scrollWidth;
+    const contentH = element.scrollHeight;
     return await html2canvas(element, {
       scale: scale,
       useCORS: true,
       backgroundColor: bgColor,
       allowTaint: true,
       logging: false,
-      width: w,
-      height: h,
-      windowWidth: w,
-      windowHeight: h,
+      width: visibleW,
+      height: visibleH,
+      windowWidth: contentW,
+      windowHeight: contentH,
     });
   }
 
@@ -430,8 +435,8 @@
       // so content reflows identically in both, and scroll positions
       // calculated from wrapper.scrollHeight match exactly where content
       // appears in each segment. No padding gaps between segments.
-      const MAX_SEGMENT_HEIGHT = 4000;  // logical px per segment
-      const CAPTURE_SCALE = 3;          // always 3x for crisp text
+      const MAX_SEGMENT_HEIGHT = 2000;  // logical px per segment (smaller = less canvas memory)
+      const CAPTURE_SCALE = 2;          // 2x for good clarity without excessive canvas size
       const BG_COLOR = '#0a0a1a';
 
       // ── Step 1: Build off-screen wrapper with ALL content ──
@@ -670,20 +675,32 @@
           }
         } catch (e) {
           console.warn('Stitched canvas download failed, falling back to segment-by-segment download:', e);
-          // Fallback: download each segment as a separate image
+          // Fallback: download each segment as a separate image.
+          // On mobile (especially iOS), multiple sequential downloads often fail
+          // because the browser only handles one at a time. We use a staggered
+          // approach with delays between each download.
           if (segmentCanvases.length > 1) {
             var zipFilename = filename.replace('.png', '');
-            for (var si = 0; si < segmentCanvases.length; si++) {
-              (function(segCanvas, idx) {
-                var segFilename = zipFilename + '_part' + (idx + 1) + '.png';
-                segCanvas.toBlob(function(segBlob) {
-                  if (segBlob && segBlob.size > 0) {
-                    triggerDownload(segBlob, segFilename);
-                  }
-                }, 'image/png');
-              })(segmentCanvases[si], si);
+            // Use a recursive function with delays to ensure each download
+            // completes before the next one starts
+            function downloadSegment(index) {
+              if (index >= segmentCanvases.length) {
+                alert('内容较长，已分段保存为多张图片（共 ' + segmentCanvases.length + ' 张），请按文件名顺序查看。');
+                return;
+              }
+              var segFilename = zipFilename + '_part' + (index + 1) + '.png';
+              segmentCanvases[index].toBlob(function(segBlob) {
+                if (segBlob && segBlob.size > 0) {
+                  triggerDownload(segBlob, segFilename);
+                  // Wait 500ms before triggering the next download
+                  setTimeout(function() { downloadSegment(index + 1); }, 500);
+                } else {
+                  // Skip empty segments
+                  setTimeout(function() { downloadSegment(index + 1); }, 100);
+                }
+              }, 'image/png');
             }
-            alert('内容较长，已分段保存为多张图片（共 ' + segmentCanvases.length + ' 张），请按文件名顺序查看。');
+            downloadSegment(0);
           } else {
             alert('截图生成失败，图片内容为空。请尝试减少引用数量后重试。');
           }
