@@ -82,6 +82,11 @@
       while (target && target !== document.body) {
         const trackAttr = target.getAttribute('data-track');
         if (trackAttr) {
+          // Skip tracking if the element (or its closest interactive ancestor) is disabled.
+          // This prevents tracking clicks on disabled inputs/buttons before authentication.
+          if (target.disabled || target.closest('[disabled]')) {
+            return;
+          }
           const extraData = {};
           // Collect additional data attributes
           for (const attr of target.attributes) {

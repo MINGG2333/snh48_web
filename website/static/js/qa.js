@@ -145,8 +145,10 @@
         if (authed) {
           inputEl.disabled = false;
           submitEl.disabled = false;
-          inputEl.focus();
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
+          // Focus without scrolling — the login overlay was just dismissed,
+          // scrolling to the input would be jarring.
+          inputEl.focus({ preventScroll: true });
         }
       } else {
         kbReady = false;
@@ -1269,8 +1271,10 @@
           loginOverlay.style.display = 'none';
           inputEl.disabled = false;
           submitEl.disabled = false;
-          inputEl.focus();
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
+          // Focus without scrolling — the login overlay was just dismissed,
+          // scrolling to the input would be jarring.
+          inputEl.focus({ preventScroll: true });
           if (window._qaPendingOnLogin) {
             window._qaPendingOnLogin = false;
             setTimeout(checkPendingTask, 100);
