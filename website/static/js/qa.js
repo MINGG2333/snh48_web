@@ -445,6 +445,7 @@
         'left: -9999px;',
         'top: 0;',
         'width: 780px;',
+        'padding: 0 24px;',
       ].join(' ');
       document.body.appendChild(wrapper);
 
@@ -672,7 +673,7 @@
           'left: -9999px;',
           'top: 0;',
           'width: 780px;',
-          'padding: 0;',
+          'padding: 0 24px;',
           'margin: 0;',
         ].join('');
 
