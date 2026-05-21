@@ -389,42 +389,21 @@
   }
 
   /**
-   * Capture a single page segment at the given scale.
-   * Returns a canvas for that segment.
-   *
-   * We use a negative translateY on the inner content to shift the desired
-   * portion into the visible area. The container has overflow:hidden so
-   * only the visible portion is rendered.
-   *
-   * To avoid overlap between segments, we use a small overlap margin:
-   * each segment captures slightly more than its exact portion, and the
-   * stitching code trims the overlap from all but the first segment.
+   * Capture a single DOM element as a canvas at the given scale.
+   * Each element is captured independently with its own html2canvas call,
+   * ensuring consistent font rendering within each component.
    */
-  async function captureSegment(container, scale, bgColor, offsetY) {
-    // Apply negative translateY to shift content up so the desired
-    // portion is visible in the container's viewport
-    const inner = container.firstElementChild;
-    if (inner && offsetY > 0) {
-      inner.style.transform = 'translateY(-' + offsetY + 'px)';
-    }
-
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    // Use the full content dimensions for windowWidth/windowHeight so
-    // html2canvas renders at the correct scale regardless of offset.
-    // This prevents font size inconsistencies between segments.
-    const contentW = inner ? inner.scrollWidth : w;
-    const contentH = inner ? inner.scrollHeight : h;
-    return await html2canvas(container, {
+  async function captureElement(el, scale, bgColor) {
+    return await html2canvas(el, {
       scale: scale,
       useCORS: true,
       backgroundColor: bgColor,
       allowTaint: true,
       logging: false,
-      width: w,
-      height: h,
-      windowWidth: contentW,
-      windowHeight: contentH,
+      width: el.scrollWidth,
+      height: el.scrollHeight,
+      windowWidth: el.scrollWidth,
+      windowHeight: el.scrollHeight,
     });
   }
 
@@ -443,12 +422,12 @@
     await new Promise(r => setTimeout(r, 50));
 
     try {
-      // ── Strategy: Segment + Stitch ──
-      // The wrapper and segWrapper have identical width and NO padding,
-      // so content reflows identically in both, and scroll positions
-      // calculated from wrapper.scrollHeight match exactly where content
-      // appears in each segment. No padding gaps between segments.
-      const MAX_SEGMENT_HEIGHT = 1200;  // logical px per segment (smaller = less canvas memory per capture)
+      // ── Strategy: Component-based capture ──
+      // Instead of splitting by fixed pixel height (which causes font size
+      // inconsistencies on iOS Safari due to html2canvas windowHeight
+      // differences between segments), we capture each logical component
+      // as an independent element. This ensures consistent font rendering
+      // within each component.
       const CAPTURE_SCALE = 3;          // 3x for crisp text
       const BG_COLOR = '#0a0a1a';
 
@@ -467,10 +446,9 @@
       ].join(' ');
       document.body.appendChild(wrapper);
 
-      // ── Step 2: Build all content sections ──
       const question = document.getElementById('qaInput')?.value?.trim() || '';
 
-      // 2a: Page header (title + subtitle)
+      // ── Component 1: Page header (title + subtitle) ──
       const header = document.createElement('div');
       header.style.cssText = 'text-align: center; margin-bottom: 32px; padding: 0 20px;';
       header.innerHTML = [
@@ -479,7 +457,7 @@
       ].join('');
       wrapper.appendChild(header);
 
-      // 2b: KB status (show what was actually displayed on the page)
+      // ── Component 2: KB status ──
       const kbStatus = document.getElementById('kbStatus');
       if (kbStatus) {
         const isReady = kbStatus.classList.contains('ready');
@@ -498,7 +476,7 @@
         wrapper.appendChild(statusDiv);
       }
 
-      // 2c: Question input area (showing what was asked, static)
+      // ── Component 3: Question input area ──
       if (question) {
         const inputArea = document.createElement('div');
         inputArea.style.cssText = 'display:flex;gap:12px;margin-bottom:24px;';
@@ -513,7 +491,7 @@
         wrapper.appendChild(inputArea);
       }
 
-      // 2d: Clone result content (from "处理耗时" onward)
+      // ── Component 4: Result content (answer + citations + disclaimer) ──
       const clone = resultEl.cloneNode(true);
 
       // Remove interactive elements from clone
@@ -534,7 +512,7 @@
 
       wrapper.appendChild(clone);
 
-      // 2e: Build footer with QR code
+      // ── Component 5: Footer with QR code ──
       const footer = document.createElement('div');
       footer.style.cssText = [
         'margin-top: 24px;',
@@ -578,24 +556,91 @@
       footer.appendChild(info);
       wrapper.appendChild(footer);
 
-      // ── Step 3: Wait for layout ──
+      // ── Step 2: Wait for layout ──
       await new Promise(r => setTimeout(r, 200));
 
-      // ── Step 4: Segment and capture ──
-      // Measure the full content height
-      const totalHeight = wrapper.scrollHeight;
-      const numSegments = Math.ceil(totalHeight / MAX_SEGMENT_HEIGHT);
+      // ── Step 3: Identify component boundaries ──
+      // We split the wrapper into logical components by finding direct children
+      // that represent distinct visual sections. Each component is captured
+      // independently to ensure consistent font rendering.
+      const components = [];
+      const children = Array.from(wrapper.children);
 
-      const segmentCanvases = [];
+      // Group children into components:
+      // - header (title + subtitle)
+      // - kb status
+      // - question input area
+      // - result content (answer + citations + disclaimer)
+      // - footer
+      // If the result content is too tall, we further split it into:
+      //   - answer section
+      //   - citation items (each individually, if many)
+      //   - disclaimer + share area
 
-      for (let i = 0; i < numSegments; i++) {
-        const startY = i * MAX_SEGMENT_HEIGHT;
-        const segHeight = Math.min(MAX_SEGMENT_HEIGHT, totalHeight - startY);
+      for (const child of children) {
+        // Check if this is the result clone (contains answer + citations)
+        const hasAnswer = child.querySelector('.qa-answer');
+        const hasCitations = child.querySelector('.qa-citations');
+        const hasDisclaimer = child.querySelector('.qa-answer-disclaimer');
 
-        // IMPORTANT: segWrapper has NO padding — same content-box width as wrapper.
-        // This ensures content reflows identically and scroll positions align.
-        const segWrapper = document.createElement('div');
-        segWrapper.style.cssText = [
+        if (hasAnswer || hasCitations || hasDisclaimer) {
+          // This is the result content — split into sub-components
+          // to avoid capturing an overly tall element
+
+          // Sub-component: elapsed time (the div containing "处理耗时" text)
+          const elapsedDiv = child.querySelector('[style*="text-align:right"]');
+          if (elapsedDiv && elapsedDiv.textContent.indexOf('处理耗时') !== -1) {
+            components.push(elapsedDiv);
+          }
+
+          // Sub-component: compliance notice
+          const complianceNotice = child.querySelector('.qa-compliance-notice');
+          if (complianceNotice) {
+            components.push(complianceNotice);
+          }
+
+          // Sub-component: answer section
+          const answerSection = child.querySelector('.qa-answer');
+          if (answerSection) {
+            components.push(answerSection);
+          }
+
+          // Sub-component: each citation item individually
+          const citationItems = child.querySelectorAll('.citation-item');
+          if (citationItems.length > 0) {
+            // If there are many citations, capture each one individually
+            // to keep each component small and avoid canvas memory issues
+            for (const citItem of citationItems) {
+              components.push(citItem);
+            }
+          }
+
+          // Sub-component: disclaimer
+          const disclaimer = child.querySelector('.qa-answer-disclaimer');
+          if (disclaimer) {
+            components.push(disclaimer);
+          }
+
+          // Sub-component: comprehensiveness banner (if present)
+          const compBannerInClone = child.querySelector('.qa-comp-banner');
+          if (compBannerInClone) {
+            components.push(compBannerInClone);
+          }
+        } else {
+          // Other components (header, status, input, footer) — capture as-is
+          components.push(child);
+        }
+      }
+
+      // ── Step 4: Capture each component independently ──
+      const componentCanvases = [];
+
+      for (let i = 0; i < components.length; i++) {
+        const comp = components[i];
+
+        // Create a wrapper for this component with the same background and font
+        const compWrapper = document.createElement('div');
+        compWrapper.style.cssText = [
           'background: ' + BG_COLOR + ';',
           "font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;",
           'color: #f0f0f0;',
@@ -605,41 +650,37 @@
           'left: -9999px;',
           'top: 0;',
           'width: 780px;',
-          'overflow: hidden;',
-          'height: ' + segHeight + 'px;',
-        ].join(' ');
+          'padding: 0;',
+          'margin: 0;',
+        ].join('');
 
-        // Clone the full wrapper content and place inside segWrapper
-        const contentClone = wrapper.cloneNode(true);
-        contentClone.style.position = 'static';  // normal flow
-        contentClone.style.margin = '0';
-        contentClone.style.left = 'auto';
-        contentClone.style.top = 'auto';
-        segWrapper.appendChild(contentClone);
+        // Clone the component element
+        const compClone = comp.cloneNode(true);
+        compClone.style.margin = '0';
+        compWrapper.appendChild(compClone);
+        document.body.appendChild(compWrapper);
 
-        document.body.appendChild(segWrapper);
+        // Wait a brief moment for layout
+        await new Promise(r => setTimeout(r, 20));
 
-        // Capture this segment — uses translateY on inner content to shift
-        // the desired portion into the visible area (more reliable than scrollTop)
-        const segCanvas = await captureSegment(segWrapper, CAPTURE_SCALE, BG_COLOR, startY);
-        segmentCanvases.push(segCanvas);
+        // Capture this component independently
+        const compCanvas = await captureElement(compWrapper, CAPTURE_SCALE, BG_COLOR);
+        componentCanvases.push(compCanvas);
 
         // Clean up
-        document.body.removeChild(segWrapper);
+        document.body.removeChild(compWrapper);
       }
 
       // Clean up the full wrapper
       document.body.removeChild(wrapper);
 
-      // ── Step 5: Stitch segments together ──
-      // To avoid overlap/redundancy between segments caused by sub-pixel
-      // rounding in html2canvas, we trim a small overlap margin from the
-      // top of every segment except the first one.
-      const OVERLAP_TRIM = 2; // px to trim from top of each subsequent segment (at capture scale)
-      const finalWidth = segmentCanvases[0].width;
-      let finalHeight = segmentCanvases[0].height;
-      for (let si = 1; si < segmentCanvases.length; si++) {
-        finalHeight += segmentCanvases[si].height - OVERLAP_TRIM;
+      // ── Step 5: Stitch components together ──
+      // No overlap trimming needed since components are distinct elements
+      // with no vertical overlap. We simply stack them vertically.
+      const finalWidth = componentCanvases[0].width;
+      let finalHeight = 0;
+      for (let ci = 0; ci < componentCanvases.length; ci++) {
+        finalHeight += componentCanvases[ci].height;
       }
 
       const finalCanvas = document.createElement('canvas');
@@ -648,19 +689,10 @@
       const ctx = finalCanvas.getContext('2d');
 
       let yOffset = 0;
-      for (let si = 0; si < segmentCanvases.length; si++) {
-        const segCanvas = segmentCanvases[si];
-        if (si === 0) {
-          // First segment: draw full canvas
-          ctx.drawImage(segCanvas, 0, 0);
-          yOffset = segCanvas.height;
-        } else {
-          // Subsequent segments: skip OVERLAP_TRIM pixels from the top
-          // to remove any duplicate content at the boundary
-          const trimH = segCanvas.height - OVERLAP_TRIM;
-          ctx.drawImage(segCanvas, 0, OVERLAP_TRIM, segCanvas.width, trimH, 0, yOffset, segCanvas.width, trimH);
-          yOffset += trimH;
-        }
+      for (let ci = 0; ci < componentCanvases.length; ci++) {
+        const compCanvas = componentCanvases[ci];
+        ctx.drawImage(compCanvas, 0, yOffset);
+        yOffset += compCanvas.height;
       }
 
       // Track screenshot event
@@ -669,7 +701,7 @@
           question: document.getElementById('qaInput')?.value?.trim() || '',
           citation_count: document.querySelectorAll('.citation-item').length,
           capture_scale: CAPTURE_SCALE,
-          num_segments: numSegments,
+          num_components: componentCanvases.length,
         }, true);
       }
 
@@ -702,33 +734,26 @@
             throw new Error('empty data URL');
           }
         } catch (e) {
-          console.warn('Stitched canvas download failed, falling back to segment-by-segment download:', e);
-          // Fallback: download each segment as a separate image.
-          // On mobile (especially iOS), multiple sequential downloads often fail
-          // because the browser only handles one at a time. We use a staggered
-          // approach with delays between each download.
-          if (segmentCanvases.length > 1) {
+          console.warn('Stitched canvas download failed, falling back to component-by-component download:', e);
+          // Fallback: download each component as a separate image.
+          if (componentCanvases.length > 1) {
             var zipFilename = filename.replace('.png', '');
-            // Use a recursive function with delays to ensure each download
-            // completes before the next one starts
-            function downloadSegment(index) {
-              if (index >= segmentCanvases.length) {
-                alert('内容较长，已分段保存为多张图片（共 ' + segmentCanvases.length + ' 张），请按文件名顺序查看。');
+            function downloadComponent(index) {
+              if (index >= componentCanvases.length) {
+                alert('内容较长，已分段保存为多张图片（共 ' + componentCanvases.length + ' 张），请按文件名顺序查看。');
                 return;
               }
-              var segFilename = zipFilename + '_part' + (index + 1) + '.png';
-              segmentCanvases[index].toBlob(function(segBlob) {
-                if (segBlob && segBlob.size > 0) {
-                  triggerDownload(segBlob, segFilename);
-                  // Wait 500ms before triggering the next download
-                  setTimeout(function() { downloadSegment(index + 1); }, 500);
+              var compFilename = zipFilename + '_part' + (index + 1) + '.png';
+              componentCanvases[index].toBlob(function(compBlob) {
+                if (compBlob && compBlob.size > 0) {
+                  triggerDownload(compBlob, compFilename);
+                  setTimeout(function() { downloadComponent(index + 1); }, 500);
                 } else {
-                  // Skip empty segments
-                  setTimeout(function() { downloadSegment(index + 1); }, 100);
+                  setTimeout(function() { downloadComponent(index + 1); }, 100);
                 }
               }, 'image/png');
             }
-            downloadSegment(0);
+            downloadComponent(0);
           } else {
             alert('截图生成失败，图片内容为空。请尝试减少引用数量后重试。');
           }
