@@ -64,12 +64,10 @@ def track_event(
     is_new_user = not user_jsonl_path.exists()
 
     # ── Determine if this event should be pushed to notification center ──
+    # The server is the authority on what goes to notifications.
+    # Frontend _push_to_notification override is intentionally ignored
+    # to ensure consistent notification policy.
     push_to_notification = req.event_type in NOTIFICATION_EVENTS
-
-    # Check for _push_to_notification override from frontend
-    if req.data.get("_push_to_notification"):
-        push_to_notification = True
-        req.data.pop("_push_to_notification", None)
 
     # Add IP info for security-relevant events
     if req.event_type in ("login_attempt", "complaint_submit"):
