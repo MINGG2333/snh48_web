@@ -450,16 +450,26 @@
 
       const question = document.getElementById('qaInput')?.value?.trim() || '';
 
-      // ── Component 1: Page header (title + subtitle) ──
-      const header = document.createElement('div');
-      header.style.cssText = 'text-align: center; margin-bottom: 32px; padding: 0 20px;';
-      header.innerHTML = [
-        '<div style="font-size:42px;font-weight:700;margin-bottom:8px;color:#ff6b9d;">AI 智能问答</div>',
-        '<div style="color:rgba(255,255,255,0.6);font-size:20px;">基于知识库的问答系统</div>',
-      ].join('');
+      // ── Component 1: Navigation bar (site title bar) ──
+      // Clone the actual navbar from the live page to preserve all CSS styles,
+      // colors, hover effects, and responsive behavior exactly as rendered.
+      const navbar = document.getElementById('mainNav').cloneNode(true);
+      navbar.style.position = 'relative';  // override fixed positioning for screenshot
+      navbar.style.left = 'auto';
+      navbar.style.top = 'auto';
+      navbar.style.marginBottom = '24px';
+      // Remove mobile toggle button from screenshot (not needed)
+      const navToggle = navbar.querySelector('.nav-toggle');
+      if (navToggle) navToggle.remove();
+      wrapper.appendChild(navbar);
+
+      // ── Component 2: Page header (title + subtitle with icon) ──
+      // Clone the actual header from the live page to preserve all CSS styles.
+      const header = document.querySelector('.qa-header').cloneNode(true);
+      header.style.marginBottom = '32px';
       wrapper.appendChild(header);
 
-      // ── Component 2: KB status ──
+      // ── Component 3: KB status ──
       const kbStatus = document.getElementById('kbStatus');
       if (kbStatus) {
         const isReady = kbStatus.classList.contains('ready');
@@ -478,7 +488,7 @@
         wrapper.appendChild(statusDiv);
       }
 
-      // ── Component 3: Question input area ──
+      // ── Component 4: Question input area ──
       if (question) {
         const inputArea = document.createElement('div');
         inputArea.style.cssText = 'display:flex;gap:12px;margin-bottom:24px;';
@@ -493,7 +503,7 @@
         wrapper.appendChild(inputArea);
       }
 
-      // ── Component 4: Result content (answer + citations + disclaimer) ──
+      // ── Component 5: Result content (answer + citations + disclaimer) ──
       const clone = resultEl.cloneNode(true);
 
       // Remove interactive elements from clone
@@ -514,27 +524,24 @@
 
       wrapper.appendChild(clone);
 
-      // ── Component 5: Footer with QR code ──
+      // ── Component 6: Footer with QR code ──
       const footer = document.createElement('div');
       footer.style.cssText = [
-        'margin-top: 24px;',
-        'padding-top: 16px;',
+        'margin-top: 32px;',
+        'padding-top: 20px;',
         'padding-bottom: 40px;',
         'border-top: 1px solid rgba(255,255,255,0.12);',
         'display: flex;',
         'flex-direction: column;',
         'align-items: center;',
         'text-align: center;',
-        'gap: 10px;',
-        'width: 50%;',
-        'margin-left: auto;',
-        'margin-right: auto;',
+        'gap: 12px;',
       ].join(' ');
       const siteUrl = getSiteUrl();
       const qrHtml = generateQRCode(siteUrl, 28);
       const qrContainer = document.createElement('div');
       qrContainer.innerHTML = qrHtml;
-      qrContainer.style.cssText = 'line-height: 0; max-width: 100%; overflow: hidden;';
+      qrContainer.style.cssText = 'line-height: 0; display: flex; justify-content: center;';
       const qrImg = qrContainer.querySelector('img');
       if (qrImg) {
         qrImg.style.maxWidth = '100%';
@@ -557,6 +564,16 @@
       ].join('');
       footer.appendChild(info);
       wrapper.appendChild(footer);
+
+      // ── Apply "陈嘉仪" highlighting to match the live page ──
+      // The live page runs highlightCJY(document.body) on DOMContentLoaded,
+      // which wraps "陈嘉仪" in <span class="highlight-cjy"> with special styling.
+      // We apply the same transformation to the screenshot wrapper so that
+      // all "陈嘉仪" occurrences (in navbar, header, etc.) appear highlighted
+      // just like on the real page.
+      if (typeof highlightCJY === 'function') {
+        highlightCJY(wrapper);
+      }
 
       // ── Step 2: Wait for layout ──
       await new Promise(r => setTimeout(r, 200));
@@ -657,8 +674,9 @@
         ].join('');
 
         // Clone the component element
+        // Preserve original margins so spacing between components
+        // (e.g. margin-bottom on navbar, header) is maintained in the final image.
         const compClone = comp.cloneNode(true);
-        compClone.style.margin = '0';
         compWrapper.appendChild(compClone);
         document.body.appendChild(compWrapper);
 
