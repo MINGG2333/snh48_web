@@ -99,6 +99,8 @@
     if (loginOverlay) {
       loginOverlay.style.display = 'flex';
       loginInput.value = '';
+      // Prevent body scrolling while overlay is shown
+      document.body.style.overflow = 'hidden';
     }
     return false;
   }
@@ -1321,9 +1323,14 @@
         if (ok) {
           sitePassword = pwd;
           loginOverlay.style.display = 'none';
+          document.body.style.overflow = '';
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
+
+          // Scroll to top so the "AI 智能问答" title is visible below the navbar
+          window.scrollTo({ top: 0, behavior: 'instant' });
+
           if (window._qaPendingOnLogin) {
             window._qaPendingOnLogin = false;
             setTimeout(checkPendingTask, 100);
