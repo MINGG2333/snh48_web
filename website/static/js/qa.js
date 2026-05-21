@@ -393,25 +393,32 @@
   /**
    * Capture a single page segment at the given scale.
    * Returns a canvas for that segment.
-   * Uses element.clientWidth/clientHeight (the visible area) for the capture
-   * dimensions, and passes the full content scroll dimensions via
-   * windowWidth/windowHeight so html2canvas renders all content at full res.
+   *
+   * Instead of relying on scrollTop (which html2canvas may not respect),
+   * we use a negative translateY on the inner content to shift the desired
+   * portion into the visible area. The container has overflow:hidden so
+   * only the visible portion is rendered.
    */
-  async function captureSegment(element, scale, bgColor) {
-    const visibleW = element.clientWidth;
-    const visibleH = element.clientHeight;
-    const contentW = element.scrollWidth;
-    const contentH = element.scrollHeight;
-    return await html2canvas(element, {
+  async function captureSegment(container, scale, bgColor, offsetY) {
+    // Apply negative translateY to shift content up so the desired
+    // portion is visible in the container's viewport
+    const inner = container.firstElementChild;
+    if (inner && offsetY > 0) {
+      inner.style.transform = 'translateY(-' + offsetY + 'px)';
+    }
+
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    return await html2canvas(container, {
       scale: scale,
       useCORS: true,
       backgroundColor: bgColor,
       allowTaint: true,
       logging: false,
-      width: visibleW,
-      height: visibleH,
-      windowWidth: contentW,
-      windowHeight: contentH,
+      width: w,
+      height: h,
+      windowWidth: w,
+      windowHeight: h,
     });
   }
 
@@ -435,8 +442,8 @@
       // so content reflows identically in both, and scroll positions
       // calculated from wrapper.scrollHeight match exactly where content
       // appears in each segment. No padding gaps between segments.
-      const MAX_SEGMENT_HEIGHT = 2000;  // logical px per segment (smaller = less canvas memory)
-      const CAPTURE_SCALE = 2;          // 2x for good clarity without excessive canvas size
+      const MAX_SEGMENT_HEIGHT = 1200;  // logical px per segment (smaller = less canvas memory per capture)
+      const CAPTURE_SCALE = 3;          // 3x for crisp text
       const BG_COLOR = '#0a0a1a';
 
       // ── Step 1: Build off-screen wrapper with ALL content ──
@@ -604,13 +611,11 @@
         contentClone.style.top = 'auto';
         segWrapper.appendChild(contentClone);
 
-        // Scroll to show the correct segment
-        segWrapper.scrollTop = startY;
-
         document.body.appendChild(segWrapper);
 
-        // Capture this segment at 3x
-        const segCanvas = await captureSegment(segWrapper, CAPTURE_SCALE, BG_COLOR);
+        // Capture this segment — uses translateY on inner content to shift
+        // the desired portion into the visible area (more reliable than scrollTop)
+        const segCanvas = await captureSegment(segWrapper, CAPTURE_SCALE, BG_COLOR, startY);
         segmentCanvases.push(segCanvas);
 
         // Clean up
