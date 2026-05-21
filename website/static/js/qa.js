@@ -392,10 +392,13 @@
    * Capture a single page segment at the given scale.
    * Returns a canvas for that segment.
    *
-   * Instead of relying on scrollTop (which html2canvas may not respect),
-   * we use a negative translateY on the inner content to shift the desired
+   * We use a negative translateY on the inner content to shift the desired
    * portion into the visible area. The container has overflow:hidden so
    * only the visible portion is rendered.
+   *
+   * To avoid overlap between segments, we use a small overlap margin:
+   * each segment captures slightly more than its exact portion, and the
+   * stitching code trims the overlap from all but the first segment.
    */
   async function captureSegment(container, scale, bgColor, offsetY) {
     // Apply negative translateY to shift content up so the desired
@@ -407,6 +410,11 @@
 
     const w = container.clientWidth;
     const h = container.clientHeight;
+    // Use the full content dimensions for windowWidth/windowHeight so
+    // html2canvas renders at the correct scale regardless of offset.
+    // This prevents font size inconsistencies between segments.
+    const contentW = inner ? inner.scrollWidth : w;
+    const contentH = inner ? inner.scrollHeight : h;
     return await html2canvas(container, {
       scale: scale,
       useCORS: true,
@@ -415,8 +423,8 @@
       logging: false,
       width: w,
       height: h,
-      windowWidth: w,
-      windowHeight: h,
+      windowWidth: contentW,
+      windowHeight: contentH,
     });
   }
 
@@ -624,8 +632,15 @@
       document.body.removeChild(wrapper);
 
       // ── Step 5: Stitch segments together ──
+      // To avoid overlap/redundancy between segments caused by sub-pixel
+      // rounding in html2canvas, we trim a small overlap margin from the
+      // top of every segment except the first one.
+      const OVERLAP_TRIM = 2; // px to trim from top of each subsequent segment (at capture scale)
       const finalWidth = segmentCanvases[0].width;
-      const finalHeight = segmentCanvases.reduce((sum, c) => sum + c.height, 0);
+      let finalHeight = segmentCanvases[0].height;
+      for (let si = 1; si < segmentCanvases.length; si++) {
+        finalHeight += segmentCanvases[si].height - OVERLAP_TRIM;
+      }
 
       const finalCanvas = document.createElement('canvas');
       finalCanvas.width = finalWidth;
@@ -633,9 +648,19 @@
       const ctx = finalCanvas.getContext('2d');
 
       let yOffset = 0;
-      for (const segCanvas of segmentCanvases) {
-        ctx.drawImage(segCanvas, 0, yOffset);
-        yOffset += segCanvas.height;
+      for (let si = 0; si < segmentCanvases.length; si++) {
+        const segCanvas = segmentCanvases[si];
+        if (si === 0) {
+          // First segment: draw full canvas
+          ctx.drawImage(segCanvas, 0, 0);
+          yOffset = segCanvas.height;
+        } else {
+          // Subsequent segments: skip OVERLAP_TRIM pixels from the top
+          // to remove any duplicate content at the boundary
+          const trimH = segCanvas.height - OVERLAP_TRIM;
+          ctx.drawImage(segCanvas, 0, OVERLAP_TRIM, segCanvas.width, trimH, 0, yOffset, segCanvas.width, trimH);
+          yOffset += trimH;
+        }
       }
 
       // Track screenshot event
