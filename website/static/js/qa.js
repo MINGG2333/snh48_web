@@ -99,7 +99,6 @@
     if (loginOverlay) {
       loginOverlay.style.display = 'flex';
       loginInput.value = '';
-      loginInput.focus();
     }
     return false;
   }
@@ -146,9 +145,6 @@
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
-          // Focus without scrolling — the login overlay was just dismissed,
-          // scrolling to the input would be jarring.
-          inputEl.focus({ preventScroll: true });
         }
       } else {
         kbReady = false;
@@ -999,7 +995,14 @@
     });
 
 
-    resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Scroll to the compliance notice (just above the answer), so users see
+    // the disclaimer first before reading the AI-generated content.
+    const complianceNotice = resultEl.querySelector('.qa-compliance-notice');
+    if (complianceNotice) {
+      const navHeight = 80;
+      const targetPos = complianceNotice.getBoundingClientRect().top + window.scrollY - navHeight;
+      window.scrollTo({ top: targetPos, behavior: 'smooth' });
+    }
 
   }
 
@@ -1078,7 +1081,6 @@
           loginOverlay.style.display = 'flex';
           loginError.textContent = '密码已过期或无效，请重新输入';
           loginInput.value = '';
-          loginInput.focus();
         }
         return;
       }
@@ -1272,9 +1274,6 @@
           inputEl.disabled = false;
           submitEl.disabled = false;
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
-          // Focus without scrolling — the login overlay was just dismissed,
-          // scrolling to the input would be jarring.
-          inputEl.focus({ preventScroll: true });
           if (window._qaPendingOnLogin) {
             window._qaPendingOnLogin = false;
             setTimeout(checkPendingTask, 100);
