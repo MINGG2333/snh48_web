@@ -536,6 +536,9 @@
         'align-items: center;',
         'text-align: center;',
         'gap: 12px;',
+        'width: 50%;',
+        'margin-left: auto;',
+        'margin-right: auto;',
       ].join(' ');
       const siteUrl = getSiteUrl();
       const qrHtml = generateQRCode(siteUrl, 28);
@@ -841,6 +844,10 @@
         <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 16px;">
           为保障网站合规与内容安全，该回答已进入人工审核流程，暂时无法直接显示。
         </p>
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.6;">
+          <i class="fas fa-info-circle" style="color: #fcd34d;"></i>
+          由于 AI 输出有不确定性风险，为保证网站合规和内容安全，采取较保守的内容展示策略。
+        </p>
         <div class="qa-email-section">
           <label for="safetyEmail">如需获取回复，请留下您的邮箱：</label>
           <div class="qa-email-row">
@@ -853,6 +860,7 @@
           <div id="safetyEmailFeedback" style="margin-top:8px;font-size:0.9rem;"></div>
         </div>
       </div>`;
+
 
       resultEl.innerHTML = html;
       resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });

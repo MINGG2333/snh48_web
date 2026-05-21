@@ -496,9 +496,11 @@ def get_ask_async_result(task_id: str):
         "stats": retrieval,
         "archive_path": result.get("archive_path", ""),
         "comprehensiveness": comprehensiveness,
+        "content_safety_flagged": result.get("content_safety_flagged", False),
         "created_at": task.created_at,
         "completed_at": task.completed_at,
     }
+
 
 
 # ── Archive Email Endpoint ──────────────────────────────────────────────────
