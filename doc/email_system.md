@@ -80,8 +80,9 @@
 ```
 用户输入邮箱 → 点击提交
   → 前端校验邮箱格式
-  → POST /api/qa/archive-email { task_id: <真实task_id>, email, client_id }
-  → window._trackEvent('email_submit', { action: 'timeout_email', task_id, email })
+  → 从 sessionStorage 恢复问题内容
+  → POST /api/qa/archive-email { task_id: <真实task_id>, email, question, client_id }
+  → window._trackEvent('email_submit', { action: 'timeout_email', task_id, email, question })
 ```
 
 ---
@@ -116,8 +117,9 @@
 ```
 用户输入邮箱 → 点击提交
   → 前端校验邮箱格式
-  → POST /api/qa/archive-email { task_id: <真实task_id>, email, client_id }
-  → window._trackEvent('email_submit', { action: 'refresh_email', task_id, email })
+  → 从 pending 对象获取问题内容
+  → POST /api/qa/archive-email { task_id: <真实task_id>, email, question, client_id }
+  → window._trackEvent('email_submit', { action: 'refresh_email', task_id, email, question })
 ```
 
 ---

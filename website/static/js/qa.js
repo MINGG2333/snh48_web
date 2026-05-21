@@ -1179,13 +1179,23 @@
     if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后会通过邮箱发送答复。</span>';
     if (btn) btn.disabled = true;
 
+    // Recover question from sessionStorage
+    let question = '';
+    try {
+      const pendingRaw = sessionStorage.getItem('pending_task');
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw);
+        question = pending.question || '';
+      }
+    } catch (e) {}
+
     // Log the email request (server can pick this up later)
     console.log(`[Email Request] task=${taskId}, email=${email}`);
     // Also try to send to server if available
     fetch('/api/qa/archive-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: taskId, email, client_id: clientId }),
+      body: JSON.stringify({ task_id: taskId, email, question, client_id: clientId }),
     }).catch(() => {});
 
     // Track event
@@ -1194,6 +1204,7 @@
         action: 'timeout_email',
         task_id: taskId,
         email: email,
+        question: question,
       }, true);
     }
   };
@@ -1469,10 +1480,12 @@
     if (feedback) feedback.innerHTML = '<span style="color:#4ade80;"><i class="fas fa-check-circle"></i> 已记录！处理完成后会通过邮箱发送答复。</span>';
     if (btn) btn.disabled = true;
 
+    const question = pending.question || '';
+
     fetch('/api/qa/archive-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: pending.taskId, email, client_id: clientId }),
+      body: JSON.stringify({ task_id: pending.taskId, email, question, client_id: clientId }),
     }).catch(() => {});
 
     // Track event
@@ -1481,6 +1494,7 @@
         action: 'refresh_email',
         task_id: pending.taskId,
         email: email,
+        question: question,
       }, true);
     }
   };
