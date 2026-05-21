@@ -28,6 +28,7 @@ from website.rate_limiter import (
     get_client_ip,
     get_rate_limiter_stats,
     register_task,
+    reset_password_rate_limit,
     unregister_task,
 )
 
@@ -178,6 +179,8 @@ def verify_site_password(
         )
 
     if cfg.SITE_PASSWORD == req.password:
+        # 密码正确 → 清除该 IP 的失败尝试记录，避免之前的错误尝试继续累积
+        reset_password_rate_limit(ip)
         return {"verified": True, "message": "密码正确"}
 
     raise HTTPException(

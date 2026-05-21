@@ -49,6 +49,10 @@ class SlidingWindowLimiter:
         if not dq:
             self._records.pop(key, None)
 
+    def reset(self, key: str) -> None:
+        """Clear all records for *key* (e.g. after successful password verification)."""
+        self._records.pop(key, None)
+
     def check(self, key: str) -> Tuple[bool, int]:
         """
         Check if an action from *key* is allowed under the rate limit.
@@ -263,6 +267,16 @@ def check_password_rate_limit(ip: str) -> None:
                 f"{cfg.PASSWORD_RATE_LIMIT_PER_WINDOW} 次）"
             ),
         )
+
+
+def reset_password_rate_limit(ip: str) -> None:
+    """
+    Clear password attempt records for *ip* after a successful login.
+
+    This ensures that a legitimate user who enters the correct password
+    does not continue to be penalized for earlier failed attempts.
+    """
+    password_limiter.reset(ip)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
