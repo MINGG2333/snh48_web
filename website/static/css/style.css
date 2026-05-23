@@ -424,6 +424,21 @@ body {
   line-height: 1.8;
 }
 
+.about-service-status {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  backdrop-filter: blur(8px);
+}
+
+.about-service-hint {
+  margin-top: 8px !important;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
 .tech-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

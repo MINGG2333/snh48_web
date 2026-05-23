@@ -1635,37 +1635,6 @@
     sessionStorage.removeItem('pending_task');
   };
 
-  // ── CHANGED: DeepSeek API 余额状态检查 ──────────────────────────────
-  async function checkApiBalance() {
-    const dotEl = document.getElementById('apiStatusDot');
-    const textEl = document.getElementById('apiStatusText');
-    if (!dotEl || !textEl) return;
-
-    try {
-      const resp = await fetch('/api/balance');
-      if (!resp.ok) {
-        dotEl.className = 'api-status-dot red';
-        textEl.textContent = 'API 服务异常';
-        return;
-      }
-      // CHANGED: 前端只拿状态级别，不接触具体余额数字
-      const data = await resp.json();
-      if (data.status === 'healthy') {
-        dotEl.className = 'api-status-dot green';
-        textEl.textContent = 'API 服务正常';
-      } else if (data.status === 'low') {
-        dotEl.className = 'api-status-dot yellow';
-        textEl.textContent = 'API 余额即将耗尽';
-      } else {
-        dotEl.className = 'api-status-dot red';
-        textEl.textContent = 'API 余额已耗尽';
-      }
-    } catch (err) {
-      dotEl.className = 'api-status-dot gray';
-      textEl.textContent = '无法检测 API 状态';
-    }
-  }
-
   // ── Init ──────────────────────────────────────────────────────────────
   checkStatus().then(() => {
     // After checking KB status, check if there's a pending task from before refresh
@@ -1674,9 +1643,4 @@
     // Even if checkStatus fails, still look for pending tasks
     checkPendingTask();
   });
-
-  // CHANGED: 启动时检查 API 余额
-  checkApiBalance();
-  // 每 5 分钟刷新一次余额状态
-  setInterval(checkApiBalance, 5 * 60 * 1000);
 })();
