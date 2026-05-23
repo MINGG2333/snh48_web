@@ -949,8 +949,8 @@
           const firstSeg = segs[0];
           if (firstSeg.video_title) {
             html += `<span class="citation-header-video">📺 ${escapeHtml(firstSeg.video_title)}`;
-            if (firstSeg.absolute_time) {
-              const dateStr = firstSeg.absolute_time.slice(0, 10);
+            if (firstSeg.video_datetime) {
+              const dateStr = firstSeg.video_datetime.replace('T', ' ');
               html += ` <span class="segment-video-date">${escapeHtml(dateStr)}</span>`;
             }
             html += `</span>`;
