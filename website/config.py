@@ -78,6 +78,9 @@ QA_USER_COOLDOWN_SECONDS = int(os.getenv("QA_USER_COOLDOWN_SECONDS", "30"))
 # 每个用户每日最大提问次数（默认：50 次/天）
 QA_DAILY_QUOTA_PER_USER = int(os.getenv("QA_DAILY_QUOTA_PER_USER", "50"))
 
+# CHANGED: 每个 IP 每天最多提问次数（持久化，重启不丢失）
+QA_DAILY_IP_QUOTA = int(os.getenv("QA_DAILY_IP_QUOTA", "5"))
+
 # 每个用户最多同时处理的任务数（默认：2 个）
 QA_MAX_CONCURRENT_PER_USER = int(os.getenv("QA_MAX_CONCURRENT_PER_USER", "2"))
 

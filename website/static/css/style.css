@@ -729,6 +729,45 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+/* CHANGED: DeepSeek API 余额状态指示灯 */
+.api-status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.api-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.api-status-dot.green {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+.api-status-dot.yellow {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+}
+
+.api-status-dot.red {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.api-status-dot.gray {
+  background: #6b7280;
+  box-shadow: 0 0 6px rgba(107, 114, 128, 0.4);
+}
+
 /* ── Result area ───────────────────────────────────────────────────────── */
 .qa-result {
   margin-top: 24px;

@@ -7,14 +7,18 @@ Provides multiple layers of protection:
   3. Per-user daily question quota
   4. Per-user concurrent task limit
   5. Password verification rate limit (anti brute-force)
+  6. IP-based daily question quota (persistent, survives restart)  # CHANGED
 
 All limits are in-memory (single-process FastAPI), reset on server restart.
 All configurable via environment variables / .env file.
 """
 from __future__ import annotations
 
+import json
+import threading
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Deque, Dict, Optional, Set, Tuple
 
 from fastapi import HTTPException, Request, status
@@ -222,12 +226,104 @@ def check_concurrent_tasks(client_id: str) -> None:
         )
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  CHANGED: IP 每日限流（持久化，重启不丢失）
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_IP_QUOTA_FILE = Path(__file__).resolve().parent / "data" / "ip_daily_quota.json"
+_ip_quota_lock = threading.Lock()
+
+
+def _load_ip_quota() -> dict:
+    """从磁盘加载 IP 每日配额记录。"""
+    try:
+        if _IP_QUOTA_FILE.exists():
+            with open(_IP_QUOTA_FILE, "r") as f:
+                return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
+def _save_ip_quota(data: dict) -> None:
+    """将 IP 每日配额记录写入磁盘。"""
+    _IP_QUOTA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_IP_QUOTA_FILE, "w") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _get_today() -> str:
+    """返回今天的日期字符串 YYYY-MM-DD。"""
+    return time.strftime("%Y-%m-%d")
+
+
+def check_daily_ip_quota(ip: str) -> None:
+    """
+    检查每个 IP 每天最多提问次数（持久化存储）。
+
+    数据格式（JSON）：
+    {
+      "2026-05-23": {
+        "ip1": 3,
+        "ip2": 1
+      },
+      ...
+    }
+
+    每次调用会先清理过期日期（非今天）的记录，然后检查当前 IP 是否超额。
+    """
+    # CHANGED: IP 每日限流持久化检查
+    today = _get_today()
+    with _ip_quota_lock:
+        data = _load_ip_quota()
+
+        # 清理过期日期，只保留今天
+        keys_to_delete = [k for k in data if k != today]
+        for k in keys_to_delete:
+            del data[k]
+
+        today_data = data.get(today, {})
+        current_count = today_data.get(ip, 0)
+
+        if current_count >= cfg.QA_DAILY_IP_QUOTA:
+            log_api_error(
+                ip, "/api/qa/ask",
+                f"IP 每日配额拒绝（{current_count}/{cfg.QA_DAILY_IP_QUOTA}）",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"您的 IP 今天已提问 {current_count} 次，已达每日上限"
+                    f"（{cfg.QA_DAILY_IP_QUOTA} 次），请明天再试。"
+                ),
+            )
+
+        # 更新计数并写回磁盘
+        today_data[ip] = current_count + 1
+        data[today] = today_data
+        _save_ip_quota(data)
+
+
+def get_ip_quota_stats() -> dict:
+    """返回 IP 每日配额的统计信息。"""
+    with _ip_quota_lock:
+        data = _load_ip_quota()
+    today = _get_today()
+    today_data = data.get(today, {})
+    return {
+        "total_ips_today": len(today_data),
+        "total_requests_today": sum(today_data.values()),
+        "max_per_ip": cfg.QA_DAILY_IP_QUOTA,
+    }
+
+
 def check_all_qa_limits(ip: str, client_id: str) -> None:
     """Convenience: run all QA rate-limit checks at once."""
     check_qa_rate_limit(ip)
     check_user_cooldown(client_id)
     check_daily_quota(client_id)
     check_concurrent_tasks(client_id)
+    check_daily_ip_quota(ip)  # CHANGED: IP 每日限流
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

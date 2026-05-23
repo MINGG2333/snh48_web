@@ -1635,6 +1635,41 @@
     sessionStorage.removeItem('pending_task');
   };
 
+  // ── CHANGED: DeepSeek API 余额状态检查 ──────────────────────────────
+  async function checkApiBalance() {
+    const dotEl = document.getElementById('apiStatusDot');
+    const textEl = document.getElementById('apiStatusText');
+    if (!dotEl || !textEl) return;
+
+    try {
+      const resp = await fetch('/api/balance');
+      if (!resp.ok) {
+        dotEl.className = 'api-status-dot red';
+        textEl.textContent = 'API 服务异常';
+        return;
+      }
+      const data = await resp.json();
+      if (data.is_available && data.balance > 0) {
+        dotEl.className = 'api-status-dot green';
+        if (data.balance < 10) {
+          textEl.textContent = `API 余额不足 ￥10（当前 ￥${data.balance.toFixed(2)}）`;
+          dotEl.className = 'api-status-dot yellow';
+        } else {
+          textEl.textContent = `API 余额充足（￥${data.balance.toFixed(2)}）`;
+        }
+      } else if (data.balance <= 0) {
+        dotEl.className = 'api-status-dot red';
+        textEl.textContent = 'API 余额不足，请及时充值';
+      } else {
+        dotEl.className = 'api-status-dot red';
+        textEl.textContent = data.message || 'API 服务异常';
+      }
+    } catch (err) {
+      dotEl.className = 'api-status-dot gray';
+      textEl.textContent = '无法检测 API 状态';
+    }
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────
   checkStatus().then(() => {
     // After checking KB status, check if there's a pending task from before refresh
@@ -1643,4 +1678,9 @@
     // Even if checkStatus fails, still look for pending tasks
     checkPendingTask();
   });
+
+  // CHANGED: 启动时检查 API 余额
+  checkApiBalance();
+  // 每 5 分钟刷新一次余额状态
+  setInterval(checkApiBalance, 5 * 60 * 1000);
 })();
