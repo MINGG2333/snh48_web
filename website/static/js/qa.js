@@ -1648,21 +1648,17 @@
         textEl.textContent = 'API 服务异常';
         return;
       }
+      // CHANGED: 前端只拿状态级别，不接触具体余额数字
       const data = await resp.json();
-      if (data.is_available && data.balance > 0) {
+      if (data.status === 'healthy') {
         dotEl.className = 'api-status-dot green';
-        if (data.balance < 10) {
-          textEl.textContent = `API 余额不足 ￥10（当前 ￥${data.balance.toFixed(2)}）`;
-          dotEl.className = 'api-status-dot yellow';
-        } else {
-          textEl.textContent = `API 余额充足（￥${data.balance.toFixed(2)}）`;
-        }
-      } else if (data.balance <= 0) {
-        dotEl.className = 'api-status-dot red';
-        textEl.textContent = 'API 余额不足，请及时充值';
+        textEl.textContent = 'API 服务正常';
+      } else if (data.status === 'low') {
+        dotEl.className = 'api-status-dot yellow';
+        textEl.textContent = 'API 余额即将耗尽';
       } else {
         dotEl.className = 'api-status-dot red';
-        textEl.textContent = data.message || 'API 服务异常';
+        textEl.textContent = 'API 余额已耗尽';
       }
     } catch (err) {
       dotEl.className = 'api-status-dot gray';

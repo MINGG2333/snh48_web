@@ -7,6 +7,12 @@ API balance is running low.
 """
 from __future__ import annotations
 
+import csv
+import os
+import time
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
 import httpx
 from fastapi import APIRouter, HTTPException, status
 
@@ -15,6 +21,25 @@ from website import config as cfg
 router = APIRouter(prefix="/api/balance", tags=["余额查询"])
 
 DEEPSEEK_BALANCE_URL = "https://api.deepseek.com/user/balance"
+
+# CHANGED: 余额记录 CSV 路径（带时区）
+_BEIJING_TZ = timezone(timedelta(hours=8))
+_BALANCE_LOG_DIR = Path(__file__).resolve().parent.parent / "data"
+_BALANCE_LOG_CSV = _BALANCE_LOG_DIR / "balance_log.csv"
+
+
+def _log_balance_record(balance: float, status: str, success: bool, error_msg: str = "") -> None:
+    """将一次余额查询结果追加记录到 CSV 文件。"""
+    _BALANCE_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(_BEIJING_TZ)
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    is_new = not _BALANCE_LOG_CSV.exists()
+    with open(_BALANCE_LOG_CSV, "a", newline="") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(["timestamp", "balance_cny", "status", "success", "error"])
+        writer.writerow([timestamp, f"{balance:.2f}", status, "1" if success else "0", error_msg])
 
 
 @router.get("")
@@ -31,6 +56,7 @@ async def get_balance():
     # CHANGED: 新增余额查询接口，用于前端显示 API 服务状态
     api_key = cfg.LLM_API_KEY
     if not api_key:
+        _log_balance_record(0.0, "exhausted", False, "DEEPSEEK_API_KEY 未配置")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="DEEPSEEK_API_KEY 未配置",
@@ -43,6 +69,7 @@ async def get_balance():
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             if resp.status_code == 401:
+                _log_balance_record(0.0, "exhausted", False, "API Key 无效或未授权")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="API Key 无效或未授权",
@@ -50,26 +77,45 @@ async def get_balance():
             resp.raise_for_status()
             data = resp.json()
     except httpx.TimeoutException:
+        _log_balance_record(0.0, "exhausted", False, "查询余额超时")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="查询 DeepSeek 余额超时",
         )
     except httpx.HTTPError as e:
+        _log_balance_record(0.0, "exhausted", False, f"HTTP 错误: {e}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"查询 DeepSeek 余额失败: {e}",
         )
 
-    # DeepSeek 返回格式：{"is_available": true, "balance_infos": [{"balance": 123.45, "currency": "CNY"}]}
+    # DeepSeek 返回格式：
+    # {"is_available": true, "balance_infos": [{"currency": "CNY", "total_balance": "115.50"}]}
+    # 注意：total_balance 是字符串，字段名是 total_balance 不是 balance
+    # CHANGED: 修复字段名 total_balance（字符串）而非 balance
+    # CHANGED: 余额数字只在服务端判断，不返回给前端（隐私保护）
     balance_infos = data.get("balance_infos", [])
-    total_balance = sum(b.get("balance", 0) for b in balance_infos) if balance_infos else 0
+    total_balance = 0.0
+    if balance_infos:
+        for b in balance_infos:
+            raw = b.get("total_balance", "0")
+            try:
+                total_balance += float(raw)
+            except (ValueError, TypeError):
+                pass
 
-    is_available = data.get("is_available", False)
+    # 只返回状态级别，不暴露具体余额数字
+    if total_balance > 0:
+        if total_balance < 10:
+            status = "low"       # 余额 < 10 元，黄色预警
+        else:
+            status = "healthy"   # 余额充足，绿色
+    else:
+        status = "exhausted"    # 余额耗尽，红色
+
+    # CHANGED: 将本次查询结果记录到 CSV（余额数字只在服务器本地留存）
+    _log_balance_record(total_balance, status, True)
+
     return {
-        "balance": total_balance,
-        "currency": balance_infos[0].get("currency", "CNY") if balance_infos else "CNY",
-        "is_available": is_available,
-        "message": f"余额充足（￥{total_balance:.2f}）" if is_available and total_balance > 0
-                   else "余额不足，请及时充值" if total_balance <= 0
-                   else "服务异常，请检查 API 状态",
+        "status": status,
     }
