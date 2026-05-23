@@ -950,7 +950,7 @@
           if (firstSeg.video_title) {
             html += `<span class="citation-header-video">📺 ${escapeHtml(firstSeg.video_title)}`;
             if (firstSeg.video_datetime) {
-              const dateStr = firstSeg.video_datetime.replace('T', ' ');
+              const dateStr = firstSeg.video_datetime.replace('T', ' ').slice(0, 16);
               html += ` <span class="segment-video-date">${escapeHtml(dateStr)}</span>`;
             }
             html += `</span>`;
