@@ -447,6 +447,15 @@
     if (shareBtn) {
       shareBtn.disabled = true;
       shareBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在生成截图...';
+      // # CHANGED: Show hint text below button during loading
+      var hint = document.getElementById('qaSaveHint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.id = 'qaSaveHint';
+        hint.style.cssText = 'margin-top:8px;font-size:0.8rem;color:var(--text-dim,#999);text-align:center;';
+        hint.textContent = '问答内容较长或引用较多时，生成时间会稍长，请耐心等待';
+        shareBtn.parentNode.appendChild(hint);
+      }
     }
 
     // Let the UI update before heavy work
@@ -836,6 +845,9 @@
         alert('截图保存失败，请重试。错误信息：' + err.message);
       }
     } finally {
+      // # CHANGED: Remove loading hint text
+      var hint = document.getElementById('qaSaveHint');
+      if (hint) hint.remove();
       if (shareBtn) {
         // # CHANGED: On mobile share mode (blob stored), preserve the button
         // # CHANGED: text so user can tap again with a fresh gesture.
