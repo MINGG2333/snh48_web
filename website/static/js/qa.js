@@ -758,14 +758,30 @@
         }, true);
       }
 
-      // ── Step 6: Download PNG ──
+      // ── Step 6: Download / Share PNG ──
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
 
       const downloaded = await new Promise(function(resolve) {
         finalCanvas.toBlob(function(blob) {
           if (blob && blob.size > 0) {
-            triggerDownload(blob, filename);
-            resolve(true);
+            // # CHANGED: On mobile, use two-step flow — store blob and wait for
+            // # CHANGED: a fresh user gesture (tap) so navigator.share() works
+            // # CHANGED: reliably on iOS Safari (async work kills transient activation).
+            var _isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (_isMobile && navigator.share) {
+              window._qaShareBlob = blob;
+              window._qaShareFilename = filename;
+              if (shareBtn) {
+                shareBtn.disabled = false;
+                shareBtn.innerHTML = '<i class="fas fa-share-alt"></i> 保存到相册';
+                shareBtn.onclick = window._qaMobileShare;
+              }
+              resolve(true);
+            } else {
+              // Desktop: use existing download via <a> tag
+              triggerDownload(blob, filename);
+              resolve(true);
+            }
           } else {
             resolve(false);
           }
@@ -821,8 +837,12 @@
       }
     } finally {
       if (shareBtn) {
-        shareBtn.disabled = false;
-        shareBtn.innerHTML = '<i class="fas fa-download"></i> 保存为图片';
+        // # CHANGED: On mobile share mode (blob stored), preserve the button
+        // # CHANGED: text so user can tap again with a fresh gesture.
+        if (!window._qaShareBlob) {
+          shareBtn.disabled = false;
+          shareBtn.innerHTML = '<i class="fas fa-download"></i> 保存为图片';
+        }
       }
     }
   }
@@ -1117,6 +1137,34 @@
 
   // ── Global: Download Image ────────────────────────────────────────────
   window._qaDownloadImage = downloadAsImage;
+
+  // # CHANGED: Mobile share handler — called from a fresh user gesture (tap),
+  // # CHANGED: so navigator.share() works reliably on iOS Safari.
+  // # CHANGED: After sharing, resets the button back to normal "保存为图片".
+  window._qaMobileShare = function() {
+    var blob = window._qaShareBlob;
+    if (!blob) return;
+    var file = new File([blob], 'AI问答截图.png', { type: 'image/png' });
+    // # CHANGED: Try file share first (saves directly to Photos), fallback to text share
+    var sharePromise = (navigator.canShare && navigator.canShare({ files: [file] }))
+      ? navigator.share({ files: [file], title: 'AI 问答截图' })
+      : navigator.share({ title: 'AI 问答截图' });
+    sharePromise.catch(function(err) {
+      if (err.name !== 'AbortError') {
+        console.warn('分享失败，回退到下载方式:', err);
+        fallbackDownload(blob, 'AI问答截图.png');
+      }
+    });
+    // # CHANGED: Reset state and button
+    window._qaShareBlob = null;
+    window._qaShareFilename = '';
+    var btn = document.getElementById('qaShareBtn');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-download"></i> 保存为图片';
+      btn.onclick = window._qaDownloadImage;
+    }
+  };
 
   // ── Poll for Result ──────────────────────────────────────────────────
   async function pollResult(taskId, question) {
