@@ -13,28 +13,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function positionCircularMenu() {
       const rect = toggle.getBoundingClientRect();
       const ringSize = 280;
+      // getBoundingClientRect() returns visual viewport coordinates,
+      // but position:fixed uses the layout viewport.
+      // On iOS pinch-zoom, visualViewport.offsetLeft/Top accounts for the
+      // offset between the two — without this the ring drifts away from the toggle.
+      const vv = window.visualViewport;
+      const offsetLeft = vv ? vv.offsetLeft : 0;
+      const offsetTop  = vv ? vv.offsetTop : 0;
       // Center the ring on the toggle button
-      circularMenu.style.left = (rect.left + rect.width / 2 - ringSize / 2) + 'px';
-      circularMenu.style.top = (rect.top + rect.height / 2 - ringSize / 2) + 'px';
+      circularMenu.style.left = (rect.left + rect.width / 2 - ringSize / 2 - offsetLeft) + 'px';
+      circularMenu.style.top  = (rect.top + rect.height / 2 - ringSize / 2 - offsetTop) + 'px';
+    }
+
+    function openCircularMenu() {
+      positionCircularMenu();
+      // Hide the toggle button so the ring's center close icon takes its place
+      toggle.classList.add('hidden');
+      circularMenu.classList.add('open');
     }
 
     function closeCircularMenu() {
       circularMenu.classList.remove('open');
-      const icon = toggle.querySelector('i');
-      icon.className = 'fas fa-bars';
+      // Show the toggle button again after menu closes
+      toggle.classList.remove('hidden');
     }
 
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      positionCircularMenu();
-      circularMenu.classList.toggle('open');
-
-      // Toggle icon between bars and times
-      const icon = toggle.querySelector('i');
       if (circularMenu.classList.contains('open')) {
-        icon.className = 'fas fa-times';
+        closeCircularMenu();
       } else {
-        icon.className = 'fas fa-bars';
+        openCircularMenu();
       }
     });
 
@@ -78,6 +87,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reposition on scroll and resize
     window.addEventListener('scroll', positionCircularMenu);
     window.addEventListener('resize', positionCircularMenu);
+    // iOS pinch-zoom changes the visual viewport — listen to its events
+    // so the ring stays centred on the toggle button.
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', positionCircularMenu);
+      window.visualViewport.addEventListener('scroll', positionCircularMenu);
+    }
   }
 
   // ── Highlight "陈嘉仪" in all text nodes ────────────────────────────────

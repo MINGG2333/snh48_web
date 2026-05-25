@@ -103,6 +103,14 @@ body {
   padding: 8px;
   z-index: 1100;
   position: relative;
+  transition: opacity 0.25s ease;
+}
+
+/* When circular menu is open, hide the toggle button so the ring's
+   center close icon visually replaces it. */
+.nav-toggle.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
