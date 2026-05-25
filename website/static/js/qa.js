@@ -373,18 +373,47 @@
   }
 
   // ── Trigger file download (cross-browser compatible) ────────────────
+  // # CHANGED: On mobile, use Web Share API (navigator.share) to open system share sheet
+  // # CHANGED: so iOS Safari users can save directly to Photos without extra steps.
+  // # CHANGED: Desktop behavior remains unchanged (download via <a> tag).
   function triggerDownload(blob, filename) {
+    // # CHANGED: Detect mobile/iOS device
+    var isMobile = /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // # CHANGED: Try Web Share API on mobile (opens system share → can save to Photos directly)
+    if (isMobile && navigator.share) {
+      var shareFile = new File([blob], filename, { type: 'image/png' });
+      // # CHANGED: Use canShare if available (iOS 15+), otherwise just try share()
+      if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+        navigator.share({
+          files: [shareFile],
+          title: 'AI 问答截图',
+        }).catch(function (err) {
+          // # CHANGED: If user cancels (AbortError) or share fails, fall back to download
+          if (err.name !== 'AbortError') {
+            console.warn('分享失败，回退到下载方式:', err);
+            fallbackDownload(blob, filename);
+          }
+        });
+        return;
+      }
+    }
+    // # CHANGED: Desktop / fallback — use existing <a download> approach
+    fallbackDownload(blob, filename);
+  }
+
+  // # CHANGED: Extracted original download logic into fallbackDownload for clarity
+  function fallbackDownload(blob, filename) {
     if (window.navigator && window.navigator.msSaveBlob) {
       window.navigator.msSaveBlob(blob, filename);
       return;
     }
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
     link.href = url;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    setTimeout(() => {
+    setTimeout(function () {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     }, 100);
