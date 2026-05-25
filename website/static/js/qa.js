@@ -733,9 +733,33 @@
       const filename = 'AI问答_' + new Date().toISOString().slice(0, 19).replace(/[:-]/g, '') + '.png';
 
       const downloaded = await new Promise(function(resolve) {
-        finalCanvas.toBlob(function(blob) {
+        finalCanvas.toBlob(async function(blob) {                            // # CHANGED
           if (blob && blob.size > 0) {
-            triggerDownload(blob, filename);
+            // # CHANGED: Try Web Share API Level 2 (mobile-friendly) first
+            // # CHANGED: navigator.share({ files }) works on iOS Safari 12.2+,
+            // # CHANGED: Chrome Android, and Desktop Chrome 128+.
+            // # CHANGED: navigator.canShare pre-checks availability.
+            const shareFile = new File([blob], filename, { type: 'image/png' });  // # CHANGED
+            if (navigator.canShare && navigator.canShare({ files: [shareFile] })) { // # CHANGED
+              try {                                                                 // # CHANGED
+                await navigator.share({                                             // # CHANGED
+                  files: [shareFile],                                               // # CHANGED
+                  title: 'AI问答截图',                                              // # CHANGED
+                });                                                                 // # CHANGED
+                resolve(true);                                                      // # CHANGED
+                return;                                                             // # CHANGED
+              } catch (shareErr) {                                                  // # CHANGED
+                // # CHANGED: User cancelled share sheet, treat as success
+                if (shareErr.name === 'AbortError') {                               // # CHANGED
+                  resolve(true);                                                    // # CHANGED
+                  return;                                                           // # CHANGED
+                }                                                                   // # CHANGED
+                // # CHANGED: Web Share failed → fall through to triggerDownload
+                console.warn('Web Share failed, falling back to a[download]:', shareErr); // # CHANGED
+              }                                                                     // # CHANGED
+            }                                                                       // # CHANGED
+            // # CHANGED: Fallback — existing a[download] + blob:URL approach
+            triggerDownload(blob, filename);                                        // # CHANGED
             resolve(true);
           } else {
             resolve(false);
