@@ -205,8 +205,8 @@ body {
 /* Menu items positioned around the ring */
 .circular-menu-item {
   position: absolute;
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -216,8 +216,8 @@ body {
   justify-content: center;
   text-decoration: none;
   color: var(--text-dim);
-  font-size: 0.62rem;
-  gap: 1px;
+  font-size: 0.7rem;
+  gap: 2px;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -232,7 +232,7 @@ body {
 }
 
 .circular-menu-item i {
-  font-size: 1rem;
+  font-size: 1.15rem;
   transition: transform 0.3s;
 }
 
@@ -253,33 +253,32 @@ body {
 .circular-menu-item:nth-child(2) { transition-delay: 0.1s; }
 .circular-menu-item:nth-child(3) { transition-delay: 0.15s; }
 
-/* ── Three items symmetrically arranged around the 7:30 (bottom-left) diagonal,
-     evenly spaced at 125°/135°/145° ── */
+/* ── Three items: 6:10 / 7:30 / 8:50, symmetric around the diagonal ── */
 
-/* 时光轴 at 125° (~6:50, nearest bottom) */
+/* 时光轴 at 6:10 (95°, near bottom) */
 .circular-menu-item.item-timeline {
-  bottom: 45px;
-  left: 66px;
+  bottom: 28px;
+  left: 103px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-timeline {
   transform: scale(1);
 }
 
-/* AI 问答 at 135° (7:30, center of the diagonal) */
+/* AI 问答 at 7:30 (135°, center of diagonal) */
 .circular-menu-item.item-qa {
-  bottom: 55px;
-  left: 55px;
+  bottom: 52px;
+  left: 52px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-qa {
   transform: scale(1);
 }
 
-/* 关于 at 145° (~8:10, nearest left) */
+/* 关于 at 8:50 (175°, near left) */
 .circular-menu-item.item-about {
-  bottom: 66px;
-  left: 45px;
+  bottom: 103px;
+  left: 28px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-about {
