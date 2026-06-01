@@ -611,19 +611,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Zoom ──
   function applyScale(newScale) {
-    newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-    // Save visual center before scaling
-    const innerW = trackInner.scrollWidth;
-    const curLeft = getTrackLeft();
-    const visualCenter = curLeft + (innerW / 2) * scale;
-
-    scale = newScale;
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
     trackInner.style.transform = `scale(${scale})`;
-
-    // Adjust left so the same visual center stays fixed in the viewport
-    const newLeft = visualCenter - (innerW / 2) * scale;
-    setTrackLeft(newLeft);
-
+    // Keep wrapper height fixed at viewport height so the centering
+    // (via align-items:center on trackInner) stays stable regardless of scale.
     wrapper.style.minHeight = '100vh';
   }
 
@@ -638,8 +629,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }, { passive: false });
 
   // ── Initialize ──
-  // Pre-set transform so first zoom doesn't cause a position jump
-  trackInner.style.transform = 'scale(1)';
   renderTimeline();
   requestAnimationFrame(() => {
     centerOnMiddle();
