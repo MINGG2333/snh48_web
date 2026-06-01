@@ -599,9 +599,11 @@ document.addEventListener('DOMContentLoaded', () => {
     isDragging = false;
     wrapper.classList.remove('dragging');
     hint.classList.add('dim');
-    syncDateInputWithCenter();
 
-    if (dragDistance < 5) return;
+    if (dragDistance < 5) {
+      syncDateInputWithCenter();
+      return;
+    }
 
     const inertiaV = velocity * 800;
     if (Math.abs(inertiaV) > 5) {
@@ -618,9 +620,14 @@ document.addEventListener('DOMContentLoaded', () => {
         setTrackLeft(startVal + delta * eased);
         if (progress < 1) {
           animFrame = requestAnimationFrame(inertiaAnimate);
+        } else {
+          // Sync after inertia fully settles
+          requestAnimationFrame(() => syncDateInputWithCenter());
         }
       }
       animFrame = requestAnimationFrame(inertiaAnimate);
+    } else {
+      syncDateInputWithCenter();
     }
     velocity = 0;
   }
