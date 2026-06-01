@@ -206,16 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Get the date of the currently centered event column ──
-  function getCenteredDate() {
-    const idx = getCenteredEventIndex();
-    const events = trackInner.querySelectorAll('.timeline-event');
-    if (idx >= 0 && idx < events.length) {
-      return events[idx].dataset.date;
-    }
-    return null;
-  }
-
   // ── Center on nearest event column matching a date ──
   function centerOnDate(targetDate) {
     const target = new Date(targetDate);
@@ -233,7 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Refresh timeline, optionally preserving current center ──
   function refreshTimeline(preserveCenter) {
-    const prevDate = preserveCenter ? getCenteredDate() : null;
+    // Use the date input as the authoritative center reference
+    const prevDate = preserveCenter && dateInput && dateInput.value ? dateInput.value : null;
     mergedEvents = getFilteredEvents();
     renderTimeline(mergedEvents);
     requestAnimationFrame(() => {
@@ -699,15 +690,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentLeft = parseFloat(track.style.left) || 0;
     const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
     track.style.left = targetLeft + 'px';
+    updateTransformOrigin();
     // Update date input directly from the known centered event
     if (dateInput) dateInput.value = target.dataset.date;
   }
 
-  // ── Zoom ──
+  // ── Zoom (preserve center via date input) ──
   function applyScale(newScale) {
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
     trackInner.style.transform = `scale(${scale})`;
     wrapper.style.minHeight = '100vh';
+    // Re-center on the authoritative date to prevent drift
+    if (dateInput && dateInput.value) {
+      centerOnDate(dateInput.value);
+    }
   }
 
   zoomIn.addEventListener('click', () => applyScale(scale + 0.15));
