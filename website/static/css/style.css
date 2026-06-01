@@ -253,33 +253,33 @@ body {
 .circular-menu-item:nth-child(2) { transition-delay: 0.1s; }
 .circular-menu-item:nth-child(3) { transition-delay: 0.15s; }
 
-/* ── All items within the visible bottom-left arc (6:00–9:00),
-     均匀分布，不重叠，不溢出 ── */
+/* ── Three items symmetrically arranged around the 7:30 (bottom-left) diagonal,
+     evenly spaced at 125°/135°/145° ── */
 
-/* 时光轴 at ~6:30 (底部偏左) */
+/* 时光轴 at 125° (~6:50, nearest bottom) */
 .circular-menu-item.item-timeline {
-  bottom: 18px;
-  left: 38%;
-  transform: translateX(-50%) scale(0.3);
+  bottom: 45px;
+  left: 66px;
+  transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-timeline {
-  transform: translateX(-50%) scale(1);
+  transform: scale(1);
 }
 
-/* AI 问答 at ~7:30 (左下方) */
+/* AI 问答 at 135° (7:30, center of the diagonal) */
 .circular-menu-item.item-qa {
-  bottom: 68px;
-  left: 16px;
+  bottom: 55px;
+  left: 55px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-qa {
   transform: scale(1);
 }
 
-/* 关于 at ~8:30 (左侧偏下，不超出9:00) */
+/* 关于 at 145° (~8:10, nearest left) */
 .circular-menu-item.item-about {
-  bottom: 110px;
-  left: 14px;
+  bottom: 66px;
+  left: 45px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-about {

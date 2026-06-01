@@ -102,7 +102,15 @@ const TIMELINE_EVENTS = [
 
 // ── Today's date for comparison ──
 const TODAY = new Date();
-const TODAY_STR = formatDate(TODAY);
+
+// ── Format date (top-level so data can reference it) ──
+function formatDate(dateInput) {
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}.${m}.${day}`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Timeline Rendering
@@ -121,15 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let scale = 1;
   const MIN_SCALE = 0.5;
   const MAX_SCALE = 1.8;
-
-  // ── Format date ──
-  function formatDate(dateInput) {
-    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}.${m}.${day}`;
-  }
 
   // ── Render events ──
   function renderTimeline() {

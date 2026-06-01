@@ -84,6 +84,23 @@
   width: 220px;
   margin: 0 12px;
   position: relative;
+  height: 100%;
+  justify-content: center;
+}
+
+/* Ensure the node sits as close to center as possible by balancing
+   the visual weight above and below the node */
+.timeline-event-above .timeline-card {
+  margin-bottom: 4px;
+}
+.timeline-event-above .timeline-node-date {
+  margin-top: 2px;
+}
+.timeline-event-below .timeline-card {
+  margin-top: 4px;
+}
+.timeline-event-below .timeline-node-date {
+  margin-bottom: 2px;
 }
 
 /* ── Card (branch off the axis) ── */
