@@ -237,6 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
     mergedEvents = getFilteredEvents();
     renderTimeline(mergedEvents);
     requestAnimationFrame(() => {
+      // Force layout so newly rendered elements have valid positions
+      void wrapper.offsetHeight;
       if (prevDate) {
         centerOnDate(prevDate);
       } else {
