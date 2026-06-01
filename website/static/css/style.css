@@ -253,12 +253,12 @@ body {
 .circular-menu-item:nth-child(2) { transition-delay: 0.1s; }
 .circular-menu-item:nth-child(3) { transition-delay: 0.15s; }
 
-/* ── Three items: 6:10 / 7:30 / 8:50, symmetric around the diagonal ── */
+/* ── Three items: 6:10 / 7:30 / 8:50, spread closer to ring edge ── */
 
 /* 时光轴 at 6:10 (95°, near bottom) */
 .circular-menu-item.item-timeline {
-  bottom: 28px;
-  left: 103px;
+  bottom: 15px;
+  left: 102px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-timeline {
@@ -267,8 +267,8 @@ body {
 
 /* AI 问答 at 7:30 (135°, center of diagonal) */
 .circular-menu-item.item-qa {
-  bottom: 52px;
-  left: 52px;
+  bottom: 43px;
+  left: 43px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-qa {
@@ -277,8 +277,8 @@ body {
 
 /* 关于 at 8:50 (175°, near left) */
 .circular-menu-item.item-about {
-  bottom: 103px;
-  left: 28px;
+  bottom: 102px;
+  left: 15px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-about {

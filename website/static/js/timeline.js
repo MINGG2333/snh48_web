@@ -264,9 +264,10 @@ document.addEventListener('DOMContentLoaded', () => {
     track.style.left = targetLeft + 'px';
   }
 
-  // ── Custom Datepicker ──
+  // ── Custom Datepicker (day / month / year views) ──
   let dpCurrentDate = new Date();
   let dpSelectedDate = new Date();
+  let dpViewMode = 'day'; // 'day' | 'month' | 'year'
   const dpPopup = document.getElementById('datepickerPopup');
   const dpMonthYear = document.getElementById('datepickerMonthYear');
   const dpDays = document.getElementById('datepickerDays');
@@ -274,6 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const dpNext = document.getElementById('datepickerNext');
   const dpTodayBtn = document.getElementById('datepickerToday');
   let dpOpen = false;
+
+  const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
   function formatDateInput(d) {
     const y = d.getFullYear();
@@ -285,64 +288,111 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderDatepicker() {
     const year = dpCurrentDate.getFullYear();
     const month = dpCurrentDate.getMonth();
-    dpMonthYear.textContent = `${year}年${month + 1}月`;
-
-    const firstDay = new Date(year, month, 1);
-    // Monday = 0, Sunday = 6
-    let startDay = firstDay.getDay();
-    startDay = startDay === 0 ? 6 : startDay - 1; // convert Sunday=0 → 6
-
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrev = new Date(year, month, 0).getDate();
-
     const today = new Date();
-    const todayStrDate = formatDateInput(today);
+    const todayStr = formatDateInput(today);
     const selStr = formatDateInput(dpSelectedDate);
-
     let html = '';
 
-    // Previous month's trailing days
-    for (let i = startDay - 1; i >= 0; i--) {
-      html += `<button class="datepicker-day other-month" data-date="${formatDateInput(new Date(year, month - 1, daysInPrev - i))}">${daysInPrev - i}</button>`;
-    }
+    if (dpViewMode === 'day') {
+      // ── Day grid ──
+      dpMonthYear.textContent = `${year}年${month + 1}月`;
+      // Show weekday headers
+      document.querySelector('.datepicker-weekdays').style.display = 'grid';
 
-    // Current month's days
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = formatDateInput(new Date(year, month, d));
-      const isToday = dateStr === todayStrDate;
-      const isSel = dateStr === selStr;
-      let cls = 'datepicker-day';
-      if (isToday) cls += ' today';
-      if (isSel) cls += ' selected';
-      html += `<button class="${cls}" data-date="${dateStr}">${d}</button>`;
-    }
+      const firstDay = new Date(year, month, 1);
+      let startDay = firstDay.getDay();
+      startDay = startDay === 0 ? 6 : startDay - 1;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrev = new Date(year, month, 0).getDate();
 
-    // Next month's leading days (fill remaining cells)
-    const totalCells = startDay + daysInMonth;
-    const remaining = (7 - (totalCells % 7)) % 7;
-    const nextMonth = month + 1 > 11 ? 0 : month + 1;
-    const nextYear = month + 1 > 11 ? year + 1 : year;
-    for (let d = 1; d <= remaining; d++) {
-      html += `<button class="datepicker-day other-month" data-date="${formatDateInput(new Date(nextYear, nextMonth, d))}">${d}</button>`;
-    }
+      // Previous month trailing days
+      for (let i = startDay - 1; i >= 0; i--) {
+        const d = new Date(year, month - 1, daysInPrev - i);
+        html += `<button class="datepicker-day other-month" data-date="${formatDateInput(d)}">${daysInPrev - i}</button>`;
+      }
+      // Current month days
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = formatDateInput(new Date(year, month, d));
+        let cls = 'datepicker-day';
+        if (dateStr === todayStr) cls += ' today';
+        if (dateStr === selStr) cls += ' selected';
+        html += `<button class="${cls}" data-date="${dateStr}">${d}</button>`;
+      }
+      // Next month leading days
+      const totalCells = startDay + daysInMonth;
+      const remaining = (7 - (totalCells % 7)) % 7;
+      const nm = month + 1 > 11 ? 0 : month + 1;
+      const ny = month + 1 > 11 ? year + 1 : year;
+      for (let d = 1; d <= remaining; d++) {
+        const dateStr = formatDateInput(new Date(ny, nm, d));
+        html += `<button class="datepicker-day other-month" data-date="${dateStr}">${d}</button>`;
+      }
 
-    dpDays.innerHTML = html;
-
-    // Day click handlers
-    dpDays.querySelectorAll('.datepicker-day').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dateStr = btn.dataset.date;
-        dpSelectedDate = new Date(dateStr);
-        dateInput.value = dateStr;
-        closeDatepicker();
-        jumpToDate(dateStr);
+      dpDays.innerHTML = html;
+      dpDays.querySelectorAll('.datepicker-day').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ds = btn.dataset.date;
+          dpSelectedDate = new Date(ds);
+          dateInput.value = ds;
+          closeDatepicker();
+          jumpToDate(ds);
+        });
       });
-    });
+
+    } else if (dpViewMode === 'month') {
+      // ── Month grid (4×3) ──
+      dpMonthYear.textContent = `${year}年`;
+      document.querySelector('.datepicker-weekdays').style.display = 'none';
+
+      for (let m = 0; m < 12; m++) {
+        const isCurrent = m === month;
+        html += `<button class="datepicker-day datepicker-month-item${isCurrent ? ' selected' : ''}" data-month="${m}">${MONTH_NAMES[m]}</button>`;
+      }
+      dpDays.innerHTML = html;
+      dpDays.querySelectorAll('.datepicker-month-item').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dpCurrentDate = new Date(year, parseInt(btn.dataset.month), 1);
+          dpViewMode = 'day';
+          renderDatepicker();
+        });
+      });
+
+    } else if (dpViewMode === 'year') {
+      // ── Year grid (4×3) ──
+      const decadeStart = Math.floor(year / 12) * 12;
+      dpMonthYear.textContent = `${decadeStart}年 – ${decadeStart + 11}年`;
+      document.querySelector('.datepicker-weekdays').style.display = 'none';
+
+      for (let y = decadeStart; y < decadeStart + 12; y++) {
+        const isCurrent = y === year;
+        html += `<button class="datepicker-day datepicker-year-item${isCurrent ? ' selected' : ''}" data-year="${y}">${y}年</button>`;
+      }
+      dpDays.innerHTML = html;
+      dpDays.querySelectorAll('.datepicker-year-item').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dpCurrentDate = new Date(parseInt(btn.dataset.year), dpCurrentDate.getMonth(), 1);
+          dpViewMode = 'month';
+          renderDatepicker();
+        });
+      });
+    }
   }
+
+  // ── Header click: cycle view mode ──
+  dpMonthYear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (dpViewMode === 'day') dpViewMode = 'month';
+    else if (dpViewMode === 'month') dpViewMode = 'year';
+    else dpViewMode = 'day';
+    renderDatepicker();
+  });
 
   function openDatepicker() {
     dpOpen = true;
+    dpViewMode = 'day';
     dpPopup.classList.add('open');
     renderDatepicker();
   }
@@ -363,17 +413,20 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleDatepicker();
   });
 
-  // Prev/Next month
-  dpPrev.addEventListener('click', (e) => {
-    e.stopPropagation();
-    dpCurrentDate.setMonth(dpCurrentDate.getMonth() - 1);
+  // Prev/Next (adapts to view mode)
+  function dpNavigate(dir) {
+    if (dpViewMode === 'day') {
+      dpCurrentDate.setMonth(dpCurrentDate.getMonth() + dir);
+    } else if (dpViewMode === 'month') {
+      dpCurrentDate.setFullYear(dpCurrentDate.getFullYear() + dir);
+    } else if (dpViewMode === 'year') {
+      dpCurrentDate.setFullYear(dpCurrentDate.getFullYear() + dir * 12);
+    }
     renderDatepicker();
-  });
-  dpNext.addEventListener('click', (e) => {
-    e.stopPropagation();
-    dpCurrentDate.setMonth(dpCurrentDate.getMonth() + 1);
-    renderDatepicker();
-  });
+  }
+
+  dpPrev.addEventListener('click', (e) => { e.stopPropagation(); dpNavigate(-1); });
+  dpNext.addEventListener('click', (e) => { e.stopPropagation(); dpNavigate(1); });
 
   // Today button
   dpTodayBtn.addEventListener('click', (e) => {
@@ -381,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     dpCurrentDate = new Date(now.getFullYear(), now.getMonth(), 1);
     dpSelectedDate = new Date(now);
+    dpViewMode = 'day';
     dateInput.value = formatDateInput(now);
     closeDatepicker();
     jumpToDate(formatDateInput(now));

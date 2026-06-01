@@ -418,6 +418,14 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.datepicker-month-year:hover {
+  background: rgba(255, 107, 157, 0.1);
 }
 
 /* Weekday labels */
@@ -429,6 +437,7 @@
   color: var(--text-dim);
   margin-bottom: 4px;
   padding: 4px 0;
+  transition: opacity 0.2s;
 }
 
 .datepicker-weekdays span {
@@ -482,6 +491,15 @@
 .datepicker-day.today.selected {
   border-color: transparent;
   color: #fff;
+}
+
+/* Month / year grid items */
+.datepicker-month-item,
+.datepicker-year-item {
+  aspect-ratio: auto;
+  padding: 8px 4px;
+  border-radius: 8px;
+  font-size: 0.82rem;
 }
 
 /* Footer */
