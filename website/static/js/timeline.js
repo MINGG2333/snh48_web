@@ -646,8 +646,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Initialize ──
   renderTimeline();
+  // No initial centering — padding: 0 50vw naturally puts the first event
+  // near the center. This avoids conflicts with zoom's transform-origin strategy.
   requestAnimationFrame(() => {
-    centerOnMiddle();
     updateTransformOrigin();
   });
 
