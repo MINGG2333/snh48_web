@@ -571,6 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Mouse events
   wrapper.addEventListener('mousedown', (e) => {
+    hint.classList.add('dim');
     if (e.button !== 0) return;
     startDrag(e.clientX);
   });
