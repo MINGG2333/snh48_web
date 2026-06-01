@@ -646,9 +646,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Initialize ──
   renderTimeline();
+  // Apply initial transform immediately so all subsequent zooms are equivalent
+  applyScale(1);
   requestAnimationFrame(() => {
     centerOnMiddle();
-    updateTransformOrigin();
   });
 
   setTimeout(() => {
