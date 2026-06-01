@@ -500,6 +500,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setTrackLeft(val) {
     track.style.left = val + 'px';
+    // Keep transform-origin locked to wrapper center
+    updateTransformOrigin();
+  }
+
+  function updateTransformOrigin() {
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const trackRect = track.getBoundingClientRect();
+    const originX = wrapperRect.left + wrapperRect.width / 2 - trackRect.left;
+    trackInner.style.transformOrigin = `${originX}px center`;
   }
 
   function startDrag(clientX) {
@@ -617,14 +626,12 @@ document.addEventListener('DOMContentLoaded', () => {
     track.style.left = targetLeft + 'px';
   }
 
-  // ── Zoom (preserving the centered event) ──
+  // ── Zoom (no visual shift ── transform-origin locked to wrapper center) ──
   function applyScale(newScale) {
-    const centerIdx = getCenteredEventIndex();
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+    updateTransformOrigin();
     trackInner.style.transform = `scale(${scale})`;
     wrapper.style.minHeight = '100vh';
-    // Re-center the same event after scale change
-    requestAnimationFrame(() => centerOnEvent(centerIdx));
   }
 
   zoomIn.addEventListener('click', () => applyScale(scale + 0.15));
@@ -641,6 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTimeline();
   requestAnimationFrame(() => {
     centerOnMiddle();
+    updateTransformOrigin();
   });
 
   setTimeout(() => {
