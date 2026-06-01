@@ -220,8 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function centerOnMiddle() {
     const events = trackInner.querySelectorAll('.timeline-event');
     if (events.length === 0) return;
-    let targetIdx = Math.floor(events.length / 2);
-    // Iterate over DOM columns (one per unique date) to find first future date
+    let targetIdx = events.length - 1; // default: most recent
     for (let i = 0; i < events.length; i++) {
       const d = new Date(events[i].dataset.date);
       if (d > TODAY) {
