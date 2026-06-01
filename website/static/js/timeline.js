@@ -699,7 +699,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentLeft = parseFloat(track.style.left) || 0;
     const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
     track.style.left = targetLeft + 'px';
-    syncDateInputWithCenter();
+    // Update date input directly from the known centered event
+    if (dateInput) dateInput.value = target.dataset.date;
   }
 
   // ── Zoom ──
