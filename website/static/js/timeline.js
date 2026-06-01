@@ -599,6 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isDragging = false;
     wrapper.classList.remove('dragging');
     hint.classList.add('dim');
+    syncDateInputWithCenter();
 
     if (dragDistance < 5) return;
 
@@ -670,6 +671,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return best;
   }
 
+  // ── Sync date input to reflect the currently centered date ──
+  function syncDateInputWithCenter() {
+    if (!dateInput) return;
+    const idx = getCenteredEventIndex();
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (idx >= 0 && idx < events.length) {
+      dateInput.value = events[idx].dataset.date;
+    }
+  }
+
   // ── Center a specific event by index ──
   function centerOnEvent(index) {
     const events = trackInner.querySelectorAll('.timeline-event');
@@ -681,6 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentLeft = parseFloat(track.style.left) || 0;
     const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
     track.style.left = targetLeft + 'px';
+    syncDateInputWithCenter();
   }
 
   // ── Zoom ──
