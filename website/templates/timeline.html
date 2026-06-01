@@ -113,7 +113,7 @@
   transform: translate(-50%, -50%) scale(1.2);
 }
 
-/* ── Date label below the node ── */
+/* ── Date label (default: below node) ── */
 .timeline-node-date {
   position: absolute;
   top: calc(50% + 10px);
@@ -127,6 +127,12 @@
   pointer-events: none;
   z-index: 5;
   text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+}
+
+/* Card below the axis → date goes above the node */
+.timeline-event-below .timeline-node-date {
+  top: auto;
+  bottom: calc(50% + 10px);
 }
 
 .timeline-today-marker {
@@ -260,7 +266,7 @@
 
 .timeline-hint {
   position: absolute;
-  bottom: 30px;
+  top: calc(50% + 175px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
@@ -658,9 +664,10 @@
   .timeline-card-img, .timeline-card-img-placeholder { height: 65px; }
   .timeline-modal { max-width: 95vw; }
   .timeline-modal-img, .timeline-modal-img-placeholder { height: 160px; }
+  .timeline-hint { top: calc(50% + 130px); font-size: 0.7rem; }
   .timeline-zoom-controls { top: 10px; right: 8px; gap: 4px; }
   .timeline-date-jump-wrap { margin-left: 2px; padding-left: 4px; }
-  .timeline-date-input { width: 0; padding: 0; border: none; }
+  .timeline-date-input { width: 90px; padding: 4px 6px; font-size: 0.72rem; }
   .timeline-datepicker-popup { right: auto; left: 0; width: 230px; }
   .timeline-zoom-btn { width: 30px; height: 30px; font-size: 0.85rem; }
   .timeline-connector-above,
