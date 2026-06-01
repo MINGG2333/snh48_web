@@ -227,25 +227,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevDate = preserveCenter && dateInput && dateInput.value ? dateInput.value : null;
     mergedEvents = getFilteredEvents();
     renderTimeline(mergedEvents);
-    requestAnimationFrame(() => {
-      // Force layout so newly rendered elements have valid positions
-      void wrapper.offsetHeight;
-      if (prevDate) {
-        centerOnDate(prevDate);
-      } else {
-        // Initial load: center on boundary between past and future
-        const events = trackInner.querySelectorAll('.timeline-event');
-        if (events.length > 0) {
-          let idx = events.length - 1;
-          for (let i = 0; i < events.length; i++) {
-            const d = new Date(events[i].dataset.date);
-            if (d > TODAY) { idx = i; break; }
-          }
-          centerOnEvent(idx);
+    // Force layout immediately so DOM positions are valid, then center synchronously
+    void wrapper.offsetHeight;
+    if (prevDate) {
+      centerOnDate(prevDate);
+    } else {
+      // Initial load: center on boundary between past and future
+      const events = trackInner.querySelectorAll('.timeline-event');
+      if (events.length > 0) {
+        let idx = events.length - 1;
+        for (let i = 0; i < events.length; i++) {
+          const d = new Date(events[i].dataset.date);
+          if (d > TODAY) { idx = i; break; }
         }
+        centerOnEvent(idx);
       }
-      updateTransformOrigin();
-    });
+    }
+    updateTransformOrigin();
   }
 
   // ── Jump to nearest event for a given date ──
