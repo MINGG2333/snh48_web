@@ -206,29 +206,53 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Refresh timeline with current filter ──
-  function refreshTimeline() {
+  // ── Get the date of the currently centered event column ──
+  function getCenteredDate() {
+    const idx = getCenteredEventIndex();
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (idx >= 0 && idx < events.length) {
+      return events[idx].dataset.date;
+    }
+    return null;
+  }
+
+  // ── Center on nearest event column matching a date ──
+  function centerOnDate(targetDate) {
+    const target = new Date(targetDate);
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (events.length === 0) return;
+    let best = 0;
+    let bestDiff = Infinity;
+    events.forEach((el, i) => {
+      const d = new Date(el.dataset.date);
+      const diff = Math.abs(d - target);
+      if (diff < bestDiff) { bestDiff = diff; best = i; }
+    });
+    centerOnEvent(best);
+  }
+
+  // ── Refresh timeline, optionally preserving current center ──
+  function refreshTimeline(preserveCenter) {
+    const prevDate = preserveCenter ? getCenteredDate() : null;
     mergedEvents = getFilteredEvents();
     renderTimeline(mergedEvents);
     requestAnimationFrame(() => {
-      centerOnMiddle();
+      if (prevDate) {
+        centerOnDate(prevDate);
+      } else {
+        // Initial load: center on boundary between past and future
+        const events = trackInner.querySelectorAll('.timeline-event');
+        if (events.length > 0) {
+          let idx = events.length - 1;
+          for (let i = 0; i < events.length; i++) {
+            const d = new Date(events[i].dataset.date);
+            if (d > TODAY) { idx = i; break; }
+          }
+          centerOnEvent(idx);
+        }
+      }
       updateTransformOrigin();
     });
-  }
-
-  // ── Center on the boundary between past and future ──
-  function centerOnMiddle() {
-    const events = trackInner.querySelectorAll('.timeline-event');
-    if (events.length === 0) return;
-    let targetIdx = events.length - 1; // default: most recent
-    for (let i = 0; i < events.length; i++) {
-      const d = new Date(events[i].dataset.date);
-      if (d > TODAY) {
-        targetIdx = i;
-        break;
-      }
-    }
-    centerOnEvent(targetIdx);
   }
 
   // ── Jump to nearest event for a given date ──
@@ -430,13 +454,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Filter buttons ──
+  // ── Filter buttons (preserve current time center) ──
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       filterBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentFilter = btn.dataset.source;
-      refreshTimeline();
+      refreshTimeline(true); // keep the current center position
     });
   });
 
@@ -455,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.warn('[timeline] Failed to fetch live events:', err);
     }
-    refreshTimeline();
+    refreshTimeline(true); // preserve the center that was already set
   }
 
   // ── Date jump button ──
