@@ -638,6 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
   zoomOut.addEventListener('click', () => applyScale(scale - 0.15));
 
   wrapper.addEventListener('wheel', (e) => {
+    hint.classList.add('dim');
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       applyScale(scale - e.deltaY * 0.002);

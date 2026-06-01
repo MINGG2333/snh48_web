@@ -297,9 +297,9 @@
 /* ── Zoom controls ── */
 .timeline-zoom-controls {
   position: absolute;
-  top: 20px;
+  top: calc(20px + var(--nav-height));
   right: 24px;
-  z-index: 10;
+  z-index: 1001;
   display: flex;
   gap: 6px;
 }
@@ -664,7 +664,7 @@
   .timeline-modal { max-width: 95vw; }
   .timeline-modal-img, .timeline-modal-img-placeholder { height: 160px; }
   .timeline-hint { top: calc(50% + 130px); font-size: 0.7rem; }
-  .timeline-zoom-controls { top: 10px; right: 8px; gap: 4px; }
+  .timeline-zoom-controls { top: calc(10px + var(--nav-height)); right: 8px; gap: 4px; }
   .timeline-date-jump-wrap { margin-left: 2px; padding-left: 4px; }
   .timeline-date-input { width: 90px; padding: 4px 6px; font-size: 0.72rem; }
   .timeline-datepicker-popup { right: 0; left: auto; width: 220px; }
