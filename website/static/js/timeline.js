@@ -154,9 +154,10 @@ document.addEventListener('DOMContentLoaded', () => {
           ? `<img class="timeline-card-img" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy">`
           : `<div class="timeline-card-img-placeholder"><i class="fas ${ev.icon || 'fa-calendar'}"></i></div>`;
 
+        const imgClass = hasCover ? 'timeline-card-img loading' : 'timeline-card-img-placeholder';
         cardsHtml += `
           <div class="timeline-card" data-event-id="${ev.id}">
-            ${imgHtml}
+            ${hasCover ? `<img class="${imgClass}" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
             <div class="timeline-card-body">
               <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
               <div class="timeline-card-title">${ev.title}</div>

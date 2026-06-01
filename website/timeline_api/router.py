@@ -6,13 +6,11 @@ from __future__ import annotations
 
 import csv
 import json
-import os
-import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Query
 
 from website import config as cfg
 
@@ -35,18 +33,6 @@ def _get_messages_csv_path() -> Optional[Path]:
         return csv_path
     # Also try the server production path
     server_path = Path(f"/home/snh48-fan-hub/room_record/{MEMBER_DIR}/messages.csv")
-    if server_path.exists():
-        return server_path
-    return None
-
-
-def _get_live_covers_dir() -> Optional[Path]:
-    """Return the live_covers directory path."""
-    root = Path(cfg.ROOM_RECORD_ROOT)
-    covers_dir = root / MEMBER_DIR / "live_covers"
-    if covers_dir.exists():
-        return covers_dir
-    server_path = Path(f"/home/snh48-fan-hub/room_record/{MEMBER_DIR}/live_covers")
     if server_path.exists():
         return server_path
     return None
@@ -83,7 +69,6 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
     if not csv_path:
         return []
 
-    covers_dir = _get_live_covers_dir()
     records = []
 
     try:
@@ -100,16 +85,12 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                 live_info = extract_live_info(row.get("text_content", ""))
                 media_path = row.get("media_path", "").strip()
 
-                # Build cover URL: try local file first, then CDN
+                # Build cover URL via static mount (fast, no API overhead)
                 cover_url = ""
                 file_name = ""
                 if media_path:
-                    # media_path looks like "live_covers/20251006_014320.jpg"
                     file_name = Path(media_path).name
-                    if covers_dir:
-                        local_file = covers_dir / file_name
-                        if local_file.exists():
-                            cover_url = f"/api/timeline/cover/{MEMBER_NAME}_{MEMBER_ID}/{file_name}"
+                    cover_url = f"/live-covers/{file_name}"
 
                 record = {
                     "id": f"live_{dt.strftime('%Y%m%d_%H%M%S')}",
@@ -175,19 +156,4 @@ def get_live_pushes_grouped(
     }
 
 
-@router.get("/cover/{member_dir}/{filename}")
-def serve_live_cover(member_dir: str, filename: str):
-    """Serve a live cover image from the local filesystem."""
-    from fastapi.responses import FileResponse
 
-    # Try local dev path
-    local_path = Path(cfg.ROOM_RECORD_ROOT) / member_dir / "live_covers" / filename
-    if local_path.exists():
-        return FileResponse(str(local_path), media_type="image/jpeg")
-
-    # Try server path
-    server_path = Path(f"/home/snh48-fan-hub/room_record/{member_dir}/live_covers/{filename}")
-    if server_path.exists():
-        return FileResponse(str(server_path), media_type="image/jpeg")
-
-    raise HTTPException(status_code=404, detail="Cover not found")

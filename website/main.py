@@ -25,6 +25,17 @@ app = FastAPI(
 # ── Static Files ───────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory=str(cfg.STATIC_DIR)), name="static")
 
+# ── Live Covers (mount local directory as static for fast serving) ────────
+from pathlib import Path as _Path
+_live_covers_dir = _Path(cfg.ROOM_RECORD_ROOT) / "陈嘉仪_161808449" / "live_covers"
+if _live_covers_dir.exists():
+    app.mount("/live-covers", StaticFiles(directory=str(_live_covers_dir)), name="live_covers")
+else:
+    # Try server production path
+    _server_covers = _Path("/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers")
+    if _server_covers.exists():
+        app.mount("/live-covers", StaticFiles(directory=str(_server_covers)), name="live_covers")
+
 # ── Templates ──────────────────────────────────────────────────────────────
 templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))
 
