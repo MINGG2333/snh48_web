@@ -205,8 +205,8 @@ body {
 /* Menu items positioned around the ring */
 .circular-menu-item {
   position: absolute;
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -216,8 +216,8 @@ body {
   justify-content: center;
   text-decoration: none;
   color: var(--text-dim);
-  font-size: 0.75rem;
-  gap: 3px;
+  font-size: 0.68rem;
+  gap: 2px;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -232,7 +232,7 @@ body {
 }
 
 .circular-menu-item i {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   transition: transform 0.3s;
 }
 
@@ -251,21 +251,35 @@ body {
 /* Staggered animation delays for each item */
 .circular-menu-item:nth-child(1) { transition-delay: 0.05s; }
 .circular-menu-item:nth-child(2) { transition-delay: 0.1s; }
+.circular-menu-item:nth-child(3) { transition-delay: 0.15s; }
 
-/* Position: AI 问答 at ~6:30 o'clock (bottom center) */
-.circular-menu-item.item-qa {
+/* ── All items within the visible bottom-left arc (6:00–9:00),
+     确保不溢出扇形可见区域 ── */
+
+/* 时光轴 at ~6:30 (底部偏左) */
+.circular-menu-item.item-timeline {
   bottom: 24px;
-  left: 50%;
+  left: 38%;
   transform: translateX(-50%) scale(0.3);
 }
-.circular-menu.open .circular-menu-item.item-qa {
+.circular-menu.open .circular-menu-item.item-timeline {
   transform: translateX(-50%) scale(1);
 }
 
-/* Position: 关于 at ~8:30 o'clock (bottom-left) */
+/* AI 问答 at ~7:30 (左下方) */
+.circular-menu-item.item-qa {
+  bottom: 78px;
+  left: 18px;
+  transform: scale(0.3);
+}
+.circular-menu.open .circular-menu-item.item-qa {
+  transform: scale(1);
+}
+
+/* 关于 at ~8:30 (左侧偏下，不超出9:00) */
 .circular-menu-item.item-about {
   bottom: 96px;
-  left: 24px;
+  left: 16px;
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-about {

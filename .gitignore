@@ -27,3 +27,6 @@ kb_qa.log
 # OS
 .DS_Store
 Thumbs.db
+
+ref/
+img/

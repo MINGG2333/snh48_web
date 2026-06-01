@@ -61,9 +61,10 @@ def main():
     src_dir = project_root / IMG_DIR
     out_dir = project_root / OUT_DIR
 
-    # 扫描 img/ 目录下所有图片
+    # 扫描 img/ 目录下所有图片（排除备案图标）
+    EXCLUDED = {"备案图标.png"}
     images = sorted(
-        [f for f in src_dir.iterdir() if f.suffix.lower() in EXTENSIONS],
+        [f for f in src_dir.iterdir() if f.suffix.lower() in EXTENSIONS and f.name not in EXCLUDED],
         key=lambda f: f.name,
     )
 

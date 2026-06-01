@@ -130,6 +130,22 @@ async def qa_page(request: Request):
     )
 
 
+@app.get("/timeline", response_class=HTMLResponse)
+async def timeline_page(request: Request):
+    """Timeline page showing Chen Jiayi's journey."""
+    return templates.TemplateResponse(
+        "timeline.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/scroller-admin", response_class=HTMLResponse)
 async def scroller_admin_page(request: Request):
     """Scroller text management page."""

@@ -1,0 +1,555 @@
+{% extends "base.html" %}
+
+{% block title %}时光轴 - {{ site_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Timeline page specific ── */
+.timeline-page {
+  padding-top: calc(var(--nav-height) + 20px);
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(255, 107, 157, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(192, 132, 252, 0.08) 0%, transparent 50%),
+    var(--bg-dark);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-header {
+  text-align: center;
+  padding: 30px 24px 10px;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.timeline-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+
+.timeline-header p {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+/* ── Timeline track ── */
+.timeline-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.timeline-wrapper:active {
+  cursor: grabbing;
+}
+
+.timeline-track {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 50vw;
+  will-change: transform;
+  transition: none;
+}
+
+.timeline-wrapper.dragging .timeline-track {
+  transition: none !important;
+}
+
+/* ── Center guide line ── */
+.timeline-guide {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.timeline-guide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, var(--primary), var(--accent), transparent);
+  opacity: 0.6;
+}
+
+.timeline-guide::after {
+  content: '';
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  background: var(--primary);
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(255, 107, 157, 0.6), 0 0 40px rgba(255, 107, 157, 0.3);
+  animation: guidePulse 2s ease-in-out infinite;
+}
+
+@keyframes guidePulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 107, 157, 0.6), 0 0 40px rgba(255, 107, 157, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(255, 107, 157, 0.8), 0 0 60px rgba(255, 107, 157, 0.4); }
+}
+
+/* ── Timeline node ── */
+.timeline-node {
+  flex-shrink: 0;
+  width: 200px;
+  margin: 0 20px;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.timeline-node:hover {
+  transform: translateY(-8px) scale(1.03);
+}
+
+/* Connecting line between nodes */
+.timeline-node::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -20px;
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 107, 157, 0.4), rgba(192, 132, 252, 0.2));
+  transform: translateY(-50%);
+}
+
+.timeline-node:last-child::before {
+  display: none;
+}
+
+/* Node card */
+.timeline-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow);
+}
+
+.timeline-node:hover .timeline-card {
+  border-color: rgba(255, 107, 157, 0.3);
+  box-shadow: 0 8px 40px rgba(255, 107, 157, 0.15);
+}
+
+/* Node image/thumbnail */
+.timeline-img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.1), rgba(192, 132, 252, 0.1));
+}
+
+.timeline-img-placeholder {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  color: var(--text-dim);
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.08), rgba(192, 132, 252, 0.08));
+}
+
+/* Node info */
+.timeline-info {
+  padding: 12px 14px 14px;
+}
+
+.timeline-date {
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.timeline-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.timeline-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+.timeline-badge.milestone { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+.timeline-badge.tour { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.2); }
+.timeline-badge.show { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.2); }
+.timeline-badge.event { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.2); }
+.timeline-badge.external { background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.2); }
+
+/* ── Section dividers ── */
+.timeline-section-label {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  margin: 0 30px;
+  position: relative;
+}
+
+.timeline-section-label::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -30px;
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary));
+}
+
+.timeline-section-label::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -30px;
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), transparent);
+}
+
+.timeline-section-label .section-icon {
+  font-size: 2rem;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.timeline-section-label .section-text {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Scroll hint arrow ── */
+.timeline-hint {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  opacity: 0.7;
+  animation: hintBounce 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.timeline-hint i {
+  font-size: 1.2rem;
+}
+
+@keyframes hintBounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.7; }
+  50% { transform: translateX(-50%) translateY(6px); opacity: 0.4; }
+}
+
+.timeline-hint.dim {
+  opacity: 0 !important;
+  transition: opacity 0.5s;
+}
+
+/* ── Zoom controls ── */
+.timeline-zoom-controls {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+}
+
+.timeline-zoom-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.timeline-zoom-btn:hover {
+  background: rgba(255, 107, 157, 0.15);
+  border-color: var(--primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIMELINE MODAL
+   ═══════════════════════════════════════════════════════════════════════════*/
+
+.timeline-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.timeline-modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.timeline-modal {
+  background: linear-gradient(135deg, rgba(20, 10, 30, 0.95), rgba(10, 10, 26, 0.95));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 107, 157, 0.2);
+  border-radius: 20px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 107, 157, 0.1);
+  transform: scale(0.9) translateY(20px);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.timeline-modal-overlay.open .timeline-modal {
+  transform: scale(1) translateY(0);
+}
+
+.timeline-modal-img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 20px 20px 0 0;
+  display: block;
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.1), rgba(192, 132, 252, 0.1));
+}
+
+.timeline-modal-img-placeholder {
+  width: 100%;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  color: var(--text-dim);
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.08), rgba(192, 132, 252, 0.08));
+  border-radius: 20px 20px 0 0;
+}
+
+.timeline-modal-body {
+  padding: 24px;
+}
+
+.timeline-modal-date {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.timeline-modal-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.timeline-modal-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+.timeline-modal-desc {
+  color: var(--text-dim);
+  line-height: 1.8;
+  font-size: 0.92rem;
+}
+
+.timeline-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.timeline-modal-close:hover {
+  background: rgba(255, 107, 157, 0.3);
+  border-color: var(--primary);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .timeline-header h1 { font-size: 1.5rem; }
+  .timeline-node { width: 170px; margin: 0 14px; }
+  .timeline-img, .timeline-img-placeholder { height: 90px; }
+  .timeline-modal { max-width: 95vw; }
+  .timeline-modal-img, .timeline-modal-img-placeholder { height: 160px; }
+  .timeline-section-label { width: 70px; margin: 0 20px; }
+  .timeline-zoom-controls { top: 10px; right: 12px; }
+  .timeline-zoom-btn { width: 30px; height: 30px; font-size: 0.85rem; }
+}
+</style>
+{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/timeline" class="active"><i class="fas fa-clock"></i> 时光轴</a>
+            <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+
+<!-- Mobile Circular Menu -->
+<div class="circular-menu" id="circularMenu">
+    <div class="circular-menu-ring">
+        <div class="circular-menu-close" id="circularMenuClose">
+            <i class="fas fa-times"></i>
+        </div>
+        <!-- 时光轴 at ~4:30 o'clock (bottom-right) -->
+        <a href="/timeline" class="circular-menu-item item-timeline">
+            <i class="fas fa-clock"></i>
+            <span>时光轴</span>
+        </a>
+        <!-- AI 问答 at ~6:30 o'clock (bottom center) -->
+        <a href="/qa" class="circular-menu-item item-qa">
+            <i class="fas fa-robot"></i>
+            <span>AI 问答</span>
+        </a>
+        <!-- 关于 at ~8:30 o'clock (bottom-left) -->
+        <a href="/about" class="circular-menu-item item-about">
+            <i class="fas fa-info-circle"></i>
+            <span>关于</span>
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<main class="timeline-page">
+    <div class="timeline-header">
+        <h1><i class="fas fa-clock"></i> 时光轴</h1>
+        <p>陈嘉仪的成长轨迹 — 从入团到未来，每一步都值得铭记</p>
+    </div>
+
+    <div class="timeline-wrapper" id="timelineWrapper">
+        <!-- Guide line -->
+        <div class="timeline-guide"></div>
+
+        <!-- Zoom controls -->
+        <div class="timeline-zoom-controls">
+            <button class="timeline-zoom-btn" id="zoomIn" title="放大">
+                <i class="fas fa-plus"></i>
+            </button>
+            <button class="timeline-zoom-btn" id="zoomOut" title="缩小">
+                <i class="fas fa-minus"></i>
+            </button>
+        </div>
+
+        <!-- Track -->
+        <div class="timeline-track" id="timelineTrack"></div>
+
+        <!-- Hint -->
+        <div class="timeline-hint" id="timelineHint">
+            <i class="fas fa-arrows-alt-h"></i>
+            <span>拖拽滑动</span>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="timeline-modal-overlay" id="timelineModalOverlay">
+        <div class="timeline-modal" id="timelineModal">
+            <button class="timeline-modal-close" id="timelineModalClose">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="timelineModalContent"></div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/timeline.js?v={{ static_version('js/timeline.js') }}"></script>
+{% endblock %}
