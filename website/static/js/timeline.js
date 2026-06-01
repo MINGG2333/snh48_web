@@ -216,7 +216,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function centerOnMiddle() {
     const events = trackInner.querySelectorAll('.timeline-event');
     if (events.length === 0) return;
-    // Find the first future event (after today)
     let targetIdx = Math.floor(events.length / 2);
     for (let i = 0; i < TIMELINE_EVENTS.length; i++) {
       const d = new Date(TIMELINE_EVENTS[i].date);
@@ -225,25 +224,14 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
       }
     }
-    const target = events[Math.min(targetIdx, events.length - 1)];
-    if (!target) return;
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const offset = wrapperRect.width / 2 - targetRect.width / 2;
-    const currentLeft = parseFloat(track.style.left) || 0;
-    const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
-    track.style.left = targetLeft + 'px';
+    centerOnEvent(targetIdx);
   }
 
   // ── Jump to nearest event for a given date ──
   function jumpToDate(targetDate) {
-    const events = trackInner.querySelectorAll('.timeline-event');
-    if (events.length === 0) return;
-
     const target = new Date(targetDate);
     let nearestIdx = 0;
     let minDiff = Infinity;
-
     TIMELINE_EVENTS.forEach((ev, i) => {
       const d = new Date(ev.date);
       const diff = Math.abs(d - target);
@@ -252,16 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         nearestIdx = i;
       }
     });
-
-    const targetEl = events[nearestIdx];
-    if (!targetEl) return;
-
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const targetRect = targetEl.getBoundingClientRect();
-    const offset = wrapperRect.width / 2 - targetRect.width / 2;
-    const currentLeft = parseFloat(track.style.left) || 0;
-    const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
-    track.style.left = targetLeft + 'px';
+    centerOnEvent(nearestIdx);
   }
 
   // ── Custom Datepicker (day / month / year views) ──
@@ -609,13 +588,43 @@ document.addEventListener('DOMContentLoaded', () => {
     endDrag();
   }, { passive: true });
 
-  // ── Zoom ──
+  // ── Find which event is closest to the viewport center ──
+  function getCenteredEventIndex() {
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (events.length === 0) return 0;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const cx = wrapperRect.left + wrapperRect.width / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    events.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      const dist = Math.abs(r.left + r.width / 2 - cx);
+      if (dist < bestDist) { bestDist = dist; best = i; }
+    });
+    return best;
+  }
+
+  // ── Center a specific event by index ──
+  function centerOnEvent(index) {
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (index < 0 || index >= events.length) return;
+    const target = events[index];
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const offset = wrapperRect.width / 2 - targetRect.width / 2;
+    const currentLeft = parseFloat(track.style.left) || 0;
+    const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
+    track.style.left = targetLeft + 'px';
+  }
+
+  // ── Zoom (preserving the centered event) ──
   function applyScale(newScale) {
+    const centerIdx = getCenteredEventIndex();
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
     trackInner.style.transform = `scale(${scale})`;
-    // Keep wrapper height fixed at viewport height so the centering
-    // (via align-items:center on trackInner) stays stable regardless of scale.
     wrapper.style.minHeight = '100vh';
+    // Re-center the same event after scale change
+    requestAnimationFrame(() => centerOnEvent(centerIdx));
   }
 
   zoomIn.addEventListener('click', () => applyScale(scale + 0.15));
