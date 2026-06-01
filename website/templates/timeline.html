@@ -6,7 +6,7 @@
 <style>
 /* ── Timeline page specific ── */
 .timeline-page {
-  padding-top: calc(var(--nav-height) + 20px);
+  padding-top: var(--nav-height);
   min-height: 100vh;
   background:
     radial-gradient(ellipse at 20% 50%, rgba(255, 107, 157, 0.10) 0%, transparent 50%),
@@ -17,30 +17,10 @@
   flex-direction: column;
 }
 
-.timeline-header {
-  text-align: center;
-  padding: 30px 24px 10px;
-  position: relative;
-  z-index: 10;
-  flex-shrink: 0;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIMELINE WRAPPER & HORIZONTAL AXIS
+   ═══════════════════════════════════════════════════════════════════════════*/
 
-.timeline-header h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 6px;
-}
-
-.timeline-header p {
-  color: var(--text-dim);
-  font-size: 0.9rem;
-}
-
-/* ── Timeline track ── */
 .timeline-wrapper {
   flex: 1;
   position: relative;
@@ -71,77 +51,44 @@
   transition: none !important;
 }
 
-/* ── Center guide line ── */
-.timeline-guide {
+/* ── Horizontal axis line ── */
+.timeline-axis {
   position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  transform: translateX(-50%);
-  z-index: 5;
-  pointer-events: none;
-}
-
-.timeline-guide::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent, var(--primary), var(--accent), transparent);
-  opacity: 0.6;
-}
-
-.timeline-guide::after {
-  content: '';
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 12px;
-  height: 12px;
-  background: var(--primary);
-  border-radius: 50%;
-  box-shadow: 0 0 20px rgba(255, 107, 157, 0.6), 0 0 40px rgba(255, 107, 157, 0.3);
-  animation: guidePulse 2s ease-in-out infinite;
-}
-
-@keyframes guidePulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(255, 107, 157, 0.6), 0 0 40px rgba(255, 107, 157, 0.3); }
-  50% { box-shadow: 0 0 30px rgba(255, 107, 157, 0.8), 0 0 60px rgba(255, 107, 157, 0.4); }
-}
-
-/* ── Timeline node ── */
-.timeline-node {
-  flex-shrink: 0;
-  width: 200px;
-  margin: 0 20px;
-  position: relative;
-  cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.timeline-node:hover {
-  transform: translateY(-8px) scale(1.03);
-}
-
-/* Connecting line between nodes */
-.timeline-node::before {
-  content: '';
-  position: absolute;
+  left: 0;
+  right: 0;
   top: 50%;
-  right: -20px;
-  width: 40px;
   height: 2px;
-  background: linear-gradient(90deg, rgba(255, 107, 157, 0.4), rgba(192, 132, 252, 0.2));
   transform: translateY(-50%);
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255, 107, 157, 0.15) 5%,
+    rgba(255, 107, 157, 0.5) 30%,
+    var(--primary) 50%,
+    var(--accent) 70%,
+    rgba(192, 132, 252, 0.3) 95%,
+    transparent 100%
+  );
 }
 
-.timeline-node:last-child::before {
-  display: none;
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIMELINE EVENT COLUMN
+   ═══════════════════════════════════════════════════════════════════════════*/
+
+.timeline-event {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 220px;
+  margin: 0 12px;
+  position: relative;
 }
 
-/* Node card */
+/* ── Card (branch off the axis) ── */
 .timeline-card {
+  width: 100%;
   background: var(--card-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -150,121 +97,167 @@
   overflow: hidden;
   transition: all 0.3s ease;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  position: relative;
+  z-index: 10;
 }
 
-.timeline-node:hover .timeline-card {
-  border-color: rgba(255, 107, 157, 0.3);
-  box-shadow: 0 8px 40px rgba(255, 107, 157, 0.15);
+.timeline-card:hover {
+  border-color: rgba(255, 107, 157, 0.35);
+  box-shadow: 0 8px 40px rgba(255, 107, 157, 0.2);
+  transform: translateY(-3px);
 }
 
-/* Node image/thumbnail */
-.timeline-img {
+.timeline-card-above {
+  margin-bottom: 0;
+}
+
+.timeline-card-below {
+  margin-top: 0;
+}
+
+/* Card thumbnail / placeholder */
+.timeline-card-img {
   width: 100%;
-  height: 110px;
+  height: 80px;
   object-fit: cover;
   display: block;
   background: linear-gradient(135deg, rgba(255, 107, 157, 0.1), rgba(192, 132, 252, 0.1));
 }
 
-.timeline-img-placeholder {
+.timeline-card-img-placeholder {
   width: 100%;
-  height: 110px;
+  height: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
+  font-size: 1.6rem;
   color: var(--text-dim);
   background: linear-gradient(135deg, rgba(255, 107, 157, 0.08), rgba(192, 132, 252, 0.08));
 }
 
-/* Node info */
-.timeline-info {
-  padding: 12px 14px 14px;
+/* Card body */
+.timeline-card-body {
+  padding: 10px 12px 12px;
 }
 
-.timeline-date {
-  font-size: 0.75rem;
+.timeline-card-date {
+  font-size: 0.7rem;
   color: var(--accent);
   font-weight: 500;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
-.timeline-title {
-  font-size: 0.95rem;
+.timeline-card-title {
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--text);
-  line-height: 1.4;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.timeline-badge {
+.timeline-card-badge {
   display: inline-block;
-  font-size: 0.65rem;
-  padding: 2px 8px;
+  font-size: 0.6rem;
+  padding: 2px 7px;
   border-radius: 20px;
-  margin-top: 6px;
+  margin-top: 5px;
   font-weight: 500;
 }
 
-.timeline-badge.milestone { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
-.timeline-badge.tour { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.2); }
-.timeline-badge.show { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.2); }
-.timeline-badge.event { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.2); }
-.timeline-badge.external { background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.2); }
+.timeline-card-badge.milestone { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+.timeline-card-badge.tour { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.2); }
+.timeline-card-badge.show { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.2); }
+.timeline-card-badge.event { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.2); }
+.timeline-card-badge.external { background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.2); }
 
-/* ── Section dividers ── */
-.timeline-section-label {
+/* ── Connector line (card ↔ node) ── */
+.timeline-connector {
+  width: 2px;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100px;
-  margin: 0 30px;
   position: relative;
+  z-index: 3;
 }
 
-.timeline-section-label::before {
-  content: '';
+.timeline-connector-above {
+  height: 18px;
+  background: linear-gradient(180deg, rgba(255, 107, 157, 0.3), rgba(255, 107, 157, 0.6));
+}
+
+.timeline-connector-below {
+  height: 18px;
+  background: linear-gradient(180deg, rgba(192, 132, 252, 0.6), rgba(192, 132, 252, 0.3));
+}
+
+/* ── Node dot on the axis ── */
+.timeline-node {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 3px solid var(--bg-dark);
+  box-shadow: 0 0 0 2px rgba(255, 107, 157, 0.4), 0 0 12px rgba(255, 107, 157, 0.3);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 6;
+  transition: all 0.3s ease;
+}
+
+.timeline-event:hover .timeline-node {
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.6), 0 0 20px rgba(255, 107, 157, 0.5);
+  transform: scale(1.2);
+}
+
+/* Date label near the node */
+.timeline-node-date {
   position: absolute;
   top: 50%;
-  left: -30px;
-  width: 60px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--primary));
-}
-
-.timeline-section-label::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: -30px;
-  width: 60px;
-  height: 2px;
-  background: linear-gradient(90deg, var(--primary), transparent);
-}
-
-.timeline-section-label .section-icon {
-  font-size: 2rem;
-  margin-bottom: 6px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.timeline-section-label .section-text {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  font-weight: 500;
   white-space: nowrap;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-weight: 400;
+  letter-spacing: 0.3px;
+  pointer-events: none;
+  z-index: 5;
 }
 
-/* ── Scroll hint arrow ── */
+/* Card-above events: date below node */
+.timeline-event-above .timeline-node-date {
+  left: 24px;
+  transform: translateY(-50%);
+}
+
+/* Card-below events: date above node */
+.timeline-event-below .timeline-node-date {
+  left: 24px;
+  transform: translateY(-50%);
+}
+
+/* ── "今天" marker ── */
+.timeline-today-marker {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.6rem;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 1px 6px;
+  border-radius: 10px;
+  left: 42px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLL HINT
+   ═══════════════════════════════════════════════════════════════════════════*/
+
 .timeline-hint {
   position: absolute;
   bottom: 30px;
@@ -452,14 +445,15 @@
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  .timeline-header h1 { font-size: 1.5rem; }
-  .timeline-node { width: 170px; margin: 0 14px; }
-  .timeline-img, .timeline-img-placeholder { height: 90px; }
+
+  .timeline-event { width: 180px; margin: 0 8px; }
+  .timeline-card-img, .timeline-card-img-placeholder { height: 65px; }
   .timeline-modal { max-width: 95vw; }
   .timeline-modal-img, .timeline-modal-img-placeholder { height: 160px; }
-  .timeline-section-label { width: 70px; margin: 0 20px; }
   .timeline-zoom-controls { top: 10px; right: 12px; }
   .timeline-zoom-btn { width: 30px; height: 30px; font-size: 0.85rem; }
+  .timeline-connector-above,
+  .timeline-connector-below { height: 14px; }
 }
 </style>
 {% endblock %}
@@ -509,14 +503,9 @@
 
 {% block content %}
 <main class="timeline-page">
-    <div class="timeline-header">
-        <h1><i class="fas fa-clock"></i> 时光轴</h1>
-        <p>陈嘉仪的成长轨迹 — 从入团到未来，每一步都值得铭记</p>
-    </div>
-
     <div class="timeline-wrapper" id="timelineWrapper">
-        <!-- Guide line -->
-        <div class="timeline-guide"></div>
+        <!-- Horizontal axis line -->
+        <div class="timeline-axis"></div>
 
         <!-- Zoom controls -->
         <div class="timeline-zoom-controls">

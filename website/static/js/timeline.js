@@ -1,7 +1,7 @@
 /**
  * SNH48 演艺信息站 - 时光轴 Timeline
  *
- * 功能：水平拖拽滑动时间轴 + 点击弹出详情弹窗
+ * 功能：水平拖拽滑动时间轴 + 节点分支引出卡片 + 点击弹出详情弹窗
  * 数据：硬编码陈嘉仪历史事件与未来行程
  */
 
@@ -10,7 +10,6 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const TIMELINE_EVENTS = [
-  // ── 历史事件 ──
   {
     id: 'join',
     date: '2025-09-23',
@@ -44,12 +43,6 @@ const TIMELINE_EVENTS = [
     icon: 'fa-crown',
     color: '#fbbf24',
   },
-
-  // ── 分隔：历史 / 未来 ──
-  { _divider: 'past', label: '历史轨迹', icon: 'fa-history' },
-  { _divider: 'future', label: '未来行程', icon: 'fa-calendar-alt' },
-
-  // ── 未来行程 ──
   {
     id: 'work-exhibition',
     date: '2026-06-04',
@@ -107,6 +100,10 @@ const TIMELINE_EVENTS = [
   },
 ];
 
+// ── Today's date for comparison ──
+const TODAY = new Date();
+const TODAY_STR = formatDate(TODAY);
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  Timeline Rendering
 // ═══════════════════════════════════════════════════════════════════════════
@@ -125,98 +122,115 @@ document.addEventListener('DOMContentLoaded', () => {
   const MIN_SCALE = 0.5;
   const MAX_SCALE = 1.8;
 
-  // ── Render nodes ──
-  function renderTimeline() {
-    track.innerHTML = '';
-    TIMELINE_EVENTS.forEach((event, index) => {
-      if (event._divider) {
-        // Section divider
-        const div = document.createElement('div');
-        div.className = 'timeline-section-label';
-        div.innerHTML = `
-          <div class="section-icon"><i class="fas ${event.icon}"></i></div>
-          <div class="section-text">${event.label}</div>
-        `;
-        track.appendChild(div);
-      } else {
-        // Event node
-        const node = document.createElement('div');
-        node.className = 'timeline-node';
-        node.dataset.index = index;
-
-        const badgeClassMap = {
-          milestone: 'milestone',
-          tour: 'tour',
-          show: 'show',
-          event: 'event',
-          external: 'external',
-        };
-        const badgeClass = badgeClassMap[event.type] || 'event';
-
-        const imgHtml = event.image
-          ? `<img class="timeline-img" src="${event.image}" alt="${event.title}" loading="lazy">`
-          : `<div class="timeline-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
-
-        node.innerHTML = `
-          <div class="timeline-card">
-            ${imgHtml}
-            <div class="timeline-info">
-              <div class="timeline-date">${formatDate(event.date)}</div>
-              <div class="timeline-title">${event.title}</div>
-              <span class="timeline-badge ${badgeClass}">${event.typeLabel}</span>
-            </div>
-          </div>
-        `;
-
-        node.addEventListener('click', () => openModal(event));
-        node.addEventListener('touchend', (e) => {
-          // Only open on tap, not after drag
-          if (!wrapper.classList.contains('dragging')) {
-            openModal(event);
-          }
-        });
-
-        track.appendChild(node);
-      }
-    });
-  }
-
   // ── Format date ──
-  function formatDate(dateStr) {
-    const d = new Date(dateStr);
+  function formatDate(dateInput) {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}.${m}.${day}`;
   }
 
-  // ── Center on a specific event ──
-  function centerOn(index) {
-    const nodes = track.querySelectorAll('.timeline-node');
-    if (index >= 0 && index < nodes.length) {
-      const node = nodes[index];
-      const wrapperRect = wrapper.getBoundingClientRect();
-      const nodeRect = node.getBoundingClientRect();
-      const offset = wrapperRect.width / 2 - nodeRect.width / 2;
-      const currentLeft = parseFloat(track.style.left) || 0;
-      const targetLeft = currentLeft - (nodeRect.left - wrapperRect.left - offset);
-      track.style.left = targetLeft + 'px';
-    }
+  // ── Render events ──
+  function renderTimeline() {
+    track.innerHTML = '';
+
+    TIMELINE_EVENTS.forEach((event, index) => {
+      // Alternate card above/below
+      const isAbove = index % 2 === 0;
+      const sideClass = isAbove ? 'timeline-event-above' : 'timeline-event-below';
+
+      // Event column
+      const col = document.createElement('div');
+      col.className = `timeline-event ${sideClass}`;
+
+      const badgeClassMap = {
+        milestone: 'milestone',
+        tour: 'tour',
+        show: 'show',
+        event: 'event',
+        external: 'external',
+      };
+      const badgeClass = badgeClassMap[event.type] || 'event';
+
+      // Thumbnail HTML
+      const imgHtml = event.image
+        ? `<img class="timeline-card-img" src="${event.image}" alt="${event.title}" loading="lazy">`
+        : `<div class="timeline-card-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
+
+      // Card HTML
+      const cardHtml = `
+        <div class="timeline-card">
+          ${imgHtml}
+          <div class="timeline-card-body">
+            <div class="timeline-card-date">${formatDate(event.date)}</div>
+            <div class="timeline-card-title">${event.title}</div>
+            <span class="timeline-card-badge ${badgeClass}">${event.typeLabel}</span>
+          </div>
+        </div>
+      `;
+
+      // Check if this event is past today
+      const eventDate = new Date(event.date);
+      const isToday = eventDate.toDateString() === TODAY.toDateString();
+
+      if (isAbove) {
+        // Card above → connector → node → date label
+        col.innerHTML = `
+          ${cardHtml}
+          <div class="timeline-connector timeline-connector-above"></div>
+          <div class="timeline-node"></div>
+          <div class="timeline-node-date">${formatDate(event.date)}${isToday ? ' <span class="timeline-today-marker">今天</span>' : ''}</div>
+        `;
+      } else {
+        // Node → date label → connector → card below
+        col.innerHTML = `
+          <div class="timeline-node-date">${formatDate(event.date)}${isToday ? ' <span class="timeline-today-marker">今天</span>' : ''}</div>
+          <div class="timeline-node"></div>
+          <div class="timeline-connector timeline-connector-below"></div>
+          ${cardHtml}
+        `;
+      }
+
+      // Click handler on the card
+      const cardEl = col.querySelector('.timeline-card');
+      cardEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openModal(event);
+      });
+
+      // Touch handler
+      cardEl.addEventListener('touchend', (e) => {
+        if (!wrapper.classList.contains('dragging')) {
+          openModal(event);
+        }
+      });
+
+      track.appendChild(col);
+    });
   }
 
-  // ── Center on the divider between past and future ──
-  function centerOnDivider() {
-    const dividers = track.querySelectorAll('.timeline-section-label');
-    if (dividers.length > 1) {
-      // Center on the second divider (未来行程)
-      const div = dividers[1];
-      const wrapperRect = wrapper.getBoundingClientRect();
-      const divRect = div.getBoundingClientRect();
-      const offset = wrapperRect.width / 2 - divRect.width / 2;
-      const currentLeft = parseFloat(track.style.left) || 0;
-      const targetLeft = currentLeft - (divRect.left - wrapperRect.left - offset);
-      track.style.left = targetLeft + 'px';
+  // ── Center on the boundary between past and future ──
+  function centerOnMiddle() {
+    const events = track.querySelectorAll('.timeline-event');
+    if (events.length === 0) return;
+    // Find the first future event (after today)
+    let targetIdx = Math.floor(events.length / 2);
+    for (let i = 0; i < TIMELINE_EVENTS.length; i++) {
+      const d = new Date(TIMELINE_EVENTS[i].date);
+      if (d > TODAY) {
+        targetIdx = Math.max(0, i);
+        break;
+      }
     }
+    const target = events[Math.min(targetIdx, events.length - 1)];
+    if (!target) return;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const offset = wrapperRect.width / 2 - targetRect.width / 2;
+    const currentLeft = parseFloat(track.style.left) || 0;
+    const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
+    track.style.left = targetLeft + 'px';
   }
 
   // ── Modal ──
@@ -234,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
       ? `<img class="timeline-modal-img" src="${event.image}" alt="${event.title}">`
       : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
 
-    // Escape newlines in description to <br>
     const descHtml = event.description.replace(/\n/g, '<br>');
 
     modalContent.innerHTML = `
@@ -300,18 +313,14 @@ document.addEventListener('DOMContentLoaded', () => {
     dragDistance = Math.abs(dx);
     setTrackLeft(startLeft + dx);
 
-    // Track velocity for inertia
     const now = performance.now();
     const dt = now - lastTime;
     if (dt > 0) {
       velocity = (clientX - lastX) / dt;
-      // Clamp velocity
       velocity = Math.max(-0.5, Math.min(0.5, velocity));
     }
     lastX = clientX;
     lastTime = now;
-
-    // Hide hint on interaction
     hint.classList.add('dim');
   }
 
@@ -320,35 +329,27 @@ document.addEventListener('DOMContentLoaded', () => {
     isDragging = false;
     wrapper.classList.remove('dragging');
 
-    // If barely dragged, treat as click — don't apply inertia
     if (dragDistance < 5) return;
 
-    // Apply inertia
-    const inertiaV = velocity * 800; // scale factor
+    const inertiaV = velocity * 800;
     if (Math.abs(inertiaV) > 5) {
-      let current = getTrackLeft();
-      const target = current + inertiaV;
-
-      // Animate to target with decay
+      const current = getTrackLeft();
+      const delta = inertiaV;
       const duration = 600;
       const startVal = current;
-      const delta = inertiaV;
       const startTime = performance.now();
 
       function inertiaAnimate(time) {
         const elapsed = time - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        // Ease-out cubic
         const eased = 1 - Math.pow(1 - progress, 3);
         setTrackLeft(startVal + delta * eased);
-
         if (progress < 1) {
           animFrame = requestAnimationFrame(inertiaAnimate);
         }
       }
       animFrame = requestAnimationFrame(inertiaAnimate);
     }
-
     velocity = 0;
   }
 
@@ -377,16 +378,14 @@ document.addEventListener('DOMContentLoaded', () => {
     moveDrag(touch.clientX);
   }, { passive: true });
 
-  wrapper.addEventListener('touchend', (e) => {
+  wrapper.addEventListener('touchend', () => {
     endDrag();
   }, { passive: true });
 
   // ── Zoom ──
   function applyScale(newScale) {
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-    // Scale the track's transform but keep node sizes fixed
     track.style.transform = `scale(${scale})`;
-    // Adjust track height to avoid cutoff
     if (scale < 1) {
       wrapper.style.minHeight = `${100 / scale}vh`;
     } else {
@@ -397,7 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
   zoomIn.addEventListener('click', () => applyScale(scale + 0.15));
   zoomOut.addEventListener('click', () => applyScale(scale - 0.15));
 
-  // Mouse wheel zoom
   wrapper.addEventListener('wheel', (e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -407,13 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Initialize ──
   renderTimeline();
-
-  // Center on the divider after render
   requestAnimationFrame(() => {
-    centerOnDivider();
+    centerOnMiddle();
   });
 
-  // Show hint for a while, then fade
   setTimeout(() => {
     hint.classList.add('dim');
   }, 8000);
