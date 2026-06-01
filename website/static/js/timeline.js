@@ -118,6 +118,7 @@ function formatDate(dateInput) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const track = document.getElementById('timelineTrack');
+  const trackInner = document.getElementById('timelineTrackInner');
   const wrapper = document.getElementById('timelineWrapper');
   const overlay = document.getElementById('timelineModalOverlay');
   const modalContent = document.getElementById('timelineModalContent');
@@ -125,6 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const hint = document.getElementById('timelineHint');
   const zoomIn = document.getElementById('zoomIn');
   const zoomOut = document.getElementById('zoomOut');
+  const dateInput = document.getElementById('timelineDateInput');
+  const dateJumpBtn = document.getElementById('timelineDateJump');
 
   let scale = 1;
   const MIN_SCALE = 0.5;
@@ -132,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Render events ──
   function renderTimeline() {
-    track.innerHTML = '';
+    trackInner.innerHTML = '';
 
     TIMELINE_EVENTS.forEach((event, index) => {
       // Alternate card above/below
@@ -205,13 +208,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      track.appendChild(col);
+      trackInner.appendChild(col);
     });
   }
 
   // ── Center on the boundary between past and future ──
   function centerOnMiddle() {
-    const events = track.querySelectorAll('.timeline-event');
+    const events = trackInner.querySelectorAll('.timeline-event');
     if (events.length === 0) return;
     // Find the first future event (after today)
     let targetIdx = Math.floor(events.length / 2);
@@ -230,6 +233,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentLeft = parseFloat(track.style.left) || 0;
     const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
     track.style.left = targetLeft + 'px';
+  }
+
+  // ── Jump to nearest event for a given date ──
+  function jumpToDate(targetDate) {
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (events.length === 0) return;
+
+    const target = new Date(targetDate);
+    let nearestIdx = 0;
+    let minDiff = Infinity;
+
+    TIMELINE_EVENTS.forEach((ev, i) => {
+      const d = new Date(ev.date);
+      const diff = Math.abs(d - target);
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearestIdx = i;
+      }
+    });
+
+    const targetEl = events[nearestIdx];
+    if (!targetEl) return;
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+    const offset = wrapperRect.width / 2 - targetRect.width / 2;
+    const currentLeft = parseFloat(track.style.left) || 0;
+    const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
+    track.style.left = targetLeft + 'px';
+  }
+
+  // ── Date jump button handler ──
+  if (dateJumpBtn && dateInput) {
+    dateJumpBtn.addEventListener('click', () => {
+      if (dateInput.value) {
+        jumpToDate(dateInput.value);
+      }
+    });
+    dateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && dateInput.value) {
+        jumpToDate(dateInput.value);
+      }
+    });
+    // Set default to today
+    const todayStr = new Date().toISOString().split('T')[0];
+    dateInput.value = todayStr;
   }
 
   // ── Modal ──
@@ -384,7 +433,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Zoom ──
   function applyScale(newScale) {
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-    track.style.transform = `scale(${scale})`;
+    trackInner.style.transform = `scale(${scale})`;
+    // Adjust wrapper height so scaled content doesn't get cropped vertically
     if (scale < 1) {
       wrapper.style.minHeight = `${100 / scale}vh`;
     } else {

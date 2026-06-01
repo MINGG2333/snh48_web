@@ -39,15 +39,24 @@
   position: absolute;
   left: 0;
   top: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.timeline-track-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
   height: 100%;
   display: flex;
   align-items: center;
   padding: 0 50vw;
   will-change: transform;
   transition: none;
+  transform-origin: center center;
 }
 
-.timeline-wrapper.dragging .timeline-track {
+.timeline-wrapper.dragging .timeline-track-inner {
   transition: none !important;
 }
 
@@ -105,19 +114,20 @@
   transform: translate(-50%, -50%) scale(1.2);
 }
 
-/* ── Date label next to node ── */
+/* ── Date label below the node ── */
 .timeline-node-date {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  left: 28px;
+  top: calc(50% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
   white-space: nowrap;
   font-size: 0.65rem;
-  color: var(--text-dim);
-  font-weight: 400;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
   letter-spacing: 0.3px;
   pointer-events: none;
   z-index: 5;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
 }
 
 .timeline-today-marker {
@@ -311,6 +321,39 @@
   border-color: var(--primary);
 }
 
+/* ── Date jump ── */
+.timeline-date-jump-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--glass-border);
+}
+
+.timeline-date-input {
+  width: 130px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  color-scheme: dark;
+}
+
+.timeline-date-input:focus {
+  border-color: var(--primary);
+}
+
+.timeline-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    TIMELINE MODAL
    ═══════════════════════════════════════════════════════════════════════════*/
@@ -441,7 +484,9 @@
   .timeline-card-img, .timeline-card-img-placeholder { height: 65px; }
   .timeline-modal { max-width: 95vw; }
   .timeline-modal-img, .timeline-modal-img-placeholder { height: 160px; }
-  .timeline-zoom-controls { top: 10px; right: 12px; }
+  .timeline-zoom-controls { top: 10px; right: 8px; gap: 4px; }
+  .timeline-date-jump-wrap { margin-left: 2px; padding-left: 4px; }
+  .timeline-date-input { width: 0; padding: 0; border: none; }
   .timeline-zoom-btn { width: 30px; height: 30px; font-size: 0.85rem; }
   .timeline-connector-above,
   .timeline-connector-below { height: 14px; }
@@ -500,7 +545,7 @@
         <!-- Horizontal axis line -->
         <div class="timeline-axis"></div>
 
-        <!-- Zoom controls -->
+        <!-- Zoom controls + date jump -->
         <div class="timeline-zoom-controls">
             <button class="timeline-zoom-btn" id="zoomIn" title="放大">
                 <i class="fas fa-plus"></i>
@@ -508,10 +553,18 @@
             <button class="timeline-zoom-btn" id="zoomOut" title="缩小">
                 <i class="fas fa-minus"></i>
             </button>
+            <div class="timeline-date-jump-wrap">
+                <input type="date" id="timelineDateInput" class="timeline-date-input">
+                <button class="timeline-zoom-btn" id="timelineDateJump" title="跳转到日期">
+                    <i class="fas fa-calendar-day"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Track -->
-        <div class="timeline-track" id="timelineTrack"></div>
+        <div class="timeline-track" id="timelineTrack">
+            <div class="timeline-track-inner" id="timelineTrackInner"></div>
+        </div>
 
         <!-- Hint -->
         <div class="timeline-hint" id="timelineHint">
