@@ -626,10 +626,9 @@ document.addEventListener('DOMContentLoaded', () => {
     track.style.left = targetLeft + 'px';
   }
 
-  // ── Zoom (no visual shift ── transform-origin locked to wrapper center) ──
+  // ── Zoom ──
   function applyScale(newScale) {
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-    updateTransformOrigin();
     trackInner.style.transform = `scale(${scale})`;
     wrapper.style.minHeight = '100vh';
   }
