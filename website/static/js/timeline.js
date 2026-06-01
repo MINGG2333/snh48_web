@@ -227,23 +227,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevDate = preserveCenter && dateInput && dateInput.value ? dateInput.value : null;
     mergedEvents = getFilteredEvents();
     renderTimeline(mergedEvents);
-    // Force layout immediately so DOM positions are valid, then center synchronously
-    void wrapper.offsetHeight;
-    if (prevDate) {
-      centerOnDate(prevDate);
-    } else {
-      // Initial load: center on boundary between past and future
-      const events = trackInner.querySelectorAll('.timeline-event');
-      if (events.length > 0) {
-        let idx = events.length - 1;
-        for (let i = 0; i < events.length; i++) {
-          const d = new Date(events[i].dataset.date);
-          if (d > TODAY) { idx = i; break; }
+    requestAnimationFrame(() => {
+      // Force layout so newly rendered elements have valid positions
+      void wrapper.offsetHeight;
+      if (prevDate) {
+        centerOnDate(prevDate);
+      } else {
+        // Initial load: center on boundary between past and future
+        const events = trackInner.querySelectorAll('.timeline-event');
+        if (events.length > 0) {
+          let idx = events.length - 1;
+          for (let i = 0; i < events.length; i++) {
+            const d = new Date(events[i].dataset.date);
+            if (d > TODAY) { idx = i; break; }
+          }
+          centerOnEvent(idx);
         }
-        centerOnEvent(idx);
       }
-    }
-    updateTransformOrigin();
+      updateTransformOrigin();
+    });
   }
 
   // ── Jump to nearest event for a given date ──
@@ -693,15 +695,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dateInput) dateInput.value = target.dataset.date;
   }
 
-  // ── Zoom (preserve center via date input) ──
+  // ── Zoom (no re-center — transform-origin keeps center stable) ──
   function applyScale(newScale) {
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
     trackInner.style.transform = `scale(${scale})`;
     wrapper.style.minHeight = '100vh';
-    // Re-center on the authoritative date to prevent drift
-    if (dateInput && dateInput.value) {
-      centerOnDate(dateInput.value);
-    }
   }
 
   zoomIn.addEventListener('click', () => applyScale(scale + 0.15));
