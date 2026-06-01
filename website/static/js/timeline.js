@@ -543,6 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isDragging) return;
     isDragging = false;
     wrapper.classList.remove('dragging');
+    hint.classList.add('dim');
 
     if (dragDistance < 5) return;
 
