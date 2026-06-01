@@ -220,14 +220,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const events = trackInner.querySelectorAll('.timeline-event');
     if (events.length === 0) return;
     let targetIdx = Math.floor(events.length / 2);
-    for (let i = 0; i < mergedEvents.length; i++) {
-      const d = new Date(mergedEvents[i].date);
+    // Iterate over DOM columns (one per unique date) to find first future date
+    for (let i = 0; i < events.length; i++) {
+      const d = new Date(events[i].dataset.date);
       if (d > TODAY) {
-        targetIdx = Math.max(0, i);
+        targetIdx = i;
         break;
       }
     }
-    centerOnEvent(Math.min(targetIdx, events.length - 1));
+    centerOnEvent(targetIdx);
   }
 
   // ── Jump to nearest event for a given date ──
