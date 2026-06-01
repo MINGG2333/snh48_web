@@ -1,107 +1,74 @@
 /**
- * SNH48 演艺信息站 - 时光轴 Timeline
+ * SNH48 演艺信息站 - 时光轴 Timeline (Phase 2)
  *
  * 功能：水平拖拽滑动时间轴 + 节点分支引出卡片 + 点击弹出详情弹窗
- * 数据：硬编码陈嘉仪历史事件与未来行程
+ * 数据：手动硬编码事件 + 服务器直播记录(LIVEPUSH) 自动合并
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Event Data
+//  Manual Event Data (硬编码，保留)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const TIMELINE_EVENTS = [
+const MANUAL_EVENTS = [
   {
-    id: 'join',
-    date: '2025-09-23',
-    title: '加入 SNH48 二十三期生',
-    type: 'milestone',
-    typeLabel: '里程碑',
+    id: 'join', source: 'manual', date: '2025-09-23',
+    title: '加入 SNH48 二十三期生', type: 'milestone', typeLabel: '里程碑',
     description: `2025年9月23日，陈嘉仪正式加入 SNH48 二十三期生，时年20岁。\n\n作为 SNH48 新生代成员，陈嘉仪以独特的气质和才艺获得了关注。官方资料显示，她的特长是"反射弧特长"（官方认证反应慢），爱好包括看国漫、唱歌跳舞、舞团练习室视频和玩游戏。\n\n她的 Catch Phrase 是："陈可以是加减乘除的乘，嘉可以是加减乘除的加，仪可以是一二三四的一。"粉丝亲切地称她为"×＋1"或"甲鱼"。`,
-    image: null,
-    icon: 'fa-star',
-    color: '#fbbf24',
+    image: null, icon: 'fa-star',
   },
   {
-    id: 'debut',
-    date: '2025-10-05',
-    title: '星梦剧院首演《B·RISE 梦之门》',
-    type: 'milestone',
-    typeLabel: '里程碑 · 公演',
+    id: 'debut', source: 'manual', date: '2025-10-05',
+    title: '星梦剧院首演《B·RISE 梦之门》', type: 'milestone', typeLabel: '里程碑 · 公演',
     description: `2025年10月5日 & 10月6日 19:00\n📍 SNH48 星梦剧院\n\nSNH48 23期新生公演《B·RISE 梦之门》在星梦剧院盛大首演！这是陈嘉仪登上 SNH48 舞台的出道首秀。\n\n首演中，陈嘉仪与同期23期生李婷在公演中上演了"小学鸡拌嘴名场面"，活泼可爱的互动给粉丝们留下了深刻印象。`,
-    image: null,
-    icon: 'fa-theater-masks',
-    color: '#c084fc',
+    image: null, icon: 'fa-theater-masks',
   },
   {
-    id: 'promotion',
-    date: '2026-02-08',
-    title: '升格 TEAM HII 正式成员',
-    type: 'milestone',
-    typeLabel: '里程碑',
+    id: 'promotion', source: 'manual', date: '2026-02-08',
+    title: '升格 TEAM HII 正式成员', type: 'milestone', typeLabel: '里程碑',
     description: `2026年2月8日，陈嘉仪公演考核通过，正式升格为 SNH48 TEAM HII 正式成员！\n\n同期升格的还有刘思雨。\n\n"What time is it ! combat time ! We are the only one ! Team HII !"\n\n愿她们永远怀抱"闪着光的信念"，守护"发芽的梦想"，在 TEAM HII 的篇章里，亲手摘取属于自己的梦想果实。`,
-    image: null,
-    icon: 'fa-crown',
-    color: '#fbbf24',
+    image: null, icon: 'fa-crown',
   },
   {
-    id: 'work-exhibition',
-    date: '2026-06-04',
-    title: '作品展演暨青春宣言',
-    type: 'event',
-    typeLabel: '行程',
+    id: 'work-exhibition', source: 'manual', date: '2026-06-04',
+    title: '作品展演暨青春宣言', type: 'event', typeLabel: '行程',
     description: `📅 2026年6月4日（星期四）\n🕐 时间待定\n\n作品展演暨青春宣言活动。这是陈嘉仪升格后的一项重要演出活动，将展示她的个人作品和才艺成果。`,
-    image: null,
-    icon: 'fa-microphone-alt',
-    color: '#60a5fa',
+    image: null, icon: 'fa-microphone-alt',
   },
   {
-    id: 'beijing-tour',
-    date: '2026-06-12',
-    title: '北京巡演（11人企划）',
-    type: 'tour',
-    typeLabel: '巡演',
+    id: 'beijing-tour', source: 'manual', date: '2026-06-12',
+    title: '北京巡演（11人企划）', type: 'tour', typeLabel: '巡演',
     description: `📅 2026年6月12日（星期五）\n🕐 时间待定\n📍 北京\n\n11人企划巡演——北京站！陈嘉仪将随 TEAM HII 成员一同踏上北京巡演之旅，为首都的粉丝带来精彩演出。`,
-    image: null,
-    icon: 'fa-bus',
-    color: '#4ade80',
+    image: null, icon: 'fa-bus',
   },
   {
-    id: 'hertz-show',
-    date: '2026-06-14',
-    title: '赫兹2.0公演',
-    type: 'show',
-    typeLabel: '公演',
+    id: 'hertz-show', source: 'manual', date: '2026-06-14',
+    title: '赫兹2.0公演', type: 'show', typeLabel: '公演',
     description: `📅 2026年6月14日（星期日）\n🕐 时间待定\n\n赫兹2.0公演！SNH48 TEAM HII 将在星梦剧院呈现全新版本的赫兹公演，为观众带来视听盛宴。`,
-    image: null,
-    icon: 'fa-music',
-    color: '#c084fc',
+    image: null, icon: 'fa-music',
   },
   {
-    id: 'miluo-external',
-    date: '2026-06-19',
-    title: '湖南汨罗外务',
-    type: 'external',
-    typeLabel: '外务',
+    id: 'miluo-external', source: 'manual', date: '2026-06-19',
+    title: '湖南汨罗外务', type: 'external', typeLabel: '外务',
     description: `📅 2026年6月19日（星期五）\n🕐 时间待定\n📍 湖南汨罗\n\n陈嘉仪将赴湖南汨罗参加外务活动，这是她升格后的首次外务演出，期待她在舞台上的精彩表现！`,
-    image: null,
-    icon: 'fa-plane',
-    color: '#fb923c',
+    image: null, icon: 'fa-plane',
   },
   {
-    id: 'guangzhou-tour',
-    date: '2026-06-28',
-    title: '广州巡演',
-    type: 'tour',
-    typeLabel: '巡演',
+    id: 'guangzhou-tour', source: 'manual', date: '2026-06-28',
+    title: '广州巡演', type: 'tour', typeLabel: '巡演',
     description: `📅 2026年6月28日（星期日）\n🕐 时间待定\n📍 广州\n\n广州巡演！作为巡演系列的最后一站，陈嘉仪将在广州带来精彩的舞台表演，与粉丝们近距离互动。`,
-    image: null,
-    icon: 'fa-bus',
-    color: '#4ade80',
+    image: null, icon: 'fa-bus',
   },
 ];
 
+const BADGE_CLASS_MAP = {
+  milestone: 'milestone', tour: 'tour', show: 'show',
+  event: 'event', external: 'external', live: 'event',
+};
+
 // ── Today's date for comparison ──
 const TODAY = new Date();
+let currentFilter = 'all'; // 'all' | 'manual' | 'room'
+let allLiveEvents = [];   // fetched from API
 
 // ── Format date (top-level so data can reference it) ──
 function formatDate(dateInput) {
@@ -128,87 +95,123 @@ document.addEventListener('DOMContentLoaded', () => {
   const zoomOut = document.getElementById('zoomOut');
   const dateInput = document.getElementById('timelineDateInput');
   const dateJumpBtn = document.getElementById('timelineDateJump');
+  const filterBtns = document.querySelectorAll('.timeline-filter-btn');
 
   let scale = 1;
   const MIN_SCALE = 0.5;
   const MAX_SCALE = 1.8;
+  let mergedEvents = []; // current filtered event list
 
-  // ── Render events ──
-  function renderTimeline() {
+  // ── Group events by date ──
+  function groupByDate(events) {
+    const map = {};
+    events.forEach(ev => {
+      const d = ev.date;
+      if (!map[d]) map[d] = [];
+      map[d].push(ev);
+    });
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+  }
+
+  // ── Get filtered event list ──
+  function getFilteredEvents() {
+    let list = [...MANUAL_EVENTS];
+    if (currentFilter === 'all' || currentFilter === 'room') {
+      list = list.concat(allLiveEvents);
+    }
+    if (currentFilter === 'room') {
+      list = list.filter(e => e.source === 'room');
+    }
+    if (currentFilter === 'manual') {
+      list = list.filter(e => e.source === 'manual');
+    }
+    list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
+    return list;
+  }
+
+  // ── Render events (grouped by date) ──
+  function renderTimeline(eventList) {
     trackInner.innerHTML = '';
+    const groups = groupByDate(eventList);
 
-    TIMELINE_EVENTS.forEach((event, index) => {
-      // Alternate card above/below
-      const isAbove = index % 2 === 0;
+    groups.forEach(([dateStr, events], groupIdx) => {
+      const isAbove = groupIdx % 2 === 0;
       const sideClass = isAbove ? 'timeline-event-above' : 'timeline-event-below';
-
-      // Event column
       const col = document.createElement('div');
       col.className = `timeline-event ${sideClass}`;
+      col.dataset.date = dateStr;
 
-      const badgeClassMap = {
-        milestone: 'milestone',
-        tour: 'tour',
-        show: 'show',
-        event: 'event',
-        external: 'external',
-      };
-      const badgeClass = badgeClassMap[event.type] || 'event';
-
-      // Thumbnail HTML
-      const imgHtml = event.image
-        ? `<img class="timeline-card-img" src="${event.image}" alt="${event.title}" loading="lazy">`
-        : `<div class="timeline-card-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
-
-      // Card HTML
-      const cardHtml = `
-        <div class="timeline-card">
-          ${imgHtml}
-          <div class="timeline-card-body">
-            <div class="timeline-card-date">${formatDate(event.date)}</div>
-            <div class="timeline-card-title">${event.title}</div>
-            <span class="timeline-card-badge ${badgeClass}">${event.typeLabel}</span>
-          </div>
-        </div>
-      `;
-
-      // Check if this event is past today
-      const eventDate = new Date(event.date);
+      const eventDate = new Date(dateStr);
       const isToday = eventDate.toDateString() === TODAY.toDateString();
+      const dateLabel = formatDate(dateStr) + (isToday ? ' <span class="timeline-today-marker">今天</span>' : '');
+
+      // Build card(s) for this date group
+      let cardsHtml = '';
+      events.forEach(ev => {
+        const badgeClass = BADGE_CLASS_MAP[ev.type] || 'event';
+        const hasCover = ev.cover_url || ev.image;
+        const imgHtml = hasCover
+          ? `<img class="timeline-card-img" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy">`
+          : `<div class="timeline-card-img-placeholder"><i class="fas ${ev.icon || 'fa-calendar'}"></i></div>`;
+
+        cardsHtml += `
+          <div class="timeline-card" data-event-id="${ev.id}">
+            ${imgHtml}
+            <div class="timeline-card-body">
+              <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
+              <div class="timeline-card-title">${ev.title}</div>
+              <span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      // Build column: for multiple cards on same day, stack them
+      const cardWrapperHtml = events.length > 1
+        ? `<div class="timeline-card-stack">${cardsHtml}</div>`
+        : cardsHtml;
 
       if (isAbove) {
-        // Card above → connector → node → date label
         col.innerHTML = `
-          ${cardHtml}
+          ${cardWrapperHtml}
           <div class="timeline-connector timeline-connector-above"></div>
           <div class="timeline-node"></div>
-          <div class="timeline-node-date">${formatDate(event.date)}${isToday ? ' <span class="timeline-today-marker">今天</span>' : ''}</div>
+          <div class="timeline-node-date">${dateLabel}</div>
         `;
       } else {
-        // Node → date label → connector → card below
         col.innerHTML = `
-          <div class="timeline-node-date">${formatDate(event.date)}${isToday ? ' <span class="timeline-today-marker">今天</span>' : ''}</div>
+          <div class="timeline-node-date">${dateLabel}</div>
           <div class="timeline-node"></div>
           <div class="timeline-connector timeline-connector-below"></div>
-          ${cardHtml}
+          ${cardWrapperHtml}
         `;
       }
 
-      // Click handler on the card
-      const cardEl = col.querySelector('.timeline-card');
-      cardEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openModal(event);
-      });
-
-      // Touch handler
-      cardEl.addEventListener('touchend', (e) => {
-        if (!wrapper.classList.contains('dragging')) {
-          openModal(event);
-        }
+      // Click handlers on each card
+      col.querySelectorAll('.timeline-card').forEach(cardEl => {
+        const evId = cardEl.dataset.eventId;
+        const ev = events.find(e => e.id === evId);
+        if (!ev) return;
+        cardEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openModal(ev);
+        });
+        cardEl.addEventListener('touchend', (e) => {
+          if (!wrapper.classList.contains('dragging')) openModal(ev);
+        });
       });
 
       trackInner.appendChild(col);
+    });
+  }
+
+  // ── Refresh timeline with current filter ──
+  function refreshTimeline() {
+    mergedEvents = getFilteredEvents();
+    renderTimeline(mergedEvents);
+    requestAnimationFrame(() => {
+      centerOnMiddle();
+      updateTransformOrigin();
     });
   }
 
@@ -217,28 +220,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const events = trackInner.querySelectorAll('.timeline-event');
     if (events.length === 0) return;
     let targetIdx = Math.floor(events.length / 2);
-    for (let i = 0; i < TIMELINE_EVENTS.length; i++) {
-      const d = new Date(TIMELINE_EVENTS[i].date);
+    for (let i = 0; i < mergedEvents.length; i++) {
+      const d = new Date(mergedEvents[i].date);
       if (d > TODAY) {
         targetIdx = Math.max(0, i);
         break;
       }
     }
-    centerOnEvent(targetIdx);
+    centerOnEvent(Math.min(targetIdx, events.length - 1));
   }
 
   // ── Jump to nearest event for a given date ──
   function jumpToDate(targetDate) {
     const target = new Date(targetDate);
+    const events = trackInner.querySelectorAll('.timeline-event');
+    if (events.length === 0) return;
     let nearestIdx = 0;
     let minDiff = Infinity;
-    TIMELINE_EVENTS.forEach((ev, i) => {
-      const d = new Date(ev.date);
+    events.forEach((el, i) => {
+      const d = new Date(el.dataset.date);
       const diff = Math.abs(d - target);
-      if (diff < minDiff) {
-        minDiff = diff;
-        nearestIdx = i;
-      }
+      if (diff < minDiff) { minDiff = diff; nearestIdx = i; }
     });
     centerOnEvent(nearestIdx);
   }
@@ -427,6 +429,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ── Filter buttons ──
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.source;
+      refreshTimeline();
+    });
+  });
+
+  // ── Fetch live data from API ──
+  async function fetchLiveEvents() {
+    try {
+      const resp = await fetch('/api/timeline/live-pushes?limit=500');
+      const data = await resp.json();
+      if (data.success && Array.isArray(data.data)) {
+        allLiveEvents = data.data.map(ev => ({
+          ...ev,
+          source: 'room',
+          image: ev.cover_url || null,
+        }));
+      }
+    } catch (err) {
+      console.warn('[timeline] Failed to fetch live events:', err);
+    }
+    refreshTimeline();
+  }
+
   // ── Date jump button ──
   if (dateJumpBtn) {
     dateJumpBtn.addEventListener('click', () => {
@@ -442,16 +472,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Modal ──
   function openModal(event) {
     const badgeClassMap = {
-      milestone: 'milestone',
-      tour: 'tour',
-      show: 'show',
-      event: 'event',
-      external: 'external',
+      milestone: 'milestone', tour: 'tour', show: 'show',
+      event: 'event', external: 'external', live: 'event',
     };
     const badgeClass = badgeClassMap[event.type] || 'event';
 
-    const imgHtml = event.image
-      ? `<img class="timeline-modal-img" src="${event.image}" alt="${event.title}">`
+    const coverSrc = event.cover_url || event.image;
+    const imgHtml = coverSrc
+      ? `<img class="timeline-modal-img" src="${coverSrc}" alt="${event.title}">`
       : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
 
     const descHtml = event.description.replace(/\n/g, '<br>');
@@ -646,13 +674,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: false });
 
-  // ── Initialize ──
-  renderTimeline();
-  // Apply initial transform immediately so all subsequent zooms are equivalent
+  // ── Initialize: render with manual events first, then fetch live ──
+  refreshTimeline();
   applyScale(1);
-  requestAnimationFrame(() => {
-    centerOnMiddle();
-  });
+  fetchLiveEvents();
 
   setTimeout(() => {
     hint.classList.add('dim');

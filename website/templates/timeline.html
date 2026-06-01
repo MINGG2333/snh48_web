@@ -198,6 +198,54 @@
   top: calc(50% + 7px + 18px);  /* half-node + connector height */
 }
 
+/* ── Same-day card stack ── */
+.timeline-card-stack {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.timeline-event-above .timeline-card-stack {
+  bottom: calc(50% + 7px + 18px);
+}
+
+.timeline-event-below .timeline-card-stack {
+  top: calc(50% + 7px + 18px);
+}
+
+.timeline-card-stack .timeline-card {
+  position: relative;
+  top: auto !important;
+  bottom: auto !important;
+  width: 100%;
+}
+
+.timeline-card-stack .timeline-card-img,
+.timeline-card-stack .timeline-card-img-placeholder {
+  height: 55px;
+}
+
+.timeline-card-stack .timeline-card-body {
+  padding: 6px 10px 8px;
+}
+
+.timeline-card-stack .timeline-card-title {
+  font-size: 0.78rem;
+  -webkit-line-clamp: 1;
+}
+
+.timeline-card-stack .timeline-card-date {
+  font-size: 0.62rem;
+}
+
+.timeline-card-stack .timeline-card-badge {
+  font-size: 0.55rem;
+  padding: 1px 6px;
+  margin-top: 3px;
+}
+
 /* Card thumbnail / placeholder */
 .timeline-card-img {
   width: 100%;
@@ -324,6 +372,54 @@
 .timeline-zoom-btn:hover {
   background: rgba(255, 107, 157, 0.15);
   border-color: var(--primary);
+}
+
+/* ── Source filter bar ── */
+.timeline-filter-bar {
+  position: absolute;
+  top: calc(20px + var(--nav-height));
+  left: 24px;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+
+.timeline-filter-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+.timeline-filter-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-family: inherit;
+  padding: 4px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.timeline-filter-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.timeline-filter-btn.active {
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.2), rgba(192, 132, 252, 0.2));
+  border-color: rgba(255, 107, 157, 0.3);
+  color: var(--text);
 }
 
 /* ── Custom datepicker ── */
@@ -665,6 +761,9 @@
   .timeline-modal { max-width: 95vw; }
   .timeline-modal-img, .timeline-modal-img-placeholder { height: 160px; }
   .timeline-hint { top: calc(50% + 235px); font-size: 0.7rem; }
+  .timeline-filter-bar { top: calc(10px + var(--nav-height)); left: 8px; padding: 3px 8px; gap: 4px; }
+  .timeline-filter-btn { font-size: 0.68rem; padding: 3px 7px; }
+  .timeline-filter-label { font-size: 0.65rem; }
   .timeline-zoom-controls { top: calc(10px + var(--nav-height)); right: 8px; gap: 4px; }
   .timeline-date-jump-wrap { margin-left: 2px; padding-left: 4px; }
   .timeline-date-input { width: 90px; padding: 4px 6px; font-size: 0.72rem; }
@@ -674,6 +773,11 @@
   .timeline-connector-below { height: 14px; }
   .timeline-event-above .timeline-card { bottom: calc(50% + 7px + 14px); }
   .timeline-event-below .timeline-card { top: calc(50% + 7px + 14px); }
+  .timeline-event-above .timeline-card-stack { bottom: calc(50% + 7px + 14px); }
+  .timeline-event-below .timeline-card-stack { top: calc(50% + 7px + 14px); }
+  .timeline-card-stack .timeline-card-img,
+  .timeline-card-stack .timeline-card-img-placeholder { height: 45px; }
+  .timeline-card-stack .timeline-card-body { padding: 5px 8px 8px; }
 }
 </style>
 {% endblock %}
@@ -726,6 +830,14 @@
     <div class="timeline-wrapper" id="timelineWrapper">
         <!-- Horizontal axis line -->
         <div class="timeline-axis"></div>
+
+        <!-- Source filter bar -->
+        <div class="timeline-filter-bar" id="timelineFilterBar">
+            <span class="timeline-filter-label">来源</span>
+            <button class="timeline-filter-btn active" data-source="all">全部</button>
+            <button class="timeline-filter-btn" data-source="manual">手动</button>
+            <button class="timeline-filter-btn" data-source="room">房间</button>
+        </div>
 
         <!-- Zoom controls + date jump -->
         <div class="timeline-zoom-controls">

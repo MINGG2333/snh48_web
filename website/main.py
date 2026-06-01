@@ -299,6 +299,9 @@ app.include_router(track_router)
 from website.balance_api.router import router as balance_router  # CHANGED: 新增余额查询接口
 app.include_router(balance_router)  # CHANGED
 
+from website.timeline_api.router import router as timeline_router
+app.include_router(timeline_router)
+
 
 # ── Security Headers Middleware ─────────────────────────────────────────────
 

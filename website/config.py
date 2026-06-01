@@ -88,6 +88,14 @@ QA_MAX_CONCURRENT_PER_USER = int(os.getenv("QA_MAX_CONCURRENT_PER_USER", "2"))
 PASSWORD_RATE_LIMIT_PER_WINDOW = int(os.getenv("PASSWORD_RATE_LIMIT_PER_WINDOW", "10"))
 PASSWORD_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("PASSWORD_RATE_LIMIT_WINDOW_SECONDS", "300"))
 
+# ── Room Record (直播数据，来自 snh48-fan-hub) ──────────────────────────────
+# 服务器上实际路径：/home/snh48-fan-hub/room_record/
+# 本地开发可设置环境变量 ROOM_RECORD_ROOT 指向本地副本
+ROOM_RECORD_ROOT = os.getenv(
+    "ROOM_RECORD_ROOT",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "room_record"),
+)
+
 # ── Server ─────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
