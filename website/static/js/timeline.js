@@ -684,14 +684,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const events = trackInner.querySelectorAll('.timeline-event');
     if (index < 0 || index >= events.length) return;
     const target = events[index];
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const offset = wrapperRect.width / 2 - targetRect.width / 2;
-    const currentLeft = parseFloat(track.style.left) || 0;
-    const targetLeft = currentLeft - (targetRect.left - wrapperRect.left - offset);
+    // Calculate position from known column widths to avoid transform-scale interference
+    const wrapperW = wrapper.getBoundingClientRect().width;
+    const colW = target.offsetWidth;        // event column width (unscaled)
+    const colMargin = parseInt(getComputedStyle(target).marginLeft) || 12;
+    const step = colW + colMargin * 2;       // full step between column centers
+    // Event i's natural center inside trackInner = 50vw padding + i*step + colW/2
+    // We want this center to align with wrapper center:
+    //   trackLeft + 50vw + index*step + colW/2 = wrapperW / 2
+    const vw50 = wrapperW * 0.5;
+    const targetLeft = wrapperW / 2 - vw50 - index * step - colW / 2;
     track.style.left = targetLeft + 'px';
     updateTransformOrigin();
-    // Update date input directly from the known centered event
     if (dateInput) dateInput.value = target.dataset.date;
   }
 
