@@ -629,6 +629,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }, { passive: false });
 
   // ── Initialize ──
+  // Pre-set transform so first zoom doesn't cause a position jump
+  trackInner.style.transform = 'scale(1)';
   renderTimeline();
   requestAnimationFrame(() => {
     centerOnMiddle();

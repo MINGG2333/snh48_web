@@ -370,7 +370,7 @@
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 107, 157, 0.2);
   border-radius: 12px;
-  padding: 12px;
+  padding: 8px 10px 6px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 107, 157, 0.1);
   z-index: 100;
   opacity: 0;
@@ -390,7 +390,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .datepicker-nav {
@@ -441,14 +441,14 @@
 }
 
 .datepicker-weekdays span {
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 /* Day grid */
 .datepicker-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 1px;
 }
 
 .datepicker-day {
@@ -506,26 +506,25 @@
 .datepicker-footer {
   display: flex;
   justify-content: center;
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--glass-border);
 }
 
 .datepicker-today-btn {
   background: transparent;
-  border: 1px solid var(--glass-border);
+  border: none;
   color: var(--accent);
-  font-size: 0.75rem;
-  padding: 4px 14px;
-  border-radius: 20px;
+  font-size: 0.72rem;
+  padding: 2px 10px;
+  border-radius: 12px;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s;
 }
 
 .datepicker-today-btn:hover {
-  background: rgba(192, 132, 252, 0.12);
-  border-color: var(--accent);
+  background: rgba(192, 132, 252, 0.1);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
