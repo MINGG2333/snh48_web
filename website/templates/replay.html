@@ -831,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     video.addEventListener('play', updatePlayBtn);
     video.addEventListener('pause', updatePlayBtn);
     video.addEventListener('click', (e) => {
+        e.preventDefault();
         // First click shows controls, second click toggles play/pause
         if (!container.classList.contains('show-controls')) {
             showControls();
