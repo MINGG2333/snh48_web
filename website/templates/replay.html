@@ -86,11 +86,15 @@
   left: 0;
   right: 0;
   padding: 40px 16px 12px;
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(14px);
-  border-top: 1px solid rgba(255,255,255,0.08);
-  opacity: 1;
+  background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
   z-index: 10;
+}
+
+.player-container:hover .player-controls,
+.player-container.show-controls .player-controls {
+  opacity: 1;
 }
 
 .player-controls-top {
