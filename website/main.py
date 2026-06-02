@@ -161,6 +161,53 @@ async def timeline_page(request: Request):
     )
 
 
+@app.get("/replay/{live_id}", response_class=HTMLResponse)
+async def replay_page(request: Request, live_id: str):
+    """Replay video player page with custom controls."""
+    # Look up replay_url from summary CSV
+    replay_url = ""
+    title = "直播回放"
+    date = ""
+    try:
+        import csv
+        from pathlib import Path
+        csv_paths = [
+            Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "陈嘉仪_161808449" / "summary.csv",
+            Path("/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/summary.csv"),
+        ]
+        for csv_path in csv_paths:
+            if csv_path.exists():
+                with open(csv_path, "r", encoding="utf-8-sig") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        if (row.get("live_id") or "").strip() == live_id:
+                            play_url = (row.get("play_url") or "").strip()
+                            vstatus = (row.get("video_status") or "").strip()
+                            if play_url and vstatus in ("available", "downloaded"):
+                                replay_url = play_url
+                            title = (row.get("title") or "").strip() or "直播回放"
+                            date = (row.get("push_bj") or "").strip()
+                            break
+                break
+    except Exception:
+        pass
+
+    return templates.TemplateResponse(
+        "replay.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+            "replay_url": replay_url or "",
+            "title": title,
+            "date": date,
+        },
+    )
+
+
 @app.get("/scroller-admin", response_class=HTMLResponse)
 async def scroller_admin_page(request: Request):
     """Scroller text management page."""

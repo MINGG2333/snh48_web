@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block title %}直播回放 - {{ site_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.replay-page {
+  padding-top: var(--nav-height);
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 107, 157, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 50% 70%, rgba(192, 132, 252, 0.06) 0%, transparent 60%),
+    var(--bg-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.replay-header {
+  text-align: center;
+  padding: 30px 24px 10px;
+  width: 100%;
+  max-width: 800px;
+}
+
+.replay-header h1 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.replay-header .date {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* ── Player container ── */
+.player-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 10px 24px 24px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 30px rgba(255, 107, 157, 0.08);
+  border: 1px solid var(--glass-border);
+}
+
+.player-container video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+
+/* ── Custom controls overlay ── */
+.player-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 40px 16px 12px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 10;
+}
+
+.player-container:hover .player-controls,
+.player-container.show-controls .player-controls {
+  opacity: 1;
+}
+
+.player-controls-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-progress {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: height 0.2s;
+}
+
+.player-progress:hover { height: 6px; }
+
+.player-progress::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px rgba(255, 107, 157, 0.5);
+  cursor: pointer;
+}
+
+.player-progress::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: none;
+  cursor: pointer;
+}
+
+.player-controls-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.player-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-btn:hover { opacity: 1; }
+
+.player-time {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Loading / error overlay ── */
+.player-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0,0,0,0.6);
+  z-index: 5;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.player-overlay .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,107,157,0.15);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.player-overlay.error {
+  color: #ef4444;
+}
+
+.player-overlay.error i {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+
+.player-overlay.hidden {
+  display: none;
+}
+
+/* ── Info section below player ── */
+.replay-info {
+  width: 100%;
+  max-width: 800px;
+  padding: 0 24px 40px;
+}
+
+.replay-info-card {
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  backdrop-filter: blur(8px);
+}
+
+.replay-info-card h3 {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.replay-info-card p {
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.replay-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+  transition: color 0.2s;
+}
+
+.replay-back-btn:hover { color: var(--primary); }
+
+@media (max-width: 768px) {
+  .replay-header h1 { font-size: 1.1rem; }
+  .player-container { border-radius: 0; border-left: none; border-right: none; }
+}
+</style>
+{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/timeline" class="nav-logo">
+            <i class="fas fa-arrow-left"></i> 时光轴
+        </a>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<main class="replay-page">
+    <div class="replay-header">
+        <h1>{{ title }}</h1>
+        <div class="date">{{ date }}</div>
+    </div>
+
+    <div class="player-container" id="playerContainer">
+        <video id="replayVideo" playsinline></video>
+
+        <!-- Loading overlay -->
+        <div class="player-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <span>加载中...</span>
+        </div>
+
+        <!-- Error overlay -->
+        <div class="player-overlay error hidden" id="errorOverlay">
+            <i class="fas fa-exclamation-circle"></i>
+            <span>无法加载回放</span>
+            <a href="{{ replay_url }}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);font-size:0.85rem;margin-top:8px;">直接打开视频源</a>
+        </div>
+
+        <!-- Controls -->
+        <div class="player-controls" id="playerControls">
+            <div class="player-controls-top">
+                <input type="range" class="player-progress" id="progressBar" value="0" min="0" max="100" step="0.1">
+            </div>
+            <div class="player-controls-bottom">
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <button class="player-btn" id="playBtn"><i class="fas fa-play"></i></button>
+                    <span class="player-time" id="timeDisplay">0:00 / 0:00</span>
+                </div>
+                <button class="player-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="replay-info">
+        <div class="replay-info-card">
+            <h3><i class="fas fa-info-circle"></i> 直播信息</h3>
+            <p>{{ title }}</p>
+            <p style="color:var(--text-dim);font-size:0.85rem;margin-top:4px;">{{ date }}</p>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const video = document.getElementById('replayVideo');
+    const playBtn = document.getElementById('playBtn');
+    const progressBar = document.getElementById('progressBar');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const container = document.getElementById('playerContainer');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const errorOverlay = document.getElementById('errorOverlay');
+    const controls = document.getElementById('playerControls');
+
+    const replayUrl = '{{ replay_url|safe }}';
+    let isPlaying = false;
+
+    function formatTime(s) {
+        if (isNaN(s)) return '0:00';
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${String(sec).padStart(2, '0')}`;
+    }
+
+    function updatePlayBtn() {
+        playBtn.innerHTML = video.paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+    }
+
+    // Show controls on video tap/mouse move
+    let controlsTimer;
+    function showControls() {
+        controls.parentElement.classList.add('show-controls');
+        clearTimeout(controlsTimer);
+        controlsTimer = setTimeout(() => {
+            if (!video.paused) controls.parentElement.classList.remove('show-controls');
+        }, 3000);
+    }
+    container.addEventListener('mousemove', showControls);
+    container.addEventListener('touchstart', showControls);
+
+    // Try HLS first, fallback to direct source
+    function loadVideo(url) {
+        if (url.includes('.m3u8') && Hls && Hls.isSupported()) {
+            const hls = new Hls({ xhrSetup: (xhr) => {
+                xhr.withCredentials = false;
+            }});
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                loadingOverlay.classList.add('hidden');
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    loadingOverlay.classList.add('hidden');
+                    errorOverlay.classList.remove('hidden');
+                }
+            });
+        } else if (url) {
+            video.src = url;
+            video.addEventListener('loadedmetadata', () => {
+                loadingOverlay.classList.add('hidden');
+            });
+            video.addEventListener('error', () => {
+                loadingOverlay.classList.add('hidden');
+                errorOverlay.classList.remove('hidden');
+            });
+        } else {
+            loadingOverlay.classList.add('hidden');
+            errorOverlay.classList.remove('hidden');
+        }
+    }
+
+    loadVideo(replayUrl);
+
+    // Play/Pause
+    playBtn.addEventListener('click', () => {
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
+        }
+    });
+
+    video.addEventListener('play', updatePlayBtn);
+    video.addEventListener('pause', updatePlayBtn);
+    video.addEventListener('click', () => {
+        if (video.paused) video.play(); else video.pause();
+    });
+
+    // Progress bar
+    video.addEventListener('timeupdate', () => {
+        if (video.duration) {
+            progressBar.value = (video.currentTime / video.duration) * 100;
+            timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+        }
+    });
+
+    progressBar.addEventListener('input', () => {
+        if (video.duration) {
+            video.currentTime = (progressBar.value / 100) * video.duration;
+        }
+    });
+
+    // Fullscreen
+    fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+            container.requestFullscreen?.();
+        } else {
+            document.exitFullscreen?.();
+        }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'k') {
+            e.preventDefault();
+            playBtn.click();
+        }
+        if (e.key === 'f') fullscreenBtn.click();
+        if (e.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 10);
+        if (e.key === 'ArrowRight') video.currentTime = Math.min(video.duration, video.currentTime + 10);
+    });
+});
+</script>
+{% endblock %}

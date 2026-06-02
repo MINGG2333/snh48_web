@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="timeline-modal-date">${formatDate(event.date)}</div>
         <div class="timeline-modal-title">${event.title}</div>
         <span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>
-        ${event.has_replay && event.replay_url ? `<a href="${event.replay_url}" target="_blank" rel="noopener noreferrer" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
+        ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
     `;
