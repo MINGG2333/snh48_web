@@ -50,16 +50,6 @@
   transition: all 0.3s ease;
 }
 
-/* ── Fullscreen behavior (controls auto-hide) ── */
-.player-container.fullscreen-active .player-controls {
-  opacity: 0;
-  pointer-events: none;
-}
-.player-container.fullscreen-active.show-controls .player-controls {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 /* ── CSS fullscreen fallback (when requestFullscreen API unavailable) ── */
 .player-container.fullscreen-fallback {
   position: fixed;
@@ -116,17 +106,14 @@
   right: 0;
   padding: 40px 16px 12px;
   background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
-  opacity: 1;
+  opacity: 0;
+  pointer-events: none;
   z-index: 20;
   transition: opacity 0.4s ease;
 }
 
-/* Controls auto-hide: only in fullscreen mode */
-.player-container.fullscreen-active .player-controls {
-  opacity: 0;
-  pointer-events: none;
-}
-.player-container.fullscreen-active.show-controls .player-controls {
+/* Show controls when .show-controls is on the container */
+.player-container.show-controls .player-controls {
   opacity: 1;
   pointer-events: auto;
 }
@@ -637,7 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3000);
     }
     container.addEventListener('mousemove', showControls);
-    container.addEventListener('touchstart', showControls);
     container.addEventListener('click', showControls);
 
     // Try HLS first, fallback to direct source
@@ -677,6 +663,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDanmuButton();
     updateDanmuSettingsDisplay();
     initializeSliderProgress();
+    // Show controls initially, auto-hide after 3s
+    showControls();
 
 
     function clearActiveDanmu() {
@@ -842,7 +830,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     video.addEventListener('play', updatePlayBtn);
     video.addEventListener('pause', updatePlayBtn);
-    video.addEventListener('click', () => {
+    video.addEventListener('click', (e) => {
+        // First click shows controls, second click toggles play/pause
+        if (!container.classList.contains('show-controls')) {
+            showControls();
+            return;
+        }
         if (video.paused) video.play(); else video.pause();
     });
 
