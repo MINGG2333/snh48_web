@@ -202,7 +202,10 @@
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.16);
+  background: linear-gradient(90deg, var(--primary), var(--accent)), rgba(255,255,255,0.16);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  background-position: left;
   outline: none;
   border: none;
 }
@@ -550,8 +553,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateDanmuButton() {
         if (!danmuToggleBtn) return;
-        danmuToggleBtn.innerHTML = danmuEnabled ? '<i class="fas fa-comments"></i>' : '<i class="fas fa-comments-slash"></i>';
-        danmuToggleBtn.style.opacity = danmuEnabled ? '1' : '0.55';
+        danmuToggleBtn.innerHTML = danmuEnabled ? '<i class="fas fa-comments"></i>' : '<i class="fas fa-ban"></i>';
+        danmuToggleBtn.style.opacity = '1';
+        danmuToggleBtn.style.color = danmuEnabled ? '#fff' : 'rgba(255,255,255,0.65)';
     }
 
     function updateDanmuSettingsDisplay() {
@@ -654,6 +658,8 @@ document.addEventListener('DOMContentLoaded', () => {
         danmuOpacityRange.addEventListener('input', () => {
             danmuOpacity = Number(danmuOpacityRange.value) / 100;
             updateDanmuSettingsDisplay();
+            const pct = (danmuOpacityRange.value - danmuOpacityRange.min) / (danmuOpacityRange.max - danmuOpacityRange.min) * 100;
+            danmuOpacityRange.style.backgroundSize = pct + '% 100%';
         });
     }
 
@@ -661,6 +667,8 @@ document.addEventListener('DOMContentLoaded', () => {
         danmuSpeedRange.addEventListener('input', () => {
             danmuSpeedFactor = Number(danmuSpeedRange.value) / 100;
             updateDanmuSettingsDisplay();
+            const pct = (danmuSpeedRange.value - danmuSpeedRange.min) / (danmuSpeedRange.max - danmuSpeedRange.min) * 100;
+            danmuSpeedRange.style.backgroundSize = pct + '% 100%';
         });
     }
 
