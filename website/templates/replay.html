@@ -534,6 +534,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let danmuOpacity = 0.9;
     let danmuSpeedFactor = 1.0;
 
+    // Initialize slider progress colors on page load
+    function initializeSliderProgress() {
+        if (danmuOpacityRange) {
+            const opacityPct = (danmuOpacityRange.value - danmuOpacityRange.min) / (danmuOpacityRange.max - danmuOpacityRange.min) * 100;
+            danmuOpacityRange.style.backgroundSize = opacityPct + '% 100%';
+        }
+        if (danmuSpeedRange) {
+            const speedPct = (danmuSpeedRange.value - danmuSpeedRange.min) / (danmuSpeedRange.max - danmuSpeedRange.min) * 100;
+            danmuSpeedRange.style.backgroundSize = speedPct + '% 100%';
+        }
+    }
+
     function formatTime(s) {
         if (isNaN(s)) return '0:00';
         const m = Math.floor(s / 60);
@@ -628,6 +640,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDanmuData();
     updateDanmuButton();
     updateDanmuSettingsDisplay();
+    initializeSliderProgress();
+
 
     function clearActiveDanmu() {
         const bullets = danmuLayer ? danmuLayer.querySelectorAll('.danmu-item') : [];
