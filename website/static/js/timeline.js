@@ -63,12 +63,14 @@ const MANUAL_EVENTS = [
 const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
   event: 'event', external: 'external', live: 'event',
+  公演: 'show', 外务: 'external', 见面会: 'event', 其他: 'event',
 };
 
 // ── Today's date for comparison ──
 const TODAY = new Date();
-let currentFilter = 'all'; // 'all' | 'manual' | 'room'
+let currentFilter = 'all'; // 'all' | 'manual' | 'room' | 'assistant'
 let allLiveEvents = [];   // fetched from API
+let allScheduleEvents = []; // fetched from schedule API
 
 // ── Format date (top-level so data can reference it) ──
 function formatDate(dateInput) {
@@ -116,14 +118,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Get filtered event list ──
   function getFilteredEvents() {
     let list = [...MANUAL_EVENTS];
-    if (currentFilter === 'all' || currentFilter === 'room') {
+    if (currentFilter === 'all' || currentFilter === 'room' || currentFilter === 'assistant') {
       list = list.concat(allLiveEvents);
+    }
+    if (currentFilter === 'all' || currentFilter === 'assistant') {
+      list = list.concat(allScheduleEvents);
     }
     if (currentFilter === 'room') {
       list = list.filter(e => e.source === 'room');
     }
     if (currentFilter === 'manual') {
       list = list.filter(e => e.source === 'manual');
+    }
+    if (currentFilter === 'assistant') {
+      list = list.filter(e => e.source === 'assistant');
     }
     list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
     return list;
@@ -163,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="timeline-card-title">${ev.title}</div>
               <span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
+              ${ev.source === 'assistant' ? '<span class="timeline-card-badge assistant" style="margin-left:4px;"><i class="fas fa-robot"></i> 小助理</span>' : ''}
               ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
             </div>
           </div>
@@ -459,6 +468,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ── Fetch schedule data from API ──
+  async function fetchScheduleEvents() {
+    try {
+      const resp = await fetch('/api/timeline/schedule');
+      const data = await resp.json();
+      if (data.success && Array.isArray(data.data)) {
+        allScheduleEvents = data.data.map(ev => ({
+          ...ev,
+          source: 'assistant',
+        }));
+      }
+    } catch (err) {
+      console.warn('[timeline] Failed to fetch schedule events:', err);
+    }
+  }
+
   // ── Fetch live data from API ──
   async function fetchLiveEvents() {
     try {
@@ -512,6 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="timeline-modal-title">${event.title}</div>
         <span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
+        ${event.source === 'assistant' ? `<span class="timeline-modal-badge assistant" style="margin-left:0;"><i class="fas fa-robot"></i> 小助理</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
@@ -724,10 +750,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Initialize: wait for all data, then render once ──
   const loadingEl = document.getElementById('timelineLoading');
-  // Start fetching live events
-  const fetchPromise = fetchLiveEvents();
-  // Wait for fetch to complete, then render everything together
-  fetchPromise.then(() => {
+  // Fetch all data sources in parallel
+  Promise.all([
+    fetchLiveEvents(),
+    fetchScheduleEvents(),
+  ]).then(() => {
     refreshTimeline();
     applyScale(1);
     if (loadingEl) loadingEl.classList.add('hidden');

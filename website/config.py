@@ -96,6 +96,13 @@ LIVE_PUSH_REPLAY_ROOT = os.getenv(
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "live_push_replays"),
 )
 
+# ── Schedule CSV (行程表，由 schedule_monitor.py 生成) ──────────────────────
+# 服务器上：/home/snh48-fan-hub/schedule_record/schedule.csv
+SCHEDULE_CSV_PATH = os.getenv(
+    "SCHEDULE_CSV_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "schedule.csv"),
+)
+
 # ── Server ─────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))

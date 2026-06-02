@@ -312,4 +312,89 @@ def get_live_danmu(live_id: str = Query(..., min_length=1)):
     }
 
 
+# ── Schedule (行程表) ─────────────────────────────────────────────────────
+
+TYPE_LABEL_MAP = {
+    "公演": "公演",
+    "外务": "外务",
+    "见面会": "见面会",
+    "其他": "其他",
+}
+
+
+def read_schedule() -> List[Dict[str, Any]]:
+    """Read schedule.csv, return list of timeline-ready event dicts."""
+    csv_path_str = cfg.SCHEDULE_CSV_PATH
+    if not csv_path_str:
+        return []
+
+    csv_path = Path(csv_path_str)
+    # Also try the server path
+    if not csv_path.exists():
+        csv_path = Path("/home/snh48-fan-hub/schedule_record/schedule.csv")
+    if not csv_path.exists():
+        return []
+
+    records = []
+    try:
+        with open(csv_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                date_str = (row.get("date") or "").strip()
+                if not date_str:
+                    continue
+
+                # Skip deleted entries
+                is_deleted = (row.get("delete") or "").strip()
+                if is_deleted:
+                    continue
+
+                name = (row.get("name") or "").strip()
+                event_type = (row.get("type") or "其他").strip()
+                time_str = (row.get("time") or "").strip()
+                type_label = TYPE_LABEL_MAP.get(event_type, "其他")
+
+                # Build description
+                desc_parts = [f"📅 {date_str}"]
+                if time_str:
+                    desc_parts.append(f"🕐 {time_str}")
+                desc_parts.append(f"\n\n{name}")
+
+                title = name
+                if time_str:
+                    title = f"{name} {time_str}"
+
+                records.append({
+                    "id": f"sched_{date_str}_{name}_{event_type}",
+                    "date": date_str,
+                    "datetime": f"{date_str} {time_str}" if time_str else f"{date_str} 00:00:00",
+                    "title": title,
+                    "type": event_type,
+                    "typeLabel": type_label,
+                    "source": "assistant",
+                    "description": "\n".join(desc_parts),
+                    "cover_url": "",
+                    "icon": "fa-calendar-check",
+                })
+    except (IOError, csv.Error) as e:
+        print(f"[timeline_api] Error reading schedule CSV: {e}")
+        return []
+
+    # Sort by date
+    records.sort(key=lambda r: r["date"])
+    return records
+
+
+@router.get("/schedule")
+def get_schedule():
+    """Return schedule records as timeline-ready event list."""
+    records = read_schedule()
+    return {
+        "success": True,
+        "data": records,
+        "total": len(records),
+        "member": MEMBER_NAME,
+    }
+
+
 
