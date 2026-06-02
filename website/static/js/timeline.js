@@ -29,24 +29,6 @@ const MANUAL_EVENTS = [
     image: null, icon: 'fa-crown',
   },
   {
-    id: 'work-exhibition', source: 'manual', date: '2026-06-04',
-    title: '作品展演暨青春宣言', type: 'event', typeLabel: '行程',
-    description: `📅 2026年6月4日（星期四）\n🕐 时间待定\n\n作品展演暨青春宣言活动。这是陈嘉仪升格后的一项重要演出活动，将展示她的个人作品和才艺成果。`,
-    image: null, icon: 'fa-microphone-alt',
-  },
-  {
-    id: 'beijing-tour', source: 'manual', date: '2026-06-12',
-    title: '北京巡演（11人企划）', type: 'tour', typeLabel: '巡演',
-    description: `📅 2026年6月12日（星期五）\n🕐 时间待定\n📍 北京\n\n11人企划巡演——北京站！陈嘉仪将随 TEAM HII 成员一同踏上北京巡演之旅，为首都的粉丝带来精彩演出。`,
-    image: null, icon: 'fa-bus',
-  },
-  {
-    id: 'hertz-show', source: 'manual', date: '2026-06-14',
-    title: '赫兹2.0公演', type: 'show', typeLabel: '公演',
-    description: `📅 2026年6月14日（星期日）\n🕐 时间待定\n\n赫兹2.0公演！SNH48 TEAM HII 将在星梦剧院呈现全新版本的赫兹公演，为观众带来视听盛宴。`,
-    image: null, icon: 'fa-music',
-  },
-  {
     id: 'miluo-external', source: 'manual', date: '2026-06-19',
     title: '湖南汨罗外务', type: 'external', typeLabel: '外务',
     description: `📅 2026年6月19日（星期五）\n🕐 时间待定\n📍 湖南汨罗\n\n陈嘉仪将赴湖南汨罗参加外务活动，这是她升格后的首次外务演出，期待她在舞台上的精彩表现！`,
