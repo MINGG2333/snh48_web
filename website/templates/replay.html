@@ -310,6 +310,55 @@
   line-height: 1.6;
 }
 
+.live-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.live-title {
+  flex: 1 1 60%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-date {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.shortcut-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.shortcut-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shortcut-row kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
 .replay-back-btn {
   display: inline-flex;
   align-items: center;
@@ -401,16 +450,15 @@
     <div class="replay-info">
         <div class="replay-info-card">
             <h3><i class="fas fa-info-circle"></i> 直播信息</h3>
-            <p>{{ title }}</p>
-            <p style="color:var(--text-dim);font-size:0.85rem;margin-top:4px;">{{ date }}</p>
+            <p class="live-meta"><span class="live-title">{{ title }}</span><span class="live-date">{{ date }}</span></p>
         </div>
         <div class="replay-shortcuts">
             <div class="replay-info-card">
                 <h3><i class="fas fa-keyboard"></i> 快捷键</h3>
-                <div style="display:flex;flex-wrap:wrap;gap:8px 16px;font-size:0.82rem;color:var(--text-dim);">
-                    <span><kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">Space</kbd> / <kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">K</kbd> 播放/暂停</span>
-                    <span><kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">F</kbd> 全屏</span>
-                    <span><kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">←</kbd> <kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">→</kbd> 快退/快进 10秒</span>
+                <div class="shortcut-row">
+                    <span><kbd>Space</kbd>/<kbd>K</kbd> 播放/暂停</span>
+                    <span><kbd>F</kbd> 全屏</span>
+                    <span><kbd>←</kbd><kbd>→</kbd> 快退/快进 10秒</span>
                 </div>
             </div>
         </div>
@@ -683,10 +731,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         lastDanmuSyncTime = current;
 
-        while (nextDanmuIndex < danmuItems.length && danmuItems[nextDanmuIndex].time <= current + 0.25) {
-            if (current + 0.1 >= danmuItems[nextDanmuIndex].time) {
-                createDanmuBubble(danmuItems[nextDanmuIndex]);
-            }
+        while (nextDanmuIndex < danmuItems.length && danmuItems[nextDanmuIndex].time <= current + 0.4) {
+            createDanmuBubble(danmuItems[nextDanmuIndex]);
             nextDanmuIndex += 1;
         }
     }
