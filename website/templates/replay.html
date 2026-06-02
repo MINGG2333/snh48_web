@@ -147,6 +147,7 @@
 .player-progress-thumb {
   position: absolute;
   top: 50%;
+  left: 0%;
   width: 18px;
   height: 18px;
   transform: translate(-50%, -50%);
@@ -866,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     video.addEventListener('timeupdate', updateProgress);
     video.addEventListener('timeupdate', syncDanmu);
+    video.addEventListener('loadedmetadata', updateProgress);
     video.addEventListener('seeked', resetDanmuIndex);
 
     function seekFromClientX(clientX) {
