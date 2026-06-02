@@ -202,6 +202,7 @@ async def replay_page(request: Request, live_id: str):
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
             "replay_url": replay_url or "",
+            "live_id": live_id,
             "title": title,
             "date": date,
         },

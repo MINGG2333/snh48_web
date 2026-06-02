@@ -56,6 +56,29 @@
   outline: none;
 }
 
+.danmu-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.danmu-item {
+  position: absolute;
+  white-space: nowrap;
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(0,0,0,0.85);
+  font-size: 0.92rem;
+  font-weight: 600;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.danmu-name {
+  color: #ffcd82;
+  margin-right: 5px;
+}
+
 /* ── Custom controls overlay ── */
 .player-controls {
   position: absolute;
@@ -262,6 +285,7 @@
 <main class="replay-page">
     <div class="player-container" id="playerContainer">
         <video id="replayVideo" playsinline></video>
+        <div class="danmu-layer" id="danmuLayer"></div>
 
         <!-- Loading overlay -->
         <div class="player-overlay" id="loadingOverlay">
@@ -333,8 +357,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const controls = document.getElementById('playerControls');
 
     const replayUrl = '{{ replay_url|safe }}';
+    const liveId = '{{ live_id|e }}';
     let isPlaying = false;
     let isDraggingProgress = false;
+    let danmuItems = [];
+    let nextDanmuIndex = 0;
+    let lastDanmuSyncTime = 0;
+    const danmuLayer = document.getElementById('danmuLayer');
 
     function formatTime(s) {
         if (isNaN(s)) return '0:00';
@@ -392,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadVideo(replayUrl);
+    loadDanmuData();
 
     // Random progress thumb icon from available favicons
     const progressThumbIcon = document.getElementById('progressThumbIcon');
@@ -406,6 +436,75 @@ document.addEventListener('DOMContentLoaded', () => {
     const randomFavicon = faviconOptions[Math.floor(Math.random() * faviconOptions.length)];
     if (progressThumbIcon) {
         progressThumbIcon.src = `/static/images/favicons/${randomFavicon}`;
+    }
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function createDanmuBubble(item) {
+        if (!danmuLayer) return;
+        const bubble = document.createElement('div');
+        bubble.className = 'danmu-item';
+        bubble.style.top = `${8 + Math.floor(Math.random() * 72)}%`;
+        bubble.style.left = '100%';
+        bubble.innerHTML = `<span class="danmu-name">${escapeHtml(item.name)}</span>${escapeHtml(item.text)}`;
+        danmuLayer.appendChild(bubble);
+
+        const duration = 10 + Math.random() * 2.5;
+        requestAnimationFrame(() => {
+            bubble.style.opacity = '1';
+            bubble.style.transform = `translateX(-${100 + bubble.clientWidth}px)`;
+            bubble.style.transition = `transform ${duration}s linear, opacity ${duration}s linear`;
+        });
+
+        bubble.addEventListener('transitionend', () => {
+            bubble.remove();
+        });
+    }
+
+    async function loadDanmuData() {
+        if (!liveId) return;
+        try {
+            const response = await fetch(`/api/timeline/danmu?live_id=${encodeURIComponent(liveId)}`);
+            if (!response.ok) return;
+            const json = await response.json();
+            if (json.success && Array.isArray(json.data)) {
+                danmuItems = json.data.sort((a, b) => a.time - b.time);
+                nextDanmuIndex = 0;
+            }
+        } catch (err) {
+            console.warn('加载弹幕失败', err);
+        }
+    }
+
+    function resetDanmuIndex() {
+        if (!danmuItems.length) return;
+        const current = video.currentTime;
+        nextDanmuIndex = danmuItems.findIndex((item) => item.time >= current - 0.2);
+        if (nextDanmuIndex < 0) nextDanmuIndex = danmuItems.length;
+    }
+
+    function syncDanmu() {
+        if (!danmuItems.length || !video.duration) return;
+        const current = video.currentTime;
+
+        if (current < lastDanmuSyncTime - 1) {
+            resetDanmuIndex();
+        }
+        lastDanmuSyncTime = current;
+
+        while (nextDanmuIndex < danmuItems.length && danmuItems[nextDanmuIndex].time <= current + 0.25) {
+            if (current + 0.1 >= danmuItems[nextDanmuIndex].time) {
+                createDanmuBubble(danmuItems[nextDanmuIndex]);
+            }
+            nextDanmuIndex += 1;
+        }
     }
 
     // Play/Pause
@@ -434,6 +533,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     video.addEventListener('timeupdate', updateProgress);
+    video.addEventListener('timeupdate', syncDanmu);
+    video.addEventListener('seeked', resetDanmuIndex);
 
     function seekFromClientX(clientX) {
         const rect = progressWrap.getBoundingClientRect();

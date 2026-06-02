@@ -15,6 +15,8 @@ import csv
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.request import Request, urlopen
+import re
 
 from fastapi import APIRouter, Query
 
@@ -49,6 +51,126 @@ def parse_bj_time(bj_str: str) -> Optional[datetime]:
         return datetime.strptime(bj_str.strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJT)
     except (ValueError, AttributeError):
         return None
+
+
+def _find_summary_row(live_id: str) -> Optional[Dict[str, Any]]:
+    csv_path = _get_summary_csv_path()
+    if not csv_path or not live_id:
+        return None
+
+    try:
+        with open(csv_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if (row.get("live_id") or "").strip() == live_id.strip():
+                    return row
+    except (IOError, csv.Error):
+        return None
+
+    return None
+
+
+def _resolve_danmu_file_path(path_str: str) -> Optional[Path]:
+    if not path_str:
+        return None
+    path = Path(path_str.strip())
+    if path.is_absolute() and path.exists():
+        return path
+
+    candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT) / MEMBER_DIR / path
+    if candidate.exists():
+        return candidate
+
+    candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT) / path
+    if candidate.exists():
+        return candidate
+
+    return None
+
+
+def _read_text_file(path: Path) -> Optional[str]:
+    try:
+        return path.read_text(encoding="utf-8-sig")
+    except OSError:
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
+
+def _read_text_url(url: str) -> Optional[str]:
+    try:
+        request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=15) as response:
+            raw = response.read()
+            return raw.decode("utf-8-sig", errors="ignore")
+    except Exception:
+        return None
+
+
+def parse_pocket_danmu(file_content: str) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    time_regex = re.compile(r"\[(\d+):(\d+):(\d+)\.(\d+)\]")
+
+    for line in file_content.splitlines():
+        if not line.strip():
+            continue
+        match = time_regex.search(line)
+        if not match:
+            continue
+
+        hours = int(match.group(1))
+        minutes = int(match.group(2))
+        seconds = int(match.group(3))
+        milliseconds = int(match.group(4))
+        total_seconds = hours * 3600 + minutes * 60 + seconds + (milliseconds / 1000.0)
+
+        content_part = line[match.end():].strip()
+        nickname = "弹幕"
+        text = content_part
+
+        if '\t' in content_part:
+            parts = content_part.split('\t')
+            if len(parts) >= 2:
+                nickname = parts[0].strip() or nickname
+                text = ''.join(parts[1:]).strip() or text
+        else:
+            spaced_match = re.match(r"^(.+?)\s{2,}(.*)$", content_part)
+            if spaced_match:
+                nickname = spaced_match.group(1).strip() or nickname
+                text = spaced_match.group(2).strip() or text
+            else:
+                fallback = re.split(r"\s+", content_part, maxsplit=1)
+                if len(fallback) >= 2:
+                    nickname = fallback[0].strip() or nickname
+                    text = fallback[1].strip() or text
+
+        result.append({
+            "name": nickname or "弹幕",
+            "text": text,
+            "time": total_seconds,
+            "color": "#ffffff",
+            "border": False,
+            "mode": 0,
+        })
+
+    return result
+
+
+def _get_danmu_text(row: Dict[str, Any]) -> Optional[str]:
+    danmu_local_path = (row.get("danmu_local_path") or "").strip()
+    if danmu_local_path:
+        file_path = _resolve_danmu_file_path(danmu_local_path)
+        if file_path:
+            content = _read_text_file(file_path)
+            if content:
+                return content
+
+    danmu_url = (row.get("danmu_url") or "").strip()
+    if danmu_url:
+        return _read_text_url(danmu_url)
+
+    return None
 
 
 def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
@@ -151,6 +273,35 @@ def get_live_pushes_grouped(limit: int = Query(500, ge=1, le=2000)):
         "data": groups,
         "total": len(records),
         "member": MEMBER_NAME,
+    }
+
+
+@router.get("/danmu")
+def get_live_danmu(live_id: str = Query(..., min_length=1)):
+    """Return danmaku items for the requested live replay."""
+    row = _find_summary_row(live_id)
+    if not row:
+        return {
+            "success": False,
+            "message": "未找到对应的直播 ID 或 summary.csv。",
+            "data": [],
+            "total": 0,
+        }
+
+    danmu_text = _get_danmu_text(row)
+    if not danmu_text:
+        return {
+            "success": True,
+            "message": "未找到弹幕文件或弹幕文件为空。",
+            "data": [],
+            "total": 0,
+        }
+
+    danmu_items = parse_pocket_danmu(danmu_text)
+    return {
+        "success": True,
+        "data": danmu_items,
+        "total": len(danmu_items),
     }
 
 
