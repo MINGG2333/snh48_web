@@ -163,18 +163,23 @@ document.addEventListener('DOMContentLoaded', () => {
           : `<div class="timeline-card-img-placeholder"><i class="fas ${ev.icon || 'fa-calendar'}"></i></div>`;
 
         const imgClass = hasCover ? 'timeline-card-img loading' : 'timeline-card-img-placeholder';
+        // Check for title keyword badges (replace default type badge if matched)
+        const title_ = ev.title || '';
+        const keywordBadge =
+          title_.includes('助演') ? 'show|助演' :
+          title_.includes('首演') ? 'milestone|首演' :
+          title_.includes('巡演') ? 'tour|巡演' : '';
+        const showTypeBadge = !keywordBadge;
         cardsHtml += `
           <div class="timeline-card" data-event-id="${ev.id}">
             ${hasCover ? `<img class="${imgClass}" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
             <div class="timeline-card-body">
               <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
               <div class="timeline-card-title">${ev.title}</div>
-              <span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>
+              ${showTypeBadge ? `<span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>` : ''}
+              ${keywordBadge ? `<span class="timeline-card-badge ${keywordBadge.split('|')[0]}" style="margin-left:4px;">${keywordBadge.split('|')[1]}</span>` : ''}
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
               ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
-              ${(ev.title || '').includes('助演') ? '<span class="timeline-card-badge show" style="margin-left:4px;">助演</span>' : ''}
-              ${(ev.title || '').includes('首演') ? '<span class="timeline-card-badge milestone" style="margin-left:4px;">首演</span>' : ''}
-              ${(ev.title || '').includes('巡演') ? '<span class="timeline-card-badge tour" style="margin-left:4px;">巡演</span>' : ''}
             </div>
           </div>
         `;
@@ -525,6 +530,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const badgeClass = badgeClassMap[event.type] || 'event';
 
+    // Modal: also replace type badge with keyword badge if matched
+    const title_ = event.title || '';
+    const modalKeywordBadge =
+      title_.includes('助演') ? 'show|助演' :
+      title_.includes('首演') ? 'milestone|首演' :
+      title_.includes('巡演') ? 'tour|巡演' : '';
+    const showModalTypeBadge = !modalKeywordBadge;
+
     const coverSrc = event.cover_url || event.image;
     const imgHtml = coverSrc
       ? `<img class="timeline-modal-img" src="${coverSrc}" alt="${event.title}">`
@@ -537,7 +550,8 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="timeline-modal-body">
         <div class="timeline-modal-date">${formatDate(event.date)}</div>
         <div class="timeline-modal-title">${event.title}</div>
-        <span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>
+        ${showModalTypeBadge ? `<span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>` : ''}
+        ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         <div class="timeline-modal-desc">${descHtml}</div>
