@@ -171,8 +171,10 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="timeline-card-title">${ev.title}</div>
               <span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
-              ${ev.source === 'assistant' ? '<span class="timeline-card-badge assistant" style="margin-left:4px;"><i class="fas fa-robot"></i> 小助理</span>' : ''}
               ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
+              ${(ev.title || '').includes('助演') ? '<span class="timeline-card-badge show" style="margin-left:4px;">助演</span>' : ''}
+              ${(ev.title || '').includes('首演') ? '<span class="timeline-card-badge milestone" style="margin-left:4px;">首演</span>' : ''}
+              ${(ev.title || '').includes('巡演') ? '<span class="timeline-card-badge tour" style="margin-left:4px;">巡演</span>' : ''}
             </div>
           </div>
         `;
@@ -537,7 +539,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="timeline-modal-title">${event.title}</div>
         <span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
-        ${event.source === 'assistant' ? `<span class="timeline-modal-badge assistant" style="margin-left:0;"><i class="fas fa-robot"></i> 小助理</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
