@@ -116,10 +116,9 @@
   height: 18px;
   transform: translate(-50%, -50%);
   background: var(--primary);
-  border: 2px solid #fff;
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(255, 107, 157, 0.5);
-  opacity: 0.6;
+  opacity: 0.99;
   transition: opacity 0.2s;
   pointer-events: none;
   display: flex;
@@ -261,11 +260,6 @@
 
 {% block content %}
 <main class="replay-page">
-    <div class="replay-header">
-        <h1>{{ title }}</h1>
-        <div class="date">{{ date }}</div>
-    </div>
-
     <div class="player-container" id="playerContainer">
         <video id="replayVideo" playsinline></video>
 
