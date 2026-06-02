@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
               <div class="timeline-card-title">${ev.title}</div>
               <span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>
+              ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
               ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
             </div>
           </div>
@@ -468,6 +469,8 @@ document.addEventListener('DOMContentLoaded', () => {
           ...ev,
           source: 'room',
           image: ev.cover_url || null,
+          has_danmu: ev.has_danmu || false,
+          danmu_status: ev.danmu_status || '',
         }));
       }
     } catch (err) {
@@ -509,6 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="timeline-modal-date">${formatDate(event.date)}</div>
         <div class="timeline-modal-title">${event.title}</div>
         <span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>
+        ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>

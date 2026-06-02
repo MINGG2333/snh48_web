@@ -206,6 +206,11 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                 if play_url and video_status in ("available", "downloaded"):
                     replay_url = play_url
 
+                const_danmu_local = (row.get("danmu_local_path") or "").strip()
+                const_danmu_url = (row.get("danmu_url") or "").strip()
+                has_danmu = bool(const_danmu_local or const_danmu_url)
+                danmu_status = (row.get("danmu_status") or "").strip() or ("已生成" if has_danmu else "暂无弹幕")
+
                 title = (row.get("title") or "").strip() or f"直播 {dt.strftime('%m/%d %H:%M')}"
 
                 live_id = (row.get("live_id") or "").strip()
@@ -229,6 +234,8 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                     "cover_url": cover_url,
                     "replay_url": replay_url,
                     "has_replay": bool(replay_url),
+                    "has_danmu": has_danmu,
+                    "danmu_status": danmu_status,
                     "icon": "fa-video",
                 })
 

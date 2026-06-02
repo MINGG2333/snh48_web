@@ -36,10 +36,96 @@
 }
 
 /* ── Player container ── */
+.replay-player-grid {
+  width: 100%;
+  max-width: 1200px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  gap: 22px;
+  align-items: start;
+  margin: 10px 24px 24px;
+}
+
+.player-column {
+  width: 100%;
+}
+
+.danmu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.danmu-panel-card {
+  padding: 16px 18px;
+}
+
+.danmu-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.danmu-status {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+}
+
+.danmu-status.available {
+  color: #60a5fa;
+}
+
+.danmu-status.missing {
+  color: #9ca3af;
+}
+
+.danmu-list {
+  max-height: 450px;
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.danmu-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.danmu-row-time {
+  color: rgba(255,255,255,0.65);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.danmu-row-user {
+  color: #facc15;
+  font-size: 0.88rem;
+  min-width: 90px;
+}
+
+.danmu-row-text {
+  color: #fff;
+  font-size: 0.92rem;
+  line-height: 1.4rem;
+}
+
+.danmu-empty,
+.danmu-note {
+  color: rgba(255,255,255,0.65);
+  font-size: 0.88rem;
+  padding: 12px 0;
+}
+
 .player-container {
   width: 100%;
-  max-width: 800px;
-  margin: 10px 24px 24px;
   border-radius: var(--radius);
   overflow: hidden;
   background: #000;
@@ -266,6 +352,8 @@
 @media (max-width: 768px) {
   .replay-header h1 { font-size: 1.1rem; }
   .player-container { border-radius: 0; border-left: none; border-right: none; }
+  .replay-player-grid { grid-template-columns: 1fr; gap: 16px; }
+  .danmu-panel { width: 100%; }
   .replay-shortcuts { display: none; }
 }
 </style>
@@ -283,11 +371,13 @@
 
 {% block content %}
 <main class="replay-page">
-    <div class="player-container" id="playerContainer">
-        <video id="replayVideo" playsinline></video>
-        <div class="danmu-layer" id="danmuLayer"></div>
+    <div class="replay-player-grid">
+        <div class="player-column">
+            <div class="player-container" id="playerContainer">
+                <video id="replayVideo" playsinline></video>
+                <div class="danmu-layer" id="danmuLayer"></div>
 
-        <!-- Loading overlay -->
+                <!-- Loading overlay -->
         <div class="player-overlay" id="loadingOverlay">
             <div class="spinner"></div>
             <span>加载中...</span>
@@ -318,6 +408,13 @@
                 <button class="player-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
             </div>
         </div>
+        <aside class="danmu-panel">
+            <div class="replay-info-card danmu-panel-card">
+                <div class="danmu-panel-header"><i class="fas fa-comment-dots"></i> 弹幕列表</div>
+                <div class="danmu-status" id="danmuStatus">正在加载弹幕...</div>
+                <div class="danmu-list" id="danmuList"><div class="danmu-empty">弹幕加载后，时间戳、用户名和消息会显示在此处。</div></div>
+            </div>
+        </aside>
     </div>
 
     <div class="replay-info">
@@ -363,7 +460,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let danmuItems = [];
     let nextDanmuIndex = 0;
     let lastDanmuSyncTime = 0;
+    let danmuSyncInterval = null;
     const danmuLayer = document.getElementById('danmuLayer');
+    const danmuStatusEl = document.getElementById('danmuStatus');
+    const danmuListEl = document.getElementById('danmuList');
 
     function formatTime(s) {
         if (isNaN(s)) return '0:00';
@@ -447,6 +547,33 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#39;');
     }
 
+    function renderDanmuList() {
+        if (!danmuStatusEl || !danmuListEl) return;
+        if (!danmuItems.length) {
+            danmuStatusEl.textContent = '当前没有可用弹幕数据。';
+            danmuStatusEl.className = 'danmu-status missing';
+            danmuListEl.innerHTML = '<div class="danmu-empty">暂无弹幕。</div>';
+            return;
+        }
+
+        danmuStatusEl.textContent = `已加载 ${danmuItems.length} 条弹幕。`; 
+        danmuStatusEl.className = 'danmu-status available';
+
+        const maxShow = 500;
+        const itemsToShow = danmuItems.slice(0, maxShow);
+        danmuListEl.innerHTML = itemsToShow.map(item => `
+            <div class="danmu-row">
+                <span class="danmu-row-time">${formatTime(item.time)}</span>
+                <span class="danmu-row-user">${escapeHtml(item.name)}</span>
+                <span class="danmu-row-text">${escapeHtml(item.text)}</span>
+            </div>
+        `).join('');
+
+        if (danmuItems.length > maxShow) {
+            danmuListEl.innerHTML += '<div class="danmu-note">仅显示前 ' + maxShow + ' 条弹幕，剩余内容请继续向下滚动或在本地查看。</div>';
+        }
+    }
+
     function createDanmuBubble(item) {
         if (!danmuLayer) return;
         const bubble = document.createElement('div');
@@ -469,17 +596,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadDanmuData() {
-        if (!liveId) return;
+        if (!liveId) {
+            if (danmuStatusEl) {
+                danmuStatusEl.textContent = '未识别直播 ID，无法加载弹幕。';
+                danmuStatusEl.className = 'danmu-status missing';
+            }
+            return;
+        }
         try {
             const response = await fetch(`/api/timeline/danmu?live_id=${encodeURIComponent(liveId)}`);
-            if (!response.ok) return;
+            if (!response.ok) {
+                throw new Error('网络请求失败');
+            }
             const json = await response.json();
-            if (json.success && Array.isArray(json.data)) {
+            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
                 danmuItems = json.data.sort((a, b) => a.time - b.time);
                 nextDanmuIndex = 0;
+            } else {
+                danmuItems = [];
             }
         } catch (err) {
             console.warn('加载弹幕失败', err);
+            danmuItems = [];
+        } finally {
+            renderDanmuList();
         }
     }
 
