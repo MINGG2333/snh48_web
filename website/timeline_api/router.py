@@ -361,8 +361,6 @@ def read_schedule() -> List[Dict[str, Any]]:
                 desc_parts.append(f"\n\n{name}")
 
                 title = name
-                if time_str:
-                    title = f"{name} {time_str}"
 
                 records.append({
                     "id": f"sched_{date_str}_{name}_{event_type}",
