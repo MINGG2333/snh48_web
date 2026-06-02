@@ -80,38 +80,57 @@
   gap: 10px;
 }
 
-.player-progress {
+.player-progress-wrap {
   flex: 1;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: rgba(255,255,255,0.2);
-  border-radius: 2px;
-  outline: none;
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
   cursor: pointer;
+}
+
+.player-progress-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.15);
+  position: relative;
+  overflow: hidden;
   transition: height 0.2s;
 }
 
-.player-progress:hover { height: 6px; }
+.player-progress-wrap:hover .player-progress-track { height: 6px; }
 
-.player-progress::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+.player-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.player-progress-thumb {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
   background: var(--primary);
+  border: 2px solid #fff;
+  border-radius: 50%;
   box-shadow: 0 0 8px rgba(255, 107, 157, 0.5);
-  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  color: #fff;
+  padding-left: 1px;
 }
 
-.player-progress::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--primary);
-  border: none;
-  cursor: pointer;
-}
+.player-progress-wrap:hover .player-progress-thumb { opacity: 1; }
 
 .player-controls-bottom {
   display: flex;
@@ -259,13 +278,18 @@
         <div class="player-overlay error hidden" id="errorOverlay">
             <i class="fas fa-exclamation-circle"></i>
             <span>无法加载回放</span>
-            <a href="{{ replay_url }}" target="_blank" rel="noopener noreferrer" style="color:var(--primary);font-size:0.85rem;margin-top:8px;">直接打开视频源</a>
+            <button onclick="location.reload()" style="margin-top:10px;padding:8px 20px;border-radius:20px;border:1px solid var(--glass-border);background:var(--card-bg);color:var(--text);font-size:0.85rem;cursor:pointer;font-family:inherit;"><i class="fas fa-redo"></i> 刷新重试</button>
         </div>
 
         <!-- Controls -->
         <div class="player-controls" id="playerControls">
             <div class="player-controls-top">
-                <input type="range" class="player-progress" id="progressBar" value="0" min="0" max="100" step="0.1">
+                <div class="player-progress-wrap" id="progressWrap">
+                    <div class="player-progress-track">
+                        <div class="player-progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="player-progress-thumb" id="progressThumb"><i class="fas fa-play"></i></div>
+                </div>
             </div>
             <div class="player-controls-bottom">
                 <div style="display:flex;align-items:center;gap:4px;">
@@ -283,6 +307,14 @@
             <p>{{ title }}</p>
             <p style="color:var(--text-dim);font-size:0.85rem;margin-top:4px;">{{ date }}</p>
         </div>
+        <div class="replay-info-card" style="margin-top:12px;">
+            <h3><i class="fas fa-keyboard"></i> 快捷键</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;font-size:0.82rem;color:var(--text-dim);">
+                <span><kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">Space</kbd> / <kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">K</kbd> 播放/暂停</span>
+                <span><kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">F</kbd> 全屏</span>
+                <span><kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">←</kbd> <kbd style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--glass);border:1px solid var(--glass-border);font-size:0.75rem;">→</kbd> 快退/快进 10秒</span>
+            </div>
+        </div>
     </div>
 </main>
 {% endblock %}
@@ -293,7 +325,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('replayVideo');
     const playBtn = document.getElementById('playBtn');
-    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const progressThumb = document.getElementById('progressThumb');
+    const progressWrap = document.getElementById('progressWrap');
     const timeDisplay = document.getElementById('timeDisplay');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
     const container = document.getElementById('playerContainer');
@@ -303,6 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const replayUrl = '{{ replay_url|safe }}';
     let isPlaying = false;
+    let isDraggingProgress = false;
 
     function formatTime(s) {
         if (isNaN(s)) return '0:00';
@@ -376,26 +411,56 @@ document.addEventListener('DOMContentLoaded', () => {
         if (video.paused) video.play(); else video.pause();
     });
 
-    // Progress bar
-    video.addEventListener('timeupdate', () => {
-        if (video.duration) {
-            progressBar.value = (video.currentTime / video.duration) * 100;
+    // Progress bar (custom fill + thumb)
+    function updateProgress() {
+        if (video.duration && !isDraggingProgress) {
+            const pct = (video.currentTime / video.duration) * 100;
+            progressFill.style.width = pct + '%';
+            progressThumb.style.left = pct + '%';
             timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
         }
-    });
+    }
 
-    progressBar.addEventListener('input', () => {
+    video.addEventListener('timeupdate', updateProgress);
+
+    function seekFromClientX(clientX) {
+        const rect = progressWrap.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
         if (video.duration) {
-            video.currentTime = (progressBar.value / 100) * video.duration;
+            video.currentTime = (pct / 100) * video.duration;
         }
-    });
+        progressFill.style.width = pct + '%';
+        progressThumb.style.left = pct + '%';
+    }
 
-    // Fullscreen
+    progressWrap.addEventListener('mousedown', (e) => {
+        isDraggingProgress = true;
+        seekFromClientX(e.clientX);
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (isDraggingProgress) seekFromClientX(e.clientX);
+    });
+    document.addEventListener('mouseup', () => { isDraggingProgress = false; });
+
+    progressWrap.addEventListener('touchstart', (e) => {
+        isDraggingProgress = true;
+        seekFromClientX(e.touches[0].clientX);
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+        if (isDraggingProgress) seekFromClientX(e.touches[0].clientX);
+    }, { passive: true });
+    document.addEventListener('touchend', () => { isDraggingProgress = false; });
+
+    // Fullscreen (with iOS fallback)
     fullscreenBtn.addEventListener('click', () => {
-        if (!document.fullscreenElement) {
-            container.requestFullscreen?.();
-        } else {
-            document.exitFullscreen?.();
+        if (video.webkitEnterFullscreen) {
+            video.webkitEnterFullscreen();
+        } else if (container.requestFullscreen) {
+            if (!document.fullscreenElement) {
+                container.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
         }
     });
 
