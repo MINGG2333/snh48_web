@@ -476,7 +476,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.warn('[timeline] Failed to fetch live events:', err);
     }
-    refreshTimeline(true); // preserve the center that was already set
   }
 
   // ── Date jump button ──
@@ -723,10 +722,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: false });
 
-  // ── Initialize: render with manual events first, then fetch live ──
-  refreshTimeline();
-  applyScale(1);
-  fetchLiveEvents();
+  // ── Initialize: wait for all data, then render once ──
+  const loadingEl = document.getElementById('timelineLoading');
+  // Start fetching live events
+  const fetchPromise = fetchLiveEvents();
+  // Wait for fetch to complete, then render everything together
+  fetchPromise.then(() => {
+    refreshTimeline();
+    applyScale(1);
+    if (loadingEl) loadingEl.classList.add('hidden');
+  });
 
   setTimeout(() => {
     hint.classList.add('dim');

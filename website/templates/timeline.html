@@ -58,6 +58,30 @@
   transition: none !important;
 }
 
+/* ── Timeline loading indicator ── */
+.timeline-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 10;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.timeline-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255,107,157,0.15);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: timeline-spin 0.8s linear infinite;
+}
+@keyframes timeline-spin { to { transform: rotate(360deg); } }
+.timeline-loading.hidden { display: none; }
+
 /* ── Horizontal axis line ── */
 .timeline-axis {
   position: absolute;
@@ -911,6 +935,10 @@
 
         <!-- Track -->
         <div class="timeline-track" id="timelineTrack">
+            <div class="timeline-loading" id="timelineLoading">
+                <div class="spinner"></div>
+                <span>加载中...</span>
+            </div>
             <div class="timeline-track-inner" id="timelineTrackInner"></div>
         </div>
 
