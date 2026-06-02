@@ -357,7 +357,19 @@
         <!-- Controls -->
         <div class="player-controls" id="playerControls">
             <div class="player-controls-top">
-                <div class="danmu-control-group">
+                <div class="player-progress-wrap" id="progressWrap">
+                    <div class="player-progress-track">
+                        <div class="player-progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="player-progress-thumb" id="progressThumb"><img id="progressThumbIcon" src="/static/images/favicons/favicon1.png" alt=" " style="width:14px;height:14px;border-radius:50%;display:block;"></div>
+                </div>
+            </div>
+            <div class="player-controls-bottom">
+                <div class="player-left-group" style="display:flex;align-items:center;gap:8px;">
+                    <button class="player-btn" id="playBtn"><i class="fas fa-play"></i></button>
+                    <span class="player-time" id="timeDisplay">0:00 / 0:00</span>
+                </div>
+                <div class="player-right-group" style="display:flex;align-items:center;gap:8px;">
                     <button class="player-btn" id="danmuToggleBtn" type="button" title="弹幕开关"><i class="fas fa-comments"></i></button>
                     <div class="danmu-settings" id="danmuSettings">
                         <button class="player-btn" id="danmuSettingsBtn" type="button" title="弹幕设置"><i class="fas fa-cog"></i></button>
@@ -374,20 +386,8 @@
                             </div>
                         </div>
                     </div>
+                    <button class="player-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
                 </div>
-                <div class="player-progress-wrap" id="progressWrap">
-                    <div class="player-progress-track">
-                        <div class="player-progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="player-progress-thumb" id="progressThumb"><img id="progressThumbIcon" src="/static/images/favicons/favicon1.png" alt=" " style="width:14px;height:14px;border-radius:50%;display:block;"></div>
-                </div>
-            </div>
-            <div class="player-controls-bottom">
-                <div style="display:flex;align-items:center;gap:4px;">
-                    <button class="player-btn" id="playBtn"><i class="fas fa-play"></i></button>
-                    <span class="player-time" id="timeDisplay">0:00 / 0:00</span>
-                </div>
-                <button class="player-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
             </div>
         </div>
     </div>
