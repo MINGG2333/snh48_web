@@ -61,6 +61,7 @@
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  z-index: 8;
 }
 
 .danmu-item {
@@ -88,15 +89,7 @@
   padding: 40px 16px 12px;
   background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
   opacity: 1;
-  z-index: 10;
-}
-
-.player-controls-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
+      z-index: 20;
 .player-progress-wrap {
   flex: 1;
   position: relative;
@@ -852,15 +845,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: true });
     document.addEventListener('touchend', () => { isDraggingProgress = false; });
 
-    // Fullscreen (with iOS fallback)
+    // Fullscreen with danmaku support
     fullscreenBtn.addEventListener('click', () => {
-        if (video.webkitEnterFullscreen) {
-            video.webkitEnterFullscreen();
-        } else if (container.requestFullscreen) {
+        if (container.requestFullscreen) {
             if (!document.fullscreenElement) {
-                container.requestFullscreen();
+                container.requestFullscreen().catch(err => {
+                    console.error('Fullscreen request failed:', err);
+                });
             } else {
                 document.exitFullscreen();
+            }
+        } else if (video.webkitEnterFullscreen) {
+            // Fallback for iOS - note: danmaku won't show in native fullscreen
+            video.webkitEnterFullscreen();
+        }
+    });
+
+    // Handle fullscreen change events
+    document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) {
+            // Entered fullscreen - refresh danmaku dimensions
+            if (danmuLayer) {
+                setTimeout(() => {
+                    syncDanmu();
+                }, 100);
             }
         }
     });
