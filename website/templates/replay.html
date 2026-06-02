@@ -473,7 +473,7 @@
         <!-- Error overlay -->
         <div class="player-overlay error hidden" id="errorOverlay">
             <i class="fas fa-exclamation-circle"></i>
-            <span>无法加载回放</span>
+            <span id="errorMessage">无法加载回放</span>
             <button onclick="location.reload()" style="margin-top:10px;padding:8px 20px;border-radius:20px;border:1px solid var(--glass-border);background:var(--card-bg);color:var(--text);font-size:0.85rem;cursor:pointer;font-family:inherit;"><i class="fas fa-redo"></i> 刷新重试</button>
         </div>
 
@@ -637,7 +637,22 @@ document.addEventListener('DOMContentLoaded', () => {
     container.addEventListener('click', showControls);
 
     // Try HLS first, fallback to direct source
+    let loadTimeout = null;
+
+    function showVideoError(msg) {
+        loadingOverlay.classList.add('hidden');
+        const errMsg = document.getElementById('errorMessage');
+        if (errMsg && msg) errMsg.textContent = msg;
+        errorOverlay.classList.remove('hidden');
+        if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
+    }
+
     function loadVideo(url) {
+        // Timeout: show error if video doesn't load within 20 seconds
+        loadTimeout = setTimeout(() => {
+            showVideoError('视频加载超时，回放可能已失效');
+        }, 20000);
+
         if (url.includes('.m3u8') && Hls && Hls.isSupported()) {
             const hls = new Hls({ xhrSetup: (xhr) => {
                 xhr.withCredentials = false;
@@ -645,26 +660,25 @@ document.addEventListener('DOMContentLoaded', () => {
             hls.loadSource(url);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
                 loadingOverlay.classList.add('hidden');
             });
             hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
-                    loadingOverlay.classList.add('hidden');
-                    errorOverlay.classList.remove('hidden');
+                    showVideoError('视频加载失败，回放可能已失效');
                 }
             });
         } else if (url) {
             video.src = url;
             video.addEventListener('loadedmetadata', () => {
+                if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
                 loadingOverlay.classList.add('hidden');
             });
             video.addEventListener('error', () => {
-                loadingOverlay.classList.add('hidden');
-                errorOverlay.classList.remove('hidden');
+                showVideoError('视频加载失败，回放可能已失效');
             });
         } else {
-            loadingOverlay.classList.add('hidden');
-            errorOverlay.classList.remove('hidden');
+            showVideoError('回放视频链接不可用');
         }
     }
 
