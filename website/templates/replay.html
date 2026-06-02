@@ -47,6 +47,22 @@
   aspect-ratio: 16 / 9;
   box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 30px rgba(255, 107, 157, 0.08);
   border: 1px solid var(--glass-border);
+  transition: all 0.3s ease;
+}
+
+.player-container.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  margin: 0;
+  z-index: 9999;
+  aspect-ratio: auto;
 }
 
 .player-container video {
@@ -528,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let danmuEnabled = true;
     let danmuOpacity = 0.9;
     let danmuSpeedFactor = 1.0;
+    let isFullscreenMode = false;
 
     // Initialize slider progress colors on page load
     function initializeSliderProgress() {
@@ -847,31 +864,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: true });
     document.addEventListener('touchend', () => { isDraggingProgress = false; });
 
-    // Fullscreen with danmaku support
+    // Fullscreen with iOS support via CSS
     fullscreenBtn.addEventListener('click', () => {
-        if (container.requestFullscreen) {
-            if (!document.fullscreenElement) {
-                container.requestFullscreen().catch(err => {
-                    console.error('Fullscreen request failed:', err);
-                });
-            } else {
+        if (isFullscreenMode) {
+            // Exit fullscreen
+            isFullscreenMode = false;
+            container.classList.remove('fullscreen');
+            document.body.style.overflow = '';
+            if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
-        } else if (video.webkitEnterFullscreen) {
-            // Fallback for iOS - note: danmaku won't show in native fullscreen
-            video.webkitEnterFullscreen();
+        } else {
+            // Enter fullscreen
+            isFullscreenMode = true;
+            container.classList.add('fullscreen');
+            document.body.style.overflow = 'hidden';
+            
+            // Try standard fullscreen API first
+            if (container.requestFullscreen && !navigator.userAgent.includes('iPhone')) {
+                container.requestFullscreen().catch(err => {
+                    console.log('Fullscreen API not available:', err);
+                });
+            }
+            
+            // Refresh danmaku after layout stabilizes
+            setTimeout(() => {
+                syncDanmu();
+            }, 100);
         }
     });
 
     // Handle fullscreen change events
     document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement) {
-            // Entered fullscreen - refresh danmaku dimensions
-            if (danmuLayer) {
-                setTimeout(() => {
-                    syncDanmu();
-                }, 100);
-            }
+        if (!document.fullscreenElement) {
+            isFullscreenMode = false;
+            container.classList.remove('fullscreen');
+            document.body.style.overflow = '';
         }
     });
 
