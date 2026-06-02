@@ -82,6 +82,14 @@
   z-index: 8;
 }
 
+/* ── Click capture overlay (prevents native video click behavior) ── */
+.click-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: pointer;
+}
+
 .danmu-item {
   position: absolute;
   white-space: nowrap;
@@ -453,6 +461,7 @@
 <main class="replay-page">
     <div class="player-container" id="playerContainer">
         <video id="replayVideo" playsinline></video>
+        <div class="click-overlay" id="clickOverlay"></div>
         <div class="danmu-layer" id="danmuLayer"></div>
 
         <!-- Loading overlay -->
@@ -531,6 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const timeDisplay = document.getElementById('timeDisplay');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
     const container = document.getElementById('playerContainer');
+    const clickOverlay = document.getElementById('clickOverlay');
     const loadingOverlay = document.getElementById('loadingOverlay');
     const errorOverlay = document.getElementById('errorOverlay');
     const controls = document.getElementById('playerControls');
@@ -830,14 +840,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     video.addEventListener('play', updatePlayBtn);
     video.addEventListener('pause', updatePlayBtn);
-    video.addEventListener('click', (e) => {
+
+    // Use overlay instead of video to avoid native browser play/pause toggle
+    clickOverlay.addEventListener('click', (e) => {
         e.preventDefault();
-        // First click shows controls, second click toggles play/pause
         if (!container.classList.contains('show-controls')) {
             showControls();
             return;
         }
         if (video.paused) video.play(); else video.pause();
+    });
+    // Also handle touchend for instant response on mobile
+    clickOverlay.addEventListener('touchend', (e) => {
+        if (!container.classList.contains('show-controls')) {
+            e.preventDefault();
+            showControls();
+            return;
+        }
+        // Let click event handle the toggle to avoid double-firing
     });
 
     // Progress bar (custom fill + thumb)
