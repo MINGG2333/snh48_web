@@ -882,44 +882,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: true });
     document.addEventListener('touchend', () => { isDraggingProgress = false; });
 
-    // ── Fullscreen: requestFullscreen API → CSS fallback ──
+    // ── Fullscreen: requestFullscreen API + CSS fallback ──
     function enterFullscreen() {
         isFullscreenMode = true;
         container.classList.add('fullscreen-active');
-        container.classList.add('show-controls');
+        container.classList.add('fullscreen-fallback');
+        showControls();
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+        window.scrollTo(0, 0);
 
-        // Try standard Fullscreen API (hides Safari chrome on iOS 16+)
-        if (container.requestFullscreen) {
-            container.requestFullscreen().then(() => {
-                // System fullscreen succeeded - clean up CSS fallback
-                container.classList.remove('fullscreen-fallback');
-            }).catch(() => {
-                // System fullscreen failed - apply CSS fallback
-                applyFullscreenFallback();
-            });
-        } else {
-            applyFullscreenFallback();
+        // Try standard Fullscreen API (hides Safari/Chrome chrome)
+        // CSS fallback is always applied for consistent layout & event handling
+        if (container.requestFullscreen && !navigator.userAgent.includes('Android')) {
+            container.requestFullscreen().catch(() => {});
         }
         syncDanmu();
     }
 
-    function applyFullscreenFallback() {
-        container.classList.add('fullscreen-fallback');
-        document.body.style.overflow = 'hidden';
-        document.documentElement.style.overflow = 'hidden';
-        window.scrollTo(0, 0);
-    }
-
-    function cleanupFullscreenFallback() {
-        container.classList.remove('fullscreen-fallback');
-        document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
-    }
-
     function exitFullscreen() {
         isFullscreenMode = false;
-        container.classList.remove('fullscreen-active', 'show-controls');
-        cleanupFullscreenFallback();
+        container.classList.remove('fullscreen-active', 'fullscreen-fallback', 'show-controls');
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        container.style.height = '';
+        container.style.width = '';
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});
         }
@@ -936,10 +923,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // iOS visualViewport: adjust dimensions in CSS fallback mode
+    // iOS visualViewport: adjust dimensions in fullscreen mode
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', () => {
-            if (isFullscreenMode && container.classList.contains('fullscreen-fallback')) {
+            if (isFullscreenMode) {
                 container.style.height = window.visualViewport.height + 'px';
                 container.style.width = window.visualViewport.width + 'px';
             } else {
