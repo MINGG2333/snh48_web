@@ -362,6 +362,15 @@ def read_schedule() -> List[Dict[str, Any]]:
 
                 title = name
 
+                # Icon: use CSV column if provided, otherwise fallback by type
+                icon = (row.get("icon") or "").strip()
+                if not icon:
+                    icon = {
+                        "公演": "fa-music",
+                        "外务": "fa-plane",
+                        "见面会": "fa-handshake",
+                    }.get(event_type, "fa-calendar-check")
+
                 records.append({
                     "id": f"sched_{date_str}_{name}_{event_type}",
                     "date": date_str,
@@ -372,7 +381,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "source": "assistant",
                     "description": "\n".join(desc_parts),
                     "cover_url": "",
-                    "icon": "fa-calendar-check",
+                    "icon": icon,
                 })
     except (IOError, csv.Error) as e:
         print(f"[timeline_api] Error reading schedule CSV: {e}")
