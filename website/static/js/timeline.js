@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
               <div class="timeline-card-title">${ev.title}</div>
               <span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>
+              ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
             </div>
           </div>
         `;
@@ -508,6 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="timeline-modal-date">${formatDate(event.date)}</div>
         <div class="timeline-modal-title">${event.title}</div>
         <span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>
+        ${event.has_replay && event.replay_url ? `<a href="${event.replay_url}" target="_blank" rel="noopener noreferrer" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
     `;

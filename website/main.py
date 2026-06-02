@@ -25,16 +25,20 @@ app = FastAPI(
 # ── Static Files ───────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory=str(cfg.STATIC_DIR)), name="static")
 
-# ── Live Covers (mount local directory as static for fast serving) ────────
+# ── Live Covers (mount for fast static serving) ───────────────────────────
 from pathlib import Path as _Path
-_live_covers_dir = _Path(cfg.ROOM_RECORD_ROOT) / "陈嘉仪_161808449" / "live_covers"
-if _live_covers_dir.exists():
-    app.mount("/live-covers", StaticFiles(directory=str(_live_covers_dir)), name="live_covers")
-else:
-    # Try server production path
-    _server_covers = _Path("/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers")
-    if _server_covers.exists():
-        app.mount("/live-covers", StaticFiles(directory=str(_server_covers)), name="live_covers")
+# Try new live_push_replays covers first, then fall back to old room_record
+_covers_candidates = [
+    _Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "陈嘉仪_161808449" / "covers",
+    _Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "陈嘉仪_161808449" / "live_covers",
+    _Path("/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/covers"),
+    _Path("/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/live_covers"),
+    _Path("/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers"),
+]
+for _p in _covers_candidates:
+    if _p.exists():
+        app.mount("/live-covers", StaticFiles(directory=str(_p)), name="live_covers")
+        break
 
 # ── Templates ──────────────────────────────────────────────────────────────
 templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))
