@@ -352,7 +352,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                 name = (row.get("name") or "").strip()
                 event_type = (row.get("type") or "其他").strip()
                 time_str = (row.get("time") or "").strip()
-                type_label = TYPE_LABEL_MAP.get(event_type, "其他")
+                type_label = TYPE_LABEL_MAP.get(event_type, event_type)
 
                 # Build description
                 desc_parts = [f"📅 {date_str}"]
