@@ -56,6 +56,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   max-width: 100vw;
   border-radius: 0;
   box-shadow: none;
@@ -63,6 +64,10 @@
   margin: 0;
   z-index: 9999;
   aspect-ratio: auto;
+}
+
+.player-container.fullscreen .exit-fullscreen-btn {
+  display: flex;
 }
 
 .player-container video {
@@ -106,15 +111,17 @@
   background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
   opacity: 1;
   z-index: 20;
+  transition: opacity 0.4s ease;
 }
 
-.player-progress-wrap {
-  flex: 1;
-  position: relative;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
+/* Controls auto-hide: only in fullscreen mode */
+.player-container.fullscreen .player-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+.player-container.fullscreen.show-controls .player-controls {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .player-progress-track {
@@ -158,6 +165,29 @@
 }
 
 .player-progress-wrap:hover .player-progress-thumb { opacity: 1; }
+
+/* ── Exit fullscreen button ── */
+.exit-fullscreen-btn {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  transition: background 0.2s;
+  pointer-events: auto;
+}
+.exit-fullscreen-btn:hover { background: rgba(0,0,0,0.75); }
+.exit-fullscreen-btn i { pointer-events: none; }
 
 .danmu-control-group {
   display: flex;
@@ -491,6 +521,7 @@
                 </div>
             </div>
         </div>
+        <button class="exit-fullscreen-btn" id="exitFullscreenBtn" type="button" title="退出全屏"><i class="fas fa-compress"></i></button>
     </div>
 
     <div class="replay-info">
@@ -519,6 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressWrap = document.getElementById('progressWrap');
     const timeDisplay = document.getElementById('timeDisplay');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const exitFullscreenBtn = document.getElementById('exitFullscreenBtn');
     const container = document.getElementById('playerContainer');
     const loadingOverlay = document.getElementById('loadingOverlay');
     const errorOverlay = document.getElementById('errorOverlay');
@@ -864,44 +896,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: true });
     document.addEventListener('touchend', () => { isDraggingProgress = false; });
 
-    // Fullscreen with iOS support via CSS
+    // ── Fullscreen: requestFullscreen → CSS fallback for iOS ──
+    function enterFullscreen() {
+        isFullscreenMode = true;
+        container.classList.add('fullscreen');
+        container.classList.add('show-controls');
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+        // Scroll to top to help hide Safari chrome
+        window.scrollTo(0, 0);
+
+        // Try standard Fullscreen API (works on iOS 16+, keeps DOM visible)
+        if (container.requestFullscreen) {
+            container.requestFullscreen().catch(() => {
+                // Fallback: CSS fullscreen is already applied
+            });
+        }
+        syncDanmu();
+    }
+
+    function exitFullscreen() {
+        isFullscreenMode = false;
+        container.classList.remove('fullscreen', 'show-controls');
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
+    }
+
     fullscreenBtn.addEventListener('click', () => {
-        if (isFullscreenMode) {
-            // Exit fullscreen
-            isFullscreenMode = false;
-            container.classList.remove('fullscreen');
-            document.body.style.overflow = '';
-            if (document.fullscreenElement) {
-                document.exitFullscreen();
-            }
-        } else {
-            // Enter fullscreen
-            isFullscreenMode = true;
-            container.classList.add('fullscreen');
-            document.body.style.overflow = 'hidden';
-            
-            // Try standard fullscreen API first
-            if (container.requestFullscreen && !navigator.userAgent.includes('iPhone')) {
-                container.requestFullscreen().catch(err => {
-                    console.log('Fullscreen API not available:', err);
-                });
-            }
-            
-            // Refresh danmaku after layout stabilizes
-            setTimeout(() => {
-                syncDanmu();
-            }, 100);
+        isFullscreenMode ? exitFullscreen() : enterFullscreen();
+    });
+
+    if (exitFullscreenBtn) {
+        exitFullscreenBtn.addEventListener('click', exitFullscreen);
+    }
+
+    // Listen for fullscreen API changes (when user presses ESC or swipes)
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && isFullscreenMode) {
+            exitFullscreen();
         }
     });
 
-    // Handle fullscreen change events
-    document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement) {
-            isFullscreenMode = false;
-            container.classList.remove('fullscreen');
-            document.body.style.overflow = '';
-        }
-    });
+    // iOS visualViewport: dynamically adjust fullscreen height
+    // iOS Safari 100vh includes address bar → controls end up off-screen
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+            if (isFullscreenMode) {
+                container.style.height = window.visualViewport.height + 'px';
+                container.style.width = window.visualViewport.width + 'px';
+            } else {
+                container.style.height = '';
+                container.style.width = '';
+            }
+        });
+    }
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
