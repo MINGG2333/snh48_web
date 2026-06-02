@@ -354,11 +354,22 @@ def read_schedule() -> List[Dict[str, Any]]:
                 time_str = (row.get("time") or "").strip()
                 type_label = TYPE_LABEL_MAP.get(event_type, event_type)
 
-                # Build description
-                desc_parts = [f"📅 {date_str}"]
-                if time_str:
-                    desc_parts.append(f"🕐 {time_str}")
-                desc_parts.append(f"\n\n{name}")
+                # Optional enhanced fields from CSV
+                location = (row.get("location") or "").strip()
+                cover_url = (row.get("cover_url") or "").strip()
+                source_url = (row.get("source_url") or "").strip()
+                csv_desc = (row.get("description") or "").strip()
+
+                # Build description: use CSV description if provided, else auto-generate
+                if csv_desc:
+                    desc_parts = [csv_desc]
+                else:
+                    desc_parts = [f"📅 {date_str}"]
+                    if time_str:
+                        desc_parts.append(f"🕐 {time_str}")
+                    if location:
+                        desc_parts.append(f"📍 {location}")
+                    desc_parts.append(f"\n\n{name}")
 
                 title = name
 
@@ -380,8 +391,10 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "typeLabel": type_label,
                     "source": "assistant",
                     "description": "\n".join(desc_parts),
-                    "cover_url": "",
+                    "cover_url": cover_url,
                     "icon": icon,
+                    "location": location,
+                    "source_url": source_url,
                 })
     except (IOError, csv.Error) as e:
         print(f"[timeline_api] Error reading schedule CSV: {e}")
