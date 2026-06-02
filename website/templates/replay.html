@@ -37,7 +37,9 @@
 
 /* ── Player container ── */
 .player-container {
-  width: 100%;
+  width: min(100%, 860px);
+  max-width: 860px;
+  margin: 0 auto;
   border-radius: var(--radius);
   overflow: hidden;
   background: #000;
@@ -84,15 +86,11 @@
   left: 0;
   right: 0;
   padding: 40px 16px 12px;
-  background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.3s;
-  z-index: 10;
-}
-
-.player-container:hover .player-controls,
-.player-container.show-controls .player-controls {
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(255,255,255,0.08);
   opacity: 1;
+  z-index: 10;
 }
 
 .player-controls-top {
@@ -166,15 +164,17 @@
 .danmu-settings-menu {
   position: absolute;
   right: 0;
-  bottom: 110%;
-  width: 240px;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(255,255,255,0.08);
+  bottom: calc(100% + 10px);
+  width: min(240px, calc(100vw - 32px));
+  max-width: 240px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 14px;
   padding: 12px;
   box-shadow: 0 18px 40px rgba(0,0,0,0.25);
   backdrop-filter: blur(20px);
   z-index: 12;
+  box-sizing: border-box;
 }
 
 .danmu-settings-menu.hidden {
@@ -608,22 +608,24 @@ document.addEventListener('DOMContentLoaded', () => {
         bubble.style.top = `${8 + Math.floor(Math.random() * 72)}%`;
         bubble.style.left = '100%';
         bubble.style.transform = 'translateX(0)';
-        bubble.style.opacity = '0';
-        bubble.style.color = '#ffffff';
+        bubble.style.opacity = String(danmuOpacity);
         bubble.innerHTML = `<span class="danmu-name">${escapeHtml(item.name)}</span>${escapeHtml(item.text)}`;
         danmuLayer.appendChild(bubble);
 
-        const layerWidth = danmuLayer.clientWidth || window.innerWidth;
+        const layerWidth = danmuLayer.getBoundingClientRect().width || window.innerWidth;
         const distance = layerWidth + bubble.clientWidth + 40;
-        const duration = (6 + Math.random() * 2.5) / Math.max(danmuSpeedFactor, 0.2);
+        const baseDuration = 6 + Math.random() * 2.5;
+        const fullscreenScale = Math.max(layerWidth / 860, 1);
+        const duration = (baseDuration * fullscreenScale) / Math.max(danmuSpeedFactor, 0.2);
         requestAnimationFrame(() => {
-            bubble.style.opacity = String(danmuOpacity);
+            bubble.style.transition = `transform ${duration}s linear`;
             bubble.style.transform = `translateX(-${distance}px)`;
-            bubble.style.transition = `transform ${duration}s linear, opacity 0.35s ease`;
         });
 
-        bubble.addEventListener('transitionend', () => {
-            bubble.remove();
+        bubble.addEventListener('transitionend', (event) => {
+            if (event.propertyName === 'transform') {
+                bubble.remove();
+            }
         });
     }
 
