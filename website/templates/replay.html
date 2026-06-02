@@ -364,32 +364,33 @@
   font-size: 0.85rem;
 }
 
-.shortcut-line {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 16px;
-  align-items: center;
-  color: var(--text-dim);
-  font-size: 0.9rem;
-  white-space: nowrap;
-  overflow-x: auto;
-}
-
-.shortcut-line span {
+.shortcut-hint {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  color: rgba(255,255,255,0.75);
+  font-size: 0.9rem;
+  opacity: 0.85;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 }
 
-.shortcut-line span::before {
-  content: '•';
-  color: rgba(255,255,255,0.6);
-  margin-right: 6px;
+.shortcut-hint i {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.9);
 }
 
-.shortcut-line span:first-child::before {
-  content: '';
-  margin-right: 0;
+.shortcut-hint span {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .replay-back-btn {
@@ -484,8 +485,9 @@
             <p class="live-meta"><span class="live-title">{{ title }}</span><span class="live-date">{{ date }}</span></p>
         </div>
         <div class="replay-shortcuts">
-            <div class="replay-info-card">
-                <h3><i class="fas fa-keyboard"></i> <span class="shortcut-label">Space / K 播放/暂停 · F 全屏 · ← / → 快退/快进 10秒</span></h3>
+            <div class="shortcut-hint">
+                <i class="fas fa-keyboard"></i>
+                <span>Space / K 播放/暂停 · F 全屏 · ← / → 快退/快进 10秒</span>
             </div>
         </div>
     </div>
