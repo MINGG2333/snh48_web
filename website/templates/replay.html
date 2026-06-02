@@ -169,8 +169,8 @@
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
-  width: min(240px, calc(100vw - 32px));
-  max-width: 240px;
+  width: min(280px, calc(100vw - 32px));
+  max-width: 280px;
   background: rgba(15, 23, 42, 0.95);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 14px;
@@ -187,9 +187,11 @@
 
 .danmu-settings-menu .menu-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+  justify-content: space-between;
 }
 
 .danmu-settings-menu .menu-row:last-child {
@@ -490,19 +492,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHidden = danmuSettingsMenu.classList.contains('hidden');
         const shouldShow = typeof forceState === 'boolean' ? forceState : isHidden;
         danmuSettingsMenu.classList.toggle('hidden', !shouldShow);
+        if (shouldShow) {
+            container.classList.add('show-controls');
+        }
     }
 
     // Show controls on video tap/mouse move
     let controlsTimer;
     function showControls() {
-        controls.parentElement.classList.add('show-controls');
+        container.classList.add('show-controls');
         clearTimeout(controlsTimer);
         controlsTimer = setTimeout(() => {
-            if (!video.paused) controls.parentElement.classList.remove('show-controls');
+            if (!video.paused && (!danmuSettingsMenu || danmuSettingsMenu.classList.contains('hidden'))) {
+                container.classList.remove('show-controls');
+            }
         }, 3000);
     }
     container.addEventListener('mousemove', showControls);
     container.addEventListener('touchstart', showControls);
+    container.addEventListener('click', showControls);
 
     // Try HLS first, fallback to direct source
     function loadVideo(url) {
@@ -542,9 +550,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDanmuSettingsDisplay();
 
     if (danmuToggleBtn) {
-        danmuToggleBtn.addEventListener('click', () => {
+        danmuToggleBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
             danmuEnabled = !danmuEnabled;
             updateDanmuButton();
+            showControls();
         });
     }
 
@@ -552,6 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         danmuSettingsBtn.addEventListener('click', (event) => {
             event.stopPropagation();
             toggleDanmuMenu();
+            showControls();
         });
     }
 
