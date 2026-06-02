@@ -87,14 +87,8 @@
   right: 0;
   padding: 40px 16px 12px;
   background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: 10;
-}
-
-.player-container:hover .player-controls,
-.player-container.show-controls .player-controls {
   opacity: 1;
+  z-index: 10;
 }
 
 .player-controls-top {
@@ -190,8 +184,17 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
-  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.danmu-settings-menu .menu-row label {
+  flex: 0 0 auto;
+  min-width: 52px;
+}
+
+.danmu-settings-menu .menu-row input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .danmu-settings-menu .menu-row:last-child {
@@ -432,12 +435,10 @@
                             <div class="menu-row">
                                 <label for="danmuOpacityRange">透明度</label>
                                 <input id="danmuOpacityRange" type="range" min="20" max="100" value="90">
-                                <span id="danmuOpacityValue">90%</span>
                             </div>
                             <div class="menu-row">
                                 <label for="danmuSpeedRange">速度</label>
                                 <input id="danmuSpeedRange" type="range" min="50" max="220" value="100">
-                                <span id="danmuSpeedValue">正常</span>
                             </div>
                         </div>
                     </div>
