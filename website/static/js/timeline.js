@@ -675,8 +675,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function moveDrag(clientX) {
     if (!isDragging) return;
-    const dx = clientX - startX;
-    dragDistance = Math.abs(dx);
+    const dx = (clientX - startX) / scale;
+    dragDistance = Math.abs(clientX - startX);
     setTrackLeft(startLeft + dx);
 
     const now = performance.now();
