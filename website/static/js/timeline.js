@@ -682,7 +682,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dt = now - lastTime;
     if (dt > 0) {
       velocity = (clientX - lastX) / dt;
-      velocity = Math.max(-0.5, Math.min(0.5, velocity));
+      velocity = Math.max(-1.2, Math.min(1.2, velocity));
     }
     lastX = clientX;
     lastTime = now;
@@ -700,7 +700,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const inertiaV = velocity * 800;
+    const inertiaV = velocity * 1200;
     if (Math.abs(inertiaV) > 5) {
       const current = getTrackLeft();
       const delta = inertiaV;
