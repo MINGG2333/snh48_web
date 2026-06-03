@@ -520,21 +520,22 @@ document.addEventListener('DOMContentLoaded', () => {
       title_.includes('巡演') ? 'tour|巡演' : '';
     const showModalTypeBadge = !modalKeywordBadge;
 
-    const coverSrc = event.cover_url || event.image;
-    const imgHtml = coverSrc
-      ? `<img class="timeline-modal-img" src="${coverSrc}" alt="${event.title}">`
-      : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
-
     const descHtml = event.description.replace(/\n/g, '<br>');
 
-    // Build image gallery
-    let galleryHtml = '';
-    if (event.image_urls && event.image_urls.length > 0) {
-      galleryHtml = '<div class="timeline-modal-gallery">';
+    // Build cover/gallery: if multiple images, show scrollable gallery; else single cover
+    let coverHtml = '';
+    if (event.image_urls && event.image_urls.length > 1) {
+      coverHtml = '<div class="timeline-modal-gallery">';
       event.image_urls.forEach(url => {
-        galleryHtml += `<img src="${url}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+        coverHtml += `<img src="${url}" alt="" loading="lazy" onerror="this.style.display='none'">`;
       });
-      galleryHtml += '</div>';
+      coverHtml += '</div>';
+    } else {
+      // Single cover (from cover_url or first image_urls item or placeholder)
+      const coverSrc = event.cover_url || (event.image_urls && event.image_urls[0]) || '';
+      coverHtml = coverSrc
+        ? `<img class="timeline-modal-img" src="${coverSrc}" alt="${event.title}">`
+        : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
     }
 
     // Build B站 links
@@ -549,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     modalContent.innerHTML = `
-      ${imgHtml}
+      ${coverHtml}
       <div class="timeline-modal-body">
         <div class="timeline-modal-date">${formatDate(event.date)}</div>
         <div class="timeline-modal-title">${event.title}</div>
@@ -560,7 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</div>` : ''}
         ${event.source_url ? `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${event.source_url}" target="_blank" rel="noopener" style="color:var(--primary);">信息来源</a></div>` : ''}
         ${biliHtml}
-        ${galleryHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
     `;
