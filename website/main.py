@@ -40,10 +40,41 @@ for _p in _covers_candidates:
         app.mount("/live-covers", StaticFiles(directory=str(_p)), name="live_covers")
         break
 
-# ── Schedule Images (行程配图) ────────────────────────────────────────────
-_schedule_images_path = _Path("/home/snh48-fan-hub/schedule_record/images")
-if _schedule_images_path.exists():
-    app.mount("/schedule-images", StaticFiles(directory=str(_schedule_images_path)), name="schedule_images")
+# ── Schedule Images (行程配图，动态路由支持文件名模糊匹配) ────────────────
+_SCHEDULE_IMG_DIR = Path("/home/snh48-fan-hub/schedule_record/images")
+
+
+@app.get("/schedule-images/{filename:path}")
+async def serve_schedule_image(filename: str):
+    """Serves schedule images with fallback for .jpg / .jpg.jpg variants."""
+    if not _SCHEDULE_IMG_DIR.exists():
+        return FileResponse(status_code=404)
+
+    # Sanitize: prevent path traversal
+    safe = Path(filename).name
+    file_path = _SCHEDULE_IMG_DIR / safe
+
+    # 1. Exact match
+    if file_path.exists():
+        return FileResponse(file_path)
+
+    # 2. Try double .jpg (downloader sometimes saved xxx.jpg as xxx.jpg.jpg)
+    if safe.endswith('.jpg'):
+        alt = _SCHEDULE_IMG_DIR / f"{safe}.jpg"
+        if alt.exists():
+            return FileResponse(alt)
+
+    # 3. Try without .jpg extension
+    if safe.endswith('.jpg'):
+        alt = _SCHEDULE_IMG_DIR / safe[:-4]
+        if alt.exists():
+            return FileResponse(alt)
+    else:
+        alt = _SCHEDULE_IMG_DIR / f"{safe}.jpg"
+        if alt.exists():
+            return FileResponse(alt)
+
+    return FileResponse(status_code=404)
 
 # ── Templates ──────────────────────────────────────────────────────────────
 templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))
