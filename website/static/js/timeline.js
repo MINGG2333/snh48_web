@@ -527,14 +527,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.image_urls && event.image_urls.length > 1) {
       coverHtml = '<div class="timeline-modal-gallery">';
       event.image_urls.forEach(url => {
-        coverHtml += `<img src="${url}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+        coverHtml += `<img src="${url}" alt="" class="loading" loading="lazy" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
       });
       coverHtml += '</div>';
     } else {
       // Single cover (from cover_url or first image_urls item or placeholder)
       const coverSrc = event.cover_url || (event.image_urls && event.image_urls[0]) || '';
       coverHtml = coverSrc
-        ? `<img class="timeline-modal-img" src="${coverSrc}" alt="${event.title}">`
+        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${event.title}" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
         : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
     }
 
