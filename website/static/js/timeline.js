@@ -442,6 +442,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Filter buttons (multi-select, "全部" toggles all) ──
+  const SOURCE_ORDER = ['manual', 'room', 'assistant'];
+  const filterSwipeHint = document.getElementById('timelineFilterSwipeHint');
+
   function updateFilterUI() {
     filterBtns.forEach(btn => {
       const src = btn.dataset.source;
@@ -451,37 +454,78 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.toggle('active', activeSources.has(src));
       }
     });
+    // Show swipe hint when only one source is selected
+    if (filterSwipeHint) {
+      filterSwipeHint.classList.toggle('hidden', activeSources.size !== 1 || activeSources.has('all'));
+    }
   }
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const src = btn.dataset.source;
       if (src === 'all') {
-        // Toggle all ↔ manual only
         if (activeSources.size === 3) {
           activeSources = new Set(['manual']);
         } else {
           activeSources = new Set(['manual', 'room', 'assistant']);
         }
       } else {
-        // Toggle individual source
         if (activeSources.has(src)) {
-          // If it's the last one, don't unselect
-          if (activeSources.size === 1) return;
           activeSources.delete(src);
+          if (activeSources.size === 0) activeSources.add(src);
         } else {
-          // If only one was selected, switch to this one instead of adding
-          if (activeSources.size === 1) {
-            activeSources = new Set([src]);
-          } else {
-            activeSources.add(src);
-          }
+          activeSources.add(src);
         }
       }
       updateFilterUI();
       refreshTimeline(true);
     });
   });
+
+  // ── Single-select swipe (drag up/down to cycle through sources in real-time) ──
+  let swipeStartY = 0;
+  let swipeLastSrc = '';
+  const filterBar = document.getElementById('timelineFilterBar');
+  const SWIPE_STEP = 28; // pixels per step
+
+  if (filterBar) {
+    filterBar.addEventListener('touchstart', (e) => {
+      if (activeSources.size === 1 && !activeSources.has('all')) {
+        swipeStartY = e.touches[0].clientY;
+        swipeLastSrc = [...activeSources][0];
+      }
+    }, { passive: true });
+
+    filterBar.addEventListener('touchmove', (e) => {
+      if (swipeStartY === 0) return;
+      const dy = e.touches[0].clientY - swipeStartY;
+      const steps = Math.round(dy / SWIPE_STEP);
+
+      if (steps === 0) return;
+
+      const currentSrc = swipeLastSrc;
+      const idx = SOURCE_ORDER.indexOf(currentSrc);
+      if (idx === -1) return;
+
+      // Calculate new index: positive steps = swipe down = previous
+      let newIdx = (idx - steps) % SOURCE_ORDER.length;
+      if (newIdx < 0) newIdx += SOURCE_ORDER.length;
+
+      const newSrc = SOURCE_ORDER[newIdx];
+      if (newSrc !== [...activeSources][0]) {
+        activeSources = new Set([newSrc]);
+        updateFilterUI();
+        refreshTimeline(true);
+      }
+      // Reset start so continuous dragging accumulates steps naturally
+      swipeStartY = e.touches[0].clientY;
+      swipeLastSrc = newSrc;
+    }, { passive: true });
+
+    filterBar.addEventListener('touchend', () => {
+      swipeStartY = 0;
+    }, { passive: true });
+  }
 
   // ── Collapsible filter bar ──
   const filterHeader = document.getElementById('timelineFilterHeader');
