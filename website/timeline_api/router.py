@@ -391,19 +391,19 @@ def read_schedule() -> List[Dict[str, Any]]:
 
                 # Optional enhanced fields from CSV
                 location = (row.get("location") or "").strip()
-                cover_url = sinaimg_to_proxy((row.get("cover_url") or "").strip())
+                cover_url_src = (row.get("cover_url") or "").strip()
                 source_url = (row.get("source_url") or "").strip()
                 csv_desc = (row.get("description") or "").strip()
                 event_link = (row.get("event_link") or "").strip()
                 remark = (row.get("remark") or "").strip()
-                # event_images has priority over image_urls
+                # event_images has top priority: always overrides image_urls, and its first image becomes cover_url
                 event_images = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("event_images"))]
-                image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
-                # Use event_images as primary, image_urls as fallback
-                primary_images = event_images if event_images else image_urls
-                # cover_url fallback: event_images first, then cover_url from csv
-                if not cover_url and event_images:
+                if event_images:
+                    image_urls = event_images
                     cover_url = event_images[0]
+                else:
+                    image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
+                    cover_url = sinaimg_to_proxy(cover_url_src)
                 bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
                 chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
                 snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
@@ -446,7 +446,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "icon": icon,
                     "location": location,
                     "source_url": source_url,
-                    "image_urls": primary_images,
+                    "image_urls": image_urls,
                     "event_link": event_link,
                     "bilibili_urls": bilibili_urls,
                 })
