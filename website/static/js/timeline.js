@@ -13,7 +13,7 @@ const MANUAL_EVENTS = [
   {
     id: 'join', source: 'manual', date: '2025-09-23',
     title: '加入 SNH48 二十三期生', type: 'milestone', typeLabel: '里程碑',
-    description: `2025年9月23日，陈嘉仪正式加入 SNH48 二十三期生，时年20岁。\n\n个人特长反射弧特长，身高166cm，爱好看国漫、唱歌跳舞、最喜欢看舞团练习室视频、玩游戏。星座摩羯座，生日1月10日。所属上海丝芭文化传媒集团有限公司。`,
+    description: `2025年9月23日，陈嘉仪正式加入 SNH48 二十三期生。个人特长是反射弧特长，身高166cm，爱好看国漫、唱歌跳舞、最喜欢看舞团练习室视频、玩游戏。星座摩羯座，生日1月10日。所属上海丝芭文化传媒集团有限公司。`,
     image: 'https://www.snh48.com/images/member/gs4_10344_1.jpg',
     icon: 'fa-star',
     link: 'https://www.snh48.com/mobile/member-detail.html?sid=10344&gid=1',
