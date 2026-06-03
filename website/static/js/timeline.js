@@ -597,6 +597,36 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
+
+    // 🎂 Birthday effect for January 10th events
+    if (event.date && event.date.slice(5) === '01-10') {
+      setTimeout(() => burstCakes(), 300);
+    }
+  }
+
+  function burstCakes() {
+    const modal = document.getElementById('timelineModal');
+    if (!modal) return;
+    const rect = modal.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const emojis = ['🎂', '🎂', '🎂', '🎉', '🎉', '🎊', '💜'];
+    for (let i = 0; i < 20; i++) {
+      const el = document.createElement('div');
+      el.className = 'birthday-cake';
+      el.textContent = emojis[i % emojis.length];
+      const angle = (360 / 20) * i + Math.random() * 20;
+      const dist = 120 + Math.random() * 200;
+      const dx = Math.cos((angle * Math.PI) / 180) * dist;
+      const dy = Math.sin((angle * Math.PI) / 180) * dist;
+      el.style.left = cx + 'px';
+      el.style.top = cy + 'px';
+      el.style.setProperty('--dx', dx + 'px');
+      el.style.setProperty('--dy', dy + 'px');
+      el.style.animationDelay = (Math.random() * 0.15) + 's';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2500);
+    }
   }
 
   function closeModal() {

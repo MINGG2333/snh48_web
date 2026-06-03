@@ -879,6 +879,21 @@
   color: #fb7299;
 }
 
+/* ── Birthday cake burst ── */
+.birthday-cake {
+  position: fixed;
+  font-size: 1.8rem;
+  pointer-events: none;
+  z-index: 9999;
+  animation: cakeBurst 1.8s ease-out forwards;
+  opacity: 0;
+}
+@keyframes cakeBurst {
+  0%   { opacity: 1; transform: translate(0, 0) scale(0.5); }
+  20%  { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1.2); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.5), calc(var(--dy) * 1.5)) scale(0.3); }
+}
+
 .timeline-modal-close {
   position: absolute;
   top: 12px;
