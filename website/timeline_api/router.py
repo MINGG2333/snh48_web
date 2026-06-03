@@ -30,22 +30,18 @@ MEMBER_NAME = "陈嘉仪"
 MEMBER_ID = "161808449"
 MEMBER_DIR = f"{MEMBER_NAME}_{MEMBER_ID}"
 
-# ── 图片本地化 ──────────────────────────────────────────────────────────
-# 新浪图片已下载到服务器本地，通过 pic_id 映射到本地文件
-SCHEDULE_IMAGES_DIR = "/home/snh48-fan-hub/schedule_record/images"
-SCHEDULE_IMAGES_URL_PREFIX = "/schedule-images"
+# ── 图片代理 ────────────────────────────────────────────────────────────
+# 新浪微博图片有 Referer 防盗链，通过代理服务器加 Referer 头绕过
+IMAGE_PROXY_HOST = "http://124.222.72.203:8899"
 
 
-def sinaimg_to_local(url: str) -> str:
-    """将 https://wx1.sinaimg.cn/original/xxx.jpg 转为 /schedule-images/xxx.jpg"""
+def sinaimg_to_proxy(url: str) -> str:
+    """将 https://wx1.sinaimg.cn/large/xxx 转为 http://代理:8899/large/xxx"""
     if not url or ".sinaimg.cn" not in url:
         return url
     try:
-        # 提取文件名: xxx.jpg
-        fname = url.rstrip("/").split("/")[-1]
-        if not fname:
-            return url
-        return f"{SCHEDULE_IMAGES_URL_PREFIX}/{fname}"
+        path = url.split(".cn")[-1]  # /large/xxx 或 /original/xxx
+        return f"{IMAGE_PROXY_HOST}{path}"
     except Exception:
         return url
 
@@ -382,10 +378,10 @@ def read_schedule() -> List[Dict[str, Any]]:
 
                 # Optional enhanced fields from CSV
                 location = (row.get("location") or "").strip()
-                cover_url = sinaimg_to_local((row.get("cover_url") or "").strip())
+                cover_url = sinaimg_to_proxy((row.get("cover_url") or "").strip())
                 source_url = (row.get("source_url") or "").strip()
                 csv_desc = (row.get("description") or "").strip()
-                image_urls = [sinaimg_to_local(u) for u in parse_multi_urls(row.get("image_urls"))]
+                image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
                 bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
                 chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
                 snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
