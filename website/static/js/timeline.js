@@ -454,10 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.toggle('active', activeSources.has(src));
       }
     });
-    // Show swipe hint when only one source is selected
-    if (filterSwipeHint) {
-      filterSwipeHint.classList.toggle('hidden', activeSources.size !== 1 || activeSources.has('all'));
-    }
+    // Show swipe hint when filter is open and single source is selected
+    updateSwipeHint();
   }
 
   filterBtns.forEach(btn => {
@@ -535,11 +533,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const isOpen = filterOptions.classList.contains('open');
     filterOptions.classList.toggle('open');
     filterHeader.classList.toggle('open');
+    updateSwipeHint();
   }
 
   function closeFilterBar() {
     filterOptions.classList.remove('open');
     filterHeader.classList.remove('open');
+    if (filterSwipeHint) filterSwipeHint.classList.add('hidden');
+  }
+
+  function updateSwipeHint() {
+    if (!filterSwipeHint) return;
+    const isOpen = filterOptions.classList.contains('open');
+    const isSingle = activeSources.size === 1 && !activeSources.has('all');
+    filterSwipeHint.classList.toggle('hidden', !isOpen || !isSingle);
   }
 
   if (filterHeader) {

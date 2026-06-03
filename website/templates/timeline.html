@@ -427,10 +427,6 @@
 
 /* ── Source filter bar ── */
 .timeline-filter-bar {
-  position: absolute;
-  top: calc(20px + var(--nav-height));
-  left: 24px;
-  z-index: 1001;
   background: var(--card-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -438,6 +434,8 @@
   border-radius: 20px;
   padding: 4px 10px;
   min-width: 50px;
+  position: relative;
+  z-index: 1;
 }
 
 .timeline-filter-header {
@@ -477,20 +475,22 @@
 .timeline-filter-swipe-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid var(--glass-border);
-  color: rgba(255,255,255,0.5);
-  font-size: 0.6rem;
-  line-height: 1.3;
+  gap: 4px;
+  color: rgba(255,255,255,0.45);
+  font-size: 0.65rem;
+  line-height: 1.25;
   user-select: none;
   pointer-events: none;
+  margin-top: 6px;
 }
 .timeline-filter-swipe-hint i {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--primary);
   opacity: 0.7;
+}
+.timeline-filter-swipe-hint span {
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
 }
 .timeline-filter-swipe-hint.hidden {
   display: none;
@@ -1027,17 +1027,24 @@
         <div class="timeline-axis"></div>
 
         <!-- Source filter bar -->
-        <div class="timeline-filter-bar" id="timelineFilterBar">
-            <div class="timeline-filter-header" id="timelineFilterHeader">
-                <span>类型</span>
-                <i class="fas fa-chevron-down"></i>
+        <div style="position:absolute;top:calc(20px + var(--nav-height));left:24px;z-index:1001;display:flex;align-items:flex-start;gap:8px;">
+            <div class="timeline-filter-bar" id="timelineFilterBar">
+                <div class="timeline-filter-header" id="timelineFilterHeader">
+                    <span>类型</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="timeline-filter-options" id="timelineFilterOptions">
+                    <button class="timeline-filter-btn active" data-source="all">全部</button>
+                    <button class="timeline-filter-btn active" data-source="manual">手动</button>
+                    <button class="timeline-filter-btn active" data-source="room">直播</button>
+                    <button class="timeline-filter-btn active" data-source="assistant">行程</button>
+                </div>
             </div>
             <div class="timeline-filter-swipe-hint hidden" id="timelineFilterSwipeHint">
                 <i class="fas fa-arrow-left"></i>
-                <span>单<br>选<br>时<br>可<br>上<br>下<br>滑<br>切<br>换</span>
+                <span>单选时可以上下滑动切换</span>
             </div>
-            <div class="timeline-filter-options" id="timelineFilterOptions">
-                <button class="timeline-filter-btn active" data-source="all">全部</button>
+        </div>
                 <button class="timeline-filter-btn active" data-source="manual">手动</button>
                 <button class="timeline-filter-btn" data-source="room">直播</button>
                 <button class="timeline-filter-btn" data-source="assistant">行程</button>
