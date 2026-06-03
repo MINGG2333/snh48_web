@@ -466,11 +466,16 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         // Toggle individual source
         if (activeSources.has(src)) {
+          // If it's the last one, don't unselect
+          if (activeSources.size === 1) return;
           activeSources.delete(src);
-          // Don't allow empty selection; if empty, re-add
-          if (activeSources.size === 0) activeSources.add(src);
         } else {
-          activeSources.add(src);
+          // If only one was selected, switch to this one instead of adding
+          if (activeSources.size === 1) {
+            activeSources = new Set([src]);
+          } else {
+            activeSources.add(src);
+          }
         }
       }
       updateFilterUI();
