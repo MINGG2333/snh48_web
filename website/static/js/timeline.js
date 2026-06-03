@@ -478,6 +478,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ── Drag-to-select across filter options ──
+  let isDraggingFilter = false;
+  if (filterOptions) {
+    filterOptions.addEventListener('pointerdown', () => {
+      isDraggingFilter = true;
+      filterOptions.setPointerCapture(event.pointerId);
+    });
+
+    filterOptions.addEventListener('pointermove', (e) => {
+      if (!isDraggingFilter) return;
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (el && el.classList.contains('timeline-filter-btn') && !el.classList.contains('active')) {
+        el.click();
+      }
+    });
+
+    filterOptions.addEventListener('pointerup', () => {
+      isDraggingFilter = false;
+    });
+
+    filterOptions.addEventListener('pointerleave', () => {
+      isDraggingFilter = false;
+    });
+  }
+
   // ── Collapsible filter bar ──
   const filterHeader = document.getElementById('timelineFilterHeader');
   const filterOptions = document.getElementById('timelineFilterOptions');
