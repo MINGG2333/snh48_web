@@ -432,8 +432,10 @@ def read_schedule() -> List[Dict[str, Any]]:
                         "日常": "fa-heart",
                     }.get(event_type, "fa-calendar-check")
 
+                # Safe ID: sanitize name for HTML attribute use
+                safe_id_name = re.sub(r'[^\w\u4e00-\u9fff\-]', '_', name)
                 records.append({
-                    "id": f"sched_{date_str}_{name}_{event_type}",
+                    "id": f"sched_{date_str}_{safe_id_name}_{event_type}",
                     "date": date_str,
                     "datetime": f"{date_str} {time_str}" if time_str else f"{date_str} 00:00:00",
                     "title": title,
