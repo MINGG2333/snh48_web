@@ -41,7 +41,7 @@ const BADGE_CLASS_MAP = {
 
 // ── Today's date for comparison ──
 const TODAY = new Date();
-let activeSources = new Set(['manual', 'room', 'assistant']); // which sources are selected
+let activeSources = new Set(['room', 'assistant']); // which sources are selected
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
 
@@ -90,10 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Get filtered event list ──
   function getFilteredEvents() {
-    let list = [];
-    if (activeSources.has('manual')) {
-      list = list.concat(MANUAL_EVENTS);
-    }
+    let list = [...MANUAL_EVENTS];  // always show manual events
     if (activeSources.has('room')) {
       list = list.concat(allLiveEvents);
     }
@@ -534,6 +531,16 @@ document.addEventListener('DOMContentLoaded', () => {
   dateInput.value = formatDateInput(new Date());
 
   // ── Modal ──
+  function buildSourceLinks(sourceUrl) {
+    const urls = sourceUrl.split(';').map(u => u.trim()).filter(u => u);
+    let html = '';
+    const count = Math.min(urls.length, 3);
+    for (let i = 0; i < count; i++) {
+      html += `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${urls[i]}" target="_blank" rel="noopener" style="color:var(--primary);">来源 ${i + 1}</a></div>`;
+    }
+    return html;
+  }
+
   function openModal(event) {
     const badgeClassMap = {
       milestone: 'milestone', tour: 'tour', show: 'show',
@@ -592,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</div>` : ''}
         ${event.event_link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.event_link}" target="_blank" rel="noopener" style="color:var(--primary);">活动详情</a></div>` : ''}
-        ${event.source_url ? `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${event.source_url}" target="_blank" rel="noopener" style="color:var(--primary);">信息来源</a></div>` : ''}
+        ${event.source_url ? buildSourceLinks(event.source_url) : ''}
         ${event.link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.link}" target="_blank" rel="noopener" style="color:var(--primary);">官方档案</a></div>` : ''}
         ${biliHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
