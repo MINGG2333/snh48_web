@@ -795,6 +795,31 @@
   text-decoration: underline;
 }
 
+/* ── Modal image gallery ── */
+.timeline-modal-gallery {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.timeline-modal-gallery img {
+  flex: 0 0 auto;
+  width: 240px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  scroll-snap-align: start;
+  border: 1px solid var(--glass-border);
+}
+
+/* ── B站 icon ── */
+.timeline-modal-info .fab.fa-bilibili {
+  color: #fb7299;
+}
+
 .timeline-modal-close {
   position: absolute;
   top: 12px;

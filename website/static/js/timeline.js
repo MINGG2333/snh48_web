@@ -527,6 +527,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const descHtml = event.description.replace(/\n/g, '<br>');
 
+    // Build image gallery
+    let galleryHtml = '';
+    if (event.image_urls && event.image_urls.length > 0) {
+      galleryHtml = '<div class="timeline-modal-gallery">';
+      event.image_urls.forEach(url => {
+        galleryHtml += `<img src="${url}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+      });
+      galleryHtml += '</div>';
+    }
+
+    // Build B站 links
+    let biliHtml = '';
+    if (event.bilibili_urls && event.bilibili_urls.length > 0) {
+      biliHtml = '<div class="timeline-modal-info" style="margin-top:12px;"><i class="fab fa-bilibili"></i> 相关视频：';
+      event.bilibili_urls.forEach((url, i) => {
+        biliHtml += `<a href="${url}" target="_blank" rel="noopener" style="color:var(--primary);">视频${i + 1}</a>`;
+        if (i < event.bilibili_urls.length - 1) biliHtml += ' · ';
+      });
+      biliHtml += '</div>';
+    }
+
     modalContent.innerHTML = `
       ${imgHtml}
       <div class="timeline-modal-body">
@@ -538,6 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</div>` : ''}
         ${event.source_url ? `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${event.source_url}" target="_blank" rel="noopener" style="color:var(--primary);">信息来源</a></div>` : ''}
+        ${biliHtml}
+        ${galleryHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
     `;
