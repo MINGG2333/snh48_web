@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
       el.style.setProperty('--dy', dy + 'px');
       el.style.animationDelay = (Math.random() * 0.15) + 's';
       document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2500);
+      setTimeout(() => el.remove(), 3500);
     }
   }
 
