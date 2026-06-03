@@ -279,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (dpViewMode === 'day') {
       // ── Day grid ──
+      dpDays.classList.remove('wide-grid');
       dpMonthYear.textContent = `${year}年${month + 1}月`;
       // Show weekday headers
       document.querySelector('.datepicker-weekdays').style.display = 'grid';
@@ -326,6 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } else if (dpViewMode === 'month') {
       // ── Month grid (4×3) ──
+      dpDays.classList.add('wide-grid');
       dpMonthYear.textContent = `${year}年`;
       document.querySelector('.datepicker-weekdays').style.display = 'none';
 
@@ -345,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } else if (dpViewMode === 'year') {
       // ── Year grid (4×3) ──
+      dpDays.classList.add('wide-grid');
       const decadeStart = Math.floor(year / 12) * 12;
       dpMonthYear.textContent = `${decadeStart}年 – ${decadeStart + 11}年`;
       document.querySelector('.datepicker-weekdays').style.display = 'none';
