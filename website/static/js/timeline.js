@@ -343,13 +343,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
     } else if (dpViewMode === 'year') {
-      // ── Year grid (4×3) ──
+      // ── Year grid (3×3) ──
       dpDays.classList.add('wide-grid');
-      const decadeStart = Math.floor(year / 12) * 12;
-      dpMonthYear.textContent = `${decadeStart}年 – ${decadeStart + 11}年`;
+      const decadeStart = Math.floor(year / 9) * 9;
+      dpMonthYear.textContent = `${decadeStart}年 – ${decadeStart + 8}年`;
       document.querySelector('.datepicker-weekdays').style.display = 'none';
 
-      for (let y = decadeStart; y < decadeStart + 12; y++) {
+      for (let y = decadeStart; y < decadeStart + 9; y++) {
         const isCurrent = y === year;
         html += `<button class="datepicker-day datepicker-year-item${isCurrent ? ' selected' : ''}" data-year="${y}">${y}年</button>`;
       }
