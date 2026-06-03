@@ -50,7 +50,7 @@ const BADGE_CLASS_MAP = {
 
 // ── Today's date for comparison ──
 const TODAY = new Date();
-let currentFilter = 'all'; // 'all' | 'manual' | 'room' | 'assistant'
+let activeSources = new Set(['manual', 'room', 'assistant']); // which sources are selected
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
 
@@ -99,21 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Get filtered event list ──
   function getFilteredEvents() {
-    let list = [...MANUAL_EVENTS];
-    if (currentFilter === 'all' || currentFilter === 'room' || currentFilter === 'assistant') {
+    let list = [];
+    if (activeSources.has('manual')) {
+      list = list.concat(MANUAL_EVENTS);
+    }
+    if (activeSources.has('room')) {
       list = list.concat(allLiveEvents);
     }
-    if (currentFilter === 'all' || currentFilter === 'assistant') {
+    if (activeSources.has('assistant')) {
       list = list.concat(allScheduleEvents);
-    }
-    if (currentFilter === 'room') {
-      list = list.filter(e => e.source === 'room');
-    }
-    if (currentFilter === 'manual') {
-      list = list.filter(e => e.source === 'manual');
-    }
-    if (currentFilter === 'assistant') {
-      list = list.filter(e => e.source === 'assistant');
     }
     list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
     return list;
@@ -447,14 +441,72 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Filter buttons (preserve current time center) ──
+  // ── Filter buttons (multi-select, "全部" toggles all) ──
+  function updateFilterUI() {
+    filterBtns.forEach(btn => {
+      const src = btn.dataset.source;
+      if (src === 'all') {
+        btn.classList.toggle('active', activeSources.size === 3);
+      } else {
+        btn.classList.toggle('active', activeSources.has(src));
+      }
+    });
+  }
+
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.source;
-      refreshTimeline(true); // keep the current center position
+      const src = btn.dataset.source;
+      if (src === 'all') {
+        // Toggle all ↔ manual only
+        if (activeSources.size === 3) {
+          activeSources = new Set(['manual']);
+        } else {
+          activeSources = new Set(['manual', 'room', 'assistant']);
+        }
+      } else {
+        // Toggle individual source
+        if (activeSources.has(src)) {
+          activeSources.delete(src);
+          // Don't allow empty selection; if empty, re-add
+          if (activeSources.size === 0) activeSources.add(src);
+        } else {
+          activeSources.add(src);
+        }
+      }
+      updateFilterUI();
+      refreshTimeline(true);
+      closeFilterBar();
     });
+  });
+
+  // ── Collapsible filter bar ──
+  const filterHeader = document.getElementById('timelineFilterHeader');
+  const filterOptions = document.getElementById('timelineFilterOptions');
+
+  function toggleFilterBar() {
+    const isOpen = filterOptions.classList.contains('open');
+    filterOptions.classList.toggle('open');
+    filterHeader.classList.toggle('open');
+  }
+
+  function closeFilterBar() {
+    filterOptions.classList.remove('open');
+    filterHeader.classList.remove('open');
+  }
+
+  if (filterHeader) {
+    filterHeader.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFilterBar();
+    });
+  }
+
+  // Close filter bar when clicking outside
+  document.addEventListener('click', (e) => {
+    const bar = document.getElementById('timelineFilterBar');
+    if (bar && !bar.contains(e.target)) {
+      closeFilterBar();
+    }
   });
 
   // ── Fetch schedule data from API ──
@@ -799,6 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Initialize: wait for all data, then render once ──
   const loadingEl = document.getElementById('timelineLoading');
+  // Sync initial filter UI state
+  updateFilterUI();
   // Fetch all data sources in parallel
   Promise.all([
     fetchLiveEvents(),

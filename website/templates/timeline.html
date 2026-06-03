@@ -431,15 +431,47 @@
   top: calc(20px + var(--nav-height));
   left: 24px;
   z-index: 1001;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   background: var(--card-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
   border-radius: 20px;
   padding: 4px 10px;
+  min-width: 50px;
+}
+
+.timeline-filter-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 14px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 500;
+  user-select: none;
+  transition: color 0.2s;
+}
+.timeline-filter-header:hover { color: var(--text); }
+.timeline-filter-header i {
+  font-size: 0.65rem;
+  transition: transform 0.25s ease;
+}
+.timeline-filter-header.open i {
+  transform: rotate(180deg);
+}
+
+.timeline-filter-options {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--glass-border);
+}
+.timeline-filter-options.open {
+  display: flex;
 }
 
 
@@ -972,10 +1004,16 @@
 
         <!-- Source filter bar -->
         <div class="timeline-filter-bar" id="timelineFilterBar">
-            <button class="timeline-filter-btn active" data-source="all">全部</button>
-            <button class="timeline-filter-btn" data-source="manual">手动</button>
-            <button class="timeline-filter-btn" data-source="room">直播</button>
-            <button class="timeline-filter-btn" data-source="assistant">行程</button>
+            <div class="timeline-filter-header" id="timelineFilterHeader">
+                <span>类型</span>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="timeline-filter-options" id="timelineFilterOptions">
+                <button class="timeline-filter-btn active" data-source="all">全部</button>
+                <button class="timeline-filter-btn active" data-source="manual">手动</button>
+                <button class="timeline-filter-btn active" data-source="room">直播</button>
+                <button class="timeline-filter-btn active" data-source="assistant">行程</button>
+            </div>
         </div>
 
         <!-- Zoom controls + date jump -->
