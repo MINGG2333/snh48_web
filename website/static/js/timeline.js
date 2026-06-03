@@ -598,35 +598,43 @@ document.addEventListener('DOMContentLoaded', () => {
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    // 🎂 Birthday effect for January 10th events
+    // 🎂 Birthday fountain for January 10th events
     if (event.date && event.date.slice(5) === '01-10') {
-      setTimeout(() => burstCakes(), 300);
+      setTimeout(() => startCakeFountain(), 300);
     }
   }
 
-  function burstCakes() {
+  let cakeFountainTimer = null;
+
+  function startCakeFountain() {
     const modal = document.getElementById('timelineModal');
     if (!modal) return;
     const rect = modal.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    const emojis = ['🎂', '🎂', '🎂', '🎉', '🎉', '🎊', '💜'];
-    for (let i = 0; i < 20; i++) {
+    const emojis = ['🎂', '🎂', '🎂', '🎉', '🎊', '💜', '✨', '🎈'];
+    let count = 0;
+    const maxCount = 60;
+    const interval = setInterval(() => {
+      if (count >= maxCount) { clearInterval(interval); return; }
       const el = document.createElement('div');
       el.className = 'birthday-cake';
-      el.textContent = emojis[i % emojis.length];
-      const angle = (360 / 20) * i + Math.random() * 20;
-      const dist = 120 + Math.random() * 200;
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      const angle = Math.random() * 360;
+      const dist = 80 + Math.random() * 250;
       const dx = Math.cos((angle * Math.PI) / 180) * dist;
-      const dy = Math.sin((angle * Math.PI) / 180) * dist;
-      el.style.left = cx + 'px';
-      el.style.top = cy + 'px';
+      const dy = Math.sin((angle * Math.PI) / 180) * dist - 80;
+      el.style.left = (cx + (Math.random() - 0.5) * 40) + 'px';
+      el.style.top = (cy + (Math.random() - 0.5) * 20) + 'px';
       el.style.setProperty('--dx', dx + 'px');
       el.style.setProperty('--dy', dy + 'px');
-      el.style.animationDelay = (Math.random() * 0.15) + 's';
+      el.style.animationDuration = (0.8 + Math.random() * 0.6) + 's';
       document.body.appendChild(el);
-      setTimeout(() => el.remove(), 3500);
-    }
+      setTimeout(() => el.remove(), 2000);
+      count++;
+    }, 80);
+    cakeFountainTimer = interval;
+    setTimeout(() => { if (cakeFountainTimer) clearInterval(cakeFountainTimer); cakeFountainTimer = null; }, 5000);
   }
 
   function closeModal() {
