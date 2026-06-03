@@ -481,9 +481,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Drag-to-select across filter options ──
   let isDraggingFilter = false;
   if (filterOptions) {
-    filterOptions.addEventListener('pointerdown', () => {
+    filterOptions.addEventListener('pointerdown', (e) => {
       isDraggingFilter = true;
-      filterOptions.setPointerCapture(event.pointerId);
+      filterOptions.setPointerCapture(e.pointerId);
     });
 
     filterOptions.addEventListener('pointermove', (e) => {
