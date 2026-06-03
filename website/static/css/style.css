@@ -1337,7 +1337,8 @@ body {
    ═══════════════════════════════════════════════════════════════════════════*/
 .qa-share-area {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   margin-top: 24px;
   margin-bottom: 8px;
 }
