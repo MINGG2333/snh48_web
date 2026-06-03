@@ -38,12 +38,18 @@ IMAGE_PROXY_INTERNAL_PREFIX = "/image-proxy"
 
 
 def sinaimg_to_proxy(url: str) -> str:
-    """将 https://wx1.sinaimg.cn/large/xxx 转为 /image-proxy/large/xxx"""
-    if not url or ".sinaimg.cn" not in url:
+    """将图片 URL 转为内部代理路径（sinaimg）或直接升级为 HTTPS（hdslb）"""
+    if not url:
         return url
     try:
-        path = url.split(".cn")[-1]  # /large/xxx 或 /original/xxx
-        return f"{IMAGE_PROXY_INTERNAL_PREFIX}{path}"
+        # B站图片: http://i0.hdslb.com/... → https://i0.hdslb.com/...
+        if "hdslb.com" in url:
+            return url.replace("http://", "https://")
+        # 新浪微博图片: https://wx1.sinaimg.cn/large/xxx → /image-proxy/large/xxx
+        if ".sinaimg.cn" in url:
+            path = url.split(".cn")[-1]
+            return f"{IMAGE_PROXY_INTERNAL_PREFIX}{path}"
+        return url
     except Exception:
         return url
 
