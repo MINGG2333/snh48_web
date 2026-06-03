@@ -41,7 +41,8 @@ const BADGE_CLASS_MAP = {
 
 // ── Today's date for comparison ──
 const TODAY = new Date();
-let activeSources = new Set(['room', 'assistant']); // which sources are selected
+let activeSources = new Set(['room']);     // source-level: 'room'
+let activeTypes = new Set(['公演', '外务', '见面会', '日常', '里程碑']); // type-level
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
 
@@ -94,8 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeSources.has('room')) {
       list = list.concat(allLiveEvents);
     }
-    if (activeSources.has('assistant')) {
-      list = list.concat(allScheduleEvents);
+    if (activeTypes.size > 0) {
+      list = list.concat(allScheduleEvents.filter(ev => activeTypes.has(ev.type)));
     }
     list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
     return list;
@@ -432,21 +433,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Filter buttons (multi-select) ──
+  // ── Filter buttons (source & type multi-select) ──
   function updateFilterUI() {
     filterBtns.forEach(btn => {
-      btn.classList.toggle('active', activeSources.has(btn.dataset.source));
+      const src = btn.dataset.source;
+      const type = btn.dataset.type;
+      if (src) {
+        btn.classList.toggle('active', activeSources.has(src));
+      } else if (type) {
+        btn.classList.toggle('active', activeTypes.has(type));
+      }
     });
   }
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const src = btn.dataset.source;
-      if (activeSources.has(src)) {
-        activeSources.delete(src);
-        if (activeSources.size === 0) activeSources.add(src);
-      } else {
-        activeSources.add(src);
+      const type = btn.dataset.type;
+      if (src) {
+        if (activeSources.has(src)) { activeSources.delete(src); if (activeSources.size === 0) activeSources.add(src); }
+        else { activeSources.add(src); }
+      } else if (type) {
+        if (activeTypes.has(type)) { activeTypes.delete(type); if (activeTypes.size === 0) activeTypes.add(type); }
+        else { activeTypes.add(type); }
       }
       updateFilterUI();
       refreshTimeline(true);
