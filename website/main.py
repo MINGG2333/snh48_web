@@ -40,6 +40,11 @@ for _p in _covers_candidates:
         app.mount("/live-covers", StaticFiles(directory=str(_p)), name="live_covers")
         break
 
+# ── Schedule Images (行程配图) ────────────────────────────────────────────
+_schedule_images_path = _Path("/home/snh48-fan-hub/schedule_record/images")
+if _schedule_images_path.exists():
+    app.mount("/schedule-images", StaticFiles(directory=str(_schedule_images_path)), name="schedule_images")
+
 # ── Templates ──────────────────────────────────────────────────────────────
 templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))
 
