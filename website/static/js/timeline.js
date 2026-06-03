@@ -13,31 +13,21 @@ const MANUAL_EVENTS = [
   {
     id: 'join', source: 'manual', date: '2025-09-23',
     title: '加入 SNH48 二十三期生', type: 'milestone', typeLabel: '里程碑',
-    description: `2025年9月23日，陈嘉仪正式加入 SNH48 二十三期生，时年20岁。\n\n作为 SNH48 新生代成员，陈嘉仪以独特的气质和才艺获得了关注。官方资料显示，她的特长是"反射弧特长"（官方认证反应慢），爱好包括看国漫、唱歌跳舞、舞团练习室视频和玩游戏。\n\n她的 Catch Phrase 是："陈可以是加减乘除的乘，嘉可以是加减乘除的加，仪可以是一二三四的一。"粉丝亲切地称她为"×＋1"或"甲鱼"。`,
-    image: null, icon: 'fa-star',
-  },
-  {
-    id: 'debut', source: 'manual', date: '2025-10-05',
-    title: '星梦剧院首演《B·RISE 梦之门》', type: 'milestone', typeLabel: '里程碑 · 公演',
-    description: `2025年10月5日 & 10月6日 19:00\n📍 SNH48 星梦剧院\n\nSNH48 23期新生公演《B·RISE 梦之门》在星梦剧院盛大首演！这是陈嘉仪登上 SNH48 舞台的出道首秀。\n\n首演中，陈嘉仪与同期23期生李婷在公演中上演了"小学鸡拌嘴名场面"，活泼可爱的互动给粉丝们留下了深刻印象。`,
-    image: null, icon: 'fa-theater-masks',
-  },
-  {
-    id: 'promotion', source: 'manual', date: '2026-02-08',
-    title: '升格 TEAM HII 正式成员', type: 'milestone', typeLabel: '里程碑',
-    description: `2026年2月8日，陈嘉仪公演考核通过，正式升格为 SNH48 TEAM HII 正式成员！\n\n同期升格的还有刘思雨。\n\n"What time is it ! combat time ! We are the only one ! Team HII !"\n\n愿她们永远怀抱"闪着光的信念"，守护"发芽的梦想"，在 TEAM HII 的篇章里，亲手摘取属于自己的梦想果实。`,
-    image: null, icon: 'fa-crown',
-  },
-  {
-    id: 'miluo-external', source: 'manual', date: '2026-06-19',
-    title: '湖南汨罗外务', type: 'external', typeLabel: '外务',
-    description: `📅 2026年6月19日（星期五）\n🕐 时间待定\n📍 湖南汨罗\n\n陈嘉仪将赴湖南汨罗参加外务活动，这是她升格后的首次外务演出，期待她在舞台上的精彩表现！`,
-    image: null, icon: 'fa-plane',
+    description: `2025年9月23日，陈嘉仪正式加入 SNH48 二十三期生，时年20岁。\n\n个人特长反射弧特长，身高166cm，爱好看国漫、唱歌跳舞、最喜欢看舞团练习室视频、玩游戏。星座摩羯座，生日1月10日。所属上海丝芭文化传媒集团有限公司。`,
+    image: 'https://www.snh48.com/images/member/gs4_10344_1.jpg',
+    icon: 'fa-star',
+    link: 'https://www.snh48.com/mobile/member-detail.html?sid=10344&gid=1',
+    images: [
+      'https://www.snh48.com/images/member/gs4_10344_1.jpg',
+      'https://www.snh48.com/images/member/gs4_10344_2.jpg',
+      'https://www.snh48.com/images/member/gs4_10344_3.jpg',
+      'https://www.snh48.com/images/member/gs4_10344_4.jpg',
+    ],
   },
   {
     id: 'guangzhou-tour', source: 'manual', date: '2026-06-28',
     title: '广州巡演', type: 'tour', typeLabel: '巡演',
-    description: `📅 2026年6月28日（星期日）\n🕐 时间待定\n📍 广州\n\n广州巡演！作为巡演系列的最后一站，陈嘉仪将在广州带来精彩的舞台表演，与粉丝们近距离互动。`,
+    description: `广州巡演！`,
     image: null, icon: 'fa-bus',
   },
 ];
@@ -46,6 +36,7 @@ const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
   event: 'event', external: 'external', live: 'event',
   公演: 'show', 外务: 'external', 见面会: 'event', 其他: 'event',
+  里程碑: 'milestone', 日常: 'event',
 };
 
 // ── Today's date for comparison ──
@@ -544,6 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const badgeClassMap = {
       milestone: 'milestone', tour: 'tour', show: 'show',
       event: 'event', external: 'external', live: 'event',
+      里程碑: 'milestone', 日常: 'event',
     };
     const badgeClass = badgeClassMap[event.type] || 'event';
 
@@ -559,15 +551,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Build cover/gallery: if multiple images, show scrollable gallery; else single cover
     let coverHtml = '';
-    if (event.image_urls && event.image_urls.length > 1) {
+    // Check manual event images first, then schedule images
+    const imgList = event.images || event.image_urls || [];
+    if (imgList.length > 1) {
       coverHtml = '<div class="timeline-modal-gallery">';
-      event.image_urls.forEach(url => {
+      imgList.forEach(url => {
         coverHtml += `<img src="${url}" alt="" class="loading" loading="lazy" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
       });
       coverHtml += '</div>';
     } else {
-      // Single cover (from cover_url or first image_urls item or placeholder)
-      const coverSrc = event.cover_url || (event.image_urls && event.image_urls[0]) || '';
+      // Single cover (from cover_url or first image/imgList item or placeholder)
+      const coverSrc = event.cover_url || (imgList.length > 0 ? imgList[0] : '') || event.image || '';
       coverHtml = coverSrc
         ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${event.title}" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
         : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
@@ -594,7 +588,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</div>` : ''}
+        ${event.event_link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.event_link}" target="_blank" rel="noopener" style="color:var(--primary);">活动详情</a></div>` : ''}
         ${event.source_url ? `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${event.source_url}" target="_blank" rel="noopener" style="color:var(--primary);">信息来源</a></div>` : ''}
+        ${event.link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.link}" target="_blank" rel="noopener" style="color:var(--primary);">官方档案</a></div>` : ''}
         ${biliHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>

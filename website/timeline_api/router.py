@@ -342,6 +342,8 @@ TYPE_LABEL_MAP = {
     "公演": "公演",
     "外务": "外务",
     "见面会": "见面会",
+    "里程碑": "里程碑",
+    "日常": "日常",
     "其他": "其他",
 }
 
@@ -378,12 +380,24 @@ def read_schedule() -> List[Dict[str, Any]]:
                 time_str = (row.get("time") or "").strip()
                 type_label = TYPE_LABEL_MAP.get(event_type, event_type)
 
+                # event_type (行程/里程碑/日常)
+                row_event_type = (row.get("event_type") or "").strip()
+
                 # Optional enhanced fields from CSV
                 location = (row.get("location") or "").strip()
                 cover_url = sinaimg_to_proxy((row.get("cover_url") or "").strip())
                 source_url = (row.get("source_url") or "").strip()
                 csv_desc = (row.get("description") or "").strip()
+                event_link = (row.get("event_link") or "").strip()
+                remark = (row.get("remark") or "").strip()
+                # event_images has priority over image_urls
+                event_images = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("event_images"))]
                 image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
+                # Use event_images as primary, image_urls as fallback
+                primary_images = event_images if event_images else image_urls
+                # cover_url fallback: event_images first, then cover_url from csv
+                if not cover_url and event_images:
+                    cover_url = event_images[0]
                 bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
                 chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
                 snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
@@ -408,6 +422,8 @@ def read_schedule() -> List[Dict[str, Any]]:
                         "公演": "fa-music",
                         "外务": "fa-plane",
                         "见面会": "fa-handshake",
+                        "里程碑": "fa-star",
+                        "日常": "fa-heart",
                     }.get(event_type, "fa-calendar-check")
 
                 records.append({
@@ -417,13 +433,15 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "title": title,
                     "type": event_type,
                     "typeLabel": type_label,
+                    "eventType": row_event_type,
                     "source": "assistant",
                     "description": "\n".join(desc_parts),
                     "cover_url": cover_url,
                     "icon": icon,
                     "location": location,
                     "source_url": source_url,
-                    "image_urls": image_urls,
+                    "image_urls": primary_images,
+                    "event_link": event_link,
                     "bilibili_urls": bilibili_urls,
                 })
     except (IOError, csv.Error) as e:
