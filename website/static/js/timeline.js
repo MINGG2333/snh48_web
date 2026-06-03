@@ -41,8 +41,7 @@ const BADGE_CLASS_MAP = {
 
 // ── Today's date for comparison ──
 const TODAY = new Date();
-let activeSources = new Set(['room']); // which sources are selected
-let activeTypes = new Set(); // which schedule types are selected (populated after fetch)
+let activeSources = new Set(['room', 'assistant']); // which sources are selected
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
 
@@ -95,12 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeSources.has('room')) {
       list = list.concat(allLiveEvents);
     }
-    // Filter schedule events by selected types (if any), or show all if none selected
-    let schedList = allScheduleEvents;
-    if (activeTypes.size > 0) {
-      schedList = allScheduleEvents.filter(ev => activeTypes.has(ev.type));
+    if (activeSources.has('assistant')) {
+      list = list.concat(allScheduleEvents);
     }
-    list = list.concat(schedList);
     list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
     return list;
   }
@@ -439,49 +435,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Filter buttons (multi-select) ──
   function updateFilterUI() {
     filterBtns.forEach(btn => {
-      const src = btn.dataset.source;
-      if (src) btn.classList.toggle('active', activeSources.has(src));
+      btn.classList.toggle('active', activeSources.has(btn.dataset.source));
     });
-    // Schedule type buttons
-    document.querySelectorAll('.schedule-type-btn').forEach(btn => {
-      const t = btn.dataset.type;
-      if (t) btn.classList.toggle('active', activeTypes.has(t));
-    });
-  }
-
-  function buildScheduleTypeButtons() {
-    const container = document.getElementById('scheduleTypeFilters');
-    if (!container) return;
-    // Collect unique types from schedule events
-    const types = [...new Set(allScheduleEvents.map(ev => ev.type))].sort();
-    // Ensure all types are in activeTypes
-    types.forEach(t => activeTypes.add(t));
-    container.innerHTML = types.map(t =>
-      `<button class="timeline-filter-btn schedule-type-btn active" data-type="${t}">${t}</button>`
-    ).join('');
-    // Attach click handlers
-    container.querySelectorAll('.schedule-type-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const t = btn.dataset.type;
-        if (activeTypes.has(t)) {
-          activeTypes.delete(t);
-          if (activeTypes.size === 0) activeTypes.add(t); // keep at least one
-        } else {
-          activeTypes.add(t);
-        }
-        updateFilterUI();
-        refreshTimeline(true);
-      });
-    });
-    updateFilterUI();
   }
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const src = btn.dataset.source;
-      if (!src) return;
       if (activeSources.has(src)) {
         activeSources.delete(src);
+        if (activeSources.size === 0) activeSources.add(src);
       } else {
         activeSources.add(src);
       }
@@ -530,8 +493,6 @@ document.addEventListener('DOMContentLoaded', () => {
           ...ev,
           source: 'assistant',
         }));
-        // Build type filter buttons after data is loaded
-        buildScheduleTypeButtons();
       }
     } catch (err) {
       console.warn('[timeline] Failed to fetch schedule events:', err);
