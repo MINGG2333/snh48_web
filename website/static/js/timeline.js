@@ -441,37 +441,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Filter buttons (multi-select, "全部" toggles all) ──
+  // ── Filter buttons (multi-select) ──
   function updateFilterUI() {
     filterBtns.forEach(btn => {
-      const src = btn.dataset.source;
-      if (src === 'all') {
-        btn.classList.toggle('active', activeSources.size === 3);
-      } else {
-        btn.classList.toggle('active', activeSources.has(src));
-      }
+      btn.classList.toggle('active', activeSources.has(btn.dataset.source));
     });
   }
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const src = btn.dataset.source;
-      if (src === 'all') {
-        // Toggle all ↔ manual only
-        if (activeSources.size === 3) {
-          activeSources = new Set(['manual']);
-        } else {
-          activeSources = new Set(['manual', 'room', 'assistant']);
-        }
+      if (activeSources.has(src)) {
+        activeSources.delete(src);
+        if (activeSources.size === 0) activeSources.add(src);
       } else {
-        // Toggle individual source
-        if (activeSources.has(src)) {
-          activeSources.delete(src);
-          // Don't allow empty selection; if empty, re-add
-          if (activeSources.size === 0) activeSources.add(src);
-        } else {
-          activeSources.add(src);
-        }
+        activeSources.add(src);
       }
       updateFilterUI();
       refreshTimeline(true);
