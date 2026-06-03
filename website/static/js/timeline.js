@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } else if (dpViewMode === 'month') {
       // ── Month grid (4×3) ──
-      dpDays.classList.add('wide-grid');
+      dpDays.classList.add('month-grid');
       dpMonthYear.textContent = `${year}年`;
       document.querySelector('.datepicker-weekdays').style.display = 'none';
 
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } else if (dpViewMode === 'year') {
       // ── Year grid (3×3) ──
-      dpDays.classList.add('wide-grid');
+      dpDays.classList.add('year-grid');
       const decadeStart = Math.floor(year / 9) * 9;
       dpMonthYear.textContent = `${decadeStart}年 – ${decadeStart + 8}年`;
       document.querySelector('.datepicker-weekdays').style.display = 'none';
