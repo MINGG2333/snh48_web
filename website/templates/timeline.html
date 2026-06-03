@@ -474,8 +474,11 @@
   display: flex;
 }
 
-
-
+.timeline-filter-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 4px 0;
+}
 .timeline-filter-btn {
   background: transparent;
   border: 1px solid transparent;
@@ -1035,7 +1038,8 @@
             </div>
             <div class="timeline-filter-options" id="timelineFilterOptions">
                 <button class="timeline-filter-btn active" data-source="room">直播</button>
-                <button class="timeline-filter-btn active" data-source="assistant">行程</button>
+                <div class="timeline-filter-divider"></div>
+                <div id="scheduleTypeFilters"></div>
             </div>
         </div>
 
