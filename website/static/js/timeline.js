@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (dpViewMode === 'day') {
       // ── Day grid ──
-      dpDays.classList.remove('wide-grid');
+      dpDays.classList.remove('month-grid', 'year-grid');
       dpMonthYear.textContent = `${year}年${month + 1}月`;
       // Show weekday headers
       document.querySelector('.datepicker-weekdays').style.display = 'grid';
