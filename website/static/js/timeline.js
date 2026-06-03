@@ -642,6 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let velocity = 0;
   let lastX = 0;
   let lastTime = 0;
+  let smoothVelocity = 0;
   let animFrame = null;
 
   function getTrackLeft() {
@@ -681,8 +682,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = performance.now();
     const dt = now - lastTime;
     if (dt > 0) {
-      velocity = (clientX - lastX) / dt;
-      velocity = Math.max(-1.2, Math.min(1.2, velocity));
+      const instantV = (clientX - lastX) / dt;
+      // Exponential moving average for smooth velocity
+      smoothVelocity = smoothVelocity ? smoothVelocity * 0.7 + instantV * 0.3 : instantV;
+      smoothVelocity = Math.max(-1.5, Math.min(1.5, smoothVelocity));
     }
     lastX = clientX;
     lastTime = now;
@@ -700,11 +703,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const inertiaV = velocity * 1200;
-    if (Math.abs(inertiaV) > 5) {
+    const inertiaV = smoothVelocity * 400;
+    if (Math.abs(inertiaV) > 8) {
       const current = getTrackLeft();
       const delta = inertiaV;
-      const duration = 600;
+      const duration = 400;
       const startVal = current;
       const startTime = performance.now();
 
@@ -716,7 +719,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (progress < 1) {
           animFrame = requestAnimationFrame(inertiaAnimate);
         } else {
-          // Sync after inertia fully settles
           requestAnimationFrame(() => syncDateInputWithCenter());
         }
       }
@@ -725,6 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
       syncDateInputWithCenter();
     }
     velocity = 0;
+    smoothVelocity = 0;
   }
 
   // Mouse events
