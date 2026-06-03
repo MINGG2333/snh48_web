@@ -691,13 +691,15 @@ document.addEventListener('DOMContentLoaded', () => {
     endDrag();
   });
 
-  // Touch events
+  // Touch events (single-finger drag)
   wrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
     const touch = e.touches[0];
     startDrag(touch.clientX);
   }, { passive: true });
 
   wrapper.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
     const touch = e.touches[0];
     moveDrag(touch.clientX);
   }, { passive: true });
@@ -767,6 +769,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       applyScale(scale - e.deltaY * 0.002);
+    }
+  }, { passive: false });
+
+  // ── Pinch-to-zoom on mobile ──
+  let lastPinchDist = 0;
+  wrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastPinchDist = Math.hypot(dx, dy);
+      hint.classList.add('dim');
+    }
+  }, { passive: true });
+
+  wrapper.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (lastPinchDist > 0) {
+        const delta = dist - lastPinchDist;
+        applyScale(scale + delta * 0.005);
+      }
+      lastPinchDist = dist;
     }
   }, { passive: false });
 
