@@ -40,7 +40,7 @@ for _p in _covers_candidates:
         app.mount("/live-covers", StaticFiles(directory=str(_p)), name="live_covers")
         break
 
-# ── Schedule Images (行程配图，已改用代理方案A，无需本地路由) ──
+
 
 # ── Templates ──────────────────────────────────────────────────────────────
 templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))

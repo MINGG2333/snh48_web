@@ -32,16 +32,18 @@ MEMBER_DIR = f"{MEMBER_NAME}_{MEMBER_ID}"
 
 # ── 图片代理 ────────────────────────────────────────────────────────────
 # 新浪微博图片有 Referer 防盗链，通过代理服务器加 Referer 头绕过
-IMAGE_PROXY_HOST = "http://124.222.72.203:8899"
+# Nginx 反向代理：/image-proxy/ → http://10.0.0.6:8899/
+# 见 deploy/nginx.conf 中的配置
+IMAGE_PROXY_INTERNAL_PREFIX = "/image-proxy"
 
 
 def sinaimg_to_proxy(url: str) -> str:
-    """将 https://wx1.sinaimg.cn/large/xxx 转为 http://代理:8899/large/xxx"""
+    """将 https://wx1.sinaimg.cn/large/xxx 转为 /image-proxy/large/xxx"""
     if not url or ".sinaimg.cn" not in url:
         return url
     try:
         path = url.split(".cn")[-1]  # /large/xxx 或 /original/xxx
-        return f"{IMAGE_PROXY_HOST}{path}"
+        return f"{IMAGE_PROXY_INTERNAL_PREFIX}{path}"
     except Exception:
         return url
 
@@ -443,6 +445,3 @@ def get_schedule():
         "total": len(records),
         "member": MEMBER_NAME,
     }
-
-
-
