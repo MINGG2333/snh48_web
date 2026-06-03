@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const showTypeBadge = !keywordBadge;
         cardsHtml += `
           <div class="timeline-card" data-event-id="${ev.id}">
-            ${hasCover ? `<img class="${imgClass}" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
+            ${hasCover ? `<img class="${imgClass}" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
             <div class="timeline-card-body">
               <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
               <div class="timeline-card-title">${ev.title}</div>
@@ -556,14 +556,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (imgList.length > 1) {
       coverHtml = '<div class="timeline-modal-gallery">';
       imgList.forEach(url => {
-        coverHtml += `<img src="${url}" alt="" class="loading" loading="lazy" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
+        coverHtml += `<img src="${url}" alt="" class="loading" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
       });
       coverHtml += '</div>';
     } else {
       // Single cover (from cover_url or first image/imgList item or placeholder)
       const coverSrc = event.cover_url || (imgList.length > 0 ? imgList[0] : '') || event.image || '';
       coverHtml = coverSrc
-        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${event.title}" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
+        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${event.title}" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
         : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
     }
 
