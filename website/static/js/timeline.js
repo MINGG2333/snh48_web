@@ -475,7 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       updateFilterUI();
       refreshTimeline(true);
-      closeFilterBar();
     });
   });
 
