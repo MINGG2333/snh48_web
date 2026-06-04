@@ -1017,11 +1017,19 @@
         if (cit.citation_type) {
           html += `<span class="citation-type-badge">${escapeHtml(cit.citation_type)}</span>`;
         }
-        // Video title + date from first segment (if any)
+        // Video title (with link to replay page) + date from first segment
         if (segs.length > 0) {
           const firstSeg = segs[0];
           if (firstSeg.video_title) {
-            html += `<span class="citation-header-video">📺 ${escapeHtml(firstSeg.video_title)}`;
+            const videoLink = firstSeg.live_id
+              ? `/replay/${encodeURIComponent(firstSeg.live_id)}`
+              : null;
+            html += `<span class="citation-header-video">📺 `;
+            if (videoLink) {
+              html += `<a href="${videoLink}" target="_blank" rel="noopener noreferrer" class="citation-video-link" title="查看直播回放">${escapeHtml(firstSeg.video_title)}</a>`;
+            } else {
+              html += escapeHtml(firstSeg.video_title);
+            }
             if (firstSeg.video_datetime) {
               const dateStr = firstSeg.video_datetime.replace('T', ' ').slice(0, 16);
               html += ` <span class="segment-video-date">${escapeHtml(dateStr)}</span>`;

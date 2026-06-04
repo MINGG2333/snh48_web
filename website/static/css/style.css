@@ -988,6 +988,17 @@ body {
   margin-left: auto;
 }
 
+.citation-video-link {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.citation-video-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
 
 .citation-item .citation-id {
   font-weight: 700;
