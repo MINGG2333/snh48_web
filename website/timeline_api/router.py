@@ -396,6 +396,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                 csv_desc = (row.get("description") or "").strip()
                 event_link = (row.get("event_link") or "").strip()
                 remark = (row.get("remark") or "").strip()
+                video_urls = parse_multi_urls(row.get("video_urls"))
                 # event_images has top priority: always overrides image_urls, and its first image becomes cover_url
                 event_images = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("event_images"))]
                 if event_images:
@@ -452,6 +453,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "source_url": source_url,
                     "image_urls": image_urls,
                     "event_link": event_link,
+                    "video_urls": video_urls,
                     "bilibili_urls": bilibili_urls,
                 })
     except (IOError, csv.Error) as e:

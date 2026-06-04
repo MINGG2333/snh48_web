@@ -591,6 +591,17 @@ document.addEventListener('DOMContentLoaded', () => {
       biliHtml += '</div>';
     }
 
+    // Build external video links
+    let videoHtml = '';
+    if (event.video_urls && event.video_urls.length > 0) {
+      videoHtml = '<div class="timeline-modal-info" style="margin-top:4px;"><i class="fas fa-video"></i> 相关视频：';
+      event.video_urls.forEach((url, i) => {
+        videoHtml += `<a href="${url}" target="_blank" rel="noopener" style="color:var(--primary);">视频${i + 1}</a>`;
+        if (i < event.video_urls.length - 1) videoHtml += ' · ';
+      });
+      videoHtml += '</div>';
+    }
+
     modalContent.innerHTML = `
       ${coverHtml}
       <div class="timeline-modal-body">
@@ -605,6 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.source_url ? buildSourceLinks(event.source_url) : ''}
         ${event.link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.link}" target="_blank" rel="noopener" style="color:var(--primary);">官方档案</a></div>` : ''}
         ${biliHtml}
+        ${videoHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
       </div>
     `;
