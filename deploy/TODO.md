@@ -835,4 +835,34 @@ cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git p
 
 # 远程一行搞定（本机直接执行）
 ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
+
+---
+
+### 数据文件同步
+
+行程数据文件更新后需要手动同步。在**腾讯云服务器**（snh48-fan-hub 所在机器）上执行以下 rsync 命令同步到阿里云：
+
+#### 需要同步的数据
+
+| 数据 | 源路径（腾讯云） | 目标（阿里云） | 说明 |
+|------|----------------|---------------|------|
+| `schedule.csv` | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 行程表，网站实时读取 |
+| `live_push_replays/` | `/home/snh48-fan-hub/live_push_replays/` | 同路径 | 直播回放汇总（含封面缩略图） |
+| `room_record/…/live_covers/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面图 |
+
+> ⚠️ `schedule_record/images/`（约740MB）**不需要同步**，图片通过代理服务访问。
+
+#### 同步命令（在腾讯云上执行）
+
+```bash
+# 1. schedule.csv
+scp /home/snh48-fan-hub/schedule_record/schedule.csv root@8.210.188.184:/home/snh48-fan-hub/schedule_record/schedule.csv
+
+# 2. live_push_replays（直播汇总 + 封面缩略图）
+rsync -avz --progress /home/snh48-fan-hub/live_push_replays/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/
+
+# 3. live_covers（直播封面原图，增量同步很快）
+rsync -avz --progress /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
 ```
+
+> 同步后无需重启服务。
