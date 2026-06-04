@@ -1041,7 +1041,7 @@
             const sameVideo = seg.video_title && seg.video_title === prevVideoTitle;
 
             html += `<div class="citation-segment">`;
-            // Source info row: anchor_name (dedup), source_type, offset
+            // Source info row: anchor_name (dedup), source_type
             html += `<div class="segment-source">`;
             if (seg.anchor_name && !sameAnchor) {
               html += `<span class="segment-anchor">${escapeHtml(seg.anchor_name)}</span>`;
@@ -1050,9 +1050,12 @@
               html += `<span class="segment-type">${escapeHtml(seg.source_type)}</span>`;
             }
 
-            if (seg.video_offset) {
-              html += `<span class="segment-offset">⏱ ${escapeHtml(seg.video_offset)}</span>`;
-            }
+            // # TODO: 等转录数据时间戳修正后取消注释
+            // # 当前转录结果中 speech 片段的时间戳可能不准（连麦/周围人声音误标），
+            // # 待重新转录获得正确时间戳后再恢复显示。
+            // if (seg.video_offset) {
+            //   html += `<span class="segment-offset">⏱ ${escapeHtml(seg.video_offset)}</span>`;
+            // }
             html += `</div>`;
 
 
