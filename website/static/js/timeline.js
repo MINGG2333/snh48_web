@@ -215,15 +215,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (prevDate) {
         centerOnDate(prevDate);
       } else {
-        // Initial load: center on boundary between past and future
+        // Initial load: center on today's date
+        const todayStr = formatDateInput(TODAY);
         const events = trackInner.querySelectorAll('.timeline-event');
         if (events.length > 0) {
-          let idx = events.length - 1;
-          for (let i = 0; i < events.length; i++) {
-            const d = new Date(events[i].dataset.date);
-            if (d > TODAY) { idx = i; break; }
-          }
-          centerOnEvent(idx);
+          let best = 0;
+          let bestDiff = Infinity;
+          events.forEach((el, i) => {
+            const d = el.dataset.date;
+            const diff = Math.abs(new Date(d) - TODAY);
+            if (diff < bestDiff) { bestDiff = diff; best = i; }
+          });
+          centerOnEvent(best);
         }
       }
       updateTransformOrigin();
