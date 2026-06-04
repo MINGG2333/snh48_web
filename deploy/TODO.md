@@ -852,17 +852,31 @@ ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/tr
 
 > ⚠️ `schedule_record/images/`（约740MB）**不需要同步**，图片通过代理服务访问。
 
-#### 同步命令（在腾讯云上执行）
+#### 自动同步（推荐）
+
+已配置 ssh-key 免密登录，一键脚本：
+
+```bash
+# 手动执行
+bash deploy/sync-to-aliyun.sh
+
+# 添加定时任务（每30分钟自动同步）
+crontab -e
+# 加入以下行：
+*/30 * * * * /home/snh48_web/deploy/sync-to-aliyun.sh >> /var/log/snh48/sync-to-aliyun.log 2>&1
+```
+
+#### 手动同步命令
 
 ```bash
 # 1. schedule.csv
 scp /home/snh48-fan-hub/schedule_record/schedule.csv root@8.210.188.184:/home/snh48-fan-hub/schedule_record/schedule.csv
 
 # 2. live_push_replays（直播汇总 + 封面缩略图）
-rsync -avz --progress /home/snh48-fan-hub/live_push_replays/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/
+rsync -az --progress /home/snh48-fan-hub/live_push_replays/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/
 
 # 3. live_covers（直播封面原图，增量同步很快）
-rsync -avz --progress /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
+rsync -az --progress /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
 ```
 
 > 同步后无需重启服务。
