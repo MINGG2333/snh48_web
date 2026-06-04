@@ -810,10 +810,18 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 # SSH 连接
 ssh root@8.210.188.184
 
-# 一键更新（snh48_web + transcript_analyze + 重启）
-cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun && journalctl -u snh48-aliyun -n 10 --no-pager
+# 拉代码
+cd /home/snh48_web && git pull
+cd /home/snh48_web/transcript_analyze && git pull
 
-# 远程一行搞定（本机直接执行）
+# 判断是否需要重启：
+#   - 改了 .py 文件 → 必须重启（上面那行）
+#   - 改了 .html/.css/.js → 刷新浏览器即可
+#   - 改了 .md/文档 → 啥都不用做
+systemctl restart snh48-aliyun
+journalctl -u snh48-aliyun -n 10 --no-pager
+
+# 远程一行搞定（如果只改文档，去掉 && systemctl restart 即可）
 ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
 ```
 
