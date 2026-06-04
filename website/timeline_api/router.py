@@ -404,6 +404,8 @@ def read_schedule() -> List[Dict[str, Any]]:
                 else:
                     image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
                     cover_url = sinaimg_to_proxy(cover_url_src)
+                    if not cover_url and image_urls:
+                        cover_url = image_urls[0]
                 bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
                 chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
                 snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
