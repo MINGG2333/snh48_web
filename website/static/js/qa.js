@@ -660,6 +660,12 @@
             components.push(complianceNotice);
           }
 
+          // Sub-component: voice source disclaimer
+          const voiceDisclaimer = child.querySelector('.qa-voice-disclaimer');
+          if (voiceDisclaimer) {
+            components.push(voiceDisclaimer);
+          }
+
           // Sub-component: answer section
           const answerSection = child.querySelector('.qa-answer');
           if (answerSection) {
@@ -933,6 +939,12 @@
     html += `<div class="qa-compliance-notice" style="margin: 0 0 12px 0; padding: 10px 14px; background: rgba(255, 107, 157, 0.08); border: 1px solid rgba(255, 107, 157, 0.15); border-radius: 8px; font-size: 0.85rem; color: var(--text-dim); display: flex; align-items: flex-start; gap: 8px;">
       <i class="fas fa-shield-alt" style="color: var(--primary); margin-top: 2px; flex-shrink: 0;"></i>
       <span>本服务使用生成式人工智能技术，生成内容仅供参考，不代表陈嘉仪本人立场，请理性看待。</span>
+    </div>`;
+
+    // ── Voice source disclaimer ──
+    html += `<div class="qa-voice-disclaimer">
+      <i class="fas fa-microphone-alt"></i>
+      <span>注意：引用中标注为「主播讲话」的内容可能并非来源于陈嘉仪本人，而是来源于直播中其他参与者的声音（如连麦对象、周围人员等），请留意区分。</span>
     </div>`;
 
     // Answer

@@ -709,6 +709,26 @@ body {
   font-size: 0.85rem;
 }
 
+/* ── Voice source disclaimer ──────────────────────────────────────── */
+.qa-voice-disclaimer {
+  margin: 0 0 12px 0;
+  padding: 10px 14px;
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.12);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.qa-voice-disclaimer i {
+  color: #fbbf24;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
 /* ── Character count ────────────────────────────────────────────── */
 .qa-input-wrap {
   flex: 1;
