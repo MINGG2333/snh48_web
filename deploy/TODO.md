@@ -805,14 +805,26 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 
 ### 后续代码更新
 
+#### 阿里云香港（cjy.我爱你）
 ```bash
-# 本地
-cd /mnt/zhitainew/snh48_web && git add . && git commit -m "xxx" && git push
-cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xxx" && git push
+# SSH 连接
+ssh root@8.210.188.184
 
-# SSH 到阿里云执行
-cd /home/snh48_web && git pull
-cd /home/snh48_web/transcript_analyze && git pull
-systemctl restart snh48-aliyun
-journalctl -u snh48-aliyun -f
+# 一键更新（snh48_web + transcript_analyze + 重启）
+cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun && journalctl -u snh48-aliyun -n 10 --no-pager
+
+# 远程一行搞定（本机直接执行）
+ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
+```
+
+#### 腾讯云（cjy.plus）
+```bash
+# SSH 连接
+ssh root@124.222.72.203
+
+# 一键更新 + 重启（screen 方式，自动热重启）
+cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c "cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log"
+
+# 远程一行搞定（本机直接执行）
+ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
 ```
