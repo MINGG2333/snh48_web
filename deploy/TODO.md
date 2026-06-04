@@ -551,22 +551,17 @@ PASSWORD_RATE_LIMIT_WINDOW_SECONDS=600 # 时间窗口 10 分钟
 
 ### 2. 配置域名 DNS（DNSPod）
 
-在 DNSPod 控制台（或腾讯云 DNS 解析）为 `cjy.我爱你` 添加：
+在 DNSPod 控制台为 `cjy.我爱你` 添加 A 记录：
 
 | 记录类型 | 主机记录 | 记录值 | TTL |
 |---------|---------|--------|-----|
 | A | @ | `8.210.188.184` | 600 |
 | A | www | `8.210.188.184` | 600 |
 
-> **注意：** `cjy.我爱你` 是国际化域名（IDN），DNSPod 会自动将其转换为 Punycode `cjy.xn--6qq986b3xl`。添加记录时直接输入 `cjy.我爱你` 即可。
-
 **验证：**
 ```bash
-# 在本地电脑执行
 dig cjy.我爱你 +short
-# 或使用 punycode
-dig cjy.xn--6qq986b3xl +short
-# 都应返回 8.210.188.184
+# 应返回 8.210.188.184
 ```
 
 ### 3. SSH 登录，安装基础软件
@@ -584,21 +579,14 @@ apt install -y python3 python3-pip python3-venv git nginx certbot python3-certbo
 ssh-keygen -t ed25519 -C "xxgg2333_for_cjy" -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub
 ```
-复制输出的公钥 → 打开 [github.com/settings/keys](https://github.com/settings/keys) → 添加 New SSH Key
+复制公钥 → [github.com/settings/keys](https://github.com/settings/keys) → 添加 New SSH Key
 
 ### 4. 从 GitHub 拉取代码
 
 ```bash
-# clone snh48_web
 git clone git@github.com:MINGG2333/snh48_web.git /home/snh48_web
-
-# clone transcript_analyze 到子目录
 cd /home/snh48_web
 git clone git@github.com:MINGG2333/transcript_analyze.git
-
-# 确认结构
-ls -F
-# deploy/  transcript_analyze/  website/
 ```
 
 ### 5. 虚拟环境 + 安装依赖
@@ -607,7 +595,6 @@ ls -F
 cd /home/snh48_web
 python3 -m venv venv
 source venv/bin/activate
-
 pip install -r website/requirements.txt
 pip install -r transcript_analyze/requirements_kb_qa.txt
 ```
@@ -615,95 +602,52 @@ pip install -r transcript_analyze/requirements_kb_qa.txt
 ### 6. 申请 Let's Encrypt SSL 证书
 
 ```bash
-# 先确保 nginx 启动（用于 Let's Encrypt 验证）
+# 先启动 nginx（Let's Encrypt 验证需要）
 systemctl start nginx
 systemctl enable nginx
 
-# 申请证书（Certbot 会自动配置 nginx）
 # ⚠️ 中文域名必须使用 Punycode 格式
 certbot --nginx -d cjy.xn--6qq986b3xl -d www.cjy.xn--6qq986b3xl --non-interactive --agree-tos -m your_email@example.com
 
-# 验证证书
+# 验证
 certbot certificates
-# 应显示：
-#   Certificate Name: cjy.xn--6qq986b3xl
-#   Domains: cjy.我爱你 www.cjy.我爱你
-#   Expiry Date: ... (90天后)
-#   SSL 证书路径: /etc/letsencrypt/live/cjy.xn--6qq986b3xl/
-
-# 测试自动续签
 certbot renew --dry-run
 ```
 
-> **香港服务器可使用 Let's Encrypt**（不像大陆服务器受限）。证书有效期 90 天，Certbot 会自动续签。
+> 证书有效期 90 天，Certbot 会自动续签。
 
 ### 7. 配置 Nginx
 
-项目已提供阿里云专用 Nginx 配置 `deploy/nginx-aliyun.conf`：
+> ⚠️ **Ubuntu 22.04 注意：** nginx 版本不支持 `http2 on;` 指令（已在 `deploy/nginx-aliyun.conf` 中移除）。
 
 ```bash
+# 复制阿里云专用配置（用我们自己配置，覆盖 certbot 生成的默认配置）
 cp /home/snh48_web/deploy/nginx-aliyun.conf /etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf
-
-# 移除默认 nginx 配置（可选）
 rm -f /etc/nginx/sites-enabled/default
-
-# 测试并重载
-nginx -t
-systemctl reload nginx
+nginx -t && systemctl reload nginx
 ```
 
 **验证：**
 ```bash
-curl -I http://cjy.我爱你
-# 应返回 301 重定向到 https
 curl -I https://cjy.我爱你
-# 应返回 HTTP/2 405，server: nginx/...
+# 应返回 HTTP/1.1 502（Python 服务未启动，Nginx 正常工作）
 ```
 
-> **⚠️ 关于图片代理：** 腾讯云配置中的 `/image-proxy/` 指向 `10.0.0.6:8899`（腾讯云内网 VPC），阿里云香港服务器无法访问。如需图片代理功能请在阿里云另行部署。
+### 8. 上传知识库数据
 
-### 8. 上传数据文件和模型缓存
+> ⚠️ 如果已有现成知识库，直接上传数据库即可，无需重新构建。
 
-**在您的本地电脑执行：**
-
+**从本机直接压缩传输（推荐，避免临时文件）：**
 ```bash
-# 上传源数据（download_records.json + 字幕文件）
-cd /mnt/zhitainew/snh48
-tar czf /tmp/snh48_data.tar.gz download_records.json firered_output_batch
-scp /tmp/snh48_data.tar.gz root@8.210.188.184:/home/snh48_web/transcript_analyze/
-rm /tmp/snh48_data.tar.gz
-
-# 上传 huggingface 模型缓存
-cd /home/mingg/.cache/huggingface
-tar czf /tmp/hf_model.tar.gz hub/models--shibing624--text2vec-base-chinese
-scp /tmp/hf_model.tar.gz root@8.210.188.184:/home/
-rm /tmp/hf_model.tar.gz
+cd /mnt/zhitainew/snh48_web/transcript_analyze
+tar czf - video_knowledge_db/ | ssh root@8.210.188.184 "cd /home/snh48_web/transcript_analyze && tar xzf -"
 ```
 
-**然后在 SSH 终端：**
-
+**然后在阿里云上传 `download_records.json`：**
 ```bash
-# 解压源数据到 transcript_analyze/ 目录下
-cd /home/snh48_web/transcript_analyze
-tar xzf snh48_data.tar.gz
-rm snh48_data.tar.gz
-# 确认
-ls -la download_records.json
-ls -d firered_output_batch
-
-# 解压 huggingface 模型到缓存目录
-mkdir -p /root/.cache/huggingface
-tar xzf /home/hf_model.tar.gz -C /root/.cache/huggingface
-rm /home/hf_model.tar.gz
-# 确认
-ls /root/.cache/huggingface/hub/models--shibing624--text2vec-base-chinese/snapshots/
+# 本机执行
+scp /mnt/zhitainew/snh48/download_records.json root@8.210.188.184:/home/snh48_web/transcript_analyze/
 ```
-
-> **提示：** 如果已有腾讯云服务器的知识库数据，也可以直接从腾讯云 `scp` 过去（更快，无需重新构建）：
-> ```bash
-> # SSH 到腾讯云上执行，将知识库直接传到阿里云
-> scp -r /home/snh48_web/transcript_analyze/video_knowledge_db root@8.210.188.184:/home/snh48_web/transcript_analyze/
-> ```
 
 ### 9. 创建 .env 配置文件
 
@@ -712,48 +656,35 @@ cd /home/snh48_web
 
 cat > .env << 'EOF'
 # 网站密码（AI 问答必须）
-SITE_PASSWORD=xxxxxxxxx
+SITE_PASSWORD=hxcjy
 
-# DeepSeek API Key
+# DeepSeek API Key（问答系统必须）
 DEEPSEEK_API_KEY=你的真实DeepSeekKey
 
-# 网站标题（可选，默认"心上珍藏集"）
+# 网站标题
 SITE_TITLE=心上珍藏集
 
-# ⚠️ 香港服务器无需 ICP 备案，以下变量保持空置
-# SITE_ICP=
-# SITE_POLICE_ICP=
-# SITE_POLICE_ICP_CODE=
+# ⚠️ 香港服务器无需 ICP 备案，留空即可
 EOF
 
 chmod 600 .env
-ls -la .env
 ```
 
-> **与腾讯云的区别：** 香港服务器不在大陆管辖范围内，无需悬挂 ICP 备案号和公安联网备案号。页面底部的备案号区域（`SITE_ICP`、`SITE_POLICE_ICP`）留空即可，模板会自动隐藏。
+### 10. 关闭开发模式 reload
 
-### 10. 构建知识库
+> ⚠️ `uvicorn.run(reload=True)` 会导致 systemd 退出码 209 无法运行。
 
 ```bash
-cd /home/snh48_web
-git config core.filemode false
-chmod +x ./script/run_kb_qa_build.sh
-
-source venv/bin/activate
-
-# 先测试问答是否正常（不构建，使用现有数据）
-python transcript_analyze/run_kb_qa.py --debug ask --question "陈嘉仪和北舞的关联是什么？"
-
-# 如需完整构建知识库：
-# nohup ./script/run_kb_qa_build.sh & echo "构建任务已启动，PID: $!"
-# tail -20 kb_qa.log
+sed -i 's/reload=True/reload=False/' /home/snh48_web/website/main.py
 ```
 
-### 11. 配置 systemd 服务（生产运行）
-
-> ⚠️ **Ubuntu 22.04 注意：** Ubuntu 上的 Python 路径可能与 CentOS 不同，请确认 `which python` 路径。
+### 11. 配置 systemd 服务
 
 ```bash
+# 创建日志目录（必须先创建，否则 systemd 报错）
+mkdir -p /var/log/snh48
+chmod 755 /var/log/snh48
+
 cat > /etc/systemd/system/snh48-aliyun.service << 'EOF'
 [Unit]
 Description=SNH48 Website Service (Aliyun Hong Kong)
@@ -777,35 +708,80 @@ EOF
 systemctl daemon-reload
 systemctl enable snh48-aliyun
 systemctl start snh48-aliyun
-
-# 检查状态
 systemctl status snh48-aliyun
+# 应显示 active (running)
 ```
 
-> **服务名改为 `snh48-aliyun`** 以便与腾讯云的服务 `snh48` 区分。
+### 12. 配置图片代理（绕过微博/B站防盗链）
 
-### 12. 验证完整链路
+在阿里云上单独运行图片代理服务，因为腾讯云的内网 VPC 代理不可用。
 
 ```bash
+# 上传代理脚本
+scp /mnt/zhitainew/snh48/snh48-fan-hub/scripts/weibo_img_proxy.py root@8.210.188.184:/home/snh48-fan-hub/scripts/
+
+# 在阿里云 SSH 上启动
+mkdir -p /home/snh48-fan-hub/scripts
+nohup python3 /home/snh48-fan-hub/scripts/weibo_img_proxy.py 8899 > /var/log/snh48/img_proxy.log 2>&1 &
+
+# 验证
+curl -s http://127.0.0.1:8899/health
+# 应返回 OK
+```
+
+然后更新 Nginx 配置（`deploy/nginx-aliyun.conf` 已配置 `/image-proxy/` 路由指向本地 `127.0.0.1:8899`）：
+
+```bash
+cd /home/snh48_web && git pull
+cp deploy/nginx-aliyun.conf /etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf
+nginx -t && systemctl reload nginx
+
+# 验证代理是否通过 Nginx 生效
+curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
+# 应返回 200
+```
+
+### 13. 同步时光轴数据（从腾讯云）
+
+时光轴依赖 `snh48-fan-hub` 的三个数据集：
+
+| 数据 | 路径 | 大小 | 用途 |
+|------|------|------|------|
+| 📅 行程表 | `schedule_record/schedule.csv` | 188 KB | 时光轴日程 |
+| 🎬 直播汇总 | `live_push_replays/陈嘉仪_161808449/summary.csv` | 104 KB | 直播信息 |
+| 🖼️ 直播封面 | `room_record/陈嘉仪_161808449/live_covers/` | 96 MB | 122 张封面图 |
+
+在**阿里云 SSH** 创建目录，**腾讯云 SSH** 执行 rsync：
+
+```bash
+# 阿里云执行
+mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449
+
+# 腾讯云执行（已配好 ssh 免密则无需密码）
+rsync -avz --progress /home/snh48-fan-hub/live_push_replays/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/
+rsync -avz --progress /home/snh48-fan-hub/schedule_record/ root@8.210.188.184:/home/snh48-fan-hub/schedule_record/
+rsync -avz --progress /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
+```
+
+> **为什么部分直播封面能显示？** 直播封面优先使用本地文件（`cover_local_path` → `/live-covers/xxx.jpg`），少数没有本地路径的条目才 fallback 到 48.cn CDN。同步 `live_covers` 后所有封面都会正常显示。
+
+### 14. 重启服务并完整验证
+
+```bash
+systemctl restart snh48-aliyun
+
 # 本地服务验证
-curl -I http://127.0.0.1:8000   # 应返回 HTTP/1.1 405
-curl -s http://127.0.0.1:8000 | head -5  # 应包含 <title>心上珍藏集</title>
-
+curl -s http://127.0.0.1:8000 | head -5
 # Nginx 反向代理验证
-curl -s https://cjy.我爱你 | head -5  # 应包含 <title>心上珍藏集</title>
-curl -I https://cjy.我爱你         # 应返回 HTTP/2 405
-
-# Python 进程确认
-ps aux | grep "website.main"
-
-# 日志确认
-tail -20 /var/log/snh48/snh48_aliyun.log
+curl -s https://cjy.我爱你 | head -5
+# 图片代理验证
+curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 ```
 
 浏览器打开 **https://cjy.我爱你** 确认：
-- 首页显示正常
-- `/qa` AI 问答可用
-- `/api/qa/status` 返回知识库状态
+- 首页：星空背景 + 彩色滚动文字 ✅
+- `/qa`：AI 问答（需输入密码）✅
+- 时光轴：封面图正常显示 ✅
 
 ---
 
@@ -820,7 +796,8 @@ tail -20 /var/log/snh48/snh48_aliyun.log
 | SSL 证书 | 腾讯云付费证书 | Let's Encrypt（免费） |
 | ICP 备案 | ✅ 需要（已通过） | ❌ 不需要 |
 | 公安备案 | ✅ 需要（已通过） | ❌ 不需要 |
-| 图片代理 | ✅ 可用（腾讯云内网 VPC） | ❌ 暂不可用 |
+| 图片代理 | 腾讯云内网 `10.0.0.6:8899` | 本地 `127.0.0.1:8899`（独立运行） |
+| uvicorn reload | `reload=True`（开发模式） | `reload=False`（生产模式） |
 | service 名称 | `snh48` | `snh48-aliyun` |
 | nginx 配置 | `deploy/nginx.conf` | `deploy/nginx-aliyun.conf` |
 
@@ -836,7 +813,6 @@ cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xx
 # SSH 到阿里云执行
 cd /home/snh48_web && git pull
 cd /home/snh48_web/transcript_analyze && git pull
-
 systemctl restart snh48-aliyun
-journalctl -u snh48-aliyun -f  # 查看实时日志
+journalctl -u snh48-aliyun -f
 ```
