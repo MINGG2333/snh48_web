@@ -164,7 +164,7 @@
 
 {% block extra_scripts %}
 <script>
-var SITE_DOMAIN = '{{ site_domain|safe }}';
+{% if site_domain %}var SITE_DOMAIN = '{{ site_domain|safe }}';{% endif %}
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>

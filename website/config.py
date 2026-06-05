@@ -109,7 +109,7 @@ SCHEDULE_CSV_PATH = os.getenv(
 # ── Server ─────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
-SITE_DOMAIN = os.getenv("SITE_DOMAIN", "cjy.plus")
+SITE_DOMAIN = os.getenv("SITE_DOMAIN", "")
 
 # ── Website Metadata ───────────────────────────────────────────────────────
 SITE_TITLE = os.getenv("SITE_TITLE", "心上珍藏集")
