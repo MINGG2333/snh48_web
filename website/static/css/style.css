@@ -718,15 +718,12 @@ body {
   border-radius: 8px;
   font-size: 0.82rem;
   color: var(--text-dim);
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  line-height: 1.7;
 }
 
 .qa-voice-disclaimer i {
   color: var(--accent);
-  margin-top: 2px;
-  flex-shrink: 0;
+  margin-right: 4px;
 }
 
 /* ── Character count ────────────────────────────────────────────── */
