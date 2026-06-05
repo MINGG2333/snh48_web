@@ -30,6 +30,12 @@ const MANUAL_EVENTS = [
     description: `广州巡演！`,
     image: null, icon: 'fa-bus',
   },
+  {
+    id: 'mini-live', source: 'manual', date: '2026-11-06',
+    title: 'Mini Live', type: 'show', typeLabel: '公演',
+    description: `Mini Live！`,
+    image: null, icon: 'fa-microphone',
+  },
 ];
 
 const BADGE_CLASS_MAP = {
