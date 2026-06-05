@@ -534,13 +534,26 @@ document.addEventListener('DOMContentLoaded', () => {
   dateInput.value = formatDateInput(new Date());
 
   // ── Modal ──
-  function buildSourceLinks(sourceUrl) {
-    const urls = sourceUrl.split(';').map(u => u.trim()).filter(u => u);
+  function buildSourceLinks(event) {
     let html = '';
-    const count = Math.min(urls.length, 3);
-    for (let i = 0; i < count; i++) {
-      html += `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${urls[i]}" target="_blank" rel="noopener" style="color:var(--primary);">来源 ${i + 1}</a></div>`;
+    const allUrls = [];
+    if (event.event_link) allUrls.push({ url: event.event_link, label: '活动详情' });
+    if (event.snh48_weibo_urls) event.snh48_weibo_urls.forEach(u => allUrls.push({ url: u }));
+    if (event.chenjiayi_weibo_urls) event.chenjiayi_weibo_urls.forEach(u => allUrls.push({ url: u }));
+    if (event.source_url) {
+      event.source_url.split(';').map(u => u.trim()).filter(u => u).forEach(u => allUrls.push({ url: u }));
     }
+    if (event.link) allUrls.push({ url: event.link, label: '官方档案' });
+    // Show first 6 unique URLs
+    const seen = new Set();
+    let idx = 0;
+    allUrls.forEach(item => {
+      if (seen.has(item.url) || idx >= 6) return;
+      seen.add(item.url);
+      idx++;
+      const label = item.label || `信息来源 ${idx}`;
+      html += `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--primary);">${label}</a></div>`;
+    });
     return html;
   }
 
@@ -612,9 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</div>` : ''}
-        ${event.event_link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.event_link}" target="_blank" rel="noopener" style="color:var(--primary);">活动详情</a></div>` : ''}
-        ${event.source_url ? buildSourceLinks(event.source_url) : ''}
-        ${event.link ? `<div class="timeline-modal-info"><i class="fas fa-link"></i> <a href="${event.link}" target="_blank" rel="noopener" style="color:var(--primary);">官方档案</a></div>` : ''}
+        ${buildSourceLinks(event)}
         ${biliHtml}
         ${videoHtml}
         <div class="timeline-modal-desc">${descHtml}</div>

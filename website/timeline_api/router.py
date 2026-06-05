@@ -397,16 +397,18 @@ def read_schedule() -> List[Dict[str, Any]]:
                 event_link = (row.get("event_link") or "").strip()
                 remark = (row.get("remark") or "").strip()
                 video_urls = parse_multi_urls(row.get("video_urls"))
-                # event_images has top priority: always overrides image_urls, and its first image becomes cover_url
+
+                # Images: event_images shown first, then image_urls follows
                 event_images = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("event_images"))]
-                if event_images:
-                    image_urls = event_images
+                csv_image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
+                all_images = event_images + csv_image_urls
+
+                # Cover URL priority: manual cover_url → event_images[0] → image_urls[0]
+                cover_url = sinaimg_to_proxy(cover_url_src)
+                if not cover_url and event_images:
                     cover_url = event_images[0]
-                else:
-                    image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
-                    cover_url = sinaimg_to_proxy(cover_url_src)
-                    if not cover_url and image_urls:
-                        cover_url = image_urls[0]
+                if not cover_url and csv_image_urls:
+                    cover_url = csv_image_urls[0]
                 bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
                 chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
                 snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
@@ -451,10 +453,12 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "icon": icon,
                     "location": location,
                     "source_url": source_url,
-                    "image_urls": image_urls,
+                    "image_urls": all_images,
                     "event_link": event_link,
                     "video_urls": video_urls,
                     "bilibili_urls": bilibili_urls,
+                    "snh48_weibo_urls": snh48_weibo_urls,
+                    "chenjiayi_weibo_urls": chenjiayi_weibo_urls,
                 })
     except (IOError, csv.Error) as e:
         print(f"[timeline_api] Error reading schedule CSV: {e}")
