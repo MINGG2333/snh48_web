@@ -45,8 +45,9 @@ const BADGE_CLASS_MAP = {
   里程碑: 'milestone', 日常: 'event',
 };
 
-// ── Today's date for comparison ──
+// ── Today's date for comparison (normalize to midnight for pure date comparison) ──
 const TODAY = new Date();
+TODAY.setHours(0, 0, 0, 0);
 let activeSources = new Set(['room', 'assistant']); // which sources are selected
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
