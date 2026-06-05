@@ -1000,8 +1000,8 @@
 
     // Citation note (only shown when citations exist)
     if (hasCitations) {
-      html += `<div class="qa-voice-disclaimer" style="margin: 16px 0 8px;padding:10px 14px;border-radius:8px;background:rgba(255,107,157,0.06);border-left:3px solid var(--primary);font-size:0.82rem;color:var(--text-dim);">`;
-      html += `<i class="fas fa-microphone-alt" style="color:var(--primary);margin-right:4px;"></i> 注意：引用中标注为「主播讲话」的内容可能并非来源于陈嘉仪本人，而是来源于直播中其他参与者的声音（如连麦对象、周围人员等），请留意区分。`;
+      html += `<div class="qa-voice-disclaimer">`;
+      html += `<i class="fas fa-microphone-alt"></i> 注意：引用中标注为「主播讲话」的内容可能并非来源于陈嘉仪本人，而是来源于直播中其他参与者的声音（如连麦对象、周围人员等），请留意区分。`;
       html += `</div>`;
     }
 

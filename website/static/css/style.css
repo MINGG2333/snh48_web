@@ -713,8 +713,8 @@ body {
 .qa-voice-disclaimer {
   margin: 0 0 12px 0;
   padding: 10px 14px;
-  background: rgba(251, 191, 36, 0.06);
-  border: 1px solid rgba(251, 191, 36, 0.12);
+  background: rgba(192, 132, 252, 0.06);
+  border: 1px solid rgba(192, 132, 252, 0.12);
   border-radius: 8px;
   font-size: 0.82rem;
   color: var(--text-dim);
@@ -724,7 +724,7 @@ body {
 }
 
 .qa-voice-disclaimer i {
-  color: #fbbf24;
+  color: var(--accent);
   margin-top: 2px;
   flex-shrink: 0;
 }
