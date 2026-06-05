@@ -385,4 +385,4 @@ async def add_security_headers(request: Request, call_next):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("website.main:app", host=cfg.HOST, port=cfg.PORT, reload=True)
+    uvicorn.run("website.main:app", host=cfg.HOST, port=cfg.PORT, reload=False)
