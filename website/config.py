@@ -61,9 +61,12 @@ SITE_PASSWORD = os.getenv("SITE_PASSWORD", "")
 
 # 背景词管理密码（独立于 AI 问答密码，环境变量 SCROLLER_PASSWORD）
 # 留空则背景词管理功能将被禁用
-# 可在 .env 中设置：
-#   SCROLLER_PASSWORD=xxxxxxxxx
 SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
+
+# 观察页管理密码（独立密码，环境变量 OB_PASSWORD）
+# 观察页用于管理员查看用户使用情况（按 IP 分组）
+# 留空则观察页功能将被禁用
+OB_PASSWORD = os.getenv("OB_PASSWORD", "")
 
 # ── Rate Limiting (防滥用配置) ──────────────────────────────────────────────
 # 所有值均可通过 .env 文件或环境变量覆盖

@@ -7,10 +7,13 @@ Events are recorded to:
   - user_{client_id}_events.jsonl (machine-readable, per user)
   - user_{client_id}_events.md (human-readable, per user)
   - notification_center.md (for important events)
+  - ip_clients.json (IP→client_id mapping, for admin observation page)
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Header, Request
@@ -20,6 +23,39 @@ from website.logging_setup import get_session_dir
 from website.user_events import record_user_event
 
 router = APIRouter(prefix="/api/track", tags=["用户行为追踪"])
+
+# ── IP ↔ Client mapping file (for admin OB page, never exposed to frontend) ──
+IP_CLIENTS_FILE = Path(__file__).resolve().parent.parent / "data" / "ip_clients.json"
+
+
+def _ensure_ip_clients_file():
+    """Create the IP→client mapping file if it doesn't exist."""
+    IP_CLIENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not IP_CLIENTS_FILE.exists():
+        IP_CLIENTS_FILE.write_text("{}")
+
+
+def _track_ip_to_client(ip: str, client_id: str):
+    """Record IP→client_id mapping (never sent to frontend)."""
+    _ensure_ip_clients_file()
+    try:
+        data = json.loads(IP_CLIENTS_FILE.read_text())
+        if ip not in data:
+            data[ip] = []
+        if client_id not in data[ip]:
+            data[ip].append(client_id)
+        IP_CLIENTS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    except Exception:
+        pass  # Silently fail — IP tracking is best-effort
+
+
+def _extract_client_ip(request: Request, x_forwarded_for: Optional[str]) -> str:
+    """Extract client IP from request, respecting reverse-proxy headers."""
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    if request.client:
+        return request.client.host or "unknown"
+    return "unknown"
 
 
 class TrackEventRequest(BaseModel):
@@ -57,6 +93,10 @@ def track_event(
     session_dir = get_session_dir()
     client_id = req.client_id
 
+    # ── Track IP → client mapping (for admin OB page, never exposed) ────
+    ip = _extract_client_ip(request, x_forwarded_for)
+    _track_ip_to_client(ip, client_id)
+
     # ── Detect new user ──────────────────────────────────────────────────
     # A new user is detected when their per-user JSONL file doesn't exist yet.
     # This means this is the first event ever received from this client_id.
@@ -68,11 +108,6 @@ def track_event(
     # Frontend _push_to_notification override is intentionally ignored
     # to ensure consistent notification policy.
     push_to_notification = req.event_type in NOTIFICATION_EVENTS
-
-    # Add IP info for security-relevant events
-    if req.event_type in ("login_attempt", "complaint_submit"):
-        ip = x_forwarded_for or request.client.host if request.client else "unknown"
-        req.data["ip"] = ip
 
     # ── Record the actual event ──────────────────────────────────────────
     record_user_event(

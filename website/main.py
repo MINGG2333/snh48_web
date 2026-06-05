@@ -279,6 +279,22 @@ async def complaint_page(request: Request):
     )
 
 
+@app.get("/ob", response_class=HTMLResponse)
+async def ob_page(request: Request):
+    """Admin observation page - user activity grouped by IP."""
+    return templates.TemplateResponse(
+        "ob.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 # ── API Routes ─────────────────────────────────────────────────────────────
 
 
@@ -367,6 +383,9 @@ app.include_router(balance_router)  # CHANGED
 
 from website.timeline_api.router import router as timeline_router
 app.include_router(timeline_router)
+
+from website.ob_api.router import router as ob_router
+app.include_router(ob_router)
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

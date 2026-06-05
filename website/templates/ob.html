@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site_title }} · 观察</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0e17;
+      --surface: #131a2b;
+      --surface-hover: #1a2440;
+      --border: #1e2d4a;
+      --text: #c8d6e5;
+      --text-dim: #6b7f99;
+      --accent: #7c4dff;
+      --accent-glow: rgba(124, 77, 255, 0.15);
+      --notif: #ff4757;
+      --green: #2ed573;
+      --gold: #ffa502;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Login Overlay ── */
+    #loginOverlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+    #loginOverlay.hidden { display: none; }
+    .login-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      width: 340px;
+      text-align: center;
+    }
+    .login-box h1 { font-size: 24px; margin-bottom: 8px; }
+    .login-box p { color: var(--text-dim); font-size: 14px; margin-bottom: 24px; }
+    .login-box input {
+      width: 100%; padding: 12px 16px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 16px;
+      outline: none; transition: border-color .2s;
+    }
+    .login-box input:focus { border-color: var(--accent); }
+    .login-box input::placeholder { color: var(--text-dim); }
+    .login-box .error { color: var(--notif); font-size: 13px; margin-top: 12px; display: none; }
+    .login-box .error.show { display: block; }
+    .login-btn {
+      width: 100%; margin-top: 16px; padding: 12px;
+      background: var(--accent); border: none; border-radius: 10px;
+      color: #fff; font-size: 16px; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .login-btn:hover { opacity: .85; }
+
+    /* ── Header ── */
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header .stats { color: var(--text-dim); font-size: 13px; }
+    header .stats span { color: var(--accent); font-weight: 600; }
+
+    /* ── IP Group Grid ── */
+    .groups-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      padding: 24px 32px;
+      flex: 1;
+    }
+    .groups-container.empty {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-dim); font-size: 15px;
+    }
+    .groups-container.empty::before { content: '暂无数据'; }
+
+    .group-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all .25s ease;
+      position: relative;
+      min-height: 120px;
+    }
+    .group-card:hover {
+      border-color: var(--accent);
+      background: var(--surface-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }
+    .group-card:active { transform: translateY(0); }
+
+    /* Notification badge */
+    .notif-badge {
+      position: absolute;
+      top: -6px; right: -6px;
+      background: var(--notif);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 22px; height: 22px;
+      border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 6px;
+      box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
+    }
+
+    /* User avatars */
+    .group-users {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .user-chip {
+      background: rgba(124, 77, 255, 0.1);
+      border: 1px solid rgba(124, 77, 255, 0.2);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+      color: var(--accent);
+      font-family: monospace;
+    }
+    .group-time {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 12px;
+    }
+
+    /* ── Modal ── */
+    #eventModal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      display: none;
+      backdrop-filter: blur(4px);
+    }
+    #eventModal.open { display: flex; align-items: center; justify-content: center; }
+
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: modalIn .25s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .modal-header h2 { font-size: 16px; }
+    .modal-header .users-list { font-size: 12px; color: var(--text-dim); }
+    .modal-close {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      transition: all .2s;
+    }
+    .modal-close:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .modal-body {
+      padding: 16px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* ── Notification Nav ── */
+    .notif-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 71, 87, 0.05);
+      flex-shrink: 0;
+    }
+    .notif-nav-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .notif-nav-btn {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--notif);
+      background: rgba(255, 71, 87, 0.1);
+      color: var(--notif);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .notif-nav-btn:hover {
+      background: rgba(255, 71, 87, 0.2);
+    }
+    .notif-nav-btn.active {
+      background: var(--notif);
+      color: #fff;
+    }
+
+    /* ── Event Items ── */
+    .event-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      transition: background .2s;
+      margin-bottom: 4px;
+      scroll-margin-top: 80px;
+    }
+    .event-item:hover { background: rgba(255,255,255,0.03); }
+    .event-item.highlight {
+      background: rgba(124, 77, 255, 0.08);
+      border: 1px solid var(--accent);
+      animation: highlightPulse 2s ease;
+    }
+    @keyframes highlightPulse {
+      0%, 100% { box-shadow: 0 0 0 0 transparent; }
+      50% { box-shadow: 0 0 20px var(--accent-glow); }
+    }
+    .event-item .ev-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .event-item .ev-icon.new_user { background: rgba(46, 213, 115, 0.15); }
+    .event-item .ev-icon.qa_submit { background: rgba(124, 77, 255, 0.15); }
+    .event-item .ev-icon.email_submit { background: rgba(255, 165, 2, 0.15); }
+    .event-item .ev-icon.complaint_submit { background: rgba(255, 71, 87, 0.15); }
+    .event-item .ev-icon.page_view { background: rgba(70, 130, 255, 0.15); }
+    .event-item .ev-icon.other { background: rgba(107, 127, 153, 0.15); }
+
+    .event-item .ev-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .event-item .ev-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .event-item .ev-type {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .event-item .ev-user {
+      font-size: 11px;
+      color: var(--accent);
+      font-family: monospace;
+    }
+    .event-item .ev-time {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+    .event-item .ev-detail {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      word-break: break-word;
+    }
+    .event-item .ev-detail .q { color: var(--gold); }
+    .event-item .notif-tag {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(255, 71, 87, 0.15);
+      color: var(--notif);
+      margin-left: 6px;
+    }
+    .event-item .mark-read-btn {
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--green);
+      background: transparent;
+      color: var(--green);
+      cursor: pointer;
+      transition: all .2s;
+      margin-left: 8px;
+    }
+    .event-item .mark-read-btn:hover {
+      background: rgba(46, 213, 115, 0.15);
+    }
+    .event-item .mark-read-btn.done {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .empty-events {
+      text-align: center;
+      color: var(--text-dim);
+      padding: 40px 0;
+      font-size: 14px;
+    }
+
+    /* ── Scrollbar ── */
+    .modal-body::-webkit-scrollbar { width: 6px; }
+    .modal-body::-webkit-scrollbar-track { background: transparent; }
+    .modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      header { padding: 16px 20px; }
+      .groups-container {
+        padding: 16px 20px;
+        grid-template-columns: 1fr;
+      }
+      .modal-content { width: 95%; max-height: 90vh; }
+      .modal-body { padding: 12px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Login Overlay ── -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <h1>🔍 观察</h1>
+    <p>请输入管理员密码以访问</p>
+    <input type="password" id="passwordInput" placeholder="密码" autofocus>
+    <div class="error" id="loginError">密码错误</div>
+    <button class="login-btn" id="loginBtn">进入</button>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<header id="mainHeader" style="display:none">
+  <h1>🔍 观察 · 用户动态</h1>
+  <div class="stats">
+    <span id="groupCount">0</span> 个活跃IP组 ·
+    <span id="totalNotifs">0</span> 条通知
+  </div>
+</header>
+
+<!-- ── Groups Grid ── -->
+<div class="groups-container" id="groupsContainer"></div>
+
+<!-- ── Event Modal ── -->
+<div id="eventModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div>
+        <h2 id="modalTitle">用户活动</h2>
+        <div class="users-list" id="modalUsers"></div>
+      </div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="notif-nav" id="notifNav" style="display:none"></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──
+  let obPassword = '';
+  let groupsData = [];
+  let currentGroupId = -1;
+  let currentNotifIdx = -1;
+
+  // ── DOM refs ──
+  const loginOverlay = document.getElementById('loginOverlay');
+  const passwordInput = document.getElementById('passwordInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const mainHeader = document.getElementById('mainHeader');
+  const groupsContainer = document.getElementById('groupsContainer');
+  const groupCount = document.getElementById('groupCount');
+  const totalNotifs = document.getElementById('totalNotifs');
+  const eventModal = document.getElementById('eventModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalUsers = document.getElementById('modalUsers');
+  const modalBody = document.getElementById('modalBody');
+  const modalClose = document.getElementById('modalClose');
+  const notifNav = document.getElementById('notifNav');
+
+  // ── Login ──
+  function doLogin() {
+    const pw = passwordInput.value.trim();
+    if (!pw) return;
+    obPassword = pw;
+    loginError.classList.remove('show');
+    fetchData();
+  }
+
+  passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+  loginBtn.addEventListener('click', doLogin);
+
+  // ── Fetch Data ──
+  async function fetchData() {
+    try {
+      const resp = await fetch('/api/ob/data', {
+        headers: { 'X-Ob-Password': obPassword }
+      });
+      if (resp.status === 401 || resp.status === 403) {
+        loginError.classList.add('show');
+        passwordInput.value = '';
+        passwordInput.focus();
+        return;
+      }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      groupsData = data.groups || [];
+      loginOverlay.classList.add('hidden');
+      mainHeader.style.display = 'flex';
+      renderGroups();
+    } catch (err) {
+      loginError.textContent = '加载失败: ' + err.message;
+      loginError.classList.add('show');
+    }
+  }
+
+  // ── Render Groups ──
+  function renderGroups() {
+    groupsContainer.innerHTML = '';
+    groupCount.textContent = groupsData.length;
+    let totalN = 0;
+    groupsData.forEach(g => totalN += g.notification_count);
+    totalNotifs.textContent = totalN;
+
+    if (groupsData.length === 0) {
+      groupsContainer.classList.add('empty');
+      return;
+    }
+    groupsContainer.classList.remove('empty');
+
+    groupsData.forEach((group) => {
+      const card = document.createElement('div');
+      card.className = 'group-card';
+      card.dataset.groupId = group.id;
+
+      // Notification badge
+      if (group.notification_count > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'notif-badge';
+        badge.textContent = group.notification_count > 99 ? '99+' : group.notification_count;
+        card.appendChild(badge);
+      }
+
+      // Users
+      const usersDiv = document.createElement('div');
+      usersDiv.className = 'group-users';
+      group.users.forEach((uid) => {
+        const chip = document.createElement('span');
+        chip.className = 'user-chip';
+        chip.textContent = uid;
+        usersDiv.appendChild(chip);
+      });
+      card.appendChild(usersDiv);
+
+      // Latest activity time
+      if (group.events.length > 0) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'group-time';
+        timeDiv.textContent = '最近活动: ' + group.events[0].time_str;
+        card.appendChild(timeDiv);
+      }
+
+      card.addEventListener('click', () => openModal(group.id));
+      groupsContainer.appendChild(card);
+    });
+  }
+
+  // ── Open Modal ──
+  function openModal(groupId) {
+    const group = groupsData.find(g => g.id === groupId);
+    if (!group) return;
+    currentGroupId = groupId;
+    currentNotifIdx = -1;
+
+    modalTitle.textContent = '用户活动记录 (' + group.events.length + ' 条)';
+    modalUsers.textContent = '用户: ' + group.users.join(', ');
+
+    // Notification navigation
+    if (group.notifications.length > 0) {
+      notifNav.style.display = 'flex';
+      notifNav.innerHTML = '<span class="notif-nav-label">🔔 导航:</span>';
+      group.notifications.forEach((notif, ni) => {
+        const btn = document.createElement('button');
+        btn.className = 'notif-nav-btn';
+        btn.textContent = (ni + 1) + '. ' + (notif.type_label || notif.event_id);
+        btn.dataset.notifIdx = ni;
+        btn.addEventListener('click', () => navigateToNotif(groupId, ni));
+        notifNav.appendChild(btn);
+      });
+    } else {
+      notifNav.style.display = 'none';
+    }
+
+    renderEvents(group);
+    eventModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // ── Navigate to Notification ──
+  function navigateToNotif(groupId, notifIdx) {
+    const group = groupsData.find(g => g.id === groupId);
+    if (!group || notifIdx >= group.notifications.length) return;
+    currentNotifIdx = notifIdx;
+
+    const notif = group.notifications[notifIdx];
+    const eventIdx = notif.event_idx;
+
+    // Highlight nav button
+    document.querySelectorAll('.notif-nav-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', i === notifIdx);
+    });
+
+    // Scroll to event
+    const eventEl = document.querySelector(`.event-item[data-event-idx="${eventIdx}"]`);
+    if (eventEl) {
+      // Remove previous highlight
+      document.querySelectorAll('.event-item.highlight').forEach(el => el.classList.remove('highlight'));
+      eventEl.classList.add('highlight');
+      eventEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  // ── Render Events ──
+  function renderEvents(group) {
+    modalBody.innerHTML = '';
+    if (group.events.length === 0) {
+      modalBody.innerHTML = '<div class="empty-events">暂无事件记录</div>';
+      return;
+    }
+
+    group.events.forEach((ev, idx) => {
+      const item = document.createElement('div');
+      item.className = 'event-item';
+      item.dataset.eventIdx = idx;
+
+      // Icon
+      const iconDiv = document.createElement('div');
+      iconDiv.className = 'ev-icon ' + (ev.type || 'other');
+      iconDiv.textContent = getEmoji(ev.type);
+      item.appendChild(iconDiv);
+
+      // Body
+      const body = document.createElement('div');
+      body.className = 'ev-body';
+
+      const header = document.createElement('div');
+      header.className = 'ev-header';
+
+      const typeSpan = document.createElement('span');
+      typeSpan.className = 'ev-type';
+      typeSpan.textContent = ev.type_label;
+      header.appendChild(typeSpan);
+
+      const userSpan = document.createElement('span');
+      userSpan.className = 'ev-user';
+      userSpan.textContent = ev.client_id;
+      header.appendChild(userSpan);
+
+      if (ev.is_notification) {
+        const tag = document.createElement('span');
+        tag.className = 'notif-tag';
+        tag.textContent = '通知';
+        header.appendChild(tag);
+
+        // Mark as read button
+        const readBtn = document.createElement('button');
+        readBtn.className = 'mark-read-btn';
+        if (ev.status && ev.status !== '⏳ 待处理') {
+          readBtn.classList.add('done');
+          readBtn.textContent = '✅ 已处理';
+        } else {
+          readBtn.textContent = '○ 标为已读';
+        }
+        readBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (readBtn.classList.contains('done')) return;
+          readBtn.classList.add('done');
+          readBtn.textContent = '✅ 已处理';
+          // Update in data
+          ev.status = '✅ 已处理';
+          updateNotifCounts();
+        });
+        header.appendChild(readBtn);
+      }
+
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'ev-time';
+      timeSpan.textContent = ev.time_str;
+      header.appendChild(timeSpan);
+
+      body.appendChild(header);
+
+      // Detail
+      if (ev.page || ev.question || ev.detail) {
+        const detail = document.createElement('div');
+        detail.className = 'ev-detail';
+        const parts = [];
+        if (ev.page) parts.push('📄 ' + ev.page);
+        if (ev.question) parts.push('<span class="q">❓ ' + escHtml(ev.question) + '</span>');
+        if (ev.detail) parts.push(escHtml(ev.detail));
+        detail.innerHTML = parts.join(' · ');
+        body.appendChild(detail);
+      }
+
+      item.appendChild(body);
+      modalBody.appendChild(item);
+    });
+  }
+
+  function getEmoji(type) {
+    const map = {
+      'new_user': '🆕',
+      'qa_submit': '🤖',
+      'email_submit': '📧',
+      'complaint_submit': '📋',
+      'page_view': '📄',
+      'login_attempt': '🔑',
+      'click': '👆',
+      'screenshot': '📸',
+    };
+    return map[type] || '❓';
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function updateNotifCounts() {
+    // Recalculate notification counts
+    groupsData.forEach(g => {
+      let count = 0;
+      g.events.forEach(ev => {
+        if (ev.is_notification && ev.status === '⏳ 待处理') count++;
+      });
+      g.notification_count = count;
+    });
+    // Update header
+    let totalN = 0;
+    groupsData.forEach(g => totalN += g.notification_count);
+    totalNotifs.textContent = totalN;
+    // Re-render group cards to update badges
+    renderGroups();
+  }
+
+  // ── Close Modal ──
+  function closeModal() {
+    eventModal.classList.remove('open');
+    document.body.style.overflow = '';
+    currentGroupId = -1;
+    currentNotifIdx = -1;
+  }
+
+  modalClose.addEventListener('click', closeModal);
+  eventModal.addEventListener('click', (e) => {
+    if (e.target === eventModal) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && eventModal.classList.contains('open')) closeModal();
+  });
+
+  // ── Auto-refresh every 30s ──
+  setInterval(fetchData, 30000);
+
+  // ── Focus password input ──
+  passwordInput.focus();
+
+})();
+</script>
+</body>
+</html>
