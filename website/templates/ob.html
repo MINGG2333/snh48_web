@@ -718,6 +718,8 @@
         headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
         body: JSON.stringify({ event_id: eventId }),
       });
+      // Immediately refresh data from server after successful mark
+      fetchData();
     } catch (_) {}
   }
 
