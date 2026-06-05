@@ -32,7 +32,7 @@ const MANUAL_EVENTS = [
   },
   {
     id: 'mini-live', source: 'manual', date: '2026-11-06',
-    title: 'Mini Live', type: 'show', typeLabel: '公演',
+    title: 'Mini Live', type: 'show', typeLabel: 'Live',
     description: `Mini Live！`,
     image: null, icon: 'fa-microphone',
   },
