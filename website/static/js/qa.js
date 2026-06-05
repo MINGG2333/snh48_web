@@ -370,7 +370,13 @@
   // ── Download as Image (Screenshot) ──────────────────────────────────
   function getSiteUrl() {
     if (typeof SITE_DOMAIN !== 'undefined') {
-      // Use an anchor element to resolve IDN to Punycode
+      return window.location.protocol + '//' + SITE_DOMAIN;
+    }
+    return window.location.protocol + '//' + window.location.host;
+  }
+
+  function getSiteUrlPunycode() {
+    if (typeof SITE_DOMAIN !== 'undefined') {
       const a = document.createElement('a');
       a.href = window.location.protocol + '//' + SITE_DOMAIN;
       return a.href.replace(/\/$/, '');
@@ -586,7 +592,8 @@
         'margin-right: auto;',
       ].join(' ');
       const siteUrl = getSiteUrl();
-      const qrHtml = generateQRCode(siteUrl, 28);
+      const qrUrl = getSiteUrlPunycode();
+      const qrHtml = generateQRCode(qrUrl, 28);
       const qrContainer = document.createElement('div');
       qrContainer.innerHTML = qrHtml;
       qrContainer.style.cssText = 'line-height: 0; display: flex; justify-content: center;';
