@@ -1042,17 +1042,27 @@
         }
         html += `</div>`;
 
-        // ── Segments list ──
+        // ── Segments list (merge consecutive same-speaker segments) ──
         if (segs.length > 0) {
+          // Group consecutive segments by speaker
+          const mergedSegs = [];
+          for (const seg of segs) {
+            const last = mergedSegs[mergedSegs.length - 1];
+            if (last && last.anchor_name === seg.anchor_name && last.source_type === seg.source_type) {
+              // Same speaker and same type — merge text
+              last.quoted_text += ' ' + (seg.quoted_text || '');
+              if (seg.video_offset && !last.video_offset) last.video_offset = seg.video_offset;
+            } else {
+              mergedSegs.push({ ...seg });
+            }
+          }
+
           html += `<div class="citation-segments">`;
           let prevAnchor = '';
-          let prevVideoTitle = '';
-          for (const seg of segs) {
+          for (const seg of mergedSegs) {
             const sameAnchor = seg.anchor_name && seg.anchor_name === prevAnchor;
-            const sameVideo = seg.video_title && seg.video_title === prevVideoTitle;
 
             html += `<div class="citation-segment">`;
-            // Source info row: anchor_name (dedup), source_type
             html += `<div class="segment-source">`;
             if (seg.anchor_name && !sameAnchor) {
               html += `<span class="segment-anchor">${escapeHtml(seg.anchor_name)}</span>`;
@@ -1060,22 +1070,12 @@
             if (seg.source_type) {
               html += `<span class="segment-type">${escapeHtml(seg.source_type)}</span>`;
             }
-
-            // # TODO: 等转录数据时间戳修正后取消注释
-            // # 当前转录结果中 speech 片段的时间戳可能不准（连麦/周围人声音误标），
-            // # 待重新转录获得正确时间戳后再恢复显示。
-            // if (seg.video_offset) {
-            //   html += `<span class="segment-offset">⏱ ${escapeHtml(seg.video_offset)}</span>`;
-            // }
             html += `</div>`;
 
-
-            // Quoted text
             html += `<div class="segment-text">“${escapeHtml(seg.quoted_text || '')}”</div>`;
             html += `</div>`;
 
             prevAnchor = seg.anchor_name || prevAnchor;
-            prevVideoTitle = seg.video_title || prevVideoTitle;
           }
           html += `</div>`;
         }
