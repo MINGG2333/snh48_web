@@ -182,10 +182,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const ev = events.find(e => e.id === evId);
         if (!ev) return;
         cardEl.addEventListener('click', (e) => {
+          if (isPinching) return;
           e.stopPropagation();
           openModal(ev);
         });
         cardEl.addEventListener('touchend', (e) => {
+          if (isPinching) return;
           if (!wrapper.classList.contains('dragging')) openModal(ev);
         });
       });
@@ -696,6 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Drag to scroll ──
   let isDragging = false;
+  let isPinching = false;
   let startX = 0;
   let startLeft = 0;
   let dragDistance = 0;
@@ -890,6 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastPinchDist = 0;
   wrapper.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
+      isPinching = true;
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       lastPinchDist = Math.hypot(dx, dy);
@@ -910,6 +914,10 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPinchDist = dist;
     }
   }, { passive: false });
+
+  wrapper.addEventListener('touchend', () => {
+    isPinching = false;
+  }, { passive: true });
 
   // ── Initialize: wait for all data, then render once ──
   const loadingEl = document.getElementById('timelineLoading');
