@@ -811,6 +811,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Touch events (single-finger drag)
   wrapper.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) return;
+    // Start of a new single-finger gesture → pinch has ended
+    isPinching = false;
     const touch = e.touches[0];
     startDrag(touch.clientX);
   }, { passive: true });
@@ -914,10 +916,6 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPinchDist = dist;
     }
   }, { passive: false });
-
-  wrapper.addEventListener('touchend', () => {
-    isPinching = false;
-  }, { passive: true });
 
   // ── Initialize: wait for all data, then render once ──
   const loadingEl = document.getElementById('timelineLoading');
