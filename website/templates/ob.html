@@ -78,13 +78,14 @@
     header .stats { color: var(--text-dim); font-size: 13px; }
     header .stats span { color: var(--accent); font-weight: 600; }
 
-    /* ── IP Group Grid ── */
+    /* ── IP Group Flex Grid ── */
     .groups-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       gap: 16px;
       padding: 24px 32px;
       flex: 1;
+      align-content: flex-start;
     }
     .groups-container.empty {
       display: flex; align-items: center; justify-content: center;
@@ -96,11 +97,12 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 20px;
+      padding: 16px 20px;
       cursor: pointer;
       transition: all .25s ease;
       position: relative;
-      min-height: 120px;
+      width: fit-content;
+      max-width: 360px;
     }
     .group-card:hover {
       border-color: var(--accent);
@@ -351,7 +353,6 @@
       header { padding: 16px 20px; }
       .groups-container {
         padding: 16px 20px;
-        grid-template-columns: 1fr;
       }
       .modal-content { width: 95%; max-height: 90vh; }
       .modal-body { padding: 12px 16px; }
@@ -625,6 +626,8 @@
           // Update in data
           ev.status = '✅ 已处理';
           updateNotifCounts();
+          // Persist to server
+          markReadOnServer(ev.event_id);
         });
         header.appendChild(readBtn);
       }
@@ -707,8 +710,19 @@
     if (e.key === 'Escape' && eventModal.classList.contains('open')) closeModal();
   });
 
-  // ── Auto-refresh every 30s ──
-  setInterval(fetchData, 30000);
+  // ── Mark read on server ──
+  async function markReadOnServer(eventId) {
+    try {
+      await fetch('/api/ob/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
+        body: JSON.stringify({ event_id: eventId }),
+      });
+    } catch (_) {}
+  }
+
+  // ── Auto-refresh every 10s ──
+  setInterval(fetchData, 10000);
 
   // ── Focus password input ──
   passwordInput.focus();

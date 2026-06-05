@@ -11,14 +11,43 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel
 
 from website import config as cfg
-from website.logging_setup import get_session_dir, LOG_ROOT
+from website.logging_setup import LOG_ROOT
 from website.rate_limiter import get_client_ip
 
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
 
 IP_CLIENTS_FILE = Path(__file__).resolve().parent.parent / "data" / "ip_clients.json"
+
+# ── Read notifications tracking (persistent, survives restart) ─────────────
+READ_NOTIFS_FILE = Path(__file__).resolve().parent.parent / "data" / "read_notifications.json"
+
+
+def _ensure_read_notifs_file():
+    """Create the read notifications tracking file if it doesn't exist."""
+    READ_NOTIFS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not READ_NOTIFS_FILE.exists():
+        READ_NOTIFS_FILE.write_text("[]")
+
+
+def _load_read_notifs() -> list[str]:
+    """Load the list of read notification event IDs."""
+    _ensure_read_notifs_file()
+    try:
+        return json.loads(READ_NOTIFS_FILE.read_text())
+    except Exception:
+        return []
+
+
+def _save_read_notifs(event_ids: list[str]):
+    """Save the list of read notification event IDs."""
+    READ_NOTIFS_FILE.write_text(json.dumps(event_ids, ensure_ascii=False, indent=2))
+
+
+class MarkReadRequest(BaseModel):
+    event_id: str
 
 
 async def verify_ob_password(x_ob_password: str = Header(None, alias="X-Ob-Password")):
@@ -131,10 +160,37 @@ def get_ob_data(_=Depends(verify_ob_password)):
             })
             group_id += 1
 
+    # Apply read status from tracking file
+    read_ids = _load_read_notifs()
+    for group in groups:
+        for ev in group["events"]:
+            if ev.get("is_notification") and ev.get("event_id") in read_ids:
+                ev["status"] = "✅ 已处理"
+        # Recalculate notification count
+        group["notification_count"] = sum(
+            1 for ev in group["events"]
+            if ev.get("is_notification") and ev.get("status", "⏳ 待处理") == "⏳ 待处理"
+        )
+        # Also update notification list count
+        group["notifications"] = [
+            n for n in group["notifications"]
+            if n.get("event_id") not in read_ids
+        ]
+
     # Sort groups by newest event first
     groups.sort(key=lambda g: g["events"][0]["time_str"] if g["events"] else "", reverse=True)
 
     return {"groups": groups}
+
+
+@router.post("/mark-read")
+def mark_notification_read(req: MarkReadRequest, _=Depends(verify_ob_password)):
+    """Mark a notification as read (persistent)."""
+    read_ids = _load_read_notifs()
+    if req.event_id not in read_ids:
+        read_ids.append(req.event_id)
+        _save_read_notifs(read_ids)
+    return {"success": True}
 
 
 def _sort_events(events: list[dict]):
