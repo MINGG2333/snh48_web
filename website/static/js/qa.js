@@ -369,6 +369,9 @@
 
   // ── Download as Image (Screenshot) ──────────────────────────────────
   function getSiteUrl() {
+    if (typeof SITE_DOMAIN !== 'undefined') {
+      return window.location.protocol + '//' + SITE_DOMAIN;
+    }
     return window.location.protocol + '//' + window.location.host;
   }
 

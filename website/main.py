@@ -142,6 +142,7 @@ async def qa_page(request: Request):
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "site_domain": cfg.SITE_DOMAIN,
             "static_version": static_version,
         },
     )
