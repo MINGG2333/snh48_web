@@ -370,7 +370,10 @@
   // ── Download as Image (Screenshot) ──────────────────────────────────
   function getSiteUrl() {
     if (typeof SITE_DOMAIN !== 'undefined') {
-      return window.location.protocol + '//' + SITE_DOMAIN;
+      // Use an anchor element to resolve IDN to Punycode
+      const a = document.createElement('a');
+      a.href = window.location.protocol + '//' + SITE_DOMAIN;
+      return a.href.replace(/\/$/, '');
     }
     return window.location.protocol + '//' + window.location.host;
   }
