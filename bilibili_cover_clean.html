@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站封面 - 心上珍藏集 (纯净版)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --primary: #ff6b9d;
+    --primary-dark: #e0558a;
+    --accent: #c084fc;
+    --text: #f0f0f0;
+    --text-dim: rgba(255,255,255,0.6);
+    --bg-dark: #0a0a1a;
+  }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  .cover {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: var(--bg-dark);
+    box-shadow: 0 0 60px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+
+  /* Background */
+  .bg-glow-1 {
+    position: absolute;
+    top: -200px;
+    left: -100px;
+    width: 800px;
+    height: 800px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,107,157,0.18) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .bg-glow-2 {
+    position: absolute;
+    bottom: -200px;
+    right: -150px;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(192,132,252,0.15) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .bg-noise {
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+  .deco-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(255,107,157,0.08);
+    pointer-events: none;
+  }
+  .dr1 { top: -80px; right: -60px; width: 400px; height: 400px; }
+  .dr2 { bottom: -40px; left: -80px; width: 300px; height: 300px; border-color: rgba(192,132,252,0.06); }
+
+  /* 缩放容器 */
+  .content-wrapper {
+    position: absolute;
+    inset: 0;
+    transform: scale(1.5);
+    transform-origin: center center;
+    z-index: 1;
+  }
+
+  /* 导航栏 */
+  .navbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 64px;
+    z-index: 20;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(180deg, rgba(10,10,26,0.95) 60%, transparent);
+  }
+  .nav-logo {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 1px;
+  }
+  .nav-links {
+    display: flex;
+    gap: 6px;
+  }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .nav-links a:hover,
+  .nav-links a.active {
+    color: var(--text);
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* Hero 内容 */
+  .hero-area {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    text-align: center;
+    width: 620px;
+  }
+  .hero-title {
+    font-size: 60px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 6px;
+    margin-bottom: 16px;
+  }
+  .hero-subtitle {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 520px;
+    margin: 0 auto 36px;
+    line-height: 1.8;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 32px;
+    border-radius: 50px;
+    font-size: 17px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(255,107,157,0.65), rgba(224,85,138,0.65));
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(255,107,157,0.3);
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1.5px solid rgba(255,255,255,0.12);
+  }
+  .hero-footer {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .hero-footer span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* 照片 — 右下角固定，1.2 倍放大 */
+  .photo-wrap {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    /* 右下角固定在原位 (950, 570) 附近，1.2x 放大 */
+    transform: translate(118px, -46px);
+    width: 192px;
+    height: 256px;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .photo-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+    filter:
+      drop-shadow(0 0 30px rgba(192,132,252,0.25))
+      drop-shadow(0 0 60px rgba(255,107,157,0.15));
+    transform: rotate(1.5deg);
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <!-- Background -->
+  <div class="bg-glow-1"></div>
+  <div class="bg-glow-2"></div>
+  <div class="bg-noise"></div>
+  <div class="deco-ring dr1"></div>
+  <div class="deco-ring dr2"></div>
+
+  <div class="content-wrapper">
+    <!-- 导航栏 -->
+    <nav class="navbar">
+      <div class="nav-logo">✦ 心上珍藏集</div>
+      <div class="nav-links">
+        <a class="active">首页</a>
+        <a>关于</a>
+        <a>时光轴</a>
+        <a>AI 问答</a>
+      </div>
+    </nav>
+
+    <!-- Hero 区域 -->
+    <div class="hero-area">
+      <h1 class="hero-title">心上珍藏集</h1>
+      <p class="hero-subtitle">记录 SNH48陈嘉仪 的公开信息，提供基于 LLM 的 AI 问答</p>
+      <div class="hero-actions">
+        <span class="btn btn-primary">🤖 AI 问答</span>
+        <span class="btn btn-outline">🕐 时光轴</span>
+      </div>
+      <div class="hero-footer">
+        <span>🎬 演艺视频转录</span>
+        <span>🧠 LLM 智能分析</span>
+        <span>🔗 多媒体链接</span>
+      </div>
+    </div>
+
+    <!-- 照片 -->
+    <div class="photo-wrap">
+      <img src="/mnt/zhitainew/snh48_web/img/IMG_123968-cjy.png" alt="陈嘉仪" onerror="this.style.display='none'">
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

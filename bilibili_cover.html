@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站封面预览 - 心上珍藏集</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --primary: #ff6b9d;
+    --primary-dark: #e0558a;
+    --accent: #c084fc;
+    --text: #f0f0f0;
+    --text-dim: rgba(255,255,255,0.6);
+    --bg-dark: #0a0a1a;
+  }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  /* ── Cover canvas 1280×720 ────────────────────────────────────────── */
+  .cover {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: var(--bg-dark);
+    box-shadow: 0 0 60px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+
+  /* ── Background ───────────────────────────────────────────────────── */
+  .bg-glow-1 {
+    position: absolute;
+    top: -200px;
+    left: -100px;
+    width: 800px;
+    height: 800px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,107,157,0.18) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .bg-glow-2 {
+    position: absolute;
+    bottom: -200px;
+    right: -150px;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(192,132,252,0.15) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .bg-noise {
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* ── 整体缩放容器：所有内容以中心为原点放大 1.5 倍 ── */
+  .content-wrapper {
+    position: absolute;
+    inset: 0;
+    transform: scale(1.5);
+    transform-origin: center center;
+    z-index: 1;
+  }
+  .deco-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(255,107,157,0.08);
+    pointer-events: none;
+  }
+  .dr1 { top: -80px; right: -60px; width: 400px; height: 400px; }
+  .dr2 { bottom: -40px; left: -80px; width: 300px; height: 300px; border-color: rgba(192,132,252,0.06); }
+
+  /* ====================================================================
+     PHOTO — 缩小，放在中间内容区域的右下方
+     ==================================================================== */
+  .photo-wrap {
+    position: absolute;
+    /* 以画布中心为基准偏移：水平居中偏右，垂直靠下 */
+    left: 50%;
+    top: 50%;
+    transform: translate(150px, -3px);
+    width: 160px;
+    height: 213px;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .photo-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+    filter:
+      drop-shadow(0 0 30px rgba(192,132,252,0.25))
+      drop-shadow(0 0 60px rgba(255,107,157,0.15));
+    transform: rotate(1.5deg);
+  }
+
+  /* ====================================================================
+     EYE-CATCHING TEXT — 醒目吸引眼球的文案
+     ==================================================================== */
+
+  /* ── 「当追星遇上 AI」— 金色，缩小放在副标题和按钮之间 ── */
+  .headline {
+    position: absolute;
+    top: 350px;
+    z-index: 25;
+    white-space: nowrap;
+    pointer-events: none;
+    /* 让 AI 固定不动，前面文字右移 */
+    left: 420px;
+    transform: translateX(-50%) rotate(-2deg);
+  }
+  .headline .text {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 12px rgba(251,191,36,0.3));
+  }
+  .headline .ai {
+    /* 保持 AI 在原位 */
+    margin-left: 0;
+  }
+  .headline .before {
+    margin-right: 0;
+  }
+
+  /* ── 「用 AI 发电」tagline ── */
+  .tagline-big .before {
+    margin-right: 0;
+  }
+  .tagline-big .after {
+    margin-left: 0;
+  }
+  /* .sub removed */
+
+  /* ── 「用 AI 发电」— 大号金色，倾斜有冲击力，放在左下侧 ── */
+  .tagline-big {
+    position: absolute;
+    top: 470px;
+    left: 320px;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transform: rotate(-4deg);
+    pointer-events: none;
+  }
+  .tagline-big .lightning {
+    font-size: 50px;
+    color: #fbbf24;
+    filter: drop-shadow(0 0 16px rgba(251,191,36,0.4));
+    transform: rotate(-10deg) scale(1.2);
+  }
+  .tagline-big .text {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b, #fbbf24);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 12px rgba(251,191,36,0.3));
+  }
+  /* .hint removed */
+
+  /* ── 「一行代码不写」— 印章效果，右上角 ── */
+  .no-code-seal {
+    position: absolute;
+    top: 160px;
+    right: 300px;
+    z-index: 26;
+    transform: rotate(8deg);
+    pointer-events: none;
+  }
+  .no-code-seal .inner {
+    display: inline-block;
+    padding: 10px 22px;
+    border: 2.5px solid rgba(251,191,36,0.5);
+    border-radius: 4px;
+    background: rgba(251,191,36,0.07);
+    position: relative;
+  }
+  .no-code-seal .inner::before,
+  .no-code-seal .inner::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: rgba(251,191,36,0.35);
+    border-style: solid;
+  }
+  .no-code-seal .inner::before {
+    top: -1px; left: -1px;
+    border-width: 2.5px 0 0 2.5px;
+  }
+  .no-code-seal .inner::after {
+    bottom: -1px; right: -1px;
+    border-width: 0 2.5px 2.5px 0;
+  }
+  .no-code-seal .main-text {
+    display: block;
+    font-size: 24px;
+    font-weight: 700;
+    color: #fbbf24;
+    letter-spacing: 6px;
+    line-height: 1.3;
+  }
+  .no-code-seal .sub-text {
+    display: block;
+    font-size: 12px;
+    color: rgba(251,191,36,0.4);
+    letter-spacing: 3px;
+    margin-top: 1px;
+    font-weight: 400;
+  }
+  .navbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 64px;
+    z-index: 20;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(180deg, rgba(10,10,26,0.95) 60%, transparent);
+  }
+  .nav-logo {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 1px;
+  }
+  .nav-links {
+    display: flex;
+    gap: 6px;
+  }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .nav-links a:hover,
+  .nav-links a.active {
+    color: var(--text);
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* ====================================================================
+     HERO CONTENT — 主页居中内容
+     ==================================================================== */
+  .hero-area {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    text-align: center;
+    /* 限制宽度避免与右侧照片重叠 */
+    width: 620px;
+  }
+
+  .hero-title {
+    font-size: 60px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 6px;
+    margin-bottom: 16px;
+  }
+
+  .hero-subtitle {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 520px;
+    margin: 0 auto 36px;
+    line-height: 1.8;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 32px;
+    border-radius: 50px;
+    font-size: 17px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(255,107,157,0.65), rgba(224,85,138,0.65));
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(255,107,157,0.3);
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1.5px solid rgba(255,255,255,0.12);
+  }
+
+  .hero-footer {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .hero-footer span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── Instruction ──────────────────────────────────────────────────── */
+  .instruction {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: #999;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover" id="cover">
+  <!-- Background (不缩放) -->
+  <div class="bg-glow-1"></div>
+  <div class="bg-glow-2"></div>
+  <div class="bg-noise"></div>
+  <div class="deco-ring dr1"></div>
+  <div class="deco-ring dr2"></div>
+
+  <!-- 所有内容整体缩放 1.5x -->
+  <div class="content-wrapper">
+
+  <!-- ========== 导航栏（复刻主页） ========== -->
+  <nav class="navbar">
+    <div class="nav-logo">
+      ✦ 心上珍藏集
+    </div>
+    <div class="nav-links">
+      <a class="active">首页</a>
+      <a>关于</a>
+      <a>时光轴</a>
+      <a>AI 问答</a>
+    </div>
+  </nav>
+
+  <!-- ========== 「当追星遇上 AI」超大标题 ========== -->
+  <div class="headline">
+    <span class="text"><span class="before">当追星遇上</span><span class="ai">AI</span></span>
+
+  </div>
+
+  <!-- ========== 「一行代码不写」印章 ========== -->
+  <div class="no-code-seal">
+    <div class="inner">
+      <span class="main-text">✦ 一行代码不写 ✦</span>
+      <span class="sub-text">NO HUMAN CODE</span>
+    </div>
+  </div>
+
+  <!-- ========== 「用 AI 发电」大号 tagline ========== -->
+  <div class="tagline-big">
+    <span class="lightning">⚡</span>
+    <span class="text"><span class="before">用</span><span class="ai">AI</span><span class="after">发电</span></span>
+
+  </div>
+
+  <!-- ========== 主页 Hero 区域 ========== -->
+  <div class="hero-area">
+    <h1 class="hero-title">心上珍藏集</h1>
+    <p class="hero-subtitle">记录 SNH48陈嘉仪 的公开信息，提供基于 LLM 的 AI 问答</p>
+    <div class="hero-actions">
+      <span class="btn btn-primary">🤖 AI 问答</span>
+      <span class="btn btn-outline">🕐 时光轴</span>
+    </div>
+    <div class="hero-footer">
+      <span>🎬 演艺视频转录</span>
+      <span>🧠 LLM 智能分析</span>
+      <span>🔗 多媒体链接</span>
+    </div>
+  </div>
+
+  <!-- ========== 陈嘉仪照片 ========== -->
+  <div class="photo-wrap">
+    <img
+      src="/mnt/zhitainew/snh48_web/img/IMG_123968-cjy.png"
+      alt="陈嘉仪"
+      onerror="this.style.display='none'"
+    >
+  </div>
+
+</div>
+
+<div class="instruction">
+  ⚡ 封面 1280×720（16:9）— 截图截此区域即可 ⚡
+</div>
+
+</body>
+</html>

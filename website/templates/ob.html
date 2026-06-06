@@ -212,11 +212,14 @@
     .notif-nav {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      padding: 12px 24px;
+      gap: 6px;
+      padding: 10px 24px;
       border-bottom: 1px solid var(--border);
       background: rgba(255, 71, 87, 0.05);
       flex-shrink: 0;
+      overflow-y: auto;
+      max-height: 140px;
+      align-content: flex-start;
     }
     .notif-nav-label {
       font-size: 12px;
@@ -224,6 +227,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      flex-shrink: 0;
     }
     .notif-nav-btn {
       padding: 4px 12px;
@@ -234,6 +238,7 @@
       font-size: 11px;
       cursor: pointer;
       transition: all .2s;
+      flex-shrink: 0;
     }
     .notif-nav-btn:hover {
       background: rgba(255, 71, 87, 0.2);
@@ -242,6 +247,28 @@
       background: var(--notif);
       color: #fff;
     }
+    .notif-nav-btn.dim {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .mark-all-read-btn {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--green);
+      background: rgba(46, 213, 115, 0.1);
+      color: var(--green);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .2s;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .mark-all-read-btn:hover {
+      background: rgba(46, 213, 115, 0.25);
+    }
+    .notif-nav::-webkit-scrollbar { width: 4px; }
+    .notif-nav::-webkit-scrollbar-track { background: transparent; }
+    .notif-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
     /* ── Event Items ── */
     .event-item {
@@ -526,6 +553,17 @@
     if (group.notifications.length > 0) {
       notifNav.style.display = 'flex';
       notifNav.innerHTML = '<span class="notif-nav-label">🔔 导航:</span>';
+
+      // "全部已读" button
+      const markAllBtn = document.createElement('button');
+      markAllBtn.className = 'mark-all-read-btn';
+      markAllBtn.textContent = '✅ 全部已读';
+      markAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        markAllRead(group);
+      });
+      notifNav.appendChild(markAllBtn);
+
       group.notifications.forEach((notif, ni) => {
         const btn = document.createElement('button');
         btn.className = 'notif-nav-btn';
@@ -721,6 +759,42 @@
       // Immediately refresh data from server after successful mark
       fetchData();
     } catch (_) {}
+  }
+
+  // ── Mark all notifications as read for a group ──
+  function markAllRead(group) {
+    const toMark = [];
+    group.events.forEach(ev => {
+      if (ev.is_notification && ev.status === '⏳ 待处理') {
+        ev.status = '✅ 已处理';
+        toMark.push(ev.event_id);
+      }
+    });
+    group.notification_count = 0;
+
+    // Update UI immediately
+    document.querySelectorAll('.mark-read-btn').forEach(btn => {
+      if (!btn.classList.contains('done')) {
+        btn.classList.add('done');
+        btn.textContent = '✅ 已处理';
+      }
+    });
+    document.querySelectorAll('.notif-nav-btn').forEach(btn => btn.classList.add('dim'));
+    document.querySelectorAll('.mark-all-read-btn').forEach(btn => {
+      btn.textContent = '✅ 全部已读';
+      btn.style.opacity = '0.4';
+      btn.style.pointerEvents = 'none';
+    });
+    updateNotifCounts();
+
+    // Persist to server
+    toMark.forEach(eid => {
+      fetch('/api/ob/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
+        body: JSON.stringify({ event_id: eid }),
+      }).catch(() => {});
+    });
   }
 
   // ── Auto-refresh every 10s ──
