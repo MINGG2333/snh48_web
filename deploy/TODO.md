@@ -496,28 +496,76 @@ nohup python -m website.main > /var/log/snh48/snh48.log 2>&1 &
 
 ## 八、防滥用策略说明
 
-系统内置了**多层级速率限制**来保护服务器算力和 API 费用，所有阈值均可通过 `.env` 配置：
+系统内置了**多层级速率限制**来保护服务器算力和 API 费用，所有阈值均可通过 `.env` 配置。
+
+### QA 问答限速（原有）
 
 | 层级 | 针对 | 默认值 | 限制类型 |
 |---|---|---|---|
 | **IP 级频率** | 每个 IP 地址 | 每 60 秒最多 5 次 | 滑动窗口 |
 | **用户冷却** | 每个浏览器 | 两次提问至少间隔 30 秒 | 时间戳对比 |
 | **日配额** | 每个浏览器 | 每天最多 50 次 | 日历日计数 |
+| **IP 日配额** | 每个 IP 地址 | 每天最多 5 次 | 持久化 JSON |
 | **并发限制** | 每个浏览器 | 最多同时处理 2 个任务 | 任务注册表 |
 | **密码暴力破解** | 每个 IP 地址 | 每 300 秒最多 10 次 | 滑动窗口 |
 
+### 公开端点防滥用限速（2025-06-08 新增）
+
+| 端点 | 默认值 | 配置变量 |
+|------|--------|----------|
+| `POST /api/scroller/login` | 每 300 秒最多 10 次 | `SCROLLER_LOGIN_MAX_PER_WINDOW` / `SCROLLER_LOGIN_WINDOW_SECONDS` |
+| `POST /api/qa/archive-email` | 每 300 秒最多 5 次 | `EMAIL_SUBMIT_MAX_PER_WINDOW` / `EMAIL_SUBMIT_WINDOW_SECONDS` |
+| `POST /api/track/event` | 每 60 秒最多 30 次 | `TRACK_EVENT_MAX_PER_WINDOW` / `TRACK_EVENT_WINDOW_SECONDS` |
+| `POST /api/complaint/submit` | 每 600 秒最多 3 次 | `COMPLAINT_MAX_PER_WINDOW` / `COMPLAINT_WINDOW_SECONDS` |
+
 修改默认值（在 `.env` 中添加）：
 ```ini
+# ── QA 限速 ──
 QA_RATE_LIMIT_PER_WINDOW=10          # 每个 IP 每 60 秒最多 10 次
 QA_RATE_LIMIT_WINDOW_SECONDS=120     # 时间窗口改为 120 秒
 QA_USER_COOLDOWN_SECONDS=15          # 冷却改为 15 秒
 QA_DAILY_QUOTA_PER_USER=100          # 每日配额改为 100 次
+QA_DAILY_IP_QUOTA=10                 # IP 每日配额改为 10 次
 QA_MAX_CONCURRENT_PER_USER=3         # 并发最多 3 个
 PASSWORD_RATE_LIMIT_PER_WINDOW=5     # 密码尝试更严格
 PASSWORD_RATE_LIMIT_WINDOW_SECONDS=600 # 时间窗口 10 分钟
+
+# ── 公开端点限速 ──
+SCROLLER_LOGIN_MAX_PER_WINDOW=5      # 登录尝试更严格
+EMAIL_SUBMIT_MAX_PER_WINDOW=3        # 邮箱提交更严格
+TRACK_EVENT_MAX_PER_WINDOW=50        # 追踪事件更宽松
+COMPLAINT_MAX_PER_WINDOW=5           # 投诉提交更宽松
 ```
 
 用户超限时返回 **HTTP 429**，前端显示中文提示。
+
+---
+
+## 九、前端代码安全措施（2025-06-08 实施）
+
+### 已实施的防护
+
+| 措施 | 涉及文件 | 效果 |
+|------|----------|------|
+| **关键配置后移** | `main.py` → `qa.html` → `qa.js` | QA 配置通过 Jinja2 服务端注入 `window.__QA_CONFIG__`，静态 JS 文件零参数暴露；攻击者直接读 JS 只能看到误导性假值 |
+| **关键数据后移** | `timeline_api/router.py` → `timeline.js` | 手动事件数据不再硬编码，从 `website/data/manual_events.csv` 动态加载，修改后无需重启 |
+| **密码存储安全** | `scroller_api/router.py` → `scroller-admin.js` | 管理密码改用 HttpOnly Cookie（HMAC 哈希），JS 无法读取，防止 XSS 窃取 |
+| **公开端点限速** | `rate_limiter.py` + 各 router | 4 个公开可写端点新增 IP 限速 |
+
+### 尚未实施（待评估）
+
+| 措施 | 工具 | 效果 | 坏处 |
+|------|------|------|------|
+| **JS 代码混淆** | javascript-obfuscator | 前端代码不可读，大幅提升逆向成本 | 构建复杂化、调试困难、轻微性能影响 |
+| **CSS 压缩** | CSSNano | CSS 不可读 | 几乎无坏处 |
+| **Source Map 控制** | 构建时排除 | 防止浏览器还原原始代码 | 调试需另存 map 文件 |
+
+### 注意事项
+
+- 后端重启后 Scroller 管理员需重新登录（Cookie 使用服务端随机密钥签名，重启后旧 Cookie 失效）
+- 手动事件数据现在在 `website/data/manual_events.csv` 中维护，修改后**无需重启**，刷新时光轴页面即可看到更新
+- CSV 列说明：`id`（唯一标识）, `date`（YYYY-MM-DD）, `title`, `type`（milestone/tour/show/event）, `typeLabel`（显示文字）, `description`, `image`（单张封面）, `icon`（Font Awesome 图标）, `link`（外部链接）, `images`（多图，分号分隔）
+- 所有限速在服务重启后会重置（除 IP 日配额外）
 
 ---
 

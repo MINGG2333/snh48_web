@@ -4,12 +4,14 @@
  * Features:
  *   - Load current texts from API
  *   - Add / remove / edit text items
- *   - Save via password-protected PUT endpoint
+ *   - Login via HttpOnly cookie (password never stored in JS)
+ *   - Save via cookie-authenticated PUT endpoint
  */
 (function () {
   'use strict';
 
-  let sitePassword = sessionStorage.getItem('scrollerPassword') || '';
+  // Password is no longer stored in sessionStorage.
+  // Auth uses HttpOnly cookie set by POST /api/scroller/login.
 
   // ── DOM refs ──────────────────────────────────────────────────────────
   const container = document.getElementById('textItems');
@@ -106,29 +108,19 @@
 
   // ── Save texts via API ────────────────────────────────────────────────
   async function saveTexts() {
-    if (!sitePassword) {
-      // Show login overlay to get password first
-      showLogin(() => saveTexts());
-      return;
-    }
-
     btnSave.disabled = true;
     btnSave.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 保存中...';
 
     try {
+      // Cookie is sent automatically by the browser; no header needed
       const resp = await fetch('/api/scroller/texts', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Scroller-Password': sitePassword,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texts }),
       });
 
       if (resp.status === 401 || resp.status === 403) {
-        // Password invalid – re-prompt
-        sitePassword = '';
-        sessionStorage.removeItem('scrollerPassword');
+        // Cookie expired or invalid – re-prompt login
         showLogin(() => saveTexts());
         return;
       }
@@ -161,16 +153,32 @@
     const newLoginSubmit = loginSubmit.cloneNode(true);
     loginSubmit.parentNode.replaceChild(newLoginSubmit, loginSubmit);
 
-    function doLogin() {
+    async function doLogin() {
       const pwd = loginInput.value.trim();
       if (!pwd) {
         loginError.textContent = '请输入密码';
         return;
       }
-      sitePassword = pwd;
-      sessionStorage.setItem('scrollerPassword', pwd);
-      loginOverlay.style.display = 'none';
-      if (callback) callback();
+
+      loginError.textContent = '验证中...';
+      try {
+        const resp = await fetch('/api/scroller/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pwd }),
+        });
+
+        if (resp.ok) {
+          // HttpOnly cookie is now set by the server
+          loginOverlay.style.display = 'none';
+          if (callback) callback();
+        } else {
+          const err = await resp.json().catch(() => ({ detail: '密码错误' }));
+          loginError.textContent = err.detail || '密码错误，请重试';
+        }
+      } catch (e) {
+        loginError.textContent = '网络错误，请重试';
+      }
     }
 
     newLoginSubmit.addEventListener('click', doLogin);

@@ -91,6 +91,31 @@ QA_MAX_CONCURRENT_PER_USER = int(os.getenv("QA_MAX_CONCURRENT_PER_USER", "2"))
 PASSWORD_RATE_LIMIT_PER_WINDOW = int(os.getenv("PASSWORD_RATE_LIMIT_PER_WINDOW", "10"))
 PASSWORD_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("PASSWORD_RATE_LIMIT_WINDOW_SECONDS", "300"))
 
+# ── QA 前端配置（通过 /api/qa/config 暴露给前端，不硬编码在 JS 中）─────────
+# Nginx proxy 超时时间（秒），前端轮询超过此时间后显示超时提示
+QA_TIMEOUT_SECONDS = int(os.getenv("QA_TIMEOUT_SECONDS", "300"))
+# 前端轮询间隔（毫秒）
+QA_POLL_INTERVAL_MS = int(os.getenv("QA_POLL_INTERVAL_MS", "3000"))
+# 超时预警时间（秒），超过此时间前端显示警告
+QA_WARN_SECONDS = int(os.getenv("QA_WARN_SECONDS", "240"))
+
+# ── 通用公开端点限速（防滥用）────────────────────────────────────────────────
+# Scroller 登录限速（防暴力破解）
+SCROLLER_LOGIN_MAX_PER_WINDOW = int(os.getenv("SCROLLER_LOGIN_MAX_PER_WINDOW", "10"))
+SCROLLER_LOGIN_WINDOW_SECONDS = int(os.getenv("SCROLLER_LOGIN_WINDOW_SECONDS", "300"))
+
+# 邮箱提交限速（防垃圾邮箱提交）
+EMAIL_SUBMIT_MAX_PER_WINDOW = int(os.getenv("EMAIL_SUBMIT_MAX_PER_WINDOW", "5"))
+EMAIL_SUBMIT_WINDOW_SECONDS = int(os.getenv("EMAIL_SUBMIT_WINDOW_SECONDS", "300"))
+
+# 行为追踪事件限速（防伪造事件洪水）
+TRACK_EVENT_MAX_PER_WINDOW = int(os.getenv("TRACK_EVENT_MAX_PER_WINDOW", "30"))
+TRACK_EVENT_WINDOW_SECONDS = int(os.getenv("TRACK_EVENT_WINDOW_SECONDS", "60"))
+
+# 投诉提交限速（防恶意刷投诉）
+COMPLAINT_MAX_PER_WINDOW = int(os.getenv("COMPLAINT_MAX_PER_WINDOW", "3"))
+COMPLAINT_WINDOW_SECONDS = int(os.getenv("COMPLAINT_WINDOW_SECONDS", "600"))
+
 # ── Live Push Replays (直播汇总，含回放信息，替代旧的 room_record) ─────────
 # summary.csv 所在目录，由 live_push_replay_matcher.py 生成
 # 服务器上：/home/snh48-fan-hub/live_push_replays/
@@ -104,6 +129,12 @@ LIVE_PUSH_REPLAY_ROOT = os.getenv(
 SCHEDULE_CSV_PATH = os.getenv(
     "SCHEDULE_CSV_PATH",
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "schedule.csv"),
+)
+
+# ── Manual Events CSV (手动事件，修改后无需重启即可生效) ─────────────────
+MANUAL_EVENTS_CSV_PATH = os.getenv(
+    "MANUAL_EVENTS_CSV_PATH",
+    str(WEBSITE_DIR / "data" / "manual_events.csv"),
 )
 
 # ── Server ─────────────────────────────────────────────────────────────────

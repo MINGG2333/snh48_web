@@ -7,22 +7,20 @@
 (function() {
   'use strict';
 
-  // ── Config ──────────────────────────────────────────────────────────────
-  const TIMEOUT_SECONDS = 300;       // nginx proxy_read_timeout
-  const POLL_INTERVAL_MS = 3000;     // poll every 3 seconds
-  const WARN_SECONDS = 240;          // show warning at 4 minutes
-  const MAX_QUESTION_LENGTH = 20;    // max meaningful chars allowed
-  // Allowed characters in a question (whitelist)
-  const QUESTION_ALLOWED_RE = /^[\u4e00-\u9fff a-zA-Z0-9，。！？、；：""''（）【】《》—…·,.?!;:()\[\]{}\-～~\s]+$/;
-  // Count only meaningful chars: Chinese, English letters, digits
-  function countMeaningful(str) {
-    const m = str.match(/[\u4e00-\u9fffa-zA-Z0-9]/g);
-    return m ? m.length : 0;
-  }
-  // Check for disallowed special symbols
-  function hasBadChars(str) {
-    return !QUESTION_ALLOWED_RE.test(str);
-  }
+  // ── Config (injected server-side via Jinja2, NOT in static JS) ────────
+  // If window.__QA_CONFIG__ is missing (e.g. JS file hotlinked directly),
+  // use sentinel values that do NOT match production — so an attacker
+  // reading the static JS alone gets misleading defaults.
+  const CFG = window.__QA_CONFIG__ || {
+    timeout_seconds: 120,
+    poll_interval_ms: 5000,
+    warn_seconds: 90,
+    max_question_length: 10,
+  };
+  let TIMEOUT_SECONDS = CFG.timeout_seconds;
+  let POLL_INTERVAL_MS = CFG.poll_interval_ms;
+  let WARN_SECONDS = CFG.warn_seconds;
+  let MAX_QUESTION_LENGTH = CFG.max_question_length;
 
   // ── State ────────────────────────────────────────────────────────────────
   let sitePassword = '';       // 仅内存变量，刷新后需重新输入密码
@@ -30,6 +28,16 @@
   let timerInterval = null;
   let pollInterval = null;
   let startTime = null;
+
+  // ── Character validators ──────────────────────────────────────────────
+  const QUESTION_ALLOWED_RE = /^[\u4e00-\u9fff a-zA-Z0-9，。！？、；：""''（）【】《》—…·,.?!;:()\[\]{}\-～~\s]+$/;
+  function countMeaningful(str) {
+    const m = str.match(/[\u4e00-\u9fffa-zA-Z0-9]/g);
+    return m ? m.length : 0;
+  }
+  function hasBadChars(str) {
+    return !QUESTION_ALLOWED_RE.test(str);
+  }
 
   const statusEl = document.getElementById('kbStatus');
   const inputEl = document.getElementById('qaInput');
@@ -1762,10 +1770,8 @@
 
   // ── Init ──────────────────────────────────────────────────────────────
   checkStatus().then(() => {
-    // After checking KB status, check if there's a pending task from before refresh
     checkPendingTask();
   }, () => {
-    // Even if checkStatus fails, still look for pending tasks
     checkPendingTask();
   });
 })();

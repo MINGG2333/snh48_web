@@ -479,3 +479,76 @@ def get_schedule():
         "total": len(records),
         "member": MEMBER_NAME,
     }
+
+
+# ── Manual Events ────────────────────────────────────────────────────────
+# Previously hardcoded in timeline.js, then hardcoded in this file.
+# Now loaded from CSV so events can be updated without restarting the server.
+# CSV columns: id, date, title, type, typeLabel, description, image, icon, link, images
+
+
+def _find_manual_csv() -> Optional[Path]:
+    """Locate manual_events.csv using config path (no hardcoded absolute paths)."""
+    csv_path = Path(cfg.MANUAL_EVENTS_CSV_PATH)
+    if csv_path.exists():
+        return csv_path
+    return None
+
+
+def read_manual_events() -> List[Dict[str, Any]]:
+    """Read manual_events.csv, return list of timeline-ready event dicts."""
+    csv_path = _find_manual_csv()
+    if not csv_path:
+        return []
+
+    records = []
+    try:
+        with open(csv_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ev_id = (row.get("id") or "").strip()
+                date_str = (row.get("date") or "").strip()
+                if not ev_id or not date_str:
+                    continue
+
+                title = (row.get("title") or "").strip()
+                ev_type = (row.get("type") or "event").strip()
+                type_label = (row.get("typeLabel") or ev_type).strip()
+                description = (row.get("description") or "").strip()
+                image = (row.get("image") or "").strip() or None
+                icon = (row.get("icon") or "fa-calendar").strip()
+                link = (row.get("link") or "").strip() or None
+
+                # Images: semicolon-separated URLs
+                images_raw = (row.get("images") or "").strip()
+                images = [u.strip() for u in images_raw.split(";") if u.strip()] if images_raw else []
+
+                records.append({
+                    "id": ev_id,
+                    "source": "manual",
+                    "date": date_str,
+                    "title": title,
+                    "type": ev_type,
+                    "typeLabel": type_label,
+                    "description": description,
+                    "image": image,
+                    "icon": icon,
+                    "link": link,
+                    "images": images,
+                })
+    except (IOError, csv.Error) as e:
+        print(f"[timeline_api] Error reading manual events CSV: {e}")
+        return []
+
+    return records
+
+
+@router.get("/manual-events")
+def get_manual_events():
+    """Return manually curated timeline events (loaded from CSV, no restart needed)."""
+    records = read_manual_events()
+    return {
+        "success": True,
+        "data": records,
+        "total": len(records),
+    }

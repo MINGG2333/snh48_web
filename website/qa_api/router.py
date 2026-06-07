@@ -25,6 +25,7 @@ from website.logging_setup import log_interaction, log_llm_call, log_api_error, 
 from website.rate_limiter import (
     check_all_qa_limits,
     check_password_rate_limit,
+    check_email_submit_limit,
     get_client_ip,
     get_rate_limiter_stats,
     register_task,
@@ -215,6 +216,22 @@ def get_status():
     """Check if the knowledge base is ready."""
     _get_qa_engine()
     return _qa_status
+
+
+# ── QA Frontend Config Endpoint ─────────────────────────────────────────────
+
+@router.get("/config")
+def get_qa_config():
+    """
+    Return frontend configuration so sensitive parameters
+    are not hardcoded in the browser-visible JS.
+    """
+    return {
+        "max_question_length": MAX_QUESTION_LENGTH,
+        "timeout_seconds": cfg.QA_TIMEOUT_SECONDS,
+        "poll_interval_ms": cfg.QA_POLL_INTERVAL_MS,
+        "warn_seconds": cfg.QA_WARN_SECONDS,
+    }
 
 
 # ── Async Q&A Endpoints ────────────────────────────────────────────────────
@@ -514,7 +531,7 @@ class ArchiveEmailRequest(BaseModel):
 
 
 @router.post("/archive-email")
-def archive_email(req: ArchiveEmailRequest):
+def archive_email(req: ArchiveEmailRequest, request: Request):
     """
     Store an email address associated with an async task.
     This allows notifying users when a long-running task completes.
@@ -524,6 +541,10 @@ def archive_email(req: ArchiveEmailRequest):
       2. email_requests.md     — 人类可读的 Markdown 汇总文件（按时间倒序排列）
       3. notification_center.md — 统一通知中心（汇总所有待处理事件，含处理状态）
     """
+    # Rate-limit email submissions to prevent spam
+    ip = get_client_ip(request)
+    check_email_submit_limit(ip)
+
     from website.logging_setup import get_session_dir
     session_dir = get_session_dir()
     email_log_path = session_dir / "email_requests.jsonl"

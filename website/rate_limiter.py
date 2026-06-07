@@ -97,6 +97,32 @@ password_limiter = SlidingWindowLimiter(
     window_seconds=cfg.PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
 )
 
+# ── Generic public-endpoint rate limiters (anti-abuse) ────────────────────
+
+# Scroller admin login brute-force protection
+scroller_login_limiter = SlidingWindowLimiter(
+    max_requests=cfg.SCROLLER_LOGIN_MAX_PER_WINDOW,
+    window_seconds=cfg.SCROLLER_LOGIN_WINDOW_SECONDS,
+)
+
+# Email archive submission anti-spam
+email_submit_limiter = SlidingWindowLimiter(
+    max_requests=cfg.EMAIL_SUBMIT_MAX_PER_WINDOW,
+    window_seconds=cfg.EMAIL_SUBMIT_WINDOW_SECONDS,
+)
+
+# Track event anti-flood (prevents forged event injection)
+track_event_limiter = SlidingWindowLimiter(
+    max_requests=cfg.TRACK_EVENT_MAX_PER_WINDOW,
+    window_seconds=cfg.TRACK_EVENT_WINDOW_SECONDS,
+)
+
+# Complaint submission anti-spam
+complaint_limiter = SlidingWindowLimiter(
+    max_requests=cfg.COMPLAINT_MAX_PER_WINDOW,
+    window_seconds=cfg.COMPLAINT_WINDOW_SECONDS,
+)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Per-User State (tracked by client_id)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -385,9 +411,74 @@ def get_rate_limiter_stats() -> dict:
     return {
         "qa_ip_limiter": qa_ip_limiter.stats,
         "password_limiter": password_limiter.stats,
+        "scroller_login_limiter": scroller_login_limiter.stats,
+        "email_submit_limiter": email_submit_limiter.stats,
+        "track_event_limiter": track_event_limiter.stats,
+        "complaint_limiter": complaint_limiter.stats,
         "active_tasks": len(_active_tasks),
         "tracked_users": {
             "with_cooldown": len(_last_question_time),
             "with_daily_quota": len(_daily_usage),
         },
     }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Public Endpoint Rate-Limit Checks (anti-abuse)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+def check_scroller_login_limit(ip: str) -> None:
+    """Rate-limit scroller admin login attempts (anti brute-force)."""
+    allowed, count = scroller_login_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"登录尝试过于频繁，请稍后再试"
+                f"（限制：每 {cfg.SCROLLER_LOGIN_WINDOW_SECONDS} 秒最多 "
+                f"{cfg.SCROLLER_LOGIN_MAX_PER_WINDOW} 次）"
+            ),
+        )
+
+
+def check_email_submit_limit(ip: str) -> None:
+    """Rate-limit email archive submissions (anti-spam)."""
+    allowed, count = email_submit_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"邮箱提交过于频繁，请稍后再试"
+                f"（限制：每 {cfg.EMAIL_SUBMIT_WINDOW_SECONDS} 秒最多 "
+                f"{cfg.EMAIL_SUBMIT_MAX_PER_WINDOW} 次）"
+            ),
+        )
+
+
+def check_track_event_limit(ip: str) -> None:
+    """Rate-limit track event submissions (anti-event-flood)."""
+    allowed, count = track_event_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"事件提交过于频繁，请稍后再试"
+                f"（限制：每 {cfg.TRACK_EVENT_WINDOW_SECONDS} 秒最多 "
+                f"{cfg.TRACK_EVENT_MAX_PER_WINDOW} 次）"
+            ),
+        )
+
+
+def check_complaint_limit(ip: str) -> None:
+    """Rate-limit complaint submissions (anti-spam)."""
+    allowed, count = complaint_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"投诉提交过于频繁，请稍后再试"
+                f"（限制：每 {cfg.COMPLAINT_WINDOW_SECONDS} 秒最多 "
+                f"{cfg.COMPLAINT_MAX_PER_WINDOW} 次）"
+            ),
+        )

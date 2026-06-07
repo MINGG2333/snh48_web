@@ -16,8 +16,10 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
+
+from website.rate_limiter import check_complaint_limit, get_client_ip
 
 router = APIRouter(prefix="/api/complaint", tags=["投诉举报"])
 
@@ -81,13 +83,17 @@ class ComplaintRequest(BaseModel):
 
 
 @router.post("/submit")
-def submit_complaint(req: ComplaintRequest):
+def submit_complaint(req: ComplaintRequest, request: Request):
     """
     Submit a complaint or report.
 
     Generates a unique ticket_id for tracking, stores the complaint
     data in a JSONL file, and returns the ticket_id to the user.
     """
+    # Rate-limit complaint submissions to prevent spam
+    ip = get_client_ip(request)
+    check_complaint_limit(ip)
+
     _ensure_dir()
 
     ticket_id = f"CP-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"

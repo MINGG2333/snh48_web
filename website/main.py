@@ -4,6 +4,7 @@ SNH48 演艺信息站 - FastAPI Application
 """
 from __future__ import annotations
 
+import json
 import os
 import random
 import sys
@@ -144,6 +145,13 @@ async def qa_page(request: Request):
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "site_domain": cfg.SITE_DOMAIN,
             "static_version": static_version,
+            # QA config injected server-side as JSON (not in static JS)
+            "qa_config_json": json.dumps({
+                "timeout_seconds": cfg.QA_TIMEOUT_SECONDS,
+                "poll_interval_ms": cfg.QA_POLL_INTERVAL_MS,
+                "warn_seconds": cfg.QA_WARN_SECONDS,
+                "max_question_length": 20,
+            }),
         },
     )
 

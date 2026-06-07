@@ -20,6 +20,7 @@ from fastapi import APIRouter, Header, Request
 from pydantic import BaseModel
 
 from website.logging_setup import get_session_dir
+from website.rate_limiter import check_track_event_limit
 from website.user_events import record_user_event
 
 router = APIRouter(prefix="/api/track", tags=["用户行为追踪"])
@@ -96,6 +97,9 @@ def track_event(
     # ── Track IP → client mapping (for admin OB page, never exposed) ────
     ip = _extract_client_ip(request, x_forwarded_for)
     _track_ip_to_client(ip, client_id)
+
+    # ── Rate-limit track events to prevent forged event floods ────────
+    check_track_event_limit(ip)
 
     # ── Detect new user ──────────────────────────────────────────────────
     # A new user is detected when their per-user JSONL file doesn't exist yet.

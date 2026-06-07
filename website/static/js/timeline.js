@@ -6,37 +6,10 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Manual Event Data (硬编码，保留)
+//  Manual Event Data (fetched from backend API, not hardcoded)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MANUAL_EVENTS = [
-  {
-    id: 'join', source: 'manual', date: '2025-09-23',
-    title: '加入 SNH48 二十三期生', type: 'milestone', typeLabel: '里程碑',
-    description: `2025年9月23日，陈嘉仪正式加入 SNH48 二十三期生。个人特长是反射弧特长，身高166cm，爱好看国漫、唱歌跳舞、最喜欢看舞团练习室视频、玩游戏。星座摩羯座，生日1月10日。所属上海丝芭文化传媒集团有限公司。`,
-    image: 'https://www.snh48.com/images/member/gs4_10344_1.jpg',
-    icon: 'fa-star',
-    link: 'https://www.snh48.com/mobile/member-detail.html?sid=10344&gid=1',
-    images: [
-      'https://www.snh48.com/images/member/gs4_10344_1.jpg',
-      'https://www.snh48.com/images/member/gs4_10344_2.jpg',
-      'https://www.snh48.com/images/member/gs4_10344_3.jpg',
-      'https://www.snh48.com/images/member/gs4_10344_4.jpg',
-    ],
-  },
-  {
-    id: 'guangzhou-tour', source: 'manual', date: '2026-06-28',
-    title: '广州巡演', type: 'tour', typeLabel: '巡演',
-    description: `广州巡演！`,
-    image: null, icon: 'fa-bus',
-  },
-  {
-    id: 'mini-live', source: 'manual', date: '2026-11-06',
-    title: 'Mini Live', type: 'show', typeLabel: 'Live',
-    description: `Mini Live！`,
-    image: null, icon: 'fa-microphone',
-  },
-];
+let MANUAL_EVENTS = [];  // populated by fetchManualEvents()
 
 const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
@@ -511,6 +484,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── Fetch manual events from API ──
+  async function fetchManualEvents() {
+    try {
+      const resp = await fetch('/api/timeline/manual-events');
+      const data = await resp.json();
+      if (data.success && Array.isArray(data.data)) {
+        MANUAL_EVENTS = data.data;
+      }
+    } catch (err) {
+      console.warn('[timeline] Failed to fetch manual events:', err);
+    }
+  }
+
   // ── Fetch live data from API ──
   async function fetchLiveEvents() {
     try {
@@ -922,8 +908,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingEl = document.getElementById('timelineLoading');
   // Sync initial filter UI state
   updateFilterUI();
-  // Fetch all data sources in parallel
+  // Fetch all data sources in parallel (manual events from API, not hardcoded)
   Promise.all([
+    fetchManualEvents(),
     fetchLiveEvents(),
     fetchScheduleEvents(),
   ]).then(() => {
