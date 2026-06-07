@@ -563,13 +563,8 @@ USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
 | **密码存储安全** | `scroller_api/router.py` → `scroller-admin.js` | 管理密码改用 HttpOnly Cookie（HMAC 哈希），JS 无法读取，防止 XSS 窃取 |
 | **公开端点限速** | `rate_limiter.py` + 各 router | 4 个公开可写端点新增 IP 限速 |
 | **JS 代码混淆** | `script/obfuscate_js.cjs` | 7 个 JS 文件混淆为乱码（变量名随机化、字符串加密、控制流平坦化），通过 `USE_OBFUSCATED_JS=true` 启用 |
-| **CSS 压缩** | `script/obfuscate_js.cjs` (clean-css) | style.css 33KB → 20KB，去除注释/空格/换行 |
-
-### 尚未实施（待评估）
-
-| 措施 | 工具 | 效果 | 坏处 |
-|------|------|------|------|
-| **Source Map 控制** | 构建时排除 | 防止浏览器还原原始代码 | 调试需另存 map 文件 |
+| **CSS 压缩** | `script/obfuscate_js.cjs` (clean-css) | style.css 33KB → 20KB，去除注释/空格/换行，浏览器 DevTools 自动格式化 |
+| **Source Map 控制** | 构建工具默认不生成 | 无 `.map` 文件，浏览器无法还原原始代码 |
 
 ### 工作流
 
