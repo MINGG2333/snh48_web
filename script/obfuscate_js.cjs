@@ -1,19 +1,22 @@
 /**
- * JS Obfuscation Build Script
+ * JS Obfuscation + CSS Minification Build Script
  *
- * Reads source files from static/js/ and outputs obfuscated versions
- * to static/js-dist/. Run before deployment:
+ * JS:  src=static/js/ → dist=static/js-dist/
+ * CSS: src=static/css/ → dist=static/css-dist/
+ *
+ * Run before deployment:
  *   node script/obfuscate_js.cjs
- *
- * Restore source readability during development:
- *   git checkout website/static/js/
  */
 const fs = require('fs');
 const path = require('path');
 const JavaScriptObfuscator = require('javascript-obfuscator');
+const CleanCSS = require('clean-css');
 
-const SRC_DIR = path.join(__dirname, '..', 'website', 'static', 'js');
-const DIST_DIR = path.join(__dirname, '..', 'website', 'static', 'js-dist');
+const BASE = path.join(__dirname, '..', 'website', 'static');
+const JS_SRC = path.join(BASE, 'js');
+const JS_DIST = path.join(BASE, 'js-dist');
+const CSS_SRC_DIR = path.join(BASE, 'css');
+const CSS_DIST_DIR = path.join(BASE, 'css-dist');
 
 // ── Obfuscation options ──────────────────────────────────────────────────
 const OPTIONS = {
@@ -39,51 +42,94 @@ const OPTIONS = {
   reservedStrings: [],
 };
 
-// ── Ensure dist directory exists ─────────────────────────────────────────
-if (!fs.existsSync(DIST_DIR)) {
-  fs.mkdirSync(DIST_DIR, { recursive: true });
-}
+// ── Ensure dist directories exist ──────────────────────────────────────────
+[JS_DIST, CSS_DIST_DIR].forEach(d => {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+});
 
-// ── Find all .js files ───────────────────────────────────────────────────
-const files = fs.readdirSync(SRC_DIR).filter(f => f.endsWith('.js'));
+// ═══════════════════════════════════════════════════════════════════════════
+//  JS Obfuscation
+// ═══════════════════════════════════════════════════════════════════════════
 
-if (files.length === 0) {
-  console.log('No JS files found in', SRC_DIR);
-  process.exit(0);
-}
+const jsFiles = fs.readdirSync(JS_SRC).filter(f => f.endsWith('.js'));
 
-console.log(`Obfuscating ${files.length} file(s)...\n`);
+if (jsFiles.length === 0) {
+  console.log('No JS files found in', JS_SRC);
+} else {
+  console.log(`Obfuscating ${jsFiles.length} JS file(s)...\n`);
 
-let totalOriginal = 0;
-let totalObfuscated = 0;
+  let totalOriginal = 0;
+  let totalObfuscated = 0;
 
-for (const file of files) {
-  const srcPath = path.join(SRC_DIR, file);
-  const srcCode = fs.readFileSync(srcPath, 'utf-8');
-  const originalSize = Buffer.byteLength(srcCode, 'utf-8');
+  for (const file of jsFiles) {
+    const srcPath = path.join(JS_SRC, file);
+    const srcCode = fs.readFileSync(srcPath, 'utf-8');
+    const originalSize = Buffer.byteLength(srcCode, 'utf-8');
 
-  try {
-    const result = JavaScriptObfuscator.obfuscate(srcCode, {
-      ...OPTIONS,
-      // Per-file adjustments
-      ...(file === 'tracker.js' ? { deadCodeInjection: false } : {}),
-    });
+    try {
+      const result = JavaScriptObfuscator.obfuscate(srcCode, {
+        ...OPTIONS,
+        ...(file === 'tracker.js' ? { deadCodeInjection: false } : {}),
+      });
 
-    const obfuscated = result.getObfuscatedCode();
-    const distPath = path.join(DIST_DIR, file);
-    fs.writeFileSync(distPath, obfuscated, 'utf-8');
+      const obfuscated = result.getObfuscatedCode();
+      const distPath = path.join(JS_DIST, file);
+      fs.writeFileSync(distPath, obfuscated, 'utf-8');
 
-    const obfSize = Buffer.byteLength(obfuscated, 'utf-8');
-    const ratio = ((obfSize / originalSize) * 100).toFixed(0);
+      const obfSize = Buffer.byteLength(obfuscated, 'utf-8');
+      const ratio = ((obfSize / originalSize) * 100).toFixed(0);
+      console.log(`  JS  ${file}: ${(originalSize/1024).toFixed(1)}KB → ${(obfSize/1024).toFixed(1)}KB (${ratio}%)`);
 
-    console.log(`  ${file}: ${(originalSize/1024).toFixed(1)}KB → ${(obfSize/1024).toFixed(1)}KB (${ratio}%)`);
-
-    totalOriginal += originalSize;
-    totalObfuscated += obfSize;
-  } catch (err) {
-    console.error(`  ${file}: ERROR - ${err.message}`);
+      totalOriginal += originalSize;
+      totalObfuscated += obfSize;
+    } catch (err) {
+      console.error(`  JS  ${file}: ERROR - ${err.message}`);
+    }
   }
+
+  const totalRatio = ((totalObfuscated / totalOriginal) * 100).toFixed(0);
+  console.log(`\nJS Done: ${(totalOriginal/1024).toFixed(1)}KB → ${(totalObfuscated/1024).toFixed(1)}KB (${totalRatio}%)\n`);
 }
 
-const totalRatio = ((totalObfuscated / totalOriginal) * 100).toFixed(0);
-console.log(`\nDone: ${(totalOriginal/1024).toFixed(1)}KB → ${(totalObfuscated/1024).toFixed(1)}KB (${totalRatio}%)`);
+// ═══════════════════════════════════════════════════════════════════════════
+//  CSS Minification
+// ═══════════════════════════════════════════════════════════════════════════
+
+const cssFiles = fs.readdirSync(CSS_SRC_DIR).filter(f => f.endsWith('.css'));
+
+if (cssFiles.length === 0) {
+  console.log('No CSS files found in', CSS_SRC_DIR);
+} else {
+  console.log(`Minifying ${cssFiles.length} CSS file(s)...\n`);
+  const minifier = new CleanCSS({ level: 2 });
+
+  let cssTotalOriginal = 0;
+  let cssTotalMinified = 0;
+
+  for (const file of cssFiles) {
+    const srcPath = path.join(CSS_SRC_DIR, file);
+    const srcCode = fs.readFileSync(srcPath, 'utf-8');
+    const originalSize = Buffer.byteLength(srcCode, 'utf-8');
+
+    const result = minifier.minify(srcCode);
+    if (result.errors.length > 0) {
+      console.error(`  CSS ${file}: ERROR - ${result.errors.join('; ')}`);
+      continue;
+    }
+
+    const distPath = path.join(CSS_DIST_DIR, file);
+    fs.writeFileSync(distPath, result.styles, 'utf-8');
+
+    const minSize = Buffer.byteLength(result.styles, 'utf-8');
+    const ratio = ((minSize / originalSize) * 100).toFixed(0);
+    console.log(`  CSS ${file}: ${(originalSize/1024).toFixed(1)}KB → ${(minSize/1024).toFixed(1)}KB (${ratio}%)`);
+
+    cssTotalOriginal += originalSize;
+    cssTotalMinified += minSize;
+  }
+
+  const cssRatio = ((cssTotalMinified / cssTotalOriginal) * 100).toFixed(0);
+  console.log(`\nCSS Done: ${(cssTotalOriginal/1024).toFixed(1)}KB → ${(cssTotalMinified/1024).toFixed(1)}KB (${cssRatio}%)`);
+}
+
+console.log('\n✅ Build complete.');
