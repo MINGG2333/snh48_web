@@ -22,6 +22,9 @@ website/data/complaints/
 .env
 .env.local
 
+# Node
+node_modules/
+
 # IDE
 .vscode/
 .idea/

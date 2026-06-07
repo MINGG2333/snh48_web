@@ -24,6 +24,12 @@ app = FastAPI(
 )
 
 # ── Static Files ───────────────────────────────────────────────────────────
+# Mount JS separately first (may be obfuscated in production)
+# The more-specific /static/js mount must come BEFORE the general /static mount
+if cfg.USE_OBFUSCATED_JS:
+    _js_dir = cfg.STATIC_DIR / "js-dist"
+    if _js_dir.exists():
+        app.mount("/static/js", StaticFiles(directory=str(_js_dir)), name="static_js")
 app.mount("/static", StaticFiles(directory=str(cfg.STATIC_DIR)), name="static")
 
 # ── Live Covers (mount for fast static serving) ───────────────────────────

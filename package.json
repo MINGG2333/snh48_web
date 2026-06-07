@@ -1,0 +1,26 @@
+{
+  "name": "snh48_web",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MINGG2333/snh48_web.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MINGG2333/snh48_web/issues"
+  },
+  "homepage": "https://github.com/MINGG2333/snh48_web#readme",
+  "devDependencies": {
+    "javascript-obfuscator": "^5.4.3"
+  }
+}

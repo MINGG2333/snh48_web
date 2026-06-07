@@ -535,6 +535,9 @@ SCROLLER_LOGIN_MAX_PER_WINDOW=5      # 登录尝试更严格
 EMAIL_SUBMIT_MAX_PER_WINDOW=3        # 邮箱提交更严格
 TRACK_EVENT_MAX_PER_WINDOW=50        # 追踪事件更宽松
 COMPLAINT_MAX_PER_WINDOW=5           # 投诉提交更宽松
+
+# ── JS 混淆（生产环境必须开启）──
+USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
 ```
 
 用户超限时返回 **HTTP 429**，前端显示中文提示。
@@ -551,14 +554,24 @@ COMPLAINT_MAX_PER_WINDOW=5           # 投诉提交更宽松
 | **关键数据后移** | `timeline_api/router.py` → `timeline.js` | 手动事件数据不再硬编码，从 `website/data/manual_events.csv` 动态加载，修改后无需重启 |
 | **密码存储安全** | `scroller_api/router.py` → `scroller-admin.js` | 管理密码改用 HttpOnly Cookie（HMAC 哈希），JS 无法读取，防止 XSS 窃取 |
 | **公开端点限速** | `rate_limiter.py` + 各 router | 4 个公开可写端点新增 IP 限速 |
+| **JS 代码混淆** | `script/obfuscate_js.cjs` | 7 个 JS 文件混淆为乱码（变量名随机化、字符串加密、控制流平坦化），通过 `USE_OBFUSCATED_JS=true` 启用 |
 
 ### 尚未实施（待评估）
 
 | 措施 | 工具 | 效果 | 坏处 |
 |------|------|------|------|
-| **JS 代码混淆** | javascript-obfuscator | 前端代码不可读，大幅提升逆向成本 | 构建复杂化、调试困难、轻微性能影响 |
 | **CSS 压缩** | CSSNano | CSS 不可读 | 几乎无坏处 |
 | **Source Map 控制** | 构建时排除 | 防止浏览器还原原始代码 | 调试需另存 map 文件 |
+
+### 工作流
+
+```bash
+# 修改 JS 源码后，重新混淆
+node script/obfuscate_js.cjs
+
+# 提交时记得包含混淆输出（已提交到 git，服务器无需 Node.js）
+git add website/static/js-dist/ && git commit -m "重新混淆 JS"
+```
 
 ### 注意事项
 
@@ -853,6 +866,17 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 
 ### 后续代码更新
 
+#### 本地修改（区分情况）
+
+```bash
+# ⚠️ 改了 JS 文件 → 必须先重新混淆，再提交
+node script/obfuscate_js.cjs
+git add website/static/js-dist/ website/static/js/
+
+# 只改了 .py / .html / .css / .md → 正常提交即可
+cd /mnt/zhitainew/snh48_web && git add . && git commit -m "xxx" && git push
+```
+
 #### 阿里云香港（cjy.我爱你）
 ```bash
 # SSH 连接
@@ -862,27 +886,27 @@ ssh root@8.210.188.184
 cd /home/snh48_web && git pull
 cd /home/snh48_web/transcript_analyze && git pull
 
+# ⚠️ 重启后 scroller 管理员需重新登录（Cookie 密钥随进程重启变化）
 # 判断是否需要重启：
-#   - 改了 .py 文件 → 必须重启（上面那行）
-#   - 改了 .html/.css/.js → 刷新浏览器即可
+#   - 改了 .py 文件 → 必须重启
+#   - 改了 .html → 刷新浏览器即可
+#   - 改了 .js（已混淆输出在 js-dist/）→ 刷新浏览器即可
+#   - 改了 .css → 刷新浏览器即可
 #   - 改了 .md/文档 → 啥都不用做
 systemctl restart snh48-aliyun
 journalctl -u snh48-aliyun -n 10 --no-pager
 
-# 远程一行搞定（如果只改文档，去掉 && systemctl restart 即可）
+# 远程一行搞定
 ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
 ```
 
 #### 腾讯云（cjy.plus）
 ```bash
-# SSH 连接
-ssh root@124.222.72.203
-
-# 一键更新 + 重启（screen 方式，自动热重启）
-cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c "cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log"
-
 # 远程一行搞定（本机直接执行）
 ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
+```
+
+> **⚠️ 首次启用 JS 混淆**：需要在服务器 `.env` 中添加 `USE_OBFUSCATED_JS=true`。已推送到 Git 的 `js-dist/` 目录包含混淆输出，服务器无需安装 Node.js。
 
 ---
 

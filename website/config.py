@@ -137,6 +137,11 @@ MANUAL_EVENTS_CSV_PATH = os.getenv(
     str(WEBSITE_DIR / "data" / "manual_events.csv"),
 )
 
+# ── JS Obfuscation ──────────────────────────────────────────────────────────
+# 设置为 "true" 时使用混淆后的 JS（static/js-dist/），否则使用源文件（static/js/）
+USE_OBFUSCATED_JS = os.getenv("USE_OBFUSCATED_JS", "").lower() in ("1", "true", "yes")
+JS_DIST_DIR = STATIC_DIR / "js-dist" if USE_OBFUSCATED_JS else STATIC_DIR / "js"
+
 # ── Server ─────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
