@@ -169,11 +169,7 @@ def check_qa_rate_limit(ip: str) -> int:
         log_api_error(ip, "/api/qa/ask", f"IP级限速拒绝（{count}/{cfg.QA_RATE_LIMIT_PER_WINDOW}）")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"请求过于频繁，请稍后再试"
-                f"（限制：每 {cfg.QA_RATE_LIMIT_WINDOW_SECONDS} 秒最多 "
-                f"{cfg.QA_RATE_LIMIT_PER_WINDOW} 次）"
-            ),
+            detail="请求过于频繁，请稍后再试",
         )
     return count
 
@@ -196,7 +192,9 @@ def check_user_cooldown(client_id: str) -> None:
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"提问过于频繁，请 {remaining} 秒后再试",
+                detail=(
+                f"提问过于频繁，请稍后再试"
+            ),
             )
     _last_question_time[client_id] = now
 
@@ -217,10 +215,7 @@ def check_daily_quota(client_id: str) -> None:
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=(
-                    f"今日提问次数已达上限（{cfg.QA_DAILY_QUOTA_PER_USER} 次），"
-                    f"请明天再试。如需增加额度，请联系管理员。"
-                ),
+                detail="今日提问次数已达上限，请明天再试",
             )
         # Increment count
         _daily_usage[client_id] = (today, record[1] + 1)
@@ -245,10 +240,7 @@ def check_concurrent_tasks(client_id: str) -> None:
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"您有正在处理中的问题，请等待完成后再提问"
-                f"（最多同时处理 {cfg.QA_MAX_CONCURRENT_PER_USER} 个）"
-            ),
+            detail="您有正在处理中的问题，请等待完成后再提问",
         )
 
 
@@ -318,10 +310,7 @@ def check_daily_ip_quota(ip: str) -> None:
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=(
-                    f"您的 IP 今天已提问 {current_count} 次，已达每日上限"
-                    f"（{cfg.QA_DAILY_IP_QUOTA} 次），请明天再试。"
-                ),
+                detail="您的 IP 今天提问次数已达上限，请明天再试",
             )
 
         # 更新计数并写回磁盘
@@ -383,11 +372,7 @@ def check_password_rate_limit(ip: str) -> None:
         log_api_error(ip, "/api/qa/verify-password", "密码暴力破解限速拒绝")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"密码验证尝试过于频繁，请稍后再试"
-                f"（限制：每 {cfg.PASSWORD_RATE_LIMIT_WINDOW_SECONDS} 秒最多 "
-                f"{cfg.PASSWORD_RATE_LIMIT_PER_WINDOW} 次）"
-            ),
+            detail="密码验证尝试过于频繁，请稍后再试",
         )
 
 
@@ -434,11 +419,7 @@ def check_scroller_login_limit(ip: str) -> None:
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"登录尝试过于频繁，请稍后再试"
-                f"（限制：每 {cfg.SCROLLER_LOGIN_WINDOW_SECONDS} 秒最多 "
-                f"{cfg.SCROLLER_LOGIN_MAX_PER_WINDOW} 次）"
-            ),
+            detail="登录尝试过于频繁，请稍后再试",
         )
 
 
@@ -448,11 +429,7 @@ def check_email_submit_limit(ip: str) -> None:
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"邮箱提交过于频繁，请稍后再试"
-                f"（限制：每 {cfg.EMAIL_SUBMIT_WINDOW_SECONDS} 秒最多 "
-                f"{cfg.EMAIL_SUBMIT_MAX_PER_WINDOW} 次）"
-            ),
+            detail="邮箱提交过于频繁，请稍后再试",
         )
 
 
@@ -462,11 +439,7 @@ def check_track_event_limit(ip: str) -> None:
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"事件提交过于频繁，请稍后再试"
-                f"（限制：每 {cfg.TRACK_EVENT_WINDOW_SECONDS} 秒最多 "
-                f"{cfg.TRACK_EVENT_MAX_PER_WINDOW} 次）"
-            ),
+            detail="事件提交过于频繁，请稍后再试",
         )
 
 
@@ -476,9 +449,5 @@ def check_complaint_limit(ip: str) -> None:
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"投诉提交过于频繁，请稍后再试"
-                f"（限制：每 {cfg.COMPLAINT_WINDOW_SECONDS} 秒最多 "
-                f"{cfg.COMPLAINT_MAX_PER_WINDOW} 次）"
-            ),
+            detail="投诉提交过于频繁，请稍后再试",
         )
