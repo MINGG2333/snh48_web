@@ -114,6 +114,9 @@ SITE_PASSWORD=xxxxxxxxx
 
 # DeepSeek API Key（问答系统必须）
 DEEPSEEK_API_KEY=你的真实DeepSeekKey
+
+# JS/CSS 混淆压缩（生产环境必须开启）
+USE_OBFUSCATED_JS=true
 EOF
 
 # 重要：限制权限，防止其他用户读取
@@ -428,25 +431,30 @@ SITE_POLICE_ICP_CODE=11010602202601
 
 ## 四、后续代码更新
 
-本地修改后 push → SSH 中 git pull + 重启：
+### 本地修改（区分情况）
 
 ```bash
-# 本地
+# ⚠️ 改了 JS/CSS 文件 → 必须先重新构建，再提交
+node script/obfuscate_js.cjs
+git add website/static/js-dist/ website/static/css-dist/
+
+# 只改了 .py / .html / .md → 正常提交即可
 cd /mnt/zhitainew/snh48_web && git add . && git commit -m "xxx" && git push
 cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xxx" && git push
 ```
 
-然后在 SSH 终端 pull 并重启：
-
+### 部署到腾讯云（cjy.plus）
 ```bash
-cd /home/snh48_web && git pull
-cd /home/snh48_web/transcript_analyze && git pull
-
-pkill -f "website.main"
-cd /home/snh48_web
-source venv/bin/activate
-nohup python -m website.main > /var/log/snh48/snh48.log 2>&1 &
+ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
 ```
+
+### 部署到阿里云（cjy.我爱你）
+```bash
+ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
+```
+
+> ⚠️ 服务器无需 Node.js —— 混淆/压缩输出（js-dist/ css-dist/）已提交到 Git。
+> 仅 `.py` 修改需要重启；`.html`/`.js`/`.css` 刷新浏览器即可。
 
 ---
 
@@ -555,22 +563,23 @@ USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
 | **密码存储安全** | `scroller_api/router.py` → `scroller-admin.js` | 管理密码改用 HttpOnly Cookie（HMAC 哈希），JS 无法读取，防止 XSS 窃取 |
 | **公开端点限速** | `rate_limiter.py` + 各 router | 4 个公开可写端点新增 IP 限速 |
 | **JS 代码混淆** | `script/obfuscate_js.cjs` | 7 个 JS 文件混淆为乱码（变量名随机化、字符串加密、控制流平坦化），通过 `USE_OBFUSCATED_JS=true` 启用 |
+| **CSS 压缩** | `script/obfuscate_js.cjs` (clean-css) | style.css 33KB → 20KB，去除注释/空格/换行 |
 
 ### 尚未实施（待评估）
 
 | 措施 | 工具 | 效果 | 坏处 |
 |------|------|------|------|
-| **CSS 压缩** | CSSNano | CSS 不可读 | 几乎无坏处 |
 | **Source Map 控制** | 构建时排除 | 防止浏览器还原原始代码 | 调试需另存 map 文件 |
 
 ### 工作流
 
 ```bash
-# 修改 JS 源码后，重新混淆
+# 修改 JS/CSS 源码后，重新构建
 node script/obfuscate_js.cjs
 
-# 提交时记得包含混淆输出（已提交到 git，服务器无需 Node.js）
-git add website/static/js-dist/ && git commit -m "重新混淆 JS"
+# 提交时记得包含构建输出（已提交到 git，服务器无需 Node.js）
+git add website/static/js-dist/ website/static/css-dist/
+git commit -m "重新构建 JS/CSS"
 ```
 
 ### 注意事项
@@ -725,6 +734,9 @@ DEEPSEEK_API_KEY=你的真实DeepSeekKey
 # 网站标题
 SITE_TITLE=心上珍藏集
 
+# JS/CSS 混淆压缩（生产环境必须开启）
+USE_OBFUSCATED_JS=true
+
 # ⚠️ 香港服务器无需 ICP 备案，留空即可
 EOF
 
@@ -866,47 +878,17 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 
 ### 后续代码更新
 
-#### 本地修改（区分情况）
-
-```bash
-# ⚠️ 改了 JS 文件 → 必须先重新混淆，再提交
-node script/obfuscate_js.cjs
-git add website/static/js-dist/ website/static/js/
-
-# 只改了 .py / .html / .css / .md → 正常提交即可
-cd /mnt/zhitainew/snh48_web && git add . && git commit -m "xxx" && git push
-```
+> 详细说明见「四、后续代码更新」。以下为阿里云/腾讯云各自的快速命令。
 
 #### 阿里云香港（cjy.我爱你）
 ```bash
-# SSH 连接
-ssh root@8.210.188.184
-
-# 拉代码
-cd /home/snh48_web && git pull
-cd /home/snh48_web/transcript_analyze && git pull
-
-# ⚠️ 重启后 scroller 管理员需重新登录（Cookie 密钥随进程重启变化）
-# 判断是否需要重启：
-#   - 改了 .py 文件 → 必须重启
-#   - 改了 .html → 刷新浏览器即可
-#   - 改了 .js（已混淆输出在 js-dist/）→ 刷新浏览器即可
-#   - 改了 .css → 刷新浏览器即可
-#   - 改了 .md/文档 → 啥都不用做
-systemctl restart snh48-aliyun
-journalctl -u snh48-aliyun -n 10 --no-pager
-
-# 远程一行搞定
 ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
 ```
 
 #### 腾讯云（cjy.plus）
 ```bash
-# 远程一行搞定（本机直接执行）
 ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
 ```
-
-> **⚠️ 首次启用 JS 混淆**：需要在服务器 `.env` 中添加 `USE_OBFUSCATED_JS=true`。已推送到 Git 的 `js-dist/` 目录包含混淆输出，服务器无需安装 Node.js。
 
 ---
 
