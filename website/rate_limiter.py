@@ -310,7 +310,7 @@ def check_daily_ip_quota(ip: str) -> None:
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="您的 IP 今天提问次数已达上限，请明天再试",
+                detail="今天提问次数已达上限，请明天再试",
             )
 
         # 更新计数并写回磁盘
