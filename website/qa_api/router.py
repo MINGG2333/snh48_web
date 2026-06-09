@@ -6,8 +6,10 @@ Gracefully handles cases where the knowledge base hasn't been built yet.
 from __future__ import annotations
 
 import json
+import hmac
 import os
 import re
+import secrets
 import sys
 import threading
 import traceback
@@ -195,9 +197,11 @@ def verify_site_password(
 
 class AsyncTask:
     """Represents an async QA task running in background thread."""
-    def __init__(self, task_id: str, question: str):
+    def __init__(self, task_id: str, question: str, client_id: str, poll_token: str):
         self.task_id = task_id
         self.question = question
+        self.client_id = client_id
+        self.poll_token = poll_token
         self.status = "processing"  # processing | completed | error
         self.result: Optional[Dict[str, Any]] = None
         self.error: Optional[str] = None
@@ -276,11 +280,11 @@ def ask_question_async(
     check_all_qa_limits(ip, client_id)
 
     task_id = uuid.uuid4().hex[:12]
+    poll_token = secrets.token_urlsafe(32)
 
 
     register_task(task_id, client_id)
-    task = AsyncTask(task_id=task_id, question=req.question)
-    task.client_id = client_id
+    task = AsyncTask(task_id=task_id, question=req.question, client_id=client_id, poll_token=poll_token)
     _tasks[task_id] = task
 
     # Log the question submission
@@ -380,8 +384,9 @@ def ask_question_async(
 
     return {
         "task_id": task_id,
+        "poll_token": poll_token,
         "status": "processing",
-        "message": "任务已提交，请通过 task_id 轮询结果",
+        "message": "任务已提交，请通过 task_id 和 poll_token 轮询结果",
     }
 
 
@@ -475,11 +480,20 @@ def ask_question_sync(
 
 
 @router.get("/ask-async/{task_id}")
-def get_ask_async_result(task_id: str):
+def get_ask_async_result(
+    task_id: str,
+    _=Depends(verify_password),
+    x_client_id: Optional[str] = Header(None, alias="X-Client-Id"),
+    x_poll_token: Optional[str] = Header(None, alias="X-Poll-Token"),
+):
     """Poll the status/result of an async QA task."""
     task = _tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="任务不存在或已过期")
+    if not x_client_id or x_client_id != task.client_id:
+        raise HTTPException(status_code=403, detail="无权访问该任务结果")
+    if not x_poll_token or not hmac.compare_digest(x_poll_token, task.poll_token):
+        raise HTTPException(status_code=403, detail="无权访问该任务结果")
 
     if task.status == "processing":
         return {

@@ -14,13 +14,13 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from website.logging_setup import get_session_dir
-from website.rate_limiter import check_track_event_limit
+from website.rate_limiter import check_track_event_limit, get_client_ip
 from website.user_events import record_user_event
 
 router = APIRouter(prefix="/api/track", tags=["用户行为追踪"])
@@ -50,15 +50,6 @@ def _track_ip_to_client(ip: str, client_id: str):
         pass  # Silently fail — IP tracking is best-effort
 
 
-def _extract_client_ip(request: Request, x_forwarded_for: Optional[str]) -> str:
-    """Extract client IP from request, respecting reverse-proxy headers."""
-    if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
-    if request.client:
-        return request.client.host or "unknown"
-    return "unknown"
-
-
 class TrackEventRequest(BaseModel):
     client_id: str
     event_type: str
@@ -81,7 +72,6 @@ NOTIFICATION_EVENTS = {
 def track_event(
     req: TrackEventRequest,
     request: Request,
-    x_forwarded_for: Optional[str] = Header(None, alias="X-Forwarded-For"),
 ):
     """
     Record a user behavior event sent from the frontend tracker.
@@ -95,7 +85,7 @@ def track_event(
     client_id = req.client_id
 
     # ── Track IP → client mapping (for admin OB page, never exposed) ────
-    ip = _extract_client_ip(request, x_forwarded_for)
+    ip = get_client_ip(request)
     _track_ip_to_client(ip, client_id)
 
     # ── Rate-limit track events to prevent forged event floods ────────

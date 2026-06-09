@@ -57,6 +57,31 @@ document.addEventListener('DOMContentLoaded', () => {
   const MAX_SCALE = 1.8;
   let mergedEvents = []; // current filtered event list
 
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+  }
+
+  function safeUrl(raw) {
+    if (!raw) return '';
+    const value = String(raw).trim();
+    if (!value || value.startsWith('//')) return '';
+    try {
+      const url = new URL(value, window.location.origin);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+      if (value.startsWith('/')) return escapeHtml(url.pathname + url.search + url.hash);
+      return escapeHtml(url.href);
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  function safeIcon(raw) {
+    const icon = String(raw || 'fa-calendar').trim().split(/\s+/)[0];
+    return /^fa-[a-z0-9-]+$/i.test(icon) ? icon : 'fa-calendar';
+  }
+
   // ── Group events by date ──
   function groupByDate(events) {
     const map = {};
@@ -101,10 +126,16 @@ document.addEventListener('DOMContentLoaded', () => {
       let cardsHtml = '';
       events.forEach(ev => {
         const badgeClass = BADGE_CLASS_MAP[ev.type] || 'event';
-        const hasCover = ev.cover_url || ev.image;
+        const coverSrc = safeUrl(ev.cover_url || ev.image);
+        const hasCover = !!coverSrc;
+        const titleText = escapeHtml(ev.title || '');
+        const typeLabelText = escapeHtml(ev.typeLabel || '');
+        const eventId = escapeHtml(ev.id || '');
+        const eventTime = ev.datetime ? ' ' + escapeHtml(String(ev.datetime).slice(11, 16)) : '';
+        const iconClass = safeIcon(ev.icon);
         const imgHtml = hasCover
-          ? `<img class="timeline-card-img" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy">`
-          : `<div class="timeline-card-img-placeholder"><i class="fas ${ev.icon || 'fa-calendar'}"></i></div>`;
+          ? `<img class="timeline-card-img" src="${coverSrc}" alt="${titleText}" loading="lazy">`
+          : `<div class="timeline-card-img-placeholder"><i class="fas ${iconClass}"></i></div>`;
 
         const imgClass = hasCover ? 'timeline-card-img loading' : 'timeline-card-img-placeholder';
         // Check for title keyword badges (replace default type badge if matched)
@@ -115,12 +146,12 @@ document.addEventListener('DOMContentLoaded', () => {
           title_.includes('巡演') ? 'tour|巡演' : '';
         const showTypeBadge = !keywordBadge;
         cardsHtml += `
-          <div class="timeline-card" data-event-id="${ev.id}">
-            ${hasCover ? `<img class="${imgClass}" src="${ev.cover_url || ev.image}" alt="${ev.title}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
+          <div class="timeline-card" data-event-id="${eventId}">
+            ${hasCover ? `<img class="${imgClass}" src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
             <div class="timeline-card-body">
-              <div class="timeline-card-date">${formatDate(ev.date)}${ev.datetime ? ' ' + ev.datetime.slice(11, 16) : ''}</div>
-              <div class="timeline-card-title">${ev.title}</div>
-              ${showTypeBadge ? `<span class="timeline-card-badge ${badgeClass}">${ev.typeLabel}</span>` : ''}
+              <div class="timeline-card-date">${escapeHtml(formatDate(ev.date))}${eventTime}</div>
+              <div class="timeline-card-title">${titleText}</div>
+              ${showTypeBadge ? `<span class="timeline-card-badge ${badgeClass}">${typeLabelText}</span>` : ''}
               ${keywordBadge ? `<span class="timeline-card-badge ${keywordBadge.split('|')[0]}" style="margin-left:4px;">${keywordBadge.split('|')[1]}</span>` : ''}
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
               ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
@@ -544,10 +575,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let idx = 0;
     allUrls.forEach(item => {
       if (seen.has(item.url) || idx >= 6) return;
+      const url = safeUrl(item.url);
+      if (!url) return;
       seen.add(item.url);
       idx++;
-      const label = item.label || `信息来源 ${idx}`;
-      html += `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${item.url}" target="_blank" rel="noopener" style="color:var(--primary);">${label}</a></div>`;
+      const label = escapeHtml(item.label || `信息来源 ${idx}`);
+      html += `<div class="timeline-modal-info"><i class="fas fa-external-link-alt"></i> <a href="${url}" target="_blank" rel="noopener" style="color:var(--primary);">${label}</a></div>`;
     });
     return html;
   }
@@ -568,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
       title_.includes('巡演') ? 'tour|巡演' : '';
     const showModalTypeBadge = !modalKeywordBadge;
 
-    const descHtml = event.description.replace(/\n/g, '<br>');
+    const descHtml = escapeHtml(event.description || '').replace(/\n/g, '<br>');
 
     // Build cover/gallery: if multiple images, show scrollable gallery; else single cover
     let coverHtml = '';
@@ -577,15 +610,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (imgList.length > 1) {
       coverHtml = '<div class="timeline-modal-gallery">';
       imgList.forEach(url => {
-        coverHtml += `<img src="${url}" alt="" class="loading" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
+        const safeSrc = safeUrl(url);
+        if (safeSrc) {
+          coverHtml += `<img src="${safeSrc}" alt="" class="loading" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
+        }
       });
       coverHtml += '</div>';
     } else {
       // Single cover (from cover_url or first image/imgList item or placeholder)
-      const coverSrc = event.cover_url || (imgList.length > 0 ? imgList[0] : '') || event.image || '';
+      const coverSrc = safeUrl(event.cover_url || (imgList.length > 0 ? imgList[0] : '') || event.image || '');
       coverHtml = coverSrc
-        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${event.title}" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
-        : `<div class="timeline-modal-img-placeholder"><i class="fas ${event.icon || 'fa-calendar'}"></i></div>`;
+        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${escapeHtml(event.title || '')}" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
+        : `<div class="timeline-modal-img-placeholder"><i class="fas ${safeIcon(event.icon)}"></i></div>`;
     }
 
     // Build B站 links
@@ -593,7 +629,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.bilibili_urls && event.bilibili_urls.length > 0) {
       biliHtml = '<div class="timeline-modal-info" style="margin-top:12px;"><i class="fab fa-bilibili"></i> 相关视频：';
       event.bilibili_urls.forEach((url, i) => {
-        biliHtml += `<a href="${url}" target="_blank" rel="noopener" style="color:var(--primary);">视频${i + 1}</a>`;
+        const safeHref = safeUrl(url);
+        if (!safeHref) return;
+        biliHtml += `<a href="${safeHref}" target="_blank" rel="noopener" style="color:var(--primary);">视频${i + 1}</a>`;
         if (i < event.bilibili_urls.length - 1) biliHtml += ' · ';
       });
       biliHtml += '</div>';
@@ -604,7 +642,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.video_urls && event.video_urls.length > 0) {
       videoHtml = '<div class="timeline-modal-info" style="margin-top:4px;"><i class="fas fa-video"></i> 相关视频：';
       event.video_urls.forEach((url, i) => {
-        videoHtml += `<a href="${url}" target="_blank" rel="noopener" style="color:var(--primary);">视频${i + 1}</a>`;
+        const safeHref = safeUrl(url);
+        if (!safeHref) return;
+        videoHtml += `<a href="${safeHref}" target="_blank" rel="noopener" style="color:var(--primary);">视频${i + 1}</a>`;
         if (i < event.video_urls.length - 1) videoHtml += ' · ';
       });
       videoHtml += '</div>';
@@ -613,13 +653,13 @@ document.addEventListener('DOMContentLoaded', () => {
     modalContent.innerHTML = `
       ${coverHtml}
       <div class="timeline-modal-body">
-        <div class="timeline-modal-date">${formatDate(event.date)}</div>
-        <div class="timeline-modal-title">${event.title}</div>
-        ${showModalTypeBadge ? `<span class="timeline-modal-badge ${badgeClass}">${event.typeLabel}</span>` : ''}
+        <div class="timeline-modal-date">${escapeHtml(formatDate(event.date))}</div>
+        <div class="timeline-modal-title">${escapeHtml(event.title || '')}</div>
+        ${showModalTypeBadge ? `<span class="timeline-modal-badge ${badgeClass}">${escapeHtml(event.typeLabel || '')}</span>` : ''}
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
-        ${event.has_replay && event.replay_url ? `<a href="/replay/${event.id.replace('live_', '')}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
-        ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</div>` : ''}
+        ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
+        ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(event.location)}</div>` : ''}
         ${buildSourceLinks(event)}
         ${biliHtml}
         ${videoHtml}

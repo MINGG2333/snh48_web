@@ -176,7 +176,7 @@ def scroller_login(req: LoginRequest, response: Response, request: Request):
         max_age=SCROLLER_COOKIE_MAX_AGE,
         httponly=True,
         samesite="strict",
-        secure=False,  # Set to True if behind HTTPS
+        secure=cfg.SECURE_COOKIES,
         path="/api/scroller",
     )
     return {"success": True, "message": "登录成功"}
@@ -193,6 +193,7 @@ def scroller_logout(response: Response):
         path="/api/scroller",
         httponly=True,
         samesite="strict",
+        secure=cfg.SECURE_COOKIES,
     )
     return {"success": True, "message": "已登出"}
 

@@ -15,6 +15,7 @@ All configurable via environment variables / .env file.
 from __future__ import annotations
 
 import json
+import ipaddress
 import threading
 import time
 from collections import defaultdict, deque
@@ -123,6 +124,18 @@ complaint_limiter = SlidingWindowLimiter(
     window_seconds=cfg.COMPLAINT_WINDOW_SECONDS,
 )
 
+# Balance status endpoint anti-flood
+balance_limiter = SlidingWindowLimiter(
+    max_requests=cfg.BALANCE_MAX_PER_WINDOW,
+    window_seconds=cfg.BALANCE_WINDOW_SECONDS,
+)
+
+# OB admin password brute-force protection
+ob_login_limiter = SlidingWindowLimiter(
+    max_requests=cfg.OB_LOGIN_MAX_PER_WINDOW,
+    window_seconds=cfg.OB_LOGIN_WINDOW_SECONDS,
+)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Per-User State (tracked by client_id)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -137,19 +150,48 @@ _daily_usage: Dict[str, Tuple[str, int]] = {}
 _active_tasks: Set[str] = set()
 
 
+def _parse_trusted_proxy_peer(value: str):
+    """Parse a trusted proxy entry as an IP or CIDR network."""
+    try:
+        return ipaddress.ip_network(value, strict=False)
+    except ValueError:
+        return None
+
+
+_TRUSTED_PROXY_NETWORKS = tuple(
+    network
+    for network in (_parse_trusted_proxy_peer(item) for item in cfg.TRUSTED_PROXY_PEERS)
+    if network is not None
+)
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  IP Extraction
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract client IP from request, respecting reverse-proxy headers."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host or "unknown"
+    """Extract client IP, trusting proxy headers only from configured peers."""
+    peer = request.client.host if request.client else ""
+    if _is_trusted_proxy_peer(peer):
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip.strip()
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    if peer:
+        return peer
     return "unknown"
+
+
+def _is_trusted_proxy_peer(peer: str) -> bool:
+    """Return True when the TCP peer is a configured reverse proxy."""
+    try:
+        ip = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(ip in network for network in _TRUSTED_PROXY_NETWORKS)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -400,6 +442,8 @@ def get_rate_limiter_stats() -> dict:
         "email_submit_limiter": email_submit_limiter.stats,
         "track_event_limiter": track_event_limiter.stats,
         "complaint_limiter": complaint_limiter.stats,
+        "balance_limiter": balance_limiter.stats,
+        "ob_login_limiter": ob_login_limiter.stats,
         "active_tasks": len(_active_tasks),
         "tracked_users": {
             "with_cooldown": len(_last_question_time),
@@ -450,4 +494,24 @@ def check_complaint_limit(ip: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="投诉提交过于频繁，请稍后再试",
+        )
+
+
+def check_balance_limit(ip: str) -> None:
+    """Rate-limit balance status requests (anti-flood)."""
+    allowed, count = balance_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="余额状态查询过于频繁，请稍后再试",
+        )
+
+
+def check_ob_login_limit(ip: str) -> None:
+    """Rate-limit failed OB password attempts."""
+    allowed, count = ob_login_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="观察页密码尝试过于频繁，请稍后再试",
         )

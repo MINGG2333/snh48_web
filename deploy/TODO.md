@@ -1,10 +1,11 @@
 # 🚀 部署步骤清单
 
 > 本文件按时间线组织部署步骤。请按顺序执行。
+> 当前安全基线和维护规则见 `doc/security/security_baseline.md`。
 
 ---
 
-## 一、ICP 备案完成前（使用 IP:8000 测试）
+## 一、ICP 备案完成前（临时使用 IP:8000 测试）
 
 ### 1. 腾讯云安全组放行端口 8000
 
@@ -12,6 +13,7 @@
 - 来源：`0.0.0.0/0`，协议端口：`TCP:8000`，策略：允许
 
 > 80/443 端口在 ICP 备案完成后才需要放行。
+> 备案完成并启用 Nginx 后，必须移除这条 8000 入站规则，避免绕过 Nginx 安全头。
 
 ### 2. SSH 登录，安装基础软件，配置 GitHub
 
@@ -117,6 +119,24 @@ DEEPSEEK_API_KEY=你的真实DeepSeekKey
 
 # JS/CSS 混淆压缩（生产环境必须开启）
 USE_OBFUSCATED_JS=true
+
+# 备案前临时 IP:8000 测试需要监听公网网卡
+# 启用 Nginx 后必须改为 HOST=127.0.0.1，并关闭安全组 8000
+HOST=0.0.0.0
+
+# IP:8000/http 临时测试 scroller 管理页时必须为 false
+# 启用 HTTPS 后必须改为 true
+SECURE_COOKIES=false
+
+# 公开端点防滥用，可按需覆盖默认值
+BALANCE_CACHE_SECONDS=300
+BALANCE_MAX_PER_WINDOW=10
+BALANCE_WINDOW_SECONDS=60
+OB_LOGIN_MAX_PER_WINDOW=10
+OB_LOGIN_WINDOW_SECONDS=300
+
+# 可信反向代理来源；生产默认只信任本机 Nginx
+TRUSTED_PROXY_PEERS=127.0.0.1,::1
 EOF
 
 # 重要：限制权限，防止其他用户读取
@@ -315,6 +335,15 @@ nginx -t
 systemctl reload nginx
 ```
 
+**安全头验证：**
+```bash
+curl -sS -D - -o /dev/null https://cjy.plus/
+curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
+curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
+```
+
+以上响应应包含 `Strict-Transport-Security`、`Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options` 和 `Referrer-Policy`。如果只首页有安全头、`/static/` 或 `/image-proxy/` 没有，说明 Nginx location 内的 `add_header` 继承规则没有处理完整。
+
 **调试（如果 nginx 启动失败）：**
 ```bash
 nginx -t                                    # 先检查语法
@@ -368,12 +397,34 @@ ps aux | grep "website.main"    # 确认进程存在
 
 ### 7. 切换访问方式并验证完整链路
 
-浏览器可直接访问 **https://cjy.plus**（原 `http://124.222.72.203:8000` 仍可用作备用）。
+浏览器可直接访问 **https://cjy.plus**。生产环境不要继续暴露 `http://124.222.72.203:8000`，否则访问者可以绕过 Nginx 的 HSTS/CSP 等安全头。
 
 ```bash
 curl -I https://cjy.plus         # 应返回 HTTP/2 405，server: nginx/1.26.3
 curl -s https://cjy.plus | head -5  # 应包含 <title>心上珍藏集</title>
 ```
+
+### 8. 关闭 8000 公网入口
+
+在腾讯云安全组中删除或禁用 `TCP:8000`、来源 `0.0.0.0/0` 的入站规则。服务器本机仍可用以下命令验证后端：
+
+```bash
+cd /home/snh48_web
+sed -i 's/^HOST=.*/HOST=127.0.0.1/' .env
+sed -i 's/^SECURE_COOKIES=.*/SECURE_COOKIES=true/' .env
+systemctl restart snh48
+
+curl -I http://127.0.0.1:8000
+curl -s http://127.0.0.1:8000 | head -5
+```
+
+在本地电脑或任意公网环境验证公网 `8000` 已关闭：
+
+```bash
+curl -I --connect-timeout 5 http://124.222.72.203:8000
+```
+
+预期结果是连接失败或超时；如果仍能返回页面或 API 响应，说明访问者仍可绕过 Nginx 安全头，需要继续检查安全组和 `.env` 中的 `HOST`。
 
 ---
 
@@ -448,6 +499,12 @@ cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xx
 ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
 ```
 
+如果本次修改包含 `deploy/nginx.conf`，还需要同步 Nginx 配置并重载：
+
+```bash
+ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cp deploy/nginx.conf /etc/nginx/conf.d/snh48.conf && nginx -t && systemctl reload nginx"
+```
+
 ### 部署到阿里云（cjy.我爱你）
 ```bash
 ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
@@ -465,11 +522,15 @@ ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/tra
 - [ ] 检查 nginx 错误日志：`tail -f /var/log/nginx/snh48_error.log`
 - [ ] 检查交互日志是否正常记录
 - [ ] 检查 AI 问答功能是否正常运行
+- [ ] 按 `doc/security/security_baseline.md` 验证 HTTPS 安全头、`/static/` 安全头、`/image-proxy/` 安全头
+- [ ] 从公网确认 `124.222.72.203:8000` 和阿里云公网 `8000` 未暴露
 
 ### 每季度
 - [ ] 更新知识库（如有新直播/新内容）
 - [ ] 检查投诉举报记录并处理积压
 - [ ] 审查服务条款是否需要更新
+- [ ] 审查 CSP 白名单是否仍然必要，移除不用的 CDN/API 域名
+- [ ] 复核公开端点限速阈值，特别是 `/api/balance`、`/api/track/event`、投诉和 OB 登录尝试
 
 ### 每年
 - [ ] 更新 ICP 备案信息（如网站内容、主办方信息有变更）
@@ -517,7 +578,7 @@ ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/tra
 | **并发限制** | 每个浏览器 | 最多同时处理 2 个任务 | 任务注册表 |
 | **密码暴力破解** | 每个 IP 地址 | 每 300 秒最多 10 次 | 滑动窗口 |
 
-### 公开端点防滥用限速（2025-06-08 新增）
+### 公开端点防滥用限速（2026-06-09 更新）
 
 | 端点 | 默认值 | 配置变量 |
 |------|--------|----------|
@@ -525,6 +586,8 @@ ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/tra
 | `POST /api/qa/archive-email` | 每 300 秒最多 5 次 | `EMAIL_SUBMIT_MAX_PER_WINDOW` / `EMAIL_SUBMIT_WINDOW_SECONDS` |
 | `POST /api/track/event` | 每 60 秒最多 30 次 | `TRACK_EVENT_MAX_PER_WINDOW` / `TRACK_EVENT_WINDOW_SECONDS` |
 | `POST /api/complaint/submit` | 每 600 秒最多 3 次 | `COMPLAINT_MAX_PER_WINDOW` / `COMPLAINT_WINDOW_SECONDS` |
+| `GET /api/balance` | 每 60 秒最多 10 次，成功结果缓存 300 秒 | `BALANCE_MAX_PER_WINDOW` / `BALANCE_WINDOW_SECONDS` / `BALANCE_CACHE_SECONDS` |
+| `GET/POST /api/ob/*` 密码失败尝试 | 每 300 秒最多 10 次 | `OB_LOGIN_MAX_PER_WINDOW` / `OB_LOGIN_WINDOW_SECONDS` |
 
 修改默认值（在 `.env` 中添加）：
 ```ini
@@ -543,6 +606,11 @@ SCROLLER_LOGIN_MAX_PER_WINDOW=5      # 登录尝试更严格
 EMAIL_SUBMIT_MAX_PER_WINDOW=3        # 邮箱提交更严格
 TRACK_EVENT_MAX_PER_WINDOW=50        # 追踪事件更宽松
 COMPLAINT_MAX_PER_WINDOW=5           # 投诉提交更宽松
+BALANCE_CACHE_SECONDS=300            # 余额成功结果缓存 5 分钟
+BALANCE_MAX_PER_WINDOW=10            # 余额查询每窗口最多 10 次
+BALANCE_WINDOW_SECONDS=60            # 余额查询窗口 60 秒
+OB_LOGIN_MAX_PER_WINDOW=10           # OB 密码失败尝试每窗口最多 10 次
+OB_LOGIN_WINDOW_SECONDS=300          # OB 密码失败尝试窗口 5 分钟
 
 # ── JS 混淆（生产环境必须开启）──
 USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
@@ -552,7 +620,7 @@ USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
 
 ---
 
-## 九、前端代码安全措施（2025-06-08 实施）
+## 九、前端与服务端安全措施（2026-06-09 更新）
 
 ### 已实施的防护
 
@@ -561,10 +629,38 @@ USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
 | **关键配置后移** | `main.py` → `qa.html` → `qa.js` | QA 配置通过 Jinja2 服务端注入 `window.__QA_CONFIG__`，静态 JS 文件零参数暴露；攻击者直接读 JS 只能看到误导性假值 |
 | **关键数据后移** | `timeline_api/router.py` → `timeline.js` | 手动事件数据不再硬编码，从 `website/data/manual_events.csv` 动态加载，修改后无需重启 |
 | **密码存储安全** | `scroller_api/router.py` → `scroller-admin.js` | 管理密码改用 HttpOnly Cookie（HMAC 哈希），JS 无法读取，防止 XSS 窃取 |
-| **公开端点限速** | `rate_limiter.py` + 各 router | 4 个公开可写端点新增 IP 限速 |
+| **公开端点限速** | `rate_limiter.py` + 各 router | 公开可写、公开查询和管理登录尝试端点均设置 IP 限速 |
 | **JS 代码混淆** | `script/obfuscate_js.cjs` | 7 个 JS 文件混淆为乱码（变量名随机化、字符串加密、控制流平坦化），通过 `USE_OBFUSCATED_JS=true` 启用 |
 | **CSS 压缩** | `script/obfuscate_js.cjs` (clean-css) | style.css 33KB → 20KB，去除注释/空格/换行，浏览器 DevTools 自动格式化 |
 | **Source Map 控制** | 构建工具默认不生成 | 无 `.map` 文件，浏览器无法还原原始代码 |
+| **nginx 安全头** | `deploy/nginx.conf` / `deploy/nginx-aliyun.conf` | HSTS + CSP + X-Frame-Options + X-Content-Type-Options + Referrer-Policy |
+| **静态/代理响应安全头** | `deploy/nginx.conf` / `deploy/nginx-aliyun.conf` | `/static/`、`/image-proxy/` 也显式返回安全头，避免 Nginx `add_header` 继承失效 |
+| **HLS CSP 兼容** | 两份 Nginx 配置 | `connect-src https:`、`media-src blob:`、`worker-src blob:` 保证外部 m3u8 回放不被 CSP 阻断 |
+| **可信代理 IP 识别** | `rate_limiter.py` + Nginx 配置 | 后端只在请求来自 `TRUSTED_PROXY_PEERS` 时采信 `X-Real-IP` / `X-Forwarded-For`，默认仅信任本机 Nginx |
+| **QA 异步结果保护** | `qa_api/router.py` + `qa.js` | 轮询 `/api/qa/ask-async/{task_id}` 需要密码、匹配的 `X-Client-Id` 和一次性 `poll_token`，防止 task_id 泄露后被读取 |
+| **余额接口缓存/限速** | `balance_api/router.py` + `rate_limiter.py` | 公开余额接口对 IP 限速，成功结果短期缓存，降低第三方 API 压力 |
+| **OB 密码尝试限速** | `ob_api/router.py` + `rate_limiter.py` | 观察页密码错误/缺失按 IP 限速，降低暴力破解风险 |
+| **输出转义与 URL 白名单** | `qa.js` / `timeline.js` | QA 答案、引用、时光轴数据、图片/链接 URL 进入 HTML 前转义或校验，降低 XSS 风险 |
+| **安全 Cookie 开关** | `scroller_api/router.py` + `.env` | 生产 HTTPS 下 `SECURE_COOKIES=true`，避免管理 Cookie 经明文连接发送 |
+
+### CSP 白名单维护
+
+修改 `deploy/nginx.conf` 和 `deploy/nginx-aliyun.conf` 中的 `Content-Security-Policy` 头：
+
+| 指令 | 当前白名单 | 用途 |
+|------|-----------|------|
+| `script-src` | `'self' 'unsafe-inline' cdnjs.cloudflare.com cdn.jsdelivr.net` | JS 加载源 |
+| `style-src` | `'self' 'unsafe-inline' cdnjs.cloudflare.com fonts.googleapis.com` | CSS 加载源 |
+| `font-src` | `'self' cdnjs.cloudflare.com fonts.gstatic.com` | 字体加载源 |
+| `img-src` | `'self' data: https:` | 图片来源 |
+| `connect-src` | `'self' https:` | fetch/XHR 目标；允许 HLS.js 拉取外部 m3u8/分片 |
+| `media-src` | `'self' https: blob:` | 视频/音频源；允许 MediaSource blob |
+| `worker-src` | `'self' blob:` | Web Worker；支持 hls.js worker |
+| `object-src` | `'none'` | 禁用 Flash/插件等 object/embed 载入 |
+
+**新增 CDN 资源时**：将域名添加到对应的 `*-src` 指令中，用空格分隔。修改后 `nginx -t && systemctl reload nginx`。
+
+> ⚠️ `'unsafe-inline'` 是临时措施。长期建议迁移到 `nonce-` 方式，需修改所有模板中的内联 `<script>` 和 `<style>`。
 
 ### 工作流
 
@@ -583,6 +679,11 @@ git commit -m "重新构建 JS/CSS"
 - 手动事件数据现在在 `website/data/manual_events.csv` 中维护，修改后**无需重启**，刷新时光轴页面即可看到更新
 - CSV 列说明：`id`（唯一标识）, `date`（YYYY-MM-DD）, `title`, `type`（milestone/tour/show/event）, `typeLabel`（显示文字）, `description`, `image`（单张封面）, `icon`（Font Awesome 图标）, `link`（外部链接）, `images`（多图，分号分隔）
 - 所有限速在服务重启后会重置（除 IP 日配额外）
+- 新增 `innerHTML` 前必须先转义所有后端/CSV/第三方数据，URL 只允许 `http:`、`https:` 或同源相对路径
+- 新增 CDN、外部 API、外部 HLS 来源时，必须同步检查 `deploy/nginx.conf` 和 `deploy/nginx-aliyun.conf` 的 CSP
+- 生产环境必须保持 `HOST=127.0.0.1`、`SECURE_COOKIES=true`，云安全组不得公网放行 `8000`
+- 后端获取客户端 IP 必须使用 `get_client_ip()`，不要在业务 router 中直接信任 `X-Forwarded-For`
+- Docker 或多层反代场景如果 Nginx 不是从 `127.0.0.1` 连接后端，必须把实际代理 IP/CIDR 加到 `TRUSTED_PROXY_PEERS`，不要宽泛信任整个内网
 
 ---
 
@@ -610,7 +711,7 @@ git commit -m "重新构建 JS/CSS"
 
 | 协议端口 | 来源 | 策略 | 说明 |
 |---------|------|------|------|
-| TCP:8000 | `0.0.0.0/0` | 允许 | Python 服务（调试用） |
+| TCP:8000 | 不建议公网放行 | 禁止 | Python 服务仅供本机 Nginx 反代访问；临时调试后必须关闭 |
 | TCP:80 | `0.0.0.0/0` | 允许 | HTTP（Let's Encrypt 验证 + 重定向） |
 | TCP:443 | `0.0.0.0/0` | 允许 | HTTPS |
 
@@ -731,6 +832,12 @@ SITE_TITLE=心上珍藏集
 
 # JS/CSS 混淆压缩（生产环境必须开启）
 USE_OBFUSCATED_JS=true
+
+# 生产环境只监听本机，由 Nginx 反向代理
+HOST=127.0.0.1
+
+# 生产 HTTPS 环境默认启用安全 Cookie
+SECURE_COOKIES=true
 
 # ⚠️ 香港服务器无需 ICP 备案，留空即可
 EOF

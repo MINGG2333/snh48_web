@@ -116,6 +116,25 @@ TRACK_EVENT_WINDOW_SECONDS = int(os.getenv("TRACK_EVENT_WINDOW_SECONDS", "60"))
 COMPLAINT_MAX_PER_WINDOW = int(os.getenv("COMPLAINT_MAX_PER_WINDOW", "3"))
 COMPLAINT_WINDOW_SECONDS = int(os.getenv("COMPLAINT_WINDOW_SECONDS", "600"))
 
+# 余额状态接口缓存和限速（避免公开状态页触发外部 API 请求洪水）
+BALANCE_CACHE_SECONDS = int(os.getenv("BALANCE_CACHE_SECONDS", "300"))
+BALANCE_MAX_PER_WINDOW = int(os.getenv("BALANCE_MAX_PER_WINDOW", "10"))
+BALANCE_WINDOW_SECONDS = int(os.getenv("BALANCE_WINDOW_SECONDS", "60"))
+
+# OB 观察页密码错误尝试限速
+OB_LOGIN_MAX_PER_WINDOW = int(os.getenv("OB_LOGIN_MAX_PER_WINDOW", "10"))
+OB_LOGIN_WINDOW_SECONDS = int(os.getenv("OB_LOGIN_WINDOW_SECONDS", "300"))
+
+# 生产环境默认只通过 HTTPS 发送管理 Cookie；本地 HTTP 调试可设为 false
+SECURE_COOKIES = os.getenv("SECURE_COOKIES", "true").lower() not in ("0", "false", "no")
+
+# 可信反向代理来源。默认只信任本机 Nginx；Docker/多层反代需显式添加真实代理 IP/CIDR。
+TRUSTED_PROXY_PEERS = tuple(
+    item.strip()
+    for item in os.getenv("TRUSTED_PROXY_PEERS", "127.0.0.1,::1").split(",")
+    if item.strip()
+)
+
 # ── Live Push Replays (直播汇总，含回放信息，替代旧的 room_record) ─────────
 # summary.csv 所在目录，由 live_push_replay_matcher.py 生成
 # 服务器上：/home/snh48-fan-hub/live_push_replays/

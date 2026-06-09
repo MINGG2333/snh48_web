@@ -15,8 +15,10 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, HTTPException, status
+from fastapi import Request
 
 from website import config as cfg
+from website.rate_limiter import check_balance_limit, get_client_ip
 
 router = APIRouter(prefix="/api/balance", tags=["余额查询"])
 
@@ -26,6 +28,7 @@ DEEPSEEK_BALANCE_URL = "https://api.deepseek.com/user/balance"
 _BEIJING_TZ = timezone(timedelta(hours=8))
 _BALANCE_LOG_DIR = Path(__file__).resolve().parent.parent / "data"
 _BALANCE_LOG_CSV = _BALANCE_LOG_DIR / "balance_log.csv"
+_BALANCE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 
 
 def _log_balance_record(balance: float, status: str, success: bool, error_msg: str = "") -> None:
@@ -43,7 +46,7 @@ def _log_balance_record(balance: float, status: str, success: bool, error_msg: s
 
 
 @router.get("")
-async def get_balance():
+async def get_balance(request: Request):
     """
     Query DeepSeek API account balance.
 
@@ -53,6 +56,13 @@ async def get_balance():
       - is_available: 余额是否充足（> 0 元）
       - message: 人类可读的状态描述
     """
+    ip = get_client_ip(request)
+    check_balance_limit(ip)
+
+    cached = _BALANCE_CACHE.get("payload")
+    if cached and time.time() < float(_BALANCE_CACHE.get("expires_at", 0.0)):
+        return cached
+
     # CHANGED: 新增余额查询接口，用于前端显示 API 服务状态
     api_key = cfg.LLM_API_KEY
     if not api_key:
@@ -116,6 +126,9 @@ async def get_balance():
     # CHANGED: 将本次查询结果记录到 CSV（余额数字只在服务器本地留存）
     _log_balance_record(total_balance, status, True)
 
-    return {
+    payload = {
         "status": status,
     }
+    _BALANCE_CACHE["payload"] = payload
+    _BALANCE_CACHE["expires_at"] = time.time() + cfg.BALANCE_CACHE_SECONDS
+    return payload

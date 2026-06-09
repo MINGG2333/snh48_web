@@ -25,6 +25,8 @@
   // ── State ────────────────────────────────────────────────────────────────
   let sitePassword = '';       // 仅内存变量，刷新后需重新输入密码
   let kbReady = false;
+  let currentTaskId = null;
+  let currentPollToken = null;
   let timerInterval = null;
   let pollInterval = null;
   let startTime = null;
@@ -95,7 +97,7 @@
       if (e && e.detail && e.detail.includes('功能未启用')) {
         // Feature is disabled – show a clear message
         if (statusEl) {
-          statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#fbbf24;"></i> ' + e.detail;
+          statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#fbbf24;"></i> ' + escapeHtml(e.detail);
           statusEl.style.display = 'block';
         }
         return false; // Feature disabled, don't show login
@@ -122,7 +124,7 @@
   }
 
   // ── Auth Header Helper ────────────────────────────────────────────────
-  function authHeaders() {
+  function authHeaders(extraHeaders) {
     const headers = {
       'Content-Type': 'application/json',
       'X-Client-Id': clientId,
@@ -130,7 +132,30 @@
     if (sitePassword) {
       headers['X-Site-Password'] = sitePassword;
     }
+    if (extraHeaders) {
+      Object.assign(headers, extraHeaders);
+    }
     return headers;
+  }
+
+  function getStoredPollToken(taskId) {
+    if (currentTaskId === taskId && currentPollToken) {
+      return currentPollToken;
+    }
+    try {
+      const pending = JSON.parse(sessionStorage.getItem('pending_task') || 'null');
+      if (pending && pending.taskId === taskId && pending.pollToken) {
+        return pending.pollToken;
+      }
+    } catch (_e) {
+      return '';
+    }
+    return '';
+  }
+
+  function pollHeaders(taskId, explicitToken) {
+    const token = explicitToken || getStoredPollToken(taskId);
+    return authHeaders(token ? { 'X-Poll-Token': token } : null);
   }
 
   // ── Check KB Status on Load ───────────────────────────────────────────
@@ -160,7 +185,7 @@
         kbReady = false;
         statusEl.className = 'qa-status not-ready';
         statusEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
-          知识库未就绪：${data.message || '请先构建知识库'}
+          知识库未就绪：${escapeHtml(data.message || '请先构建知识库')}
           <br><small>请先在终端运行 <code>python run_kb_qa.py build</code> 构建知识库</small>`;
         inputEl.disabled = true;
         submitEl.disabled = true;
@@ -168,7 +193,7 @@
     } catch (err) {
       statusEl.className = 'qa-status error';
       statusEl.innerHTML = `<i class="fas fa-times-circle"></i>
-        无法连接到服务器 (${err.message})`;
+        无法连接到服务器 (${escapeHtml(err.message)})`;
       inputEl.disabled = true;
       submitEl.disabled = true;
     }
@@ -972,7 +997,7 @@
       // Rules:
       //   - Comma-separated items each become their own link (e.g. [#1, #2, #3])
       //   - Range like #2-#5 stays as one link pointing to the first citation
-      let answerText = data.answer;
+      let answerText = escapeHtml(data.answer);
       let citationRefIndex = 0;
       answerText = answerText.replace(/\[([^\]]*?#\d+[^\]]*?)\]/g, (match, inner) => {
         const trimmed = inner.trim();
@@ -1028,13 +1053,13 @@
       html += `<div class="qa-citations">`;
       html += `<h3><i class="fas fa-book-open"></i> 引用列表 (${data.citations.length})</h3>`;
       for (const cit of data.citations) {
-        const citId = cit.citation_id?.replace('#', '') || '0';
+        const citId = String(cit.citation_id || '0').replace(/\D/g, '') || '0';
         const segs = cit.segments || [];
 
         html += `<div class="citation-item" id="citation-${citId}">`;
         // ── Citation header: ID + type badge + video title/date ──
         html += `<div class="citation-header">`;
-        html += `<span class="citation-id">${cit.citation_id || '#'}</span>`;
+        html += `<span class="citation-id">${escapeHtml(cit.citation_id || '#')}</span>`;
         if (cit.citation_type) {
           html += `<span class="citation-type-badge">${escapeHtml(cit.citation_type)}</span>`;
         }
@@ -1223,9 +1248,11 @@
   };
 
   // ── Poll for Result ──────────────────────────────────────────────────
-  async function pollResult(taskId, question) {
+  async function pollResult(taskId, question, pollToken) {
     try {
-      const resp = await fetch(`/api/qa/ask-async/${taskId}`);
+      const resp = await fetch(`/api/qa/ask-async/${taskId}`, {
+        headers: pollHeaders(taskId, pollToken),
+      });
       if (!resp.ok) {
         throw new Error(`轮询失败 (${resp.status})`);
       }
@@ -1321,10 +1348,14 @@
 
       const submitData = await submitResp.json();
       const taskId = submitData.task_id;
+      const pollToken = submitData.poll_token || '';
+      currentTaskId = taskId;
+      currentPollToken = pollToken;
 
       // Step 2: Persist task info to sessionStorage for refresh recovery
       const pendingTask = {
         taskId: taskId,
+        pollToken: pollToken,
         question: question,
         timestamp: Date.now(),
       };
@@ -1347,22 +1378,26 @@
 
       // Poll: check every POLL_INTERVAL_MS
       pollInterval = setInterval(async () => {
-        const done = await pollResult(taskId, question);
+        const done = await pollResult(taskId, question, pollToken);
         if (done) {
           stopTimers();
           const finalElapsed = Math.round((Date.now() - startTime) / 1000);
           updateTimer(finalElapsed);
           sessionStorage.removeItem('pending_task');
+          currentTaskId = null;
+          currentPollToken = null;
         }
       }, POLL_INTERVAL_MS);
 
       // Also do an immediate first poll
-      const done = await pollResult(taskId, question);
+      const done = await pollResult(taskId, question, pollToken);
       if (done) {
         stopTimers();
         const finalElapsed = Math.round((Date.now() - startTime) / 1000);
         updateTimer(finalElapsed);
         sessionStorage.removeItem('pending_task');
+        currentTaskId = null;
+        currentPollToken = null;
       }
 
     } catch (err) {
@@ -1608,7 +1643,7 @@
     if (!overlay || !questionText || !statusEl_) return;
 
     // Show the question
-    questionText.textContent = escapeHtml(pending.question || '未知');
+    questionText.textContent = pending.question || '未知';
 
     // If login overlay is also showing, defer refresh overlay until after login
     if (loginOverlay && loginOverlay.style.display === 'flex') {
@@ -1622,7 +1657,9 @@
     // Immediately poll the server to check status
     (async function pollPending() {
       try {
-        const resp = await fetch(`/api/qa/ask-async/${pending.taskId}`);
+        const resp = await fetch(`/api/qa/ask-async/${pending.taskId}`, {
+          headers: pollHeaders(pending.taskId, pending.pollToken),
+        });
         if (!resp.ok) {
           throw new Error(`查询失败 (${resp.status})`);
         }
@@ -1649,6 +1686,8 @@
           // Also update main page result area
           displayResult(data);
           sessionStorage.removeItem('pending_task');
+          currentTaskId = null;
+          currentPollToken = null;
           return;
         }
 
@@ -1728,7 +1767,9 @@
     const statusEl_ = document.getElementById('refreshTaskStatus');
     if (statusEl_) statusEl_.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在重新查询...';
 
-    fetch(`/api/qa/ask-async/${pending.taskId}`).then(resp => {
+    fetch(`/api/qa/ask-async/${pending.taskId}`, {
+      headers: pollHeaders(pending.taskId, pending.pollToken),
+    }).then(resp => {
       if (!resp.ok) throw new Error(`查询失败 (${resp.status})`);
       return resp.json();
     }).then(data => {
@@ -1748,6 +1789,8 @@
         `;
         displayResult(data);
         sessionStorage.removeItem('pending_task');
+        currentTaskId = null;
+        currentPollToken = null;
       } else if (data.status === 'error') {
         if (statusEl_) statusEl_.innerHTML = '<span style="color:#ef4444;"><i class="fas fa-times-circle"></i> 处理失败</span>';
         document.querySelector('#refreshOverlay .qa-email-section')?.remove();

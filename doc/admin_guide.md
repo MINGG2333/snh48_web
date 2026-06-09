@@ -261,6 +261,10 @@ ls "website/data/interaction_logs/$SESSION_DIR/"*_events.md
 2. **定期清理旧日志**，避免磁盘空间不足
 3. **关注登录尝试日志**，如有大量失败记录，可能存在暴力破解攻击
 4. **投诉信息需保密处理**，不得泄露投诉人信息
+5. **生产环境保持后端只监听本机**：`.env` 中应为 `HOST=127.0.0.1`、`SECURE_COOKIES=true`，云安全组不要公网放行 `8000`
+6. **修改前端源文件后必须重建 dist**：运行 `node script/obfuscate_js.cjs`，并提交 `website/static/js-dist/`、`website/static/css-dist/`
+7. **新增外部资源后检查 CSP**：同时更新腾讯云和阿里云 Nginx 配置，并确认首页、`/static/`、`/image-proxy/` 都返回安全头
+8. **安全基线复核**：详细检查清单见 `doc/security/security_baseline.md`
 
 ---
 

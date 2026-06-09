@@ -42,6 +42,15 @@
 
 **所有涉及直接编辑文件的操作**必须先向你说明方案并获得确认。包括但不限于：
 
+### 安全修复协作约定
+
+当一次推进多项安全修复或防滥用策略时，必须先列出每一项的：
+- 预期效果
+- 可能坏处或兼容性代价
+- 是否建议实施
+
+默认等待你逐项确认后再实施。只有当你明确表示“一次确认全部实施”或“按推荐全部推进”时，才可以在一次确认后批量执行。
+
 ### 1. 代码修改（任何文件）
 
 | 操作 | 说明 |
@@ -135,6 +144,15 @@ SITE_TITLE=心上珍藏集           # 网站标题
 SITE_DOMAIN=cjy.plus           # 网站域名
 QA_DAILY_QUOTA_PER_USER=20     # 用户日配额
 QA_DAILY_IP_QUOTA=20           # IP 日配额
+USE_OBFUSCATED_JS=true         # 生产环境使用 js-dist/css-dist
+HOST=127.0.0.1                 # 生产环境仅监听本机，由 Nginx 反代
+SECURE_COOKIES=true            # HTTPS 生产环境启用安全 Cookie
+BALANCE_CACHE_SECONDS=300      # 余额成功结果缓存
+BALANCE_MAX_PER_WINDOW=10      # 余额查询 IP 限速
+BALANCE_WINDOW_SECONDS=60
+OB_LOGIN_MAX_PER_WINDOW=10     # 观察页密码失败尝试限速
+OB_LOGIN_WINDOW_SECONDS=300
+TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 ```
 
 ### Git 工作流
@@ -144,7 +162,8 @@ QA_DAILY_IP_QUOTA=20           # IP 日配额
   → 阿里云: cd /home/snh48_web && git pull
   → 腾讯云: cd /home/snh48_web && git pull
   → 修改 .py 文件需要重启服务
-  → 修改 .html/.js/.css 文件不需要重启
+  → 修改 .html 文件不需要重启
+  → 修改源 .js/.css 文件必须先运行 node script/obfuscate_js.cjs，并提交 js-dist/css-dist
 ```
 
 ### API 端点汇总
@@ -153,18 +172,30 @@ QA_DAILY_IP_QUOTA=20           # IP 日配额
 |------|------|---------|
 | `/api/qa/ask` | AI 问答 | `SITE_PASSWORD` |
 | `/api/qa/ask-async` | 异步问答 | `SITE_PASSWORD` |
-| `/api/qa/verify-password` | 验证密码 | 无 |
+| `/api/qa/ask-async/{task_id}` | 异步结果轮询 | `SITE_PASSWORD` + 匹配的 `X-Client-Id` + `X-Poll-Token` |
+| `/api/qa/verify-password` | 验证密码 | 无（IP 限速） |
 | `/api/qa/status` | QA 状态 | 无 |
 | `/api/qa/build` | 重建知识库 | `SITE_PASSWORD` |
-| `/api/track/event` | 用户行为追踪 | 无 |
+| `/api/track/event` | 用户行为追踪 | 无（IP 限速） |
 | `/api/scroller/texts` | 背景词管理 | `SCROLLER_PASSWORD` |
-| `/api/complaint/submit` | 投诉提交 | 无 |
+| `/api/complaint/submit` | 投诉提交 | 无（验证码 + IP 限速） |
 | `/api/timeline/live-pushes` | 时间轴直播数据 | 无 |
 | `/api/timeline/schedule` | 时间轴行程数据 | 无 |
 | `/api/timeline/danmu` | 弹幕数据 | 无 |
-| `/api/balance` | 余额查询 | 无 |
-| `/api/ob/data` | 观察页数据 | `OB_PASSWORD` |
-| `/api/ob/mark-read` | 标记已读 | `OB_PASSWORD` |
+| `/api/balance` | 余额查询 | 无（IP 限速 + 成功结果缓存） |
+| `/api/ob/data` | 观察页数据 | `OB_PASSWORD`（失败尝试 IP 限速） |
+| `/api/ob/mark-read` | 标记已读 | `OB_PASSWORD`（失败尝试 IP 限速） |
+
+### 安全维护规则
+
+| 场景 | 必须检查 |
+|------|----------|
+| **新增 API** | 是否需要密码/Cookie/`X-Client-Id`，公开可写或产生费用的端点是否有限速 |
+| **读取客户端 IP** | 必须使用 `website.rate_limiter.get_client_ip()`，不要直接信任客户端传入的 `X-Forwarded-For`；多层反代只把实际代理 IP 加到 `TRUSTED_PROXY_PEERS` |
+| **新增动态 HTML** | 优先使用 DOM API；如使用 `innerHTML`，所有后端/CSV/第三方/用户数据必须先转义 |
+| **新增外部资源** | 同步更新 `deploy/nginx.conf` 和 `deploy/nginx-aliyun.conf` 的 CSP，并运行 `nginx -t` |
+| **修改 Nginx** | 说明优缺点并确认后执行；部署后检查首页、`/static/`、`/image-proxy/` 是否都有安全头 |
+| **生产部署** | `HOST=127.0.0.1`、`SECURE_COOKIES=true`，云安全组不得公网放行 `8000` |
 
 ### 前端页面
 

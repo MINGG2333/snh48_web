@@ -15,7 +15,8 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: snh48-web
     ports:
-      - "8000:8000"
+      # Only expose the app to the host. Public traffic should enter via Nginx.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ../transcript_analyze/download_records.json:/app/transcript_analyze/download_records.json:ro
       - ../transcript_analyze/firered_output_batch:/app/transcript_analyze/firered_output_batch:ro

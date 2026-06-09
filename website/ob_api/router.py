@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from website import config as cfg
 from website.logging_setup import LOG_ROOT
-from website.rate_limiter import get_client_ip
+from website.rate_limiter import check_ob_login_limit, get_client_ip
 
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
 
@@ -50,7 +50,10 @@ class MarkReadRequest(BaseModel):
     event_id: str
 
 
-async def verify_ob_password(x_ob_password: str = Header(None, alias="X-Ob-Password")):
+async def verify_ob_password(
+    request: Request,
+    x_ob_password: str = Header(None, alias="X-Ob-Password"),
+):
     """Verify the OB page password."""
     if not cfg.OB_PASSWORD:
         raise HTTPException(
@@ -58,6 +61,7 @@ async def verify_ob_password(x_ob_password: str = Header(None, alias="X-Ob-Passw
             detail="观察页未启用",
         )
     if not x_ob_password:
+        check_ob_login_limit(get_client_ip(request))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="需要密码",
@@ -65,6 +69,7 @@ async def verify_ob_password(x_ob_password: str = Header(None, alias="X-Ob-Passw
     # Constant-time comparison
     import hmac
     if not hmac.compare_digest(cfg.OB_PASSWORD, x_ob_password):
+        check_ob_login_limit(get_client_ip(request))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="密码错误",

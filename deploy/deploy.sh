@@ -89,7 +89,7 @@ startretries=3
 stderr_logfile=/var/log/${SERVICE_NAME}/error.log
 stdout_logfile=/var/log/${SERVICE_NAME}/output.log
 environment=
-    HOST="0.0.0.0",
+    HOST="127.0.0.1",
     PORT="${SERVICE_PORT}",
     DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-}",
     DEEPSEEK_BASE_URL="${DEEPSEEK_BASE_URL:-https://api.deepseek.com}",
@@ -110,11 +110,12 @@ fi
 echo ""
 echo "[6/6] 配置防火墙..."
 
-# Open port 8000 for testing (before domain filing complete)
+# Do not expose the backend service publicly by default.
+# Public traffic should enter via Nginx on 80/443 and be proxied to 127.0.0.1:8000.
 if command -v firewall-cmd &> /dev/null; then
-    firewall-cmd --permanent --add-port=${SERVICE_PORT}/tcp 2>/dev/null || true
+    firewall-cmd --permanent --remove-port=${SERVICE_PORT}/tcp 2>/dev/null || true
     firewall-cmd --reload 2>/dev/null || true
-    echo "✓ 防火墙端口 ${SERVICE_PORT} 已开放"
+    echo "✓ 防火墙端口 ${SERVICE_PORT} 未对公网开放"
 fi
 
 echo ""
@@ -122,7 +123,8 @@ echo "========================================"
 echo "  ✅ 部署完成！"
 echo "========================================"
 echo ""
-echo "  访问地址: http://<服务器IP>:${SERVICE_PORT}"
+echo "  本机验证: curl http://127.0.0.1:${SERVICE_PORT}"
+echo "  公网访问: 请通过 Nginx 的 80/443 域名入口访问"
 echo ""
 echo "  查看日志: tail -f /var/log/${SERVICE_NAME}/output.log"
 echo "  重启服务: supervisorctl restart ${SERVICE_NAME}"
