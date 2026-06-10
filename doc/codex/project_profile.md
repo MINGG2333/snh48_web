@@ -26,7 +26,8 @@
 ```bash
 python3 -m compileall -q website
 for f in website/static/js/*.js website/static/js-dist/*.js; do node --check "$f" || exit 1; done
-bash -n deploy/deploy.sh
+python3 -m py_compile deploy/deploy.py
+for f in deploy/deploy.sh deploy/sync-to-aliyun.sh; do bash -n "$f" || exit 1; done
 git diff --check
 ```
 
@@ -38,28 +39,36 @@ node script/obfuscate_js.cjs
 
 ## GitHub 同步部署命令
 
+推荐使用多服务器部署工具：
+
+```bash
+python3 deploy/deploy.py deploy tencent
+python3 deploy/deploy.py deploy aliyun
+python3 deploy/deploy.py deploy all
+```
+
 腾讯云：
 
 ```bash
-ssh -F /dev/null root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
+python3 deploy/deploy.py deploy tencent
 ```
 
 腾讯云 Nginx 变更：
 
 ```bash
-ssh -F /dev/null root@124.222.72.203 "cd /home/snh48_web && git pull && cp deploy/nginx.conf /etc/nginx/conf.d/snh48.conf && nginx -t && systemctl reload nginx"
+python3 deploy/deploy.py deploy tencent --nginx
 ```
 
 阿里云：
 
 ```bash
-ssh -F /dev/null root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
+python3 deploy/deploy.py deploy aliyun
 ```
 
 阿里云 Nginx 变更：
 
 ```bash
-ssh -F /dev/null root@8.210.188.184 "cd /home/snh48_web && git pull && cp deploy/nginx-aliyun.conf /etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf && nginx -t && systemctl reload nginx"
+python3 deploy/deploy.py deploy aliyun --nginx
 ```
 
 ## 生产 `.env` 安全基线

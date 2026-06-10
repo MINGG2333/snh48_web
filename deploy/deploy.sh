@@ -1,11 +1,25 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════
-# SNH48 演艺信息站 - 一键部署脚本
-# 适用于腾讯云 OpenCloudOS / CentOS / Rocky Linux
-# 运行方式：bash deploy.sh
+# SNH48 演艺信息站 - 旧版 CentOS 初始化脚本
+# 适用于已有 /home/snh48_web 的腾讯云 OpenCloudOS / CentOS / Rocky Linux。
+#
+# 这个脚本不是当前日常部署入口，也不是完整迁移工具。
+# 日常多服务器部署请使用：
+#   python3 deploy/deploy.py deploy tencent
+#   python3 deploy/deploy.py deploy tencent aliyun
+#
+# 如确需运行这个旧初始化脚本，显式设置：
+#   RUN_LEGACY_BOOTSTRAP=1 bash deploy/deploy.sh
 # ═══════════════════════════════════════════════════════════════════════════
 
 set -e
+
+if [ "${RUN_LEGACY_BOOTSTRAP:-}" != "1" ]; then
+    echo "此脚本已标记为旧版 CentOS 初始化脚本，不再作为日常部署入口。"
+    echo "日常部署请运行: python3 deploy/deploy.py deploy tencent"
+    echo "确认要运行旧脚本时，请使用: RUN_LEGACY_BOOTSTRAP=1 bash deploy/deploy.sh"
+    exit 2
+fi
 
 PROJECT_DIR="/home/snh48_web"
 SERVICE_NAME="snh48"

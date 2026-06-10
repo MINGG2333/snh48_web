@@ -26,7 +26,9 @@ snh48_web/
 │   ├── firered_output_batch/   # 字幕文件目录
 │   └── video_knowledge_db/     # 知识库持久化目录
 ├── deploy/
-│   ├── deploy.sh               # 一键部署脚本
+│   ├── deploy.py               # 多服务器部署工具（推荐入口）
+│   ├── DEPLOY_TOOL.md          # 多服务器部署工具说明
+│   ├── deploy.sh               # 旧版 CentOS 初始化脚本（非日常部署入口）
 │   ├── nginx.conf              # Nginx 配置（域名：cjy.plus）
 │   ├── TODO.md                 # **部署步骤清单（请按此操作）**
 │   └── docker-compose.yml      # Docker 部署（可选）
@@ -34,15 +36,23 @@ snh48_web/
 
 ## 🚀 部署步骤
 
-完整的部署步骤请参照 **[deploy/TODO.md](TODO.md)**，按顺序执行即可。
+日常代码部署请使用 **[deploy/deploy.py](DEPLOY_TOOL.md)**：
+
+```bash
+python3 deploy/deploy.py deploy tencent
+python3 deploy/deploy.py deploy aliyun
+python3 deploy/deploy.py deploy all
+```
+
+完整的首次部署/迁移步骤仍请参照 **[deploy/TODO.md](TODO.md)**，按顺序执行。
 
 主要流程：
-1. 安全组放行端口
+1. 云服务器安全组放行 80/443，后端 8000 只监听本机
 2. SSH 登录 → 安装基础软件 → 配置 GitHub
 3. 拉取代码 → 安装依赖
 4. 上传数据文件和模型缓存
-5. 构建知识库
-6. 创建 `.env` 配置文件
+5. 创建远端 `.env` 配置文件
+6. 配置 systemd/screen、Nginx、SSL
 7. 启动服务 → 验证
 
 ---

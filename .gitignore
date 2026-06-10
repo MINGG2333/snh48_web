@@ -21,6 +21,7 @@ website/data/complaints/
 # Environment
 .env
 .env.local
+deploy/targets.local.json
 
 # Node
 node_modules/

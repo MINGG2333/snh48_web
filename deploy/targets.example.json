@@ -1,0 +1,34 @@
+{
+  "targets": {
+    "huawei": {
+      "description": "Example Huawei Cloud Ubuntu target. Copy this file to deploy/targets.local.json and edit values.",
+      "ssh": "root@YOUR_HUAWEI_PUBLIC_IP",
+      "site_dir": "/home/snh48_web",
+      "branch": "main",
+      "repo_url": "git@github.com:MINGG2333/snh48_web.git",
+      "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
+      "service_name": "snh48-huawei",
+      "restart": "systemctl restart snh48-huawei",
+      "status": "systemctl is-active --quiet snh48-huawei",
+      "local_url": "http://127.0.0.1:8000/timeline",
+      "public_urls": [
+        "https://your-domain.example/timeline",
+        "https://your-domain.example/api/qa/status"
+      ],
+      "nginx": {
+        "mode": "generated",
+        "remote_path": "/etc/nginx/conf.d/your-domain.example.conf",
+        "server_names": [
+          "your-domain.example",
+          "www.your-domain.example"
+        ],
+        "ssl_certificate": "/etc/letsencrypt/live/your-domain.example/fullchain.pem",
+        "ssl_certificate_key": "/etc/letsencrypt/live/your-domain.example/privkey.pem",
+        "image_proxy_upstream": "http://127.0.0.1:8899/",
+        "access_log": "/var/log/nginx/snh48_huawei_access.log",
+        "error_log": "/var/log/nginx/snh48_huawei_error.log"
+      },
+      "deploy_by_default": false
+    }
+  }
+}

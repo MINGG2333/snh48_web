@@ -3,6 +3,12 @@
 > 本文件按时间线组织部署步骤。请按顺序执行。
 > 当前安全基线和维护规则见 `doc/security/security_baseline.md`。
 
+## 当前部署入口
+
+- `deploy/deploy.py`：当前推荐的多服务器部署工具，用于腾讯云、阿里云和新增 Ubuntu 服务器的代码同步、服务重启、可选 Nginx 同步和烟测。说明见 `deploy/DEPLOY_TOOL.md`。
+- `deploy/deploy.sh`：旧版 CentOS/OpenCloudOS 初始化脚本，只保留作历史兼容。它不是日常部署入口，也不能完成完整迁移。
+- `deploy/sync-to-aliyun.sh`：只同步腾讯云到阿里云的时光轴运行数据，不部署代码。
+
 ---
 
 ## 一、ICP 备案完成前（临时使用 IP:8000 测试）
@@ -496,18 +502,18 @@ cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xx
 
 ### 部署到腾讯云（cjy.plus）
 ```bash
-ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
+python3 deploy/deploy.py deploy tencent
 ```
 
 如果本次修改包含 `deploy/nginx.conf`，还需要同步 Nginx 配置并重载：
 
 ```bash
-ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cp deploy/nginx.conf /etc/nginx/conf.d/snh48.conf && nginx -t && systemctl reload nginx"
+python3 deploy/deploy.py deploy tencent --nginx
 ```
 
 ### 部署到阿里云（cjy.我爱你）
 ```bash
-ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
+python3 deploy/deploy.py deploy aliyun
 ```
 
 > ⚠️ 服务器无需 Node.js —— 混淆/压缩输出（js-dist/ css-dist/）已提交到 Git。
@@ -984,12 +990,12 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 
 #### 阿里云香港（cjy.我爱你）
 ```bash
-ssh root@8.210.188.184 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && systemctl restart snh48-aliyun"
+python3 deploy/deploy.py deploy aliyun
 ```
 
 #### 腾讯云（cjy.plus）
 ```bash
-ssh root@124.222.72.203 "cd /home/snh48_web && git pull && cd /home/snh48_web/transcript_analyze && git pull && screen -S snh48 -X quit 2>/dev/null; screen -S snh48 -dm bash -c 'cd /home/snh48_web && source venv/bin/activate && python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
+python3 deploy/deploy.py deploy tencent
 ```
 
 ---
