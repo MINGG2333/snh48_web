@@ -90,8 +90,11 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1
 
 ```bash
 curl -sS -D - -o /dev/null https://cjy.plus/
+curl -sS -D - -o /dev/null https://cjy.plus/timeline
 curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
+curl -sS -D - -o /dev/null https://cjy.plus/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
+curl -sS -D - -o /dev/null https://cjy.plus/static/js/timeline.js
 curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 ```
 
@@ -99,8 +102,11 @@ curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 
 ```bash
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/timeline
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/qa/status
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/static/js/main.js
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/static/js/timeline.js
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/image-proxy/health
 ```
 

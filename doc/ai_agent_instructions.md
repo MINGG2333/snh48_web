@@ -211,3 +211,22 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/terms` | 服务条款 | ✅ 页脚 |
 | `/scroller-admin` | 背景词管理 | ❌ 仅 URL 访问（需密码） |
 | `/ob` | 观察页 | ❌ 仅 URL 访问（需密码） |
+
+### 时光轴地图功能
+
+| 项目 | 当前规则 |
+|------|----------|
+| 地址入口 | 弹窗中点击 `location` 地址展开/隐藏地图选择 |
+| 地图按钮 | 高德/百度按钮点击后保持展开，不自动隐藏 |
+| 隐藏规则 | 只通过再次点击地址隐藏；隐藏时移除“没有打开 App？打开网页版地图”提示 |
+| 高德 App | `iosamap://poi` / `androidamap://poi`，已验证可打开 App 并搜索 |
+| 百度 App | `baidumap://map/place/search` / `bdapp://map/place/search`，已验证可打开 App 并搜索 |
+| 高德网页 | `uri.amap.com/search`；手机端 `src=xinshangzhenzangji`，桌面端使用站点域名 |
+| 百度网页 | `map.baidu.com/search/` |
+| 已知限制 | 高德手机 H5 在香港流量等境外网络下可能不稳定；内地网络通常更稳定 |
+
+维护要求：
+
+- 不要把 App 调起和网页兜底逻辑混在一起改；移动端高德网页不稳定时，先区分是高德 H5 网络/地区问题还是代码回归。
+- 不要重新使用工程名作为地图 `src` 或第三方来源参数。
+- 修改 `timeline.js` 后必须运行 `node script/obfuscate_js.cjs`，并提交对应 `website/static/js-dist/timeline.js`。

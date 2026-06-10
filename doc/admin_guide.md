@@ -268,6 +268,27 @@ ls "website/data/interaction_logs/$SESSION_DIR/"*_events.md
 
 ---
 
+## 🗺️ 时光轴地图功能维护
+
+时光轴行程弹窗会在 `location` 字段存在时显示可点击地址。点击地址后展开地图选择，用户可选择高德地图或百度地图打开。
+
+当前行为：
+
+- 点击地址负责展开/隐藏地图选择；点击高德/百度按钮不会自动隐藏。
+- 如果 App 没有成功打开，前端会尝试用新标签页打开网页版地图。
+- 浏览器拦截新标签页时，会显示“没有打开 App？打开网页版地图”的手动链接。
+- 地址收起后，手动兜底链接会自动移除。
+
+维护注意：
+
+- 高德和百度 App 调起逻辑不要与网页兜底混在一起改；用户已验证当前 App 打开路径可用。
+- 高德手机网页兜底使用 `src=xinshangzhenzangji`；桌面端可继续使用站点域名。
+- 高德移动 H5 在香港流量等境外网络下可能受高德侧网络/定位策略影响，表现不如内地网络稳定。
+- 若修改 `timeline.js` 或相关样式，必须运行 `node script/obfuscate_js.cjs` 并提交 `website/static/js-dist/`。
+- 部署后至少验证 `/timeline`、`/static/js/timeline.js`、`/api/timeline/schedule`。
+
+---
+
 ## 🚀 快速命令参考
 
 ```bash
