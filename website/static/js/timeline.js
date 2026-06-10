@@ -626,8 +626,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!place) return '';
 
     const amapAppUrl = buildAmapAppUrl(place);
-    const amapWebUrl = buildQueryUrl('https://ditu.amap.com/search', {
-      query: place,
+    const amapWebUrl = buildQueryUrl('https://uri.amap.com/search', {
+      keyword: place,
+      view: 'map',
+      src: getMapSourceId(),
+      callnative: '0',
     });
 
     const sourceId = getMapSourceId();
