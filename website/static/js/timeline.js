@@ -632,11 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
       query: place,
       src: baiduSource,
     });
-    const baiduWebUrl = buildQueryUrl('https://api.map.baidu.com/geocoder', {
-      address: place,
-      output: 'html',
-      src: 'webapp.cjy.snh48_web',
-    });
+    const baiduWebUrl = `https://map.baidu.com/search/${encodeURIComponent(place)}`;
 
     const safePlace = escapeHtml(place);
     return `
@@ -670,43 +666,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function openPreparedFallbackWindow() {
-    const fallbackWindow = window.open('', '_blank');
-    if (!fallbackWindow) return null;
-    try {
-      fallbackWindow.document.write('<!doctype html><title>打开地图</title><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;color:#222;">正在打开地图...</body>');
-      fallbackWindow.document.close();
-    } catch (_e) {
-      // Some browsers restrict access immediately; navigation fallback can still use the handle.
+  function showMapFallbackLink(choiceEl, webUrl) {
+    const block = choiceEl.closest('.timeline-location-block');
+    if (!block) return;
+    let fallback = block.querySelector('.timeline-map-fallback');
+    if (!fallback) {
+      fallback = document.createElement('div');
+      fallback.className = 'timeline-map-fallback';
+      block.appendChild(fallback);
     }
-    return fallbackWindow;
+    fallback.innerHTML = `
+      <span>没有打开 App？</span>
+      <a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener">打开网页版地图</a>
+    `;
   }
 
-  function closePreparedFallbackWindow(fallbackWindow) {
-    if (!fallbackWindow || fallbackWindow.closed) return;
-    try {
-      fallbackWindow.close();
-    } catch (_e) {
-      // If the browser refuses to close it, leave the user-controlled tab alone.
-    }
+  function openWebFallback(choiceEl, webUrl) {
+    const opened = window.open(webUrl, '_blank', 'noopener');
+    if (!opened) showMapFallbackLink(choiceEl, webUrl);
   }
 
-  function openWebFallback(fallbackWindow, webUrl) {
-    if (fallbackWindow && !fallbackWindow.closed) {
-      try {
-        fallbackWindow.location.replace(webUrl);
-        return;
-      } catch (_e) {
-        // Fall through to opening a normal tab.
-      }
-    }
-    window.open(webUrl, '_blank', 'noopener');
-  }
-
-  function openMapWithFallback(appUrl, webUrl) {
+  function openMapWithFallback(appUrl, webUrl, choiceEl) {
     let leftPage = false;
     let timer = null;
-    const fallbackWindow = openPreparedFallbackWindow();
 
     function cleanup() {
       if (timer) window.clearTimeout(timer);
@@ -716,7 +698,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function markLeftPage() {
       leftPage = true;
-      closePreparedFallbackWindow(fallbackWindow);
       cleanup();
     }
 
@@ -731,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timer = window.setTimeout(() => {
       cleanup();
       if (!leftPage && document.visibilityState !== 'hidden') {
-        openWebFallback(fallbackWindow, webUrl);
+        openWebFallback(choiceEl, webUrl);
       }
     }, 1400);
   }
@@ -850,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!appUrl || !webUrl) return;
     e.preventDefault();
     closeMapChoicePopovers();
-    openMapWithFallback(appUrl, webUrl);
+    openMapWithFallback(appUrl, webUrl, mapChoice);
   });
 
   let cakeFountainTimer = null;

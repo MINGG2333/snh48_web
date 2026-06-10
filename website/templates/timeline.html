@@ -951,6 +951,24 @@
   background: rgba(96, 165, 250, 0.18);
 }
 
+.timeline-map-fallback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px 22px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.timeline-map-fallback a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.timeline-map-fallback a:hover {
+  text-decoration: underline;
+}
+
 /* ── Modal image gallery ── */
 .timeline-modal-gallery {
   display: flex;
@@ -1079,6 +1097,7 @@
   .timeline-card-stack .timeline-card-body { padding: 5px 8px 8px; }
   .timeline-map-choice-popover { margin-left: 0; }
   .timeline-map-choice { flex: 1 1 120px; }
+  .timeline-map-fallback { margin-left: 0; }
 }
 </style>
 {% endblock %}
