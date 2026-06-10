@@ -585,6 +585,99 @@ document.addEventListener('DOMContentLoaded', () => {
     return html;
   }
 
+  function isAppleTouchDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function buildQueryUrl(baseUrl, params) {
+    const query = new URLSearchParams(params);
+    return `${baseUrl}?${query.toString()}`;
+  }
+
+  function buildLocationMapLinks(location) {
+    const place = String(location || '').trim();
+    if (!place) return '';
+
+    const amapAppUrl = buildQueryUrl('https://uri.amap.com/search', {
+      keyword: place,
+      view: 'map',
+      src: 'snh48_web',
+      callnative: '1',
+    });
+    const amapWebUrl = buildQueryUrl('https://uri.amap.com/search', {
+      keyword: place,
+      view: 'map',
+      src: 'snh48_web',
+      callnative: '0',
+    });
+
+    const baiduAppBase = isAppleTouchDevice()
+      ? 'baidumap://map/place/search'
+      : 'bdapp://map/place/search';
+    const baiduSource = isAppleTouchDevice()
+      ? 'ios.cjy.snh48_web'
+      : 'andr.cjy.snh48_web';
+    const baiduAppUrl = buildQueryUrl(baiduAppBase, {
+      query: place,
+      src: baiduSource,
+    });
+    const baiduWebUrl = buildQueryUrl('https://api.map.baidu.com/place/search', {
+      query: place,
+      output: 'html',
+      src: 'webapp.cjy.snh48_web',
+    });
+
+    const safePlace = escapeHtml(place);
+    return `
+      <div class="timeline-modal-info timeline-location-info">
+        <i class="fas fa-map-marker-alt"></i>
+        <span class="timeline-location-text">${safePlace}</span>
+      </div>
+      <div class="timeline-map-actions">
+        <a href="${escapeHtml(amapWebUrl)}" class="timeline-map-btn timeline-map-btn-amap" data-map-app-url="${escapeHtml(amapAppUrl)}" data-map-web-url="${escapeHtml(amapWebUrl)}" aria-label="用高德地图打开 ${safePlace}">
+          <i class="fas fa-location-arrow"></i>
+          <span>高德地图</span>
+        </a>
+        <a href="${escapeHtml(baiduWebUrl)}" class="timeline-map-btn timeline-map-btn-baidu" data-map-app-url="${escapeHtml(baiduAppUrl)}" data-map-web-url="${escapeHtml(baiduWebUrl)}" aria-label="用百度地图打开 ${safePlace}">
+          <i class="fas fa-map-marked-alt"></i>
+          <span>百度地图</span>
+        </a>
+      </div>
+    `;
+  }
+
+  function openMapWithFallback(appUrl, webUrl) {
+    let leftPage = false;
+    let timer = null;
+
+    function cleanup() {
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener('pagehide', markLeftPage);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    function markLeftPage() {
+      leftPage = true;
+      cleanup();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') markLeftPage();
+    }
+
+    window.addEventListener('pagehide', markLeftPage, { once: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.location.href = appUrl;
+
+    timer = window.setTimeout(() => {
+      cleanup();
+      if (!leftPage && document.visibilityState !== 'hidden') {
+        window.location.href = webUrl;
+      }
+    }, 1400);
+  }
+
   function openModal(event) {
     const badgeClassMap = {
       milestone: 'milestone', tour: 'tour', show: 'show',
@@ -659,7 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
-        ${event.location ? `<div class="timeline-modal-info"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(event.location)}</div>` : ''}
+        ${buildLocationMapLinks(event.location)}
         ${buildSourceLinks(event)}
         ${biliHtml}
         ${videoHtml}
@@ -674,6 +767,16 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => startCakeFountain(), 300);
     }
   }
+
+  modalContent.addEventListener('click', (e) => {
+    const mapLink = e.target.closest('.timeline-map-btn[data-map-app-url]');
+    if (!mapLink) return;
+    const appUrl = mapLink.dataset.mapAppUrl;
+    const webUrl = mapLink.dataset.mapWebUrl || mapLink.getAttribute('href');
+    if (!appUrl || !webUrl) return;
+    e.preventDefault();
+    openMapWithFallback(appUrl, webUrl);
+  });
 
   let cakeFountainTimer = null;
 
