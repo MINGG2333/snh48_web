@@ -50,6 +50,8 @@ python3 deploy/deploy.py deploy aliyun --nginx
 python3 deploy/deploy.py check tencent
 ```
 
+服务重启后的验证默认最多等待 3 分钟（`--verify-attempts 90 --verify-delay 2`）。腾讯云启动时会加载本地知识库和模型，冷启动可能超过 30 秒。
+
 先看将执行什么：
 
 ```bash

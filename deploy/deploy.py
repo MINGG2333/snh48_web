@@ -547,13 +547,13 @@ def main() -> int:
     deploy_parser.add_argument("--nginx", action="store_true", help="also copy nginx config and reload nginx")
     deploy_parser.add_argument("--no-verify", action="store_true", help="skip verification")
     deploy_parser.add_argument("--skip-public", action="store_true", help="skip local public URL checks")
-    deploy_parser.add_argument("--verify-attempts", type=int, default=15, help="verification retry attempts")
+    deploy_parser.add_argument("--verify-attempts", type=int, default=90, help="verification retry attempts")
     deploy_parser.add_argument("--verify-delay", type=float, default=2.0, help="seconds between verification attempts")
 
     check_parser = sub.add_parser("check", help="run target verification only")
     check_parser.add_argument("targets", nargs="+", help="target name(s), or all")
     check_parser.add_argument("--skip-public", action="store_true", help="skip local public URL checks")
-    check_parser.add_argument("--verify-attempts", type=int, default=15, help="verification retry attempts")
+    check_parser.add_argument("--verify-attempts", type=int, default=90, help="verification retry attempts")
     check_parser.add_argument("--verify-delay", type=float, default=2.0, help="seconds between verification attempts")
     check_parser.set_defaults(no_verify=False)
 
