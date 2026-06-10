@@ -283,8 +283,8 @@ def nginx_command(target: Dict[str, Any]) -> str:
     remote_path = quote(nginx.get("remote_path"))
     prepare_cache = (
         f"mkdir -p {quote(IMAGE_PROXY_CACHE_DIR)} && "
-        f"(id nginx >/dev/null 2>&1 && chown -R nginx:nginx {quote(IMAGE_PROXY_CACHE_DIR)} || "
-        f"id www-data >/dev/null 2>&1 && chown -R www-data:www-data {quote(IMAGE_PROXY_CACHE_DIR)} || true) && "
+        f"(if id nginx >/dev/null 2>&1; then chown -R nginx:nginx {quote(IMAGE_PROXY_CACHE_DIR)}; "
+        f"elif id www-data >/dev/null 2>&1; then chown -R www-data:www-data {quote(IMAGE_PROXY_CACHE_DIR)}; fi) && "
     )
     if nginx.get("mode") == "generated" or not nginx.get("repo_config"):
         config = render_nginx_config(target)
