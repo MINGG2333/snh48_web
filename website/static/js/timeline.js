@@ -595,16 +595,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${baseUrl}?${query.toString()}`;
   }
 
+  function buildAmapAppUrl(place) {
+    if (isAppleTouchDevice()) {
+      return buildQueryUrl('iosamap://poi', {
+        sourceApplication: 'snh48_web',
+        name: place,
+        dev: '0',
+      });
+    }
+    return buildQueryUrl('androidamap://poi', {
+      sourceApplication: 'snh48_web',
+      keywords: place,
+      dev: '0',
+    });
+  }
+
   function buildLocationMapLinks(location) {
     const place = String(location || '').trim();
     if (!place) return '';
 
-    const amapAppUrl = buildQueryUrl('https://uri.amap.com/search', {
-      keyword: place,
-      view: 'map',
-      src: 'snh48_web',
-      callnative: '1',
-    });
+    const amapAppUrl = buildAmapAppUrl(place);
     const amapWebUrl = buildQueryUrl('https://uri.amap.com/search', {
       keyword: place,
       view: 'map',
@@ -630,21 +640,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const safePlace = escapeHtml(place);
     return `
-      <div class="timeline-modal-info timeline-location-info">
-        <i class="fas fa-map-marker-alt"></i>
-        <span class="timeline-location-text">${safePlace}</span>
-      </div>
-      <div class="timeline-map-actions">
-        <a href="${escapeHtml(amapWebUrl)}" class="timeline-map-btn timeline-map-btn-amap" data-map-app-url="${escapeHtml(amapAppUrl)}" data-map-web-url="${escapeHtml(amapWebUrl)}" aria-label="用高德地图打开 ${safePlace}">
-          <i class="fas fa-location-arrow"></i>
-          <span>高德地图</span>
-        </a>
-        <a href="${escapeHtml(baiduWebUrl)}" class="timeline-map-btn timeline-map-btn-baidu" data-map-app-url="${escapeHtml(baiduAppUrl)}" data-map-web-url="${escapeHtml(baiduWebUrl)}" aria-label="用百度地图打开 ${safePlace}">
-          <i class="fas fa-map-marked-alt"></i>
-          <span>百度地图</span>
-        </a>
+      <div class="timeline-location-block">
+        <div class="timeline-modal-info timeline-location-info">
+          <i class="fas fa-map-marker-alt"></i>
+          <button type="button" class="timeline-location-trigger" aria-expanded="false">
+            <span class="timeline-location-text">${safePlace}</span>
+          </button>
+        </div>
+        <div class="timeline-map-choice-popover" hidden>
+          <button type="button" class="timeline-map-choice timeline-map-choice-amap" data-map-app-url="${escapeHtml(amapAppUrl)}" data-map-web-url="${escapeHtml(amapWebUrl)}" aria-label="用高德地图打开 ${safePlace}">
+            <i class="fas fa-location-arrow"></i>
+            <span>高德地图</span>
+          </button>
+          <button type="button" class="timeline-map-choice timeline-map-choice-baidu" data-map-app-url="${escapeHtml(baiduAppUrl)}" data-map-web-url="${escapeHtml(baiduWebUrl)}" aria-label="用百度地图打开 ${safePlace}">
+            <i class="fas fa-map-marked-alt"></i>
+            <span>百度地图</span>
+          </button>
+        </div>
       </div>
     `;
+  }
+
+  function closeMapChoicePopovers() {
+    modalContent.querySelectorAll('.timeline-map-choice-popover').forEach(popover => {
+      popover.hidden = true;
+    });
+    modalContent.querySelectorAll('.timeline-location-trigger[aria-expanded="true"]').forEach(trigger => {
+      trigger.setAttribute('aria-expanded', 'false');
+    });
   }
 
   function openMapWithFallback(appUrl, webUrl) {
@@ -673,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timer = window.setTimeout(() => {
       cleanup();
       if (!leftPage && document.visibilityState !== 'hidden') {
-        window.location.href = webUrl;
+        window.open(webUrl, '_blank', 'noopener');
       }
     }, 1400);
   }
@@ -769,12 +792,29 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   modalContent.addEventListener('click', (e) => {
-    const mapLink = e.target.closest('.timeline-map-btn[data-map-app-url]');
-    if (!mapLink) return;
-    const appUrl = mapLink.dataset.mapAppUrl;
-    const webUrl = mapLink.dataset.mapWebUrl || mapLink.getAttribute('href');
+    const locationTrigger = e.target.closest('.timeline-location-trigger');
+    if (locationTrigger) {
+      e.preventDefault();
+      const block = locationTrigger.closest('.timeline-location-block');
+      const popover = block ? block.querySelector('.timeline-map-choice-popover') : null;
+      if (!popover) return;
+      const shouldOpen = popover.hidden;
+      closeMapChoicePopovers();
+      popover.hidden = !shouldOpen;
+      locationTrigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+      return;
+    }
+
+    const mapChoice = e.target.closest('.timeline-map-choice[data-map-app-url]');
+    if (!mapChoice) {
+      if (!e.target.closest('.timeline-map-choice-popover')) closeMapChoicePopovers();
+      return;
+    }
+    const appUrl = mapChoice.dataset.mapAppUrl;
+    const webUrl = mapChoice.dataset.mapWebUrl;
     if (!appUrl || !webUrl) return;
     e.preventDefault();
+    closeMapChoicePopovers();
     openMapWithFallback(appUrl, webUrl);
   });
 
@@ -812,6 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function closeModal() {
+    closeMapChoicePopovers();
     overlay.classList.remove('open');
     document.body.style.overflow = '';
   }

@@ -856,19 +856,46 @@
   align-items: flex-start;
 }
 
+.timeline-location-trigger {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.timeline-location-trigger:hover .timeline-location-text,
+.timeline-location-trigger:focus-visible .timeline-location-text {
+  text-decoration: underline;
+}
+
+.timeline-location-trigger:focus-visible {
+  outline: 2px solid rgba(255, 107, 157, 0.45);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
 .timeline-location-text {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.timeline-map-actions {
+.timeline-map-choice-popover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 4px 0 14px 22px;
 }
 
-.timeline-map-btn {
+.timeline-map-choice-popover[hidden] {
+  display: none;
+}
+
+.timeline-map-choice {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -879,39 +906,47 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
+  font-family: inherit;
   font-size: 0.82rem;
   line-height: 1;
-  text-decoration: none;
+  cursor: pointer;
   transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
 }
 
-.timeline-map-btn:hover {
+.timeline-map-choice:hover,
+.timeline-map-choice:focus-visible {
   transform: translateY(-1px);
-  text-decoration: none;
 }
 
-.timeline-map-btn i {
+.timeline-map-choice:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.24);
+  outline-offset: 2px;
+}
+
+.timeline-map-choice i {
   font-size: 0.85rem;
 }
 
-.timeline-map-btn-amap {
+.timeline-map-choice-amap {
   color: #4ade80;
   border-color: rgba(74, 222, 128, 0.25);
   background: rgba(74, 222, 128, 0.1);
 }
 
-.timeline-map-btn-amap:hover {
+.timeline-map-choice-amap:hover,
+.timeline-map-choice-amap:focus-visible {
   border-color: rgba(74, 222, 128, 0.45);
   background: rgba(74, 222, 128, 0.18);
 }
 
-.timeline-map-btn-baidu {
+.timeline-map-choice-baidu {
   color: #60a5fa;
   border-color: rgba(96, 165, 250, 0.25);
   background: rgba(96, 165, 250, 0.1);
 }
 
-.timeline-map-btn-baidu:hover {
+.timeline-map-choice-baidu:hover,
+.timeline-map-choice-baidu:focus-visible {
   border-color: rgba(96, 165, 250, 0.45);
   background: rgba(96, 165, 250, 0.18);
 }
@@ -1042,8 +1077,8 @@
   .timeline-card-stack .timeline-card-img,
   .timeline-card-stack .timeline-card-img-placeholder { height: 45px; }
   .timeline-card-stack .timeline-card-body { padding: 5px 8px 8px; }
-  .timeline-map-actions { margin-left: 0; }
-  .timeline-map-btn { flex: 1 1 120px; }
+  .timeline-map-choice-popover { margin-left: 0; }
+  .timeline-map-choice { flex: 1 1 120px; }
 }
 </style>
 {% endblock %}
