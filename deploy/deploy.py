@@ -21,6 +21,7 @@ import json
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -126,6 +127,29 @@ def run(args: List[str], dry_run: bool = False) -> subprocess.CompletedProcess:
     return subprocess.run(args, check=True)
 
 
+def run_with_retries(
+    args: List[str],
+    dry_run: bool = False,
+    attempts: int = 1,
+    delay: float = 1.0,
+) -> subprocess.CompletedProcess:
+    print("+ " + shell_join(args))
+    if dry_run:
+        return subprocess.CompletedProcess(args, 0)
+
+    attempts = max(1, attempts)
+    last_result = None
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(args)
+        if result.returncode == 0:
+            return result
+        last_result = result
+        if attempt < attempts:
+            print(f"  retry {attempt}/{attempts - 1} after {delay:g}s")
+            time.sleep(delay)
+    raise subprocess.CalledProcessError(last_result.returncode, args)
+
+
 def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     result = dict(base)
     for key, value in override.items():
@@ -166,8 +190,26 @@ def remote(target: Dict[str, Any], command: str, dry_run: bool = False) -> None:
     run(ssh_args(target) + [command], dry_run=dry_run)
 
 
-def curl_check(url: str, dry_run: bool = False) -> None:
-    run(["curl", "-fsS", "-D", "-", "-o", "/dev/null", url], dry_run=dry_run)
+def remote_retry(
+    target: Dict[str, Any],
+    command: str,
+    args: argparse.Namespace,
+) -> None:
+    run_with_retries(
+        ssh_args(target) + [command],
+        dry_run=args.dry_run,
+        attempts=args.verify_attempts,
+        delay=args.verify_delay,
+    )
+
+
+def curl_check(url: str, args: argparse.Namespace) -> None:
+    run_with_retries(
+        ["curl", "-fsS", "-D", "-", "-o", "/dev/null", url],
+        dry_run=args.dry_run,
+        attempts=args.verify_attempts,
+        delay=args.verify_delay,
+    )
 
 
 def site_dir(target: Dict[str, Any]) -> str:
@@ -349,17 +391,17 @@ server {{
 def verify_target(target: Dict[str, Any], args: argparse.Namespace) -> None:
     status_cmd = target.get("status")
     if status_cmd:
-        remote(target, str(status_cmd), dry_run=args.dry_run)
+        remote_retry(target, str(status_cmd), args)
     local_url = target.get("local_url")
     if local_url:
-        remote(
+        remote_retry(
             target,
             "curl -fsS -o /dev/null " + quote(local_url),
-            dry_run=args.dry_run,
+            args,
         )
     if not args.skip_public:
         for url in target.get("public_urls", []):
-            curl_check(str(url), dry_run=args.dry_run)
+            curl_check(str(url), args)
     remote(target, remote_summary_command(target), dry_run=args.dry_run)
 
 
@@ -505,10 +547,14 @@ def main() -> int:
     deploy_parser.add_argument("--nginx", action="store_true", help="also copy nginx config and reload nginx")
     deploy_parser.add_argument("--no-verify", action="store_true", help="skip verification")
     deploy_parser.add_argument("--skip-public", action="store_true", help="skip local public URL checks")
+    deploy_parser.add_argument("--verify-attempts", type=int, default=15, help="verification retry attempts")
+    deploy_parser.add_argument("--verify-delay", type=float, default=2.0, help="seconds between verification attempts")
 
     check_parser = sub.add_parser("check", help="run target verification only")
     check_parser.add_argument("targets", nargs="+", help="target name(s), or all")
     check_parser.add_argument("--skip-public", action="store_true", help="skip local public URL checks")
+    check_parser.add_argument("--verify-attempts", type=int, default=15, help="verification retry attempts")
+    check_parser.add_argument("--verify-delay", type=float, default=2.0, help="seconds between verification attempts")
     check_parser.set_defaults(no_verify=False)
 
     boot_parser = sub.add_parser("bootstrap-ubuntu", help="prepare a new Ubuntu server")
