@@ -682,6 +682,9 @@ document.addEventListener('DOMContentLoaded', () => {
     modalContent.querySelectorAll('.timeline-map-choice-popover').forEach(popover => {
       popover.hidden = true;
     });
+    modalContent.querySelectorAll('.timeline-map-fallback').forEach(fallback => {
+      fallback.remove();
+    });
     modalContent.querySelectorAll('.timeline-location-trigger[aria-expanded="true"]').forEach(trigger => {
       trigger.setAttribute('aria-expanded', 'false');
     });
@@ -836,7 +839,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const popover = block ? block.querySelector('.timeline-map-choice-popover') : null;
       if (!popover) return;
       const shouldOpen = popover.hidden;
-      closeMapChoicePopovers();
+      if (shouldOpen) {
+        closeMapChoicePopovers();
+      } else {
+        const fallback = block.querySelector('.timeline-map-fallback');
+        if (fallback) fallback.remove();
+      }
       popover.hidden = !shouldOpen;
       locationTrigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
       return;
@@ -851,7 +859,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const webUrl = mapChoice.dataset.mapWebUrl;
     if (!appUrl || !webUrl) return;
     e.preventDefault();
-    closeMapChoicePopovers();
     openMapWithFallback(appUrl, webUrl, mapChoice);
   });
 
