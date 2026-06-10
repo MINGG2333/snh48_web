@@ -16,6 +16,7 @@
 
 - 安全审计或安全修复：`doc/codex/workflows/security_review.md`
 - 功能 bug 修复或新增功能：`doc/codex/workflows/feature_or_bugfix.md`
+- 数据生成工程或跨仓库数据依赖：`doc/codex/workflows/data_dependency.md`
 - 通过 GitHub 同步服务器：`doc/codex/workflows/deploy_via_git.md`
 - 任务分解、确认方式、验收标准定义：`doc/codex/workflows/task_intake.md`
 
@@ -27,6 +28,8 @@
 - `.env` 不提交真实值。需要改服务器 `.env` 时，先更新 `.env.example`，再只在服务器上补齐必要项，且不要输出密码明文。
 - 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs`，并提交 `website/static/js-dist/`、`website/static/css-dist/`。
 - 修改 Nginx 配置时必须运行 `nginx -t`。部署验收按本次任务目标选择，不把专项检查固化成所有任务的通用标准。
+- 网站运行依赖 `/home/snh48-fan-hub` 的行程、回放、直播封面和图片代理数据；修改 `/timeline`、回放、图片代理或相关环境变量前，先读本项目 profile 的数据工程段落和 `snh48-fan-hub/schedule_record/网站开发对接说明.md`。
+- `snh48-fan-hub` 的腾讯云实例是全量代码和数据生成源；阿里云只接收网站需要的最小数据集。不要把阿里云当作数据生成环境，也不要从网站仓库覆盖 fan-hub 运行数据。
 - 服务器上的运行数据文件不要删除或覆盖，除非用户明确要求并确认影响。
 
 ## Definition Of Done

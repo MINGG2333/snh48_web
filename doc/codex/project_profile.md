@@ -11,6 +11,8 @@
 | 前端资源 | `website/static/js/`、`website/static/css/` |
 | 生产前端产物 | `website/static/js-dist/`、`website/static/css-dist/` |
 | 知识库子项目 | `transcript_analyze/` |
+| 数据生成工程 | `/mnt/zhitainew/snh48/snh48-fan-hub`（本地），`/home/snh48-fan-hub`（服务器） |
+| 数据对接文档 | `snh48-fan-hub/schedule_record/网站开发对接说明.md` |
 | 安全文档 | `doc/security/security_baseline.md` |
 | 部署手册 | `deploy/TODO.md` |
 
@@ -20,6 +22,31 @@
 |------|------|----|----------|------------|
 | 腾讯云 | `cjy.plus` | `124.222.72.203` | screen 会话 | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
 | 阿里云香港 | `cjy.我爱你` / `cjy.xn--6qq986b3xl` | `8.210.188.184` | `systemd` 服务 `snh48-aliyun` | `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`，来源 `deploy/nginx-aliyun.conf` |
+
+## 数据生成工程依赖
+
+本网站运行时读取 `snh48-fan-hub` 生成的数据。修改 `/timeline`、直播回放、图片代理、`SCHEDULE_CSV_PATH`、`LIVE_PUSH_REPLAY_ROOT` 或相关展示逻辑前，先确认这份数据契约。
+
+| 环境 | `snh48-fan-hub` 角色 | 同步策略 |
+|------|----------------------|----------|
+| 本地 | 功能验证副本，路径 `/mnt/zhitainew/snh48/snh48-fan-hub` | 与腾讯云全量工程通过 GitHub 同步，主要用于验证脚本和对接逻辑 |
+| 腾讯云 | 全量代码和数据生成服务器，路径 `/home/snh48-fan-hub` | 常驻采集、监控、生成网站数据，供内地版暨测试版网站使用 |
+| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub` | 从腾讯云直接同步最小数据集，供香港版暨对外公开版网站使用 |
+
+网站必要数据集：
+
+- `schedule_record/schedule.csv`
+- `live_push_replays/陈嘉仪_161808449/`
+- `room_record/陈嘉仪_161808449/live_covers/`
+- 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
+
+数据同步脚本：
+
+```bash
+bash deploy/sync-to-aliyun.sh
+```
+
+该脚本应在腾讯云网站工程 `/home/snh48_web` 上执行，把必要数据从腾讯云同步到阿里云。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 ## 本地验证命令
 
@@ -148,7 +175,7 @@ curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/static/js/timeline.js
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/image-proxy/health
 ```
 
-公网 `8000` 不可访问是本项目当前安全基线之一，但不是所有功能部署的通用完成标准。安全任务、Nginx/env/网络变更或用户要求时再验证：
+安全、Nginx、环境变量或网络边界相关任务按 `doc/security/security_baseline.md` 选择额外验证命令，例如外网端口、代理健康和安全头：
 
 ```bash
 curl -I --connect-timeout 5 http://124.222.72.203:8000

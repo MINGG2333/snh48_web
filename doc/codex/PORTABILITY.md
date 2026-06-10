@@ -16,6 +16,7 @@
 | `workflows/security_review.md` | 直接复制后少量调整检查项 | Web 安全审计的检查维度通用 |
 | `workflows/feature_or_bugfix.md` | 直接复制 | 功能修复/新增功能的工程流程通用 |
 | `workflows/deploy_via_git.md` | 直接复制，并改 profile 引用 | GitHub 同步、远端拉取、重启、烟测的结构通用 |
+| `workflows/data_dependency.md` | 直接复制，并改 profile 引用 | 生产方/消费方数据契约、同步链路和验证顺序可复用 |
 
 ## 可模板化迁移
 

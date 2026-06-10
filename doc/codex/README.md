@@ -9,6 +9,7 @@
 | `AGENTS.md` | 项目入口规则 | 简短、长期有效的协作规则；任务路由；必须遵守的仓库约定 |
 | `doc/codex/project_profile.md` | 本项目配置 | 域名、服务器、部署命令、运行时文件、项目验证命令、常见风险 |
 | `doc/codex/workflows/*.md` | 可跨项目复用 | 安全审计、功能修复、部署、任务确认等流程 |
+| `doc/codex/workflows/data_dependency.md` | 可跨项目复用 | 跨仓库数据契约、同步链路、生产方/消费方协作 |
 | `doc/codex/templates/*.md` | 可模板化迁移 | 新项目要填写的 profile、部署清单、安全检查清单 |
 | `doc/security/security_baseline.md` | 本项目事实记录 | 当前网站已实施的安全措施、线上验证命令、已知取舍 |
 
