@@ -37,6 +37,27 @@ git diff --check
 node script/obfuscate_js.cjs
 ```
 
+## 功能维护备注
+
+### 时光轴地图打开
+
+入口和文档：
+
+- 页面入口：`/timeline`
+- 源文件：`website/static/js/timeline.js`
+- 生产产物：`website/static/js-dist/timeline.js`
+- 详细行为文档：`doc/timeline_badges.md`、`doc/admin_guide.md`、`doc/ai_agent_instructions.md`
+
+维护边界：
+
+- 地址文本负责展开或隐藏地图选择；点击高德/百度按钮后不要自动隐藏。
+- App 调起逻辑已验证可用，不要为了网页兜底问题顺手改动 App scheme。
+- 百度 App 和百度网页兜底已验证可用，除非用户明确指出百度回归，否则不要改动。
+- 高德桌面网页兜底已验证可用；当前只对手机浏览器网页兜底做终端区分。
+- 高德手机网页兜底使用 `https://uri.amap.com/search`，并使用 `src=xinshangzhenzangji`；不要使用工程名、目录名或内部部署名作为公开地图来源参数。
+- 高德手机 H5 在香港流量等境外网络下可能受高德侧网络、CDN、定位或地区策略影响，排查时先区分网络问题和代码回归。
+- 当前不强制传城市参数；App 搜索城市/排序由地图 App 根据关键词、定位、历史城市和网络环境决定。
+
 ## GitHub 同步部署命令
 
 推荐使用多服务器部署工具：
