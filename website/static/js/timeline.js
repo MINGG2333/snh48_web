@@ -632,8 +632,8 @@ document.addEventListener('DOMContentLoaded', () => {
       query: place,
       src: baiduSource,
     });
-    const baiduWebUrl = buildQueryUrl('https://api.map.baidu.com/place/search', {
-      query: place,
+    const baiduWebUrl = buildQueryUrl('https://api.map.baidu.com/geocoder', {
+      address: place,
       output: 'html',
       src: 'webapp.cjy.snh48_web',
     });
@@ -670,9 +670,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function openPreparedFallbackWindow() {
+    const fallbackWindow = window.open('', '_blank');
+    if (!fallbackWindow) return null;
+    try {
+      fallbackWindow.document.write('<!doctype html><title>打开地图</title><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;color:#222;">正在打开地图...</body>');
+      fallbackWindow.document.close();
+    } catch (_e) {
+      // Some browsers restrict access immediately; navigation fallback can still use the handle.
+    }
+    return fallbackWindow;
+  }
+
+  function closePreparedFallbackWindow(fallbackWindow) {
+    if (!fallbackWindow || fallbackWindow.closed) return;
+    try {
+      fallbackWindow.close();
+    } catch (_e) {
+      // If the browser refuses to close it, leave the user-controlled tab alone.
+    }
+  }
+
+  function openWebFallback(fallbackWindow, webUrl) {
+    if (fallbackWindow && !fallbackWindow.closed) {
+      try {
+        fallbackWindow.location.replace(webUrl);
+        return;
+      } catch (_e) {
+        // Fall through to opening a normal tab.
+      }
+    }
+    window.open(webUrl, '_blank', 'noopener');
+  }
+
   function openMapWithFallback(appUrl, webUrl) {
     let leftPage = false;
     let timer = null;
+    const fallbackWindow = openPreparedFallbackWindow();
 
     function cleanup() {
       if (timer) window.clearTimeout(timer);
@@ -682,6 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function markLeftPage() {
       leftPage = true;
+      closePreparedFallbackWindow(fallbackWindow);
       cleanup();
     }
 
@@ -696,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
     timer = window.setTimeout(() => {
       cleanup();
       if (!leftPage && document.visibilityState !== 'hidden') {
-        window.open(webUrl, '_blank', 'noopener');
+        openWebFallback(fallbackWindow, webUrl);
       }
     }, 1400);
   }
