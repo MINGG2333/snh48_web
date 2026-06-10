@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +51,7 @@ SECURITY_CSP = (
 IMAGE_PROXY_CACHE_DIR = "/var/cache/nginx/snh48_image_proxy"
 IMAGE_PROXY_CACHE_KEYS_ZONE_SIZE = "32m"
 IMAGE_PROXY_CACHE_MAX_SIZE = "3g"
+ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
     "tencent": {
@@ -66,11 +69,15 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         ),
         "status": "screen -ls | grep -q '\\.snh48'",
         "local_url": "http://127.0.0.1:8000/timeline",
+        "public_base_url": "https://cjy.plus",
         "public_urls": [
+            "https://cjy.plus/",
             "https://cjy.plus/timeline",
+            "https://cjy.plus/static/js/main.js",
             "https://cjy.plus/static/js/timeline.js",
             "https://cjy.plus/api/timeline/schedule",
             "https://cjy.plus/api/qa/status",
+            "https://cjy.plus/image-proxy/health",
         ],
         "nginx": {
             "repo_config": "deploy/nginx.conf",
@@ -104,11 +111,15 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "restart": "systemctl restart snh48-aliyun",
         "status": "systemctl is-active --quiet snh48-aliyun",
         "local_url": "http://127.0.0.1:8000/timeline",
+        "public_base_url": "https://cjy.xn--6qq986b3xl",
         "public_urls": [
+            "https://cjy.xn--6qq986b3xl/",
             "https://cjy.xn--6qq986b3xl/timeline",
+            "https://cjy.xn--6qq986b3xl/static/js/main.js",
             "https://cjy.xn--6qq986b3xl/static/js/timeline.js",
             "https://cjy.xn--6qq986b3xl/api/timeline/schedule",
             "https://cjy.xn--6qq986b3xl/api/qa/status",
+            "https://cjy.xn--6qq986b3xl/image-proxy/health",
         ],
         "nginx": {
             "repo_config": "deploy/nginx-aliyun.conf",
@@ -132,6 +143,13 @@ def run(args: List[str], dry_run: bool = False) -> subprocess.CompletedProcess:
     if dry_run:
         return subprocess.CompletedProcess(args, 0)
     return subprocess.run(args, check=True)
+
+
+def run_capture(args: List[str], dry_run: bool = False) -> subprocess.CompletedProcess:
+    print("+ " + shell_join(args))
+    if dry_run:
+        return subprocess.CompletedProcess(args, 0, stdout="")
+    return subprocess.run(args, check=True, text=True, stdout=subprocess.PIPE)
 
 
 def run_with_retries(
@@ -195,6 +213,11 @@ def ssh_args(target: Dict[str, Any]) -> List[str]:
 
 def remote(target: Dict[str, Any], command: str, dry_run: bool = False) -> None:
     run(ssh_args(target) + [command], dry_run=dry_run)
+
+
+def remote_capture(target: Dict[str, Any], command: str, dry_run: bool = False) -> str:
+    result = run_capture(ssh_args(target) + [command], dry_run=dry_run)
+    return str(result.stdout or "")
 
 
 def remote_retry(
@@ -280,7 +303,10 @@ def nginx_command(target: Dict[str, Any]) -> str:
     nginx = target.get("nginx")
     if not nginx:
         raise SystemExit("Target has no nginx config")
-    remote_path = quote(nginx.get("remote_path"))
+    remote_path_value = nginx.get("remote_path")
+    if not remote_path_value:
+        raise SystemExit("Target nginx config is missing required field: remote_path")
+    remote_path = quote(remote_path_value)
     prepare_cache = (
         f"mkdir -p {quote(IMAGE_PROXY_CACHE_DIR)} && "
         f"(if id nginx >/dev/null 2>&1; then chown -R nginx:nginx {quote(IMAGE_PROXY_CACHE_DIR)}; "
@@ -295,7 +321,10 @@ def nginx_command(target: Dict[str, Any]) -> str:
             "EOF\n"
             "nginx -t && systemctl reload nginx"
         )
-    repo_config = quote(nginx.get("repo_config"))
+    repo_config_value = nginx.get("repo_config")
+    if not repo_config_value:
+        raise SystemExit("Target nginx config is missing required field: repo_config")
+    repo_config = quote(repo_config_value)
     return (
         prepare_cache +
         f"cd {quote(site_dir(target))} && "
@@ -399,7 +428,7 @@ server {{
         proxy_set_header Host $proxy_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_cache snh48_image_proxy;
-        proxy_cache_key $uri;
+        proxy_cache_key "$scheme$host$request_uri";
         proxy_cache_methods GET HEAD;
         proxy_cache_valid 200 30d;
         proxy_cache_valid 301 302 1d;
@@ -447,11 +476,98 @@ def verify_target(target: Dict[str, Any], args: argparse.Namespace) -> None:
     remote(target, remote_summary_command(target), dry_run=args.dry_run)
 
 
+def public_base_url(target: Dict[str, Any]) -> str:
+    configured = target.get("public_base_url")
+    if configured:
+        return str(configured).rstrip("/")
+    for url in target.get("public_urls", []):
+        parsed = urlsplit(str(url))
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+    raise SystemExit("Target has no public_base_url or public_urls")
+
+
+def prewarm_image_cache_one(name: str, target: Dict[str, Any], args: argparse.Namespace) -> None:
+    base_url = str(args.base_url or public_base_url(target)).rstrip("/")
+    limit = max(1, int(args.limit))
+    workers = max(1, int(args.workers))
+    command = " && ".join(
+        [
+            f"cd {quote(site_dir(target))}",
+            (
+                "python3 script/prewarm_image_proxy.py "
+                f"--base-url {quote(base_url)} "
+                f"--limit {limit} "
+                f"--workers {workers}"
+            ),
+        ]
+    )
+    print(f"\n== Prewarm image cache: {name} ==")
+    remote(target, command, dry_run=args.dry_run)
+
+
+def parse_env_example_keys(path: Path) -> List[str]:
+    if not path.exists():
+        raise SystemExit(f"Env example not found: {path}")
+    keys: List[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key = line.split("=", 1)[0].strip()
+        if ENV_KEY_RE.match(key):
+            keys.append(key)
+    return sorted(set(keys))
+
+
+def remote_env_keys_command(target: Dict[str, Any]) -> str:
+    return (
+        f"cd {quote(site_dir(target))} && "
+        "if [ -f .env ]; then "
+        "sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p' .env | sort; "
+        "else echo __MISSING_ENV_FILE__; fi"
+    )
+
+
+def check_env_one(name: str, target: Dict[str, Any], args: argparse.Namespace) -> None:
+    print(f"\n== Check env keys: {name} ==")
+    example_path = ROOT / str(args.env_example)
+    expected = set(parse_env_example_keys(example_path))
+    output = remote_capture(target, remote_env_keys_command(target), dry_run=args.dry_run)
+    if args.dry_run:
+        return
+
+    remote_keys = {line.strip() for line in output.splitlines() if line.strip()}
+    if "__MISSING_ENV_FILE__" in remote_keys:
+        message = f"Remote .env is missing on {name}"
+        if args.strict_env:
+            raise SystemExit(message)
+        print(f"WARNING: {message}")
+        return
+
+    missing = sorted(expected - remote_keys)
+    extra = sorted(remote_keys - expected)
+    if missing:
+        print("Missing keys from remote .env:")
+        for key in missing:
+            print(f"  - {key}")
+    else:
+        print("Remote .env has all keys listed in .env.example.")
+    if extra:
+        print("Remote-only keys:")
+        for key in extra:
+            print(f"  - {key}")
+    if missing and args.strict_env:
+        raise SystemExit(f"Remote .env is missing {len(missing)} key(s) on {name}")
+
+
 def deploy_one(name: str, target: Dict[str, Any], args: argparse.Namespace) -> None:
     print(f"\n== Deploy target: {name} ==")
     remote(target, remote_summary_command(target), dry_run=args.dry_run)
     remote(target, clean_tracked_changes_command(target), dry_run=args.dry_run)
     remote(target, git_update_command(target), dry_run=args.dry_run)
+    if args.check_env:
+        check_env_one(name, target, args)
     if args.nginx:
         remote(target, nginx_command(target), dry_run=args.dry_run)
     if args.no_restart:
@@ -570,12 +686,24 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
         dest_mkdir = dest_path.rstrip("/") if is_dir else parent_dir(dest_path)
         remote(dest, f"mkdir -p {quote(dest_mkdir)}", dry_run=args.dry_run)
 
-        opts = "-az"
+        opts = "-az --partial"
         if item.get("delete"):
             opts += " --delete"
         src = src_path.rstrip("/") + "/" if is_dir else src_path
         dst = f"{dest['ssh']}:{dest_path.rstrip('/') + '/' if is_dir else dest_path}"
         remote(source, f"rsync {opts} {quote(src)} {quote(dst)}", dry_run=args.dry_run)
+
+
+def add_env_check_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--check-env", action="store_true", help="compare remote .env keys with .env.example")
+    parser.add_argument("--strict-env", action="store_true", help="fail when remote .env is missing keys")
+    parser.add_argument("--env-example", default=".env.example", help="path to local env example")
+
+
+def add_prewarm_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--base-url", help="public base URL override")
+    parser.add_argument("--limit", type=int, default=120, help="number of image URLs to prewarm")
+    parser.add_argument("--workers", type=int, default=8, help="parallel prewarm workers")
 
 
 def main() -> int:
@@ -595,6 +723,7 @@ def main() -> int:
     deploy_parser.add_argument("--skip-public", action="store_true", help="skip local public URL checks")
     deploy_parser.add_argument("--verify-attempts", type=int, default=90, help="verification retry attempts")
     deploy_parser.add_argument("--verify-delay", type=float, default=2.0, help="seconds between verification attempts")
+    add_env_check_args(deploy_parser)
 
     check_parser = sub.add_parser("check", help="run target verification only")
     check_parser.add_argument("targets", nargs="+", help="target name(s), or all")
@@ -603,6 +732,11 @@ def main() -> int:
     check_parser.add_argument("--verify-delay", type=float, default=2.0, help="seconds between verification attempts")
     check_parser.set_defaults(no_verify=False)
 
+    env_parser = sub.add_parser("check-env", help="compare remote .env keys with .env.example")
+    env_parser.add_argument("targets", nargs="+", help="target name(s), or all")
+    env_parser.add_argument("--strict-env", action="store_true", help="fail when remote .env is missing keys")
+    env_parser.add_argument("--env-example", default=".env.example", help="path to local env example")
+
     boot_parser = sub.add_parser("bootstrap-ubuntu", help="prepare a new Ubuntu server")
     boot_parser.add_argument("target", help="target name")
     boot_parser.add_argument("--start", action="store_true", help="start service after bootstrap")
@@ -610,6 +744,12 @@ def main() -> int:
     sync_parser = sub.add_parser("sync-data", help="sync configured runtime data from one target to another")
     sync_parser.add_argument("source", help="source target")
     sync_parser.add_argument("dest", help="destination target")
+    sync_parser.add_argument("--prewarm", action="store_true", help="prewarm destination image proxy cache after sync")
+    add_prewarm_args(sync_parser)
+
+    prewarm_parser = sub.add_parser("prewarm-image-cache", help="prewarm timeline image proxy cache")
+    prewarm_parser.add_argument("targets", nargs="+", help="target name(s), or all")
+    add_prewarm_args(prewarm_parser)
 
     args = parser.parse_args()
     targets = load_targets(args.config)
@@ -629,6 +769,11 @@ def main() -> int:
             verify_target(targets[name], args)
         return 0
 
+    if args.command == "check-env":
+        for name in target_names(args.targets, targets):
+            check_env_one(name, targets[name], args)
+        return 0
+
     if args.command == "bootstrap-ubuntu":
         if args.target not in targets:
             raise SystemExit(f"Unknown target: {args.target}")
@@ -641,6 +786,13 @@ def main() -> int:
         if args.dest not in targets:
             raise SystemExit(f"Unknown destination target: {args.dest}")
         sync_data(targets[args.source], targets[args.dest], args)
+        if args.prewarm:
+            prewarm_image_cache_one(args.dest, targets[args.dest], args)
+        return 0
+
+    if args.command == "prewarm-image-cache":
+        for name in target_names(args.targets, targets):
+            prewarm_image_cache_one(name, targets[name], args)
         return 0
 
     return 2

@@ -26,7 +26,7 @@ git push origin <branch>
 
 - 查看当前 `git status --short`，识别运行时文件和真实冲突。
 - 执行 `git pull`。
-- 如果本次新增或修改环境变量，先检查目标服务器 `.env` 是否已按 `.env.example` 补齐；缺少新增的非敏感生产项时，先增量补齐或提醒用户补齐，再让配置生效。不要输出真实密码。
+- 如果本次新增或修改环境变量，先检查目标服务器 `.env` 是否已按 `.env.example` 补齐；本项目可用 `python3 deploy/deploy.py check-env all` 只比较键名。缺少新增的非敏感生产项时，先增量补齐或提醒用户补齐，再让配置生效。不要输出真实密码。
 - 按本次变更范围判断是否需要重启应用，不要把重启作为所有部署的固定动作。
 - 如果 Nginx 配置变更，复制对应配置、运行 `nginx -t`、reload。
 
@@ -46,6 +46,12 @@ git push origin <branch>
 
 ```bash
 python3 deploy/deploy.py deploy all --no-restart
+```
+
+Nginx 配置变更可用：
+
+```bash
+python3 deploy/deploy.py deploy all --nginx --no-restart
 ```
 
 ## 4. 验证

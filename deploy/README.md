@@ -50,6 +50,19 @@ python3 deploy/deploy.py deploy all
 python3 deploy/deploy.py deploy all --no-restart
 ```
 
+Nginx 变更只需要同步配置并 reload，不需要重启 Python 服务：
+
+```bash
+python3 deploy/deploy.py deploy all --nginx --no-restart
+```
+
+环境变量变更后先检查远端 `.env` 键名；数据更新可走同步工具：
+
+```bash
+python3 deploy/deploy.py check-env all
+python3 deploy/deploy.py sync-data tencent aliyun --prewarm
+```
+
 完整的首次部署/迁移步骤仍请参照 **[deploy/TODO.md](TODO.md)**，按顺序执行。
 
 主要流程：

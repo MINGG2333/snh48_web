@@ -11,9 +11,15 @@
       "restart": "systemctl restart snh48-huawei",
       "status": "systemctl is-active --quiet snh48-huawei",
       "local_url": "http://127.0.0.1:8000/timeline",
+      "public_base_url": "https://your-domain.example",
       "public_urls": [
+        "https://your-domain.example/",
         "https://your-domain.example/timeline",
-        "https://your-domain.example/api/qa/status"
+        "https://your-domain.example/static/js/main.js",
+        "https://your-domain.example/static/js/timeline.js",
+        "https://your-domain.example/api/timeline/schedule",
+        "https://your-domain.example/api/qa/status",
+        "https://your-domain.example/image-proxy/health"
       ],
       "nginx": {
         "mode": "generated",
@@ -25,6 +31,8 @@
         "ssl_certificate": "/etc/letsencrypt/live/your-domain.example/fullchain.pem",
         "ssl_certificate_key": "/etc/letsencrypt/live/your-domain.example/privkey.pem",
         "image_proxy_upstream": "http://127.0.0.1:8899/",
+        "image_proxy_cache_keys_zone_size": "32m",
+        "image_proxy_cache_max_size": "3g",
         "access_log": "/var/log/nginx/snh48_huawei_access.log",
         "error_log": "/var/log/nginx/snh48_huawei_error.log"
       },

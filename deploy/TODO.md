@@ -118,10 +118,10 @@ cd /home/snh48_web
 # 创建 .env 文件，写入密码和 API Key
 cat > .env << 'EOF'
 # 网站密码：访问者必须输入此密码才能使用 AI 问答
-SITE_PASSWORD=xxxxxxxxx
+SITE_PASSWORD=your-site-password
 
 # DeepSeek API Key（问答系统必须）
-DEEPSEEK_API_KEY=你的真实DeepSeekKey
+DEEPSEEK_API_KEY=your-deepseek-api-key
 
 # JS/CSS 混淆压缩（生产环境必须开启）
 USE_OBFUSCATED_JS=true
@@ -520,7 +520,7 @@ python3 deploy/deploy.py deploy tencent --no-restart
 如果本次修改包含 `deploy/nginx.conf`，还需要同步 Nginx 配置并重载：
 
 ```bash
-python3 deploy/deploy.py deploy tencent --nginx
+python3 deploy/deploy.py deploy tencent --nginx --no-restart
 ```
 
 如果只改 Nginx 配置，不需要重启 Python 服务：
@@ -538,6 +538,12 @@ python3 deploy/deploy.py deploy aliyun
 
 ```bash
 python3 deploy/deploy.py deploy aliyun --no-restart
+```
+
+如果本次新增或修改了环境变量，先更新并推送 `.env.example`，再只检查远端 `.env` 的键名：
+
+```bash
+python3 deploy/deploy.py check-env all
 ```
 
 > ⚠️ 服务器无需 Node.js —— 混淆/压缩输出（js-dist/ css-dist/）已提交到 Git。
@@ -852,10 +858,10 @@ cd /home/snh48_web
 
 cat > .env << 'EOF'
 # 网站密码（AI 问答必须）
-SITE_PASSWORD=hxcjy
+SITE_PASSWORD=your-site-password
 
 # DeepSeek API Key（问答系统必须）
-DEEPSEEK_API_KEY=你的真实DeepSeekKey
+DEEPSEEK_API_KEY=your-deepseek-api-key
 
 # 网站标题
 SITE_TITLE=心上珍藏集
@@ -875,12 +881,12 @@ EOF
 chmod 600 .env
 ```
 
-### 10. 关闭开发模式 reload
+### 10. 确认开发模式 reload 已关闭
 
-> ⚠️ `uvicorn.run(reload=True)` 会导致 systemd 退出码 209 无法运行。
+> ⚠️ `uvicorn.run(reload=True)` 会导致 systemd 退出码 209 无法运行。当前仓库代码已设置为 `reload=False`，不要在服务器上直接 `sed` 修改 tracked 文件，否则会造成远端 Git dirty。
 
 ```bash
-sed -i 's/reload=True/reload=False/' /home/snh48_web/website/main.py
+grep -n "reload=False" /home/snh48_web/website/main.py
 ```
 
 ### 11. 配置 systemd 服务
@@ -1007,7 +1013,7 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 | ICP 备案 | ✅ 需要（已通过） | ❌ 不需要 |
 | 公安备案 | ✅ 需要（已通过） | ❌ 不需要 |
 | 图片代理 | 腾讯云内网 `10.0.0.6:8899` | 本地 `127.0.0.1:8899`（独立运行） |
-| uvicorn reload | `reload=True`（开发模式） | `reload=False`（生产模式） |
+| uvicorn reload | 仓库代码统一 `reload=False` | 仓库代码统一 `reload=False` |
 | service 名称 | `snh48` | `snh48-aliyun` |
 | nginx 配置 | `deploy/nginx.conf` | `deploy/nginx-aliyun.conf` |
 
@@ -1031,7 +1037,14 @@ python3 deploy/deploy.py deploy tencent
 
 ### 数据文件同步
 
-行程数据文件更新后需要手动同步。在**腾讯云服务器**（snh48-fan-hub 所在机器）上执行以下 rsync 命令同步到阿里云：
+行程、回放汇总或直播封面数据更新后需要同步到阿里云。推荐在本地通过部署工具触发腾讯云到阿里云的 rsync：
+
+```bash
+python3 deploy/deploy.py sync-data tencent aliyun
+
+# 如需同步后预热图片代理缓存：
+python3 deploy/deploy.py sync-data tencent aliyun --prewarm
+```
 
 #### 需要同步的数据
 
@@ -1045,11 +1058,14 @@ python3 deploy/deploy.py deploy tencent
 
 #### 自动同步（推荐）
 
-已配置 ssh-key 免密登录，一键脚本：
+已配置 ssh-key 免密登录时，也可在**腾讯云服务器**（snh48-fan-hub 所在机器）上执行兼容脚本：
 
 ```bash
 # 手动执行
 bash deploy/sync-to-aliyun.sh
+
+# 手动执行并预热阿里云图片缓存
+PREWARM_IMAGE_PROXY=1 bash deploy/sync-to-aliyun.sh
 
 # 添加定时任务（每10分钟自动同步）
 crontab -e
@@ -1061,13 +1077,13 @@ crontab -e
 
 ```bash
 # 1. schedule.csv
-scp /home/snh48-fan-hub/schedule_record/schedule.csv root@8.210.188.184:/home/snh48-fan-hub/schedule_record/schedule.csv
+rsync -az --partial /home/snh48-fan-hub/schedule_record/schedule.csv root@8.210.188.184:/home/snh48-fan-hub/schedule_record/schedule.csv
 
 # 2. live_push_replays（仅陈嘉仪数据）
-rsync -az --delete /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
+rsync -az --delete --partial /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
 
 # 3. live_covers（直播封面原图）
-rsync -az --delete /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
+rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
 ```
 
 > 同步后无需重启服务。

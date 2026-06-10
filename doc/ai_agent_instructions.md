@@ -74,6 +74,9 @@
 | **同步代码到阿里云** | 推荐 `python3 deploy/deploy.py deploy aliyun` |
 | **同步代码到腾讯云** | 推荐 `python3 deploy/deploy.py deploy tencent` |
 | **同步但不重启** | 文档、Codex 规则、部署说明、静态资源或模板更新用 `python3 deploy/deploy.py deploy all --no-restart` |
+| **同步 Nginx 配置** | `python3 deploy/deploy.py deploy all --nginx --no-restart`，会先运行远端 `nginx -t` |
+| **检查远端 .env 键** | `python3 deploy/deploy.py check-env all`，只输出键名不输出真实值 |
+| **同步时光轴数据** | `python3 deploy/deploy.py sync-data tencent aliyun --prewarm` |
 | **重启服务** | Python 代码、依赖、`.env` 或服务入口变更才需要；普通 `deploy` 会自动处理 |
 
 ### 3. 配置修改（.env 文件）
@@ -194,7 +197,7 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | **读取客户端 IP** | 必须使用 `website.rate_limiter.get_client_ip()`，不要直接信任客户端传入的 `X-Forwarded-For`；多层反代只把实际代理 IP 加到 `TRUSTED_PROXY_PEERS` |
 | **新增动态 HTML** | 优先使用 DOM API；如使用 `innerHTML`，所有后端/CSV/第三方/用户数据必须先转义 |
 | **新增外部资源** | 同步更新 `deploy/nginx.conf` 和 `deploy/nginx-aliyun.conf` 的 CSP，并运行 `nginx -t` |
-| **修改 Nginx** | 说明优缺点并确认后执行；部署后检查首页、`/static/`、`/image-proxy/` 是否都有安全头 |
+| **修改 Nginx** | 说明优缺点并确认后执行；用 `deploy all --nginx --no-restart`，部署后检查首页、`/static/`、`/image-proxy/` 是否都有安全头 |
 | **生产部署** | `HOST=127.0.0.1`、`SECURE_COOKIES=true`，云安全组不得公网放行 `8000` |
 
 ### 前端页面

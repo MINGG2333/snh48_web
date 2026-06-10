@@ -43,10 +43,18 @@
 数据同步脚本：
 
 ```bash
+python3 deploy/deploy.py sync-data tencent aliyun
 bash deploy/sync-to-aliyun.sh
 ```
 
-该脚本应在腾讯云网站工程 `/home/snh48_web` 上执行，把必要数据从腾讯云同步到阿里云。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。两者都是把必要数据从腾讯云同步到阿里云。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+
+数据同步后如需预热图片代理缓存：
+
+```bash
+python3 deploy/deploy.py sync-data tencent aliyun --prewarm
+python3 deploy/deploy.py prewarm-image-cache aliyun
+```
 
 ## 本地验证命令
 
@@ -121,7 +129,7 @@ python3 deploy/deploy.py deploy tencent
 腾讯云 Nginx 变更：
 
 ```bash
-python3 deploy/deploy.py deploy tencent --nginx
+python3 deploy/deploy.py deploy tencent --nginx --no-restart
 ```
 
 阿里云：
@@ -133,7 +141,7 @@ python3 deploy/deploy.py deploy aliyun
 阿里云 Nginx 变更：
 
 ```bash
-python3 deploy/deploy.py deploy aliyun --nginx
+python3 deploy/deploy.py deploy aliyun --nginx --no-restart
 ```
 
 ## 生产 `.env` 安全基线
@@ -148,6 +156,13 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1
 ```
 
 如需新增或修改 `.env` 项，先更新根目录 `.env.example`，再提醒用户同步服务器真实 `.env`。
+
+部署前可只检查远端 `.env` 键名，不输出真实值：
+
+```bash
+python3 deploy/deploy.py check-env all
+python3 deploy/deploy.py deploy all --check-env
+```
 
 ## 线上烟测命令
 

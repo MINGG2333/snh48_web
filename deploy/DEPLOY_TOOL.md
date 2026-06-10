@@ -13,7 +13,9 @@
 | 将最新代码部署到已上线服务器 | 已支持 | `deploy tencent`、`deploy aliyun`、`deploy all` 会执行远端 Git 更新、服务重启和基础烟测 |
 | 无重启同步 | 已支持 | 加 `--no-restart` 后只做远端 Git 更新和验证，适合文档、Codex 规则、已构建静态资源等更新 |
 | 同步 Nginx 配置 | 已支持 | 部署时加 `--nginx`，会复制或生成 Nginx 配置，先 `nginx -t`，再 reload |
+| 检查远端 `.env` 键 | 已支持 | `check-env` 只比较键名，不输出真实值；可在环境变量变更后使用 |
 | 同步运行数据 | 部分支持 | `sync-data` 目前面向时光轴数据，按 target 中配置的路径同步，不覆盖 `.env`、证书和用户运行数据 |
+| 预热图片代理缓存 | 已支持 | `prewarm-image-cache` 或 `sync-data --prewarm` 会访问最新图片 URL，降低首次打开失败率 |
 | 全新 Ubuntu 服务器初始化 | 半自动支持 | `bootstrap-ubuntu` 会安装基础依赖、clone 仓库、创建 venv 和 systemd，但不会处理云安全组、DNS、证书、真实 `.env` 和完整数据迁移 |
 
 因此，“已部署服务器的一键代码更新”是当前成熟路径；“全新服务器一键上线”目前不是完全无人值守，需要人工完成云资源、证书、密钥和数据确认。
@@ -55,6 +57,13 @@ python3 deploy/deploy.py deploy aliyun --nginx
 
 ```bash
 python3 deploy/deploy.py deploy all --nginx --no-restart
+```
+
+如果本次新增或修改了环境变量，先推送 `.env.example`，再检查远端 `.env` 键是否需要补齐：
+
+```bash
+python3 deploy/deploy.py check-env all
+python3 deploy/deploy.py deploy all --check-env
 ```
 
 ## 是否需要重启
@@ -129,13 +138,32 @@ python3 deploy/deploy.py --config deploy/targets.local.json deploy huawei --ngin
 
 ## 运行数据同步
 
-从腾讯云同步工具已配置的时光轴数据到另一个目标：
+从腾讯云同步工具已配置的时光轴数据到阿里云：
+
+```bash
+python3 deploy/deploy.py sync-data tencent aliyun
+```
+
+同步后预热阿里云图片代理缓存：
+
+```bash
+python3 deploy/deploy.py sync-data tencent aliyun --prewarm
+```
+
+从腾讯云同步工具已配置的时光轴数据到新增目标：
 
 ```bash
 python3 deploy/deploy.py --config deploy/targets.local.json sync-data tencent huawei
 ```
 
 这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。腾讯云到阿里云已有 `deploy/sync-to-aliyun.sh`，新服务器需要先配置对应 SSH key。
+
+只预热目标站点图片代理缓存：
+
+```bash
+python3 deploy/deploy.py prewarm-image-cache aliyun
+python3 deploy/deploy.py prewarm-image-cache all --limit 120 --workers 8
+```
 
 ## 边界
 
