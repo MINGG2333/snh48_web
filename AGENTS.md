@@ -25,7 +25,7 @@
 ## Project Rules
 
 - 默认通过 GitHub 同步服务器：本地提交推送后，服务器执行 `git pull`。不要用 `rsync` 覆盖代码，除非用户明确要求临时直传。
-- `.env` 不提交真实值。需要改服务器 `.env` 时，先更新 `.env.example`，再只在服务器上补齐必要项，且不要输出密码明文。
+- `.env` 不提交真实值。新增或修改环境变量时，必须先更新 `.env.example`；在让配置生效前，必须明确提醒用户按 `.env.example` 检查并修改服务器 `.env`。部署时只在服务器上补齐必要项，且不要输出密码明文。
 - 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs`，并提交 `website/static/js-dist/`、`website/static/css-dist/`。
 - 修改 Nginx 配置时必须运行 `nginx -t`。部署验收按本次任务目标选择，不把专项检查固化成所有任务的通用标准。
 - 网站运行依赖 `/home/snh48-fan-hub` 的行程、回放、直播封面和图片代理数据；修改 `/timeline`、回放、图片代理或相关环境变量前，先读本项目 profile 的数据工程段落和 `snh48-fan-hub/schedule_record/网站开发对接说明.md`。

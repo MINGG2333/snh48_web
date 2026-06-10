@@ -36,7 +36,7 @@
 ## 4. 实施规则
 
 - 优先按现有架构和 helper 修改，避免大重构。
-- `.env` 新变量先写入 `.env.example` 和文档。
+- `.env` 新变量先写入 `.env.example` 和文档；在让配置生效前，明确提醒用户按 `.env.example` 检查服务器 `.env`。
 - Nginx 变更同步维护所有环境配置。
 - 前端 JS/CSS 源码改动后重建 dist。
 - 安全措施的取舍必须写入 `doc/security/security_baseline.md` 或对应安全文档。
