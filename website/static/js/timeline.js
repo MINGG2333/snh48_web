@@ -590,6 +590,11 @@ document.addEventListener('DOMContentLoaded', () => {
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
+  function isMobileBrowser() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
   function buildQueryUrl(baseUrl, params) {
     const query = new URLSearchParams(params);
     return `${baseUrl}?${query.toString()}`;
@@ -626,10 +631,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!place) return '';
 
     const amapAppUrl = buildAmapAppUrl(place);
+    const amapWebSource = isMobileBrowser() ? 'xinshangzhenzangji' : getMapSourceId();
     const amapWebUrl = buildQueryUrl('https://uri.amap.com/search', {
       keyword: place,
       view: 'map',
-      src: getMapSourceId(),
+      src: amapWebSource,
       callnative: '0',
     });
 
