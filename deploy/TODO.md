@@ -5,7 +5,7 @@
 
 ## 当前部署入口
 
-- `deploy/deploy.py`：当前推荐的多服务器部署工具，用于腾讯云、阿里云和新增 Ubuntu 服务器的代码同步、服务重启、可选 Nginx 同步和烟测。说明见 `deploy/DEPLOY_TOOL.md`。
+- `deploy/deploy.py`：当前推荐的多服务器部署工具，用于腾讯云、阿里云和新增 Ubuntu 服务器的代码同步、可选服务重启、可选 Nginx 同步和烟测。说明见 `deploy/DEPLOY_TOOL.md`。
 - `deploy/deploy.sh`：旧版 CentOS/OpenCloudOS 初始化脚本，只保留作历史兼容。它不是日常部署入口，也不能完成完整迁移。
 - `deploy/sync-to-aliyun.sh`：只同步腾讯云到阿里云的时光轴运行数据，不部署代码。
 
@@ -505,10 +505,22 @@ cd /mnt/zhitainew/snh48_web/transcript_analyze && git add . && git commit -m "xx
 python3 deploy/deploy.py deploy tencent
 ```
 
+仅文档、Codex 规则、部署说明、静态资源或模板 HTML 更新，通常不需要重启 Python 服务：
+
+```bash
+python3 deploy/deploy.py deploy tencent --no-restart
+```
+
 如果本次修改包含 `deploy/nginx.conf`，还需要同步 Nginx 配置并重载：
 
 ```bash
 python3 deploy/deploy.py deploy tencent --nginx
+```
+
+如果只改 Nginx 配置，不需要重启 Python 服务：
+
+```bash
+python3 deploy/deploy.py deploy tencent --nginx --no-restart
 ```
 
 ### 部署到阿里云（cjy.我爱你）
@@ -516,8 +528,14 @@ python3 deploy/deploy.py deploy tencent --nginx
 python3 deploy/deploy.py deploy aliyun
 ```
 
+仅文档、Codex 规则、部署说明、静态资源或模板 HTML 更新，通常不需要重启 Python 服务：
+
+```bash
+python3 deploy/deploy.py deploy aliyun --no-restart
+```
+
 > ⚠️ 服务器无需 Node.js —— 混淆/压缩输出（js-dist/ css-dist/）已提交到 Git。
-> 仅 `.py` 修改需要重启；`.html`/`.js`/`.css` 刷新浏览器即可。
+> Python 代码、依赖、`.env` 或服务入口变更需要重启；`.html`/`.js`/`.css`、图片、文档和 Codex 规则通常只需 `git pull` 后刷新或验证目标 URL。
 
 ---
 

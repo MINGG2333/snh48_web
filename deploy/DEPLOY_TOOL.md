@@ -1,6 +1,6 @@
 # 多服务器部署工具
 
-`deploy/deploy.py` 是当前推荐的部署入口。它处理代码同步、服务重启、可选 Nginx 配置同步、基础烟测，以及新 Ubuntu 服务器的初始引导。
+`deploy/deploy.py` 是当前推荐的部署入口。它处理代码同步、可选服务重启、可选 Nginx 配置同步、基础烟测，以及新 Ubuntu 服务器的初始引导。
 
 旧的 `deploy/deploy.sh` 只保留为 CentOS/OpenCloudOS 初始化脚本，默认不会执行。日常部署不要使用它。
 
@@ -11,6 +11,7 @@
 | 能力 | 当前状态 | 说明 |
 |---|---|---|
 | 将最新代码部署到已上线服务器 | 已支持 | `deploy tencent`、`deploy aliyun`、`deploy all` 会执行远端 Git 更新、服务重启和基础烟测 |
+| 无重启同步 | 已支持 | 加 `--no-restart` 后只做远端 Git 更新和验证，适合文档、Codex 规则、已构建静态资源等更新 |
 | 同步 Nginx 配置 | 已支持 | 部署时加 `--nginx`，会复制或生成 Nginx 配置，先 `nginx -t`，再 reload |
 | 同步运行数据 | 部分支持 | `sync-data` 目前面向时光轴数据，按 target 中配置的路径同步，不覆盖 `.env`、证书和用户运行数据 |
 | 全新 Ubuntu 服务器初始化 | 半自动支持 | `bootstrap-ubuntu` 会安装基础依赖、clone 仓库、创建 venv 和 systemd，但不会处理云安全组、DNS、证书、真实 `.env` 和完整数据迁移 |
@@ -37,12 +38,35 @@ python3 deploy/deploy.py deploy aliyun
 python3 deploy/deploy.py deploy all
 ```
 
+仅同步不重启应用：
+
+```bash
+python3 deploy/deploy.py deploy all --no-restart
+```
+
 如果本次修改包含 Nginx 配置：
 
 ```bash
 python3 deploy/deploy.py deploy tencent --nginx
 python3 deploy/deploy.py deploy aliyun --nginx
 ```
+
+如果只改 Nginx 配置，不需要重启 Python 服务：
+
+```bash
+python3 deploy/deploy.py deploy all --nginx --no-restart
+```
+
+## 是否需要重启
+
+| 变更范围 | 推荐动作 |
+|---|---|
+| Python 代码、依赖、`.env`、服务入口 | 普通 `deploy`，让工具重启服务 |
+| 仅文档、Codex 文件、部署说明 | `deploy --no-restart` |
+| 仅静态 JS/CSS 产物、图片 | `deploy --no-restart`，验证对应静态 URL |
+| 仅模板 HTML | 通常 `deploy --no-restart`，验证目标页面；若同时改 Python 上下文或路由则重启 |
+| Nginx 配置、证书、CSP | `deploy --nginx --no-restart`，只 reload Nginx |
+| 不确定是否启动时加载的数据或配置 | 保守重启，并记录原因 |
 
 只验证不部署：
 

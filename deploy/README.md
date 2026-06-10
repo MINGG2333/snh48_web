@@ -44,6 +44,12 @@ python3 deploy/deploy.py deploy aliyun
 python3 deploy/deploy.py deploy all
 ```
 
+仅更新文档、Codex 规则、部署说明、静态资源或模板时，通常不需要重启 Python 服务：
+
+```bash
+python3 deploy/deploy.py deploy all --no-restart
+```
+
 完整的首次部署/迁移步骤仍请参照 **[deploy/TODO.md](TODO.md)**，按顺序执行。
 
 主要流程：

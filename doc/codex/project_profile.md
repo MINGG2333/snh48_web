@@ -68,6 +68,23 @@ python3 deploy/deploy.py deploy aliyun
 python3 deploy/deploy.py deploy all
 ```
 
+仅文档、Codex 规则、部署说明、已构建静态资源等不需要 Python 服务重启的更新：
+
+```bash
+python3 deploy/deploy.py deploy tencent --no-restart
+python3 deploy/deploy.py deploy aliyun --no-restart
+python3 deploy/deploy.py deploy all --no-restart
+```
+
+是否重启按本次变更范围判断：
+
+| 变更范围 | 推荐命令 |
+|---|---|
+| Python 代码、依赖、`.env`、服务入口 | `python3 deploy/deploy.py deploy all` |
+| 仅文档、Codex 文件、部署说明 | `python3 deploy/deploy.py deploy all --no-restart` |
+| 仅静态 JS/CSS 产物、图片、模板 HTML | `python3 deploy/deploy.py deploy all --no-restart`，并验证目标页面 |
+| Nginx 配置、证书、CSP | `python3 deploy/deploy.py deploy all --nginx --no-restart`，只 reload Nginx |
+
 腾讯云：
 
 ```bash

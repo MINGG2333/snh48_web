@@ -6,6 +6,9 @@ Daily code deployment:
   python3 deploy/deploy.py deploy tencent
   python3 deploy/deploy.py deploy tencent aliyun
 
+Docs/static-only deployment:
+  python3 deploy/deploy.py deploy all --no-restart
+
 New Ubuntu host bootstrap:
   cp deploy/targets.example.json deploy/targets.local.json
   # edit deploy/targets.local.json
@@ -412,10 +415,13 @@ def deploy_one(name: str, target: Dict[str, Any], args: argparse.Namespace) -> N
     remote(target, git_update_command(target), dry_run=args.dry_run)
     if args.nginx:
         remote(target, nginx_command(target), dry_run=args.dry_run)
-    restart = target.get("restart")
-    if not restart:
-        raise SystemExit(f"Target {name} is missing restart command")
-    remote(target, str(restart), dry_run=args.dry_run)
+    if args.no_restart:
+        print("Skipping application restart (--no-restart).")
+    else:
+        restart = target.get("restart")
+        if not restart:
+            raise SystemExit(f"Target {name} is missing restart command")
+        remote(target, str(restart), dry_run=args.dry_run)
     if not args.no_verify:
         verify_target(target, args)
 
@@ -542,9 +548,10 @@ def main() -> int:
 
     sub.add_parser("list", help="list configured targets")
 
-    deploy_parser = sub.add_parser("deploy", help="git pull, restart, and verify target(s)")
+    deploy_parser = sub.add_parser("deploy", help="git pull, optionally restart, and verify target(s)")
     deploy_parser.add_argument("targets", nargs="+", help="target name(s), or all")
     deploy_parser.add_argument("--nginx", action="store_true", help="also copy nginx config and reload nginx")
+    deploy_parser.add_argument("--no-restart", action="store_true", help="skip application restart after git pull")
     deploy_parser.add_argument("--no-verify", action="store_true", help="skip verification")
     deploy_parser.add_argument("--skip-public", action="store_true", help="skip local public URL checks")
     deploy_parser.add_argument("--verify-attempts", type=int, default=90, help="verification retry attempts")

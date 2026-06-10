@@ -71,10 +71,10 @@
 | 操作 | 说明 |
 |------|------|
 | **Git 提交与推送** | `git add -A && git commit -m "..." && git push` |
-| **同步代码到阿里云** | 服务器上 `cd /home/snh48_web && git pull` |
-| **同步代码到腾讯云** | 服务器上 `cd /home/snh48_web && git pull` |
-| **重启阿里云服务** | `systemctl restart snh48-aliyun` |
-| **重启腾讯云服务** | screen 会话重启 |
+| **同步代码到阿里云** | 推荐 `python3 deploy/deploy.py deploy aliyun` |
+| **同步代码到腾讯云** | 推荐 `python3 deploy/deploy.py deploy tencent` |
+| **同步但不重启** | 文档、Codex 规则、部署说明、静态资源或模板更新用 `python3 deploy/deploy.py deploy all --no-restart` |
+| **重启服务** | Python 代码、依赖、`.env` 或服务入口变更才需要；普通 `deploy` 会自动处理 |
 
 ### 3. 配置修改（.env 文件）
 
@@ -159,10 +159,10 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 
 ```
 本地开发 → git commit → git push
-  → 阿里云: cd /home/snh48_web && git pull
-  → 腾讯云: cd /home/snh48_web && git pull
-  → 修改 .py 文件需要重启服务
-  → 修改 .html 文件不需要重启
+  → 需要重启: python3 deploy/deploy.py deploy all
+  → 不需要重启: python3 deploy/deploy.py deploy all --no-restart
+  → Python 代码、依赖、.env、服务入口需要重启
+  → 文档、Codex 规则、部署说明、静态资源、模板 HTML 通常不需要重启
   → 修改源 .js/.css 文件必须先运行 node script/obfuscate_js.cjs，并提交 js-dist/css-dist
 ```
 
