@@ -595,16 +595,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${baseUrl}?${query.toString()}`;
   }
 
+  function getMapSourceName() {
+    const logo = document.querySelector('.nav-logo');
+    const logoText = logo ? logo.textContent.replace(/\s+/g, ' ').trim() : '';
+    return logoText || '心上珍藏集';
+  }
+
+  function getMapSourceId() {
+    return window.location.hostname || 'cjy.plus';
+  }
+
   function buildAmapAppUrl(place) {
+    const sourceName = getMapSourceName();
     if (isAppleTouchDevice()) {
       return buildQueryUrl('iosamap://poi', {
-        sourceApplication: 'snh48_web',
+        sourceApplication: sourceName,
         name: place,
         dev: '0',
       });
     }
     return buildQueryUrl('androidamap://poi', {
-      sourceApplication: 'snh48_web',
+      sourceApplication: sourceName,
       keywords: place,
       dev: '0',
     });
@@ -615,24 +626,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!place) return '';
 
     const amapAppUrl = buildAmapAppUrl(place);
-    const amapWebUrl = buildQueryUrl('https://uri.amap.com/search', {
-      keyword: place,
-      view: 'map',
-      src: 'snh48_web',
-      callnative: '0',
+    const amapWebUrl = buildQueryUrl('https://ditu.amap.com/search', {
+      query: place,
     });
 
+    const sourceId = getMapSourceId();
     const baiduAppBase = isAppleTouchDevice()
       ? 'baidumap://map/place/search'
       : 'bdapp://map/place/search';
     const baiduSource = isAppleTouchDevice()
-      ? 'ios.cjy.snh48_web'
-      : 'andr.cjy.snh48_web';
+      ? `ios.${sourceId}`
+      : `andr.${sourceId}`;
     const baiduAppUrl = buildQueryUrl(baiduAppBase, {
       query: place,
       src: baiduSource,
     });
-    const baiduWebUrl = `https://map.baidu.com/search/${encodeURIComponent(place)}`;
+    const baiduWebUrl = buildQueryUrl('https://map.baidu.com/search/', {
+      querytype: 's',
+      wd: place,
+    });
 
     const safePlace = escapeHtml(place);
     return `
