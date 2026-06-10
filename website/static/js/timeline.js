@@ -851,10 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const mapChoice = e.target.closest('.timeline-map-choice[data-map-app-url]');
-    if (!mapChoice) {
-      if (!e.target.closest('.timeline-map-choice-popover')) closeMapChoicePopovers();
-      return;
-    }
+    if (!mapChoice) return;
     const appUrl = mapChoice.dataset.mapAppUrl;
     const webUrl = mapChoice.dataset.mapWebUrl;
     if (!appUrl || !webUrl) return;
