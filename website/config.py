@@ -143,6 +143,20 @@ LIVE_PUSH_REPLAY_ROOT = os.getenv(
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "live_push_replays"),
 )
 
+# 远程弹幕兜底读取。默认只硬拦截危险地址，域名白名单先用于灰度观察；
+# 确认历史弹幕源都覆盖后再开启 DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=true。
+DANMU_REMOTE_TIMEOUT_SECONDS = int(os.getenv("DANMU_REMOTE_TIMEOUT_SECONDS", "15"))
+DANMU_REMOTE_MAX_BYTES = int(os.getenv("DANMU_REMOTE_MAX_BYTES", str(20 * 1024 * 1024)))
+DANMU_REMOTE_ALLOWED_HOSTS = tuple(
+    item.strip().lower()
+    for item in os.getenv("DANMU_REMOTE_ALLOWED_HOSTS", "").split(",")
+    if item.strip()
+)
+DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST = os.getenv(
+    "DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST", "false"
+).lower() in ("1", "true", "yes")
+DANMU_REMOTE_CACHE_DIR = os.getenv("DANMU_REMOTE_CACHE_DIR", "")
+
 # ── Schedule CSV (行程表，由 schedule_monitor.py 生成) ──────────────────────
 # 服务器上：/home/snh48-fan-hub/schedule_record/schedule.csv
 SCHEDULE_CSV_PATH = os.getenv(

@@ -336,6 +336,8 @@ Nginx 配置说明：
 
 ```bash
 mkdir -p /etc/nginx/conf.d
+mkdir -p /var/cache/nginx/snh48_image_proxy
+if id nginx >/dev/null 2>&1; then chown -R nginx:nginx /var/cache/nginx/snh48_image_proxy; fi
 cp deploy/nginx.conf /etc/nginx/conf.d/snh48.conf
 nginx -t
 systemctl reload nginx
@@ -346,6 +348,10 @@ systemctl reload nginx
 curl -sS -D - -o /dev/null https://cjy.plus/
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
 curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
+
+# 可选：数据同步后预热最新微博图片缓存
+cd /home/snh48_web
+python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 120 --workers 8
 ```
 
 以上响应应包含 `Strict-Transport-Security`、`Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options` 和 `Referrer-Policy`。如果只首页有安全头、`/static/` 或 `/image-proxy/` 没有，说明 Nginx location 内的 `add_header` 继承规则没有处理完整。
@@ -932,12 +938,17 @@ curl -s http://127.0.0.1:8899/health
 
 ```bash
 cd /home/snh48_web && git pull
+mkdir -p /var/cache/nginx/snh48_image_proxy
+if id www-data >/dev/null 2>&1; then chown -R www-data:www-data /var/cache/nginx/snh48_image_proxy; fi
 cp deploy/nginx-aliyun.conf /etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf
 nginx -t && systemctl reload nginx
 
 # 验证代理是否通过 Nginx 生效
 curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 # 应返回 200
+
+# 可选：数据同步后预热最新微博图片缓存
+python3 script/prewarm_image_proxy.py --base-url https://cjy.xn--6qq986b3xl --limit 120 --workers 8
 ```
 
 ### 13. 同步时光轴数据（从腾讯云）

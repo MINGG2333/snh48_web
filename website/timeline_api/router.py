@@ -12,9 +12,13 @@ Summary CSV columns:
 from __future__ import annotations
 
 import csv
+import hashlib
+import ipaddress
+import socket
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 import re
 
@@ -128,13 +132,118 @@ def _read_text_file(path: Path) -> Optional[str]:
             return None
 
 
+def _danmu_url_cache_dir() -> Path:
+    if cfg.DANMU_REMOTE_CACHE_DIR:
+        return Path(cfg.DANMU_REMOTE_CACHE_DIR)
+    return Path(cfg.LIVE_PUSH_REPLAY_ROOT) / MEMBER_DIR / ".danmu_url_cache"
+
+
+def _danmu_url_cache_path(url: str) -> Path:
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    return _danmu_url_cache_dir() / f"{digest}.txt"
+
+
+def _read_danmu_url_cache(url: str) -> Optional[str]:
+    cache_path = _danmu_url_cache_path(url)
+    if not cache_path.exists():
+        return None
+    return _read_text_file(cache_path)
+
+
+def _write_danmu_url_cache(url: str, content: str) -> None:
+    if not content:
+        return
+    cache_path = _danmu_url_cache_path(url)
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        print(f"[timeline_api] Failed to write danmu URL cache: {exc}")
+
+
+def _host_matches_allowed(host: str, allowed: Tuple[str, ...]) -> bool:
+    host = host.lower().rstrip(".")
+    for item in allowed:
+        item = item.lower().rstrip(".")
+        if not item:
+            continue
+        if item.startswith(".") and host.endswith(item):
+            return True
+        if host == item or host.endswith(f".{item}"):
+            return True
+    return False
+
+
+def _is_public_ip(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return ip.is_global
+
+
+def _validate_remote_danmu_url(url: str) -> Tuple[bool, str]:
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https"):
+        return False, "unsupported scheme"
+
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return False, "missing host"
+    if host in ("localhost",) or host.endswith(".localhost"):
+        return False, "localhost is not allowed"
+
+    try:
+        port = parsed.port
+    except ValueError:
+        return False, "invalid port"
+    if port is not None and port not in (80, 443):
+        return False, "non-standard port is not allowed"
+
+    allowed_hosts = cfg.DANMU_REMOTE_ALLOWED_HOSTS
+    if allowed_hosts and not _host_matches_allowed(host, allowed_hosts):
+        message = f"host {host} is outside DANMU_REMOTE_ALLOWED_HOSTS"
+        if cfg.DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST:
+            return False, message
+        print(f"[timeline_api] Danmu URL allowlist warning: {message}")
+
+    try:
+        addr_infos = socket.getaddrinfo(host, port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        return False, f"DNS resolution failed: {exc}"
+
+    for addr_info in addr_infos:
+        address = addr_info[4][0]
+        if not _is_public_ip(address):
+            return False, f"non-public resolved address is not allowed: {address}"
+
+    return True, ""
+
+
 def _read_text_url(url: str) -> Optional[str]:
+    allowed, reason = _validate_remote_danmu_url(url)
+    if not allowed:
+        print(f"[timeline_api] Blocked remote danmu URL: {reason}")
+        return None
+
     try:
         request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urlopen(request, timeout=15) as response:
-            raw = response.read()
+        with urlopen(request, timeout=cfg.DANMU_REMOTE_TIMEOUT_SECONDS) as response:
+            chunks = []
+            total = 0
+            while True:
+                chunk = response.read(256 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > cfg.DANMU_REMOTE_MAX_BYTES:
+                    print(f"[timeline_api] Remote danmu response too large: {total} bytes")
+                    return None
+                chunks.append(chunk)
+            raw = b"".join(chunks)
             return raw.decode("utf-8-sig", errors="ignore")
-    except Exception:
+    except Exception as exc:
+        print(f"[timeline_api] Failed to read remote danmu URL: {exc}")
         return None
 
 
@@ -198,7 +307,13 @@ def _get_danmu_text(row: Dict[str, Any]) -> Optional[str]:
 
     danmu_url = (row.get("danmu_url") or "").strip()
     if danmu_url:
-        return _read_text_url(danmu_url)
+        cached_content = _read_danmu_url_cache(danmu_url)
+        if cached_content:
+            return cached_content
+        remote_content = _read_text_url(danmu_url)
+        if remote_content:
+            _write_danmu_url_cache(danmu_url, remote_content)
+            return remote_content
 
     return None
 
