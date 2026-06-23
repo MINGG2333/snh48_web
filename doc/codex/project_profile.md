@@ -38,6 +38,7 @@
 - `schedule_record/schedule.csv`
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
+- `room_record/陈嘉仪_161808449/gift_replies/`
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
 数据同步脚本：

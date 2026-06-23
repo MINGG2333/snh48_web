@@ -98,6 +98,11 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers",
                 "delete": True,
             },
+            {
+                "type": "dir",
+                "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies",
+                "delete": True,
+            },
         ],
         "deploy_by_default": True,
     },
@@ -652,6 +657,7 @@ mkdir -p /var/log/snh48
 mkdir -p /home/snh48-fan-hub/schedule_record
 mkdir -p /home/snh48-fan-hub/live_push_replays
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
+mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
 if [ ! -f .env ] && [ -f .env.example ]; then
   cp .env.example .env
   chmod 600 .env

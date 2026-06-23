@@ -966,6 +966,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.xn--6qq986b3xl --li
 | 📅 行程表 | `schedule_record/schedule.csv` | 188 KB | 时光轴日程 |
 | 🎬 直播汇总 | `live_push_replays/陈嘉仪_161808449/summary.csv` | 104 KB | 直播信息 |
 | 🖼️ 直播封面 | `room_record/陈嘉仪_161808449/live_covers/` | 96 MB | 122 张封面图 |
+| 🎁 礼物回复 | `room_record/陈嘉仪_161808449/gift_replies/` | 小型 CSV/JSON | 礼物回复页 |
 
 在**阿里云 SSH** 创建目录，**腾讯云 SSH** 执行 rsync：
 
@@ -977,6 +978,7 @@ mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449
 rsync -avz --progress /home/snh48-fan-hub/live_push_replays/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/
 rsync -avz --progress /home/snh48-fan-hub/schedule_record/ root@8.210.188.184:/home/snh48-fan-hub/schedule_record/
 rsync -avz --progress /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
+rsync -avz --progress /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/
 ```
 
 > **为什么部分直播封面能显示？** 直播封面优先使用本地文件（`cover_local_path` → `/live-covers/xxx.jpg`），少数没有本地路径的条目才 fallback 到 48.cn CDN。同步 `live_covers` 后所有封面都会正常显示。
@@ -1053,6 +1055,7 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 | `schedule.csv` | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 行程表，网站实时读取 |
 | `live_push_replays/` | `/home/snh48-fan-hub/live_push_replays/` | 同路径 | 直播回放汇总（含封面缩略图） |
 | `room_record/…/live_covers/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面图 |
+| `room_record/…/gift_replies/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复页数据 |
 
 > ⚠️ `schedule_record/images/`（约740MB）**不需要同步**，图片通过代理服务访问。
 
@@ -1070,7 +1073,7 @@ PREWARM_IMAGE_PROXY=1 bash deploy/sync-to-aliyun.sh
 # 添加定时任务（每10分钟自动同步）
 crontab -e
 # 加入以下行：
-*/10 * * * * /home/snh48_web/deploy/sync-to-aliyun.sh >> /var/log/snh48/sync-to-aliyun.log 2>&1
+*/10 * * * * bash /home/snh48_web/deploy/sync-to-aliyun.sh >> /var/log/snh48/sync-to-aliyun.log 2>&1
 ```
 
 #### 手动同步命令
@@ -1084,6 +1087,9 @@ rsync -az --delete --partial /home/snh48-fan-hub/live_push_replays/陈嘉仪_161
 
 # 3. live_covers（直播封面原图）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
+
+# 4. gift_replies（礼物回复页小数据）
+rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/
 ```
 
 > 同步后无需重启服务。
