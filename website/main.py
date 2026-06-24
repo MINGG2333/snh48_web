@@ -312,6 +312,22 @@ async def ob_page(request: Request):
     )
 
 
+@app.get("/gift-replies", response_class=HTMLResponse)
+async def gift_replies_page(request: Request):
+    """Admin page for gift reply status."""
+    return templates.TemplateResponse(
+        "gift_replies.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 # ── API Routes ─────────────────────────────────────────────────────────────
 
 
@@ -341,9 +357,11 @@ async def startup():
     print(f"✓ Interaction log session started: {session_dir}")
 
     try:
-        from website.qa_api.router import _get_qa_engine
-        _get_qa_engine()
-        print("✓ QA engine initialization attempted.")
+        from website.qa_api.router import warmup_qa_engine_async
+        if warmup_qa_engine_async():
+            print("✓ QA engine warmup scheduled in background.")
+        else:
+            print("✓ QA engine warmup already running or ready.")
     except Exception as e:
         print(f"! QA engine not available at startup: {e}")
         print("  You can still serve the frontend. Build the KB later via API.")
@@ -403,6 +421,9 @@ app.include_router(timeline_router)
 
 from website.ob_api.router import router as ob_router
 app.include_router(ob_router)
+
+from website.gift_replies_api import router as gift_replies_router
+app.include_router(gift_replies_router)
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

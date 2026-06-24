@@ -68,6 +68,10 @@ SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
 # 留空则观察页功能将被禁用
 OB_PASSWORD = os.getenv("OB_PASSWORD", "")
 
+# 礼物回复页管理密码（独立密码，环境变量 GIFT_REPLIES_PASSWORD）
+# 留空则礼物回复页 API 将被禁用
+GIFT_REPLIES_PASSWORD = os.getenv("GIFT_REPLIES_PASSWORD", "")
+
 # ── Rate Limiting (防滥用配置) ──────────────────────────────────────────────
 # 所有值均可通过 .env 文件或环境变量覆盖
 
@@ -141,6 +145,19 @@ TRUSTED_PROXY_PEERS = tuple(
 LIVE_PUSH_REPLAY_ROOT = os.getenv(
     "LIVE_PUSH_REPLAY_ROOT",
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "live_push_replays"),
+)
+
+# ── Gift Replies (口袋房间礼物回复状态) ─────────────────────────────────────
+# 由 snh48-fan-hub/scripts/live_monitor/gift_reply_exporter.py 生成
+GIFT_REPLIES_DIR = os.getenv(
+    "GIFT_REPLIES_DIR",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "gift_replies"
+    ),
 )
 
 # 远程弹幕兜底读取。默认只硬拦截危险地址，域名白名单先用于灰度观察；

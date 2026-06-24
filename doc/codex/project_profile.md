@@ -75,6 +75,22 @@ node script/obfuscate_js.cjs
 
 ## 功能维护备注
 
+### 礼物回复管理页
+
+入口和文档：
+
+- 页面入口：`/gift-replies`
+- API：`/api/gift-replies/data`、`/api/gift-replies/summary`
+- 数据源：`GIFT_REPLIES_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/`
+- 鉴权：独立环境变量 `GIFT_REPLIES_PASSWORD`，请求头 `X-Gift-Replies-Password`
+- 数据契约：`/home/snh48-fan-hub/doc/gift_reply_data_contract.md`
+
+维护边界：
+
+- 页面不进入公开导航，仅 URL 访问并要求密码。
+- 默认每页 `100` 条，页面按数据文件里的 `refresh_interval_seconds` 自动刷新，当前为 `60` 秒。
+- 后端只读取 `gifts.csv` 和 `summary.json` 派生小数据，不读取或同步完整 `messages.csv`、语音原文件、图片归档或敏感配置。
+
 ### 时光轴地图打开
 
 入口和文档：
@@ -154,6 +170,7 @@ HOST=127.0.0.1
 SECURE_COOKIES=true
 USE_OBFUSCATED_JS=true
 TRUSTED_PROXY_PEERS=127.0.0.1,::1
+GIFT_REPLIES_PASSWORD=独立礼物回复页密码
 ```
 
 如需新增或修改 `.env` 项，先更新根目录 `.env.example`，再提醒用户同步服务器真实 `.env`。
@@ -172,6 +189,7 @@ python3 deploy/deploy.py deploy all --check-env
 ```bash
 curl -sS -D - -o /dev/null https://cjy.plus/
 curl -sS -D - -o /dev/null https://cjy.plus/timeline
+curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
 curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
 curl -sS -D - -o /dev/null https://cjy.plus/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
@@ -184,6 +202,7 @@ curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 ```bash
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/timeline
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/qa/status
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/static/js/main.js

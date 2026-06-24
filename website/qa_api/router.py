@@ -47,6 +47,8 @@ router = APIRouter(prefix="/api/qa", tags=["知识库问答"])
 
 # ── In-memory QA engine (lazy-loaded) ─────────────────────────────────────
 _qa_engine: Optional[Any] = None
+_qa_engine_loading = False
+_qa_engine_lock = threading.Lock()
 _qa_status: Dict[str, Any] = {"ready": False, "message": "未初始化", "stats": {}}
 
 
@@ -56,47 +58,74 @@ def _get_qa_engine():
     if _qa_engine is not None:
         return _qa_engine
 
-    records_path = Path(cfg.RECORDS_PATH)
-    subtitle_root = Path(cfg.SUBTITLE_ROOT)
-    kb_dir = Path(cfg.KB_DIR)
+    with _qa_engine_lock:
+        if _qa_engine is not None:
+            return _qa_engine
 
-    # Check if data exists
-    if not records_path.exists():
-        _qa_status = {"ready": False, "message": f"记录文件不存在: {records_path}"}
-        return None
-    if not kb_dir.exists() or not (kb_dir / "segment_store.json").exists():
-        _qa_status = {
-            "ready": False,
-            "message": "知识库未构建，请先运行 `python run_kb_qa.py build`",
-        }
-        return None
+        records_path = Path(cfg.RECORDS_PATH)
+        subtitle_root = Path(cfg.SUBTITLE_ROOT)
+        kb_dir = Path(cfg.KB_DIR)
 
-    try:
-        from kb_qa.qa import VideoKnowledgeQA
-        from loguru import logger
+        # Check if data exists
+        if not records_path.exists():
+            _qa_status = {"ready": False, "message": f"记录文件不存在: {records_path}"}
+            return None
+        if not kb_dir.exists() or not (kb_dir / "segment_store.json").exists():
+            _qa_status = {
+                "ready": False,
+                "message": "知识库未构建，请先运行 `python run_kb_qa.py build`",
+            }
+            return None
 
-        _qa_engine = VideoKnowledgeQA(
-            records_path=records_path,
-            subtitle_root=subtitle_root,
-            kb_dir=kb_dir,
-            embedding_model=cfg.EMBEDDING_MODEL,
-            llm_model=cfg.LLM_MODEL,
-            api_base=cfg.LLM_API_BASE,
-            api_key=cfg.LLM_API_KEY,
-            logger=logger,
-        )
-        _qa_status = {
-            "ready": True,
-            "message": "知识库已加载",
-            "stats": {
-                "segment_count": len(_qa_engine.store.segments),
-                "kb_dir": str(kb_dir),
-            },
-        }
-        return _qa_engine
-    except Exception as e:
-        _qa_status = {"ready": False, "message": f"加载失败: {e}"}
-        return None
+        try:
+            from kb_qa.qa import VideoKnowledgeQA
+            from loguru import logger
+
+            _qa_engine = VideoKnowledgeQA(
+                records_path=records_path,
+                subtitle_root=subtitle_root,
+                kb_dir=kb_dir,
+                embedding_model=cfg.EMBEDDING_MODEL,
+                llm_model=cfg.LLM_MODEL,
+                api_base=cfg.LLM_API_BASE,
+                api_key=cfg.LLM_API_KEY,
+                logger=logger,
+            )
+            _qa_status = {
+                "ready": True,
+                "message": "知识库已加载",
+                "stats": {
+                    "segment_count": len(_qa_engine.store.segments),
+                    "kb_dir": str(kb_dir),
+                },
+            }
+            return _qa_engine
+        except Exception as e:
+            _qa_status = {"ready": False, "message": f"加载失败: {e}"}
+            return None
+
+
+def warmup_qa_engine_async() -> bool:
+    """Start QA engine warmup in a daemon thread without blocking app startup."""
+    global _qa_engine_loading, _qa_status
+    if _qa_engine is not None or _qa_engine_loading:
+        return False
+
+    with _qa_engine_lock:
+        if _qa_engine is not None or _qa_engine_loading:
+            return False
+        _qa_engine_loading = True
+        _qa_status = {"ready": False, "message": "知识库正在后台加载", "stats": {}}
+
+    def _worker() -> None:
+        global _qa_engine_loading
+        try:
+            _get_qa_engine()
+        finally:
+            _qa_engine_loading = False
+
+    threading.Thread(target=_worker, name="qa-engine-warmup", daemon=True).start()
+    return True
 
 
 # ── Question validation ────────────────────────────────────────────────────
@@ -218,8 +247,9 @@ _tasks: Dict[str, AsyncTask] = {}
 @router.get("/status")
 def get_status():
     """Check if the knowledge base is ready."""
-    _get_qa_engine()
-    return _qa_status
+    status_payload = dict(_qa_status)
+    status_payload["loading"] = _qa_engine_loading
+    return status_payload
 
 
 # ── QA Frontend Config Endpoint ─────────────────────────────────────────────

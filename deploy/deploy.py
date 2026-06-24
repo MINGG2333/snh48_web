@@ -73,6 +73,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "public_urls": [
             "https://cjy.plus/",
             "https://cjy.plus/timeline",
+            "https://cjy.plus/gift-replies",
             "https://cjy.plus/static/js/main.js",
             "https://cjy.plus/static/js/timeline.js",
             "https://cjy.plus/api/timeline/schedule",
@@ -120,6 +121,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "public_urls": [
             "https://cjy.xn--6qq986b3xl/",
             "https://cjy.xn--6qq986b3xl/timeline",
+            "https://cjy.xn--6qq986b3xl/gift-replies",
             "https://cjy.xn--6qq986b3xl/static/js/main.js",
             "https://cjy.xn--6qq986b3xl/static/js/timeline.js",
             "https://cjy.xn--6qq986b3xl/api/timeline/schedule",

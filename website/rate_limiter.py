@@ -507,11 +507,16 @@ def check_balance_limit(ip: str) -> None:
         )
 
 
-def check_ob_login_limit(ip: str) -> None:
-    """Rate-limit failed OB password attempts."""
+def check_admin_login_limit(ip: str, detail: str) -> None:
+    """Rate-limit failed admin password attempts using the shared OB limiter."""
     allowed, count = ob_login_limiter.check(ip)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="观察页密码尝试过于频繁，请稍后再试",
+            detail=detail,
         )
+
+
+def check_ob_login_limit(ip: str) -> None:
+    """Rate-limit failed OB password attempts."""
+    check_admin_login_limit(ip, "观察页密码尝试过于频繁，请稍后再试")

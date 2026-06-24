@@ -62,6 +62,7 @@
 | **修改时光轴页面** | `timeline.js`、`timeline.html`、`timeline_api/router.py` |
 | **修改回放页面** | `replay.html`（弹幕、全屏、控制条等） |
 | **修改观察页** | `ob.html`、`ob_api/router.py` |
+| **修改礼物回复页** | `gift_replies.html`、`gift_replies_api.py` |
 | **修改首页飘动文字** | `scroller_api/router.py`、`scroller_admin.html` |
 | **修改 QA 页面** | `qa.html`、`qa.js`、`qa_api/router.py` |
 | **添加 CSS 样式** | `static/css/` 或模板中的 `<style>` |
@@ -85,6 +86,7 @@
 |------|------|
 | **修改网站密码** | 影响用户访问 QA 功能 |
 | **修改观察页密码** | 影响管理员访问 |
+| **修改礼物回复页密码** | 影响管理员访问 |
 | **修改背景词管理密码** | 影响管理员访问 |
 | **调整限流配额** | 影响 API 成本和用户体验 |
 | **修改网站标题/域名** | 影响页面显示 |
@@ -140,9 +142,11 @@
 SITE_PASSWORD=xxx              # AI 问答密码
 DEEPSEEK_API_KEY=xxx           # DeepSeek API Key
 OB_PASSWORD=xxx                # 观察页密码（可选）
+GIFT_REPLIES_PASSWORD=xxx      # 礼物回复页密码（可选，独立于观察页）
 
 # 可选
 SCROLLER_PASSWORD=xxx          # 背景词管理密码
+GIFT_REPLIES_DIR=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
 SITE_TITLE=心上珍藏集           # 网站标题
 SITE_DOMAIN=cjy.plus           # 网站域名
 QA_DAILY_QUOTA_PER_USER=20     # 用户日配额
@@ -188,6 +192,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/balance` | 余额查询 | 无（IP 限速 + 成功结果缓存） |
 | `/api/ob/data` | 观察页数据 | `OB_PASSWORD`（失败尝试 IP 限速） |
 | `/api/ob/mark-read` | 标记已读 | `OB_PASSWORD`（失败尝试 IP 限速） |
+| `/api/gift-replies/data` | 礼物回复分页列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/gift-replies/summary` | 礼物回复统计和礼物种类 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 
 ### 安全维护规则
 
@@ -214,6 +220,7 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/terms` | 服务条款 | ✅ 页脚 |
 | `/scroller-admin` | 背景词管理 | ❌ 仅 URL 访问（需密码） |
 | `/ob` | 观察页 | ❌ 仅 URL 访问（需密码） |
+| `/gift-replies` | 礼物回复管理页 | ❌ 仅 URL 访问（需密码） |
 
 ### 时光轴地图功能
 

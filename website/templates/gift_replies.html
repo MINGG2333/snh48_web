@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site_title }} · 礼物回复</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0c1016;
+      --surface: #151b24;
+      --surface-2: #1b2430;
+      --surface-3: #202c3a;
+      --border: #2b3849;
+      --text: #e4ebf3;
+      --muted: #91a0b2;
+      --faint: #627083;
+      --accent: #3fb7a6;
+      --accent-strong: #51d1bd;
+      --good: #45c47d;
+      --warn: #f0b84b;
+      --bad: #e26d6d;
+      --ink: #0b1118;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      line-height: 1.45;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      padding: 24px;
+    }
+
+    #loginOverlay.hidden {
+      display: none;
+    }
+
+    .login-box {
+      width: min(360px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px;
+    }
+
+    .login-box h1 {
+      font-size: 20px;
+      font-weight: 650;
+      margin-bottom: 8px;
+    }
+
+    .login-box p {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .login-box input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .login-box input:focus {
+      border-color: var(--accent);
+    }
+
+    .login-btn {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .login-error {
+      display: none;
+      margin-top: 10px;
+      color: var(--bad);
+      font-size: 13px;
+    }
+
+    .login-error.show {
+      display: block;
+    }
+
+    .page {
+      display: none;
+      min-height: 100vh;
+    }
+
+    .page.ready {
+      display: block;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(12, 16, 22, 0.96);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar-inner {
+      width: min(1480px, 100%);
+      margin: 0 auto;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .title h1 {
+      font-size: 20px;
+      font-weight: 680;
+      letter-spacing: 0;
+    }
+
+    .title p {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .refresh {
+      text-align: right;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .refresh strong {
+      color: var(--accent-strong);
+      font-weight: 650;
+    }
+
+    main {
+      width: min(1480px, 100%);
+      margin: 0 auto;
+      padding: 22px 24px 34px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      min-height: 86px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 14px;
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .stat .value {
+      font-size: 24px;
+      font-weight: 730;
+      letter-spacing: 0;
+    }
+
+    .stat .sub {
+      color: var(--faint);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .toolbar {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar-row {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(190px, 260px) minmax(160px, 220px) minmax(160px, 220px) minmax(140px, 180px) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .field input:focus,
+    .field select:focus {
+      border-color: var(--accent);
+    }
+
+    .segment {
+      display: inline-grid;
+      grid-template-columns: repeat(3, minmax(72px, 1fr));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--ink);
+      min-height: 38px;
+    }
+
+    .segment button {
+      border: 0;
+      border-right: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      padding: 0 12px;
+    }
+
+    .segment button:last-child {
+      border-right: 0;
+    }
+
+    .segment button.active {
+      background: var(--accent);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .btn {
+      min-height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 0 14px;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .table-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .table-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 1080px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: var(--muted);
+      text-align: left;
+      font-size: 12px;
+      font-weight: 650;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(43, 56, 73, 0.65);
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .col-time { width: 150px; }
+    .col-user { width: 170px; }
+    .col-gift { width: 260px; }
+    .col-count { width: 74px; }
+    .col-status { width: 110px; }
+    .col-reply-time { width: 150px; }
+    .col-reply { width: auto; }
+
+    .gift-cell {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .gift-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--surface-3);
+      object-fit: cover;
+      flex: 0 0 auto;
+    }
+
+    .primary-text {
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .secondary-text {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+      word-break: break-word;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .tag.replied {
+      color: var(--good);
+      background: rgba(69, 196, 125, 0.12);
+      border-color: rgba(69, 196, 125, 0.35);
+    }
+
+    .tag.unreplied {
+      color: var(--warn);
+      background: rgba(240, 184, 75, 0.12);
+      border-color: rgba(240, 184, 75, 0.35);
+    }
+
+    .empty {
+      display: none;
+      padding: 42px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .empty.show {
+      display: block;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pager-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .loading {
+      opacity: 0.65;
+      pointer-events: none;
+    }
+
+    @media (max-width: 1180px) {
+      .stats-grid {
+        grid-template-columns: repeat(3, minmax(140px, 1fr));
+      }
+
+      .toolbar-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar-inner {
+        padding: 16px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .refresh {
+        text-align: left;
+      }
+
+      main {
+        padding: 16px;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .toolbar-row {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      .actions .btn {
+        flex: 1;
+      }
+
+      .table-head,
+      .pagination {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h1>礼物回复</h1>
+      <p>请输入礼物回复页密码</p>
+      <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
+      <button class="login-btn" id="loginBtn">进入</button>
+      <div class="login-error" id="loginError">密码错误</div>
+    </div>
+  </div>
+
+  <div class="page" id="page">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="title">
+          <h1>礼物回复</h1>
+          <p>送礼消息、回礼物消息与未回复列表</p>
+        </div>
+        <div class="refresh">
+          <div>数据每 <strong id="refreshSeconds">60</strong> 秒刷新</div>
+          <div id="generatedAt">生成时间：-</div>
+        </div>
+      </div>
+    </div>
+
+    <main id="mainContent">
+      <section class="stats-grid" aria-label="礼物回复统计">
+        <div class="stat">
+          <div class="label">礼物消息</div>
+          <div class="value" id="totalGiftMessages">0</div>
+          <div class="sub" id="totalGiftCount">礼物数 0</div>
+        </div>
+        <div class="stat">
+          <div class="label">已回复</div>
+          <div class="value" id="repliedGiftMessages">0</div>
+          <div class="sub" id="replyRate">回复率 0%</div>
+        </div>
+        <div class="stat">
+          <div class="label">未回复</div>
+          <div class="value" id="unrepliedGiftMessages">0</div>
+          <div class="sub">需要继续关注</div>
+        </div>
+        <div class="stat">
+          <div class="label">礼物种类</div>
+          <div class="value" id="giftKinds">0</div>
+          <div class="sub">可按名称筛选</div>
+        </div>
+        <div class="stat">
+          <div class="label">文字回复</div>
+          <div class="value" id="textReplies">0</div>
+          <div class="sub">GIFTREPLY</div>
+        </div>
+        <div class="stat">
+          <div class="label">语音回复</div>
+          <div class="value" id="audioReplies">0</div>
+          <div class="sub">AUDIO_GIFT_REPLY</div>
+        </div>
+      </section>
+
+      <section class="toolbar" aria-label="筛选条件">
+        <div class="toolbar-row">
+          <div class="field">
+            <label>回复状态</label>
+            <div class="segment" id="statusSegment">
+              <button type="button" data-status="all" class="active">全部</button>
+              <button type="button" data-status="replied">已回复</button>
+              <button type="button" data-status="unreplied">未回复</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="giftSelect">礼物</label>
+            <select id="giftSelect">
+              <option value="">全部礼物</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="senderInput">送礼用户</label>
+            <input id="senderInput" type="search" placeholder="昵称关键词">
+          </div>
+          <div class="field">
+            <label for="replyTypeSelect">回复类型</label>
+            <select id="replyTypeSelect">
+              <option value="all">全部回复</option>
+              <option value="text">文字回复</option>
+              <option value="audio">语音回复</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pageSizeSelect">每页</label>
+            <select id="pageSizeSelect">
+              <option value="50">50 条</option>
+              <option value="100" selected>100 条</option>
+              <option value="200">200 条</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="applyBtn" type="button">筛选</button>
+            <button class="btn" id="resetBtn" type="button">重置</button>
+          </div>
+        </div>
+        <div class="toolbar-row" style="margin-top:10px; grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) 1fr;">
+          <div class="field">
+            <label for="dateFromInput">开始日期</label>
+            <input id="dateFromInput" type="date">
+          </div>
+          <div class="field">
+            <label for="dateToInput">结束日期</label>
+            <input id="dateToInput" type="date">
+          </div>
+          <div></div>
+        </div>
+      </section>
+
+      <section class="table-panel" id="tablePanel">
+        <div class="table-head">
+          <div id="resultSummary">共 0 条</div>
+          <div id="activeFilters">全部状态</div>
+        </div>
+        <div class="table-wrap" id="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-time">送礼时间</th>
+                <th class="col-user">送礼用户</th>
+                <th class="col-gift">礼物</th>
+                <th class="col-count">数量</th>
+                <th class="col-status">状态</th>
+                <th class="col-reply-time">回复时间</th>
+                <th class="col-reply">回复内容</th>
+              </tr>
+            </thead>
+            <tbody id="giftRows"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="emptyState">当前筛选条件下没有礼物消息</div>
+        <div class="pagination">
+          <div id="pageInfo">第 1 / 1 页</div>
+          <div class="pager-actions">
+            <button class="btn" id="prevBtn" type="button">上一页</button>
+            <button class="btn" id="nextBtn" type="button">下一页</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+  (function() {
+    "use strict";
+
+    var password = "";
+    var page = 1;
+    var pageSize = 100;
+    var statusFilter = "all";
+    var refreshTimer = null;
+    var refreshSeconds = 60;
+    var lastCatalogHash = "";
+
+    var loginOverlay = document.getElementById("loginOverlay");
+    var loginBtn = document.getElementById("loginBtn");
+    var passwordInput = document.getElementById("passwordInput");
+    var loginError = document.getElementById("loginError");
+    var pageEl = document.getElementById("page");
+    var mainContent = document.getElementById("mainContent");
+    var refreshSecondsEl = document.getElementById("refreshSeconds");
+    var generatedAt = document.getElementById("generatedAt");
+    var totalGiftMessages = document.getElementById("totalGiftMessages");
+    var totalGiftCount = document.getElementById("totalGiftCount");
+    var repliedGiftMessages = document.getElementById("repliedGiftMessages");
+    var unrepliedGiftMessages = document.getElementById("unrepliedGiftMessages");
+    var giftKinds = document.getElementById("giftKinds");
+    var textReplies = document.getElementById("textReplies");
+    var audioReplies = document.getElementById("audioReplies");
+    var replyRate = document.getElementById("replyRate");
+    var statusSegment = document.getElementById("statusSegment");
+    var giftSelect = document.getElementById("giftSelect");
+    var senderInput = document.getElementById("senderInput");
+    var replyTypeSelect = document.getElementById("replyTypeSelect");
+    var pageSizeSelect = document.getElementById("pageSizeSelect");
+    var dateFromInput = document.getElementById("dateFromInput");
+    var dateToInput = document.getElementById("dateToInput");
+    var applyBtn = document.getElementById("applyBtn");
+    var resetBtn = document.getElementById("resetBtn");
+    var resultSummary = document.getElementById("resultSummary");
+    var activeFilters = document.getElementById("activeFilters");
+    var giftRows = document.getElementById("giftRows");
+    var emptyState = document.getElementById("emptyState");
+    var tableWrap = document.getElementById("tableWrap");
+    var pageInfo = document.getElementById("pageInfo");
+    var prevBtn = document.getElementById("prevBtn");
+    var nextBtn = document.getElementById("nextBtn");
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("zh-CN");
+    }
+
+    function setText(node, value) {
+      node.textContent = value == null ? "" : String(value);
+    }
+
+    function makeCell(className) {
+      var td = document.createElement("td");
+      if (className) td.className = className;
+      return td;
+    }
+
+    function makeTextBlock(primary, secondary) {
+      var wrap = document.createElement("div");
+      var p = document.createElement("div");
+      p.className = "primary-text";
+      setText(p, primary || "-");
+      wrap.appendChild(p);
+      if (secondary) {
+        var s = document.createElement("div");
+        s.className = "secondary-text";
+        setText(s, secondary);
+        wrap.appendChild(s);
+      }
+      return wrap;
+    }
+
+    function doLogin() {
+      var value = passwordInput.value.trim();
+      if (!value) return;
+      password = value;
+      loginError.classList.remove("show");
+      fetchData({ resetTimer: true });
+    }
+
+    function buildQuery() {
+      var params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      params.set("status", statusFilter);
+      params.set("gift_name", giftSelect.value || "");
+      params.set("sender", senderInput.value.trim());
+      params.set("reply_type", replyTypeSelect.value || "all");
+      params.set("date_from", dateFromInput.value || "");
+      params.set("date_to", dateToInput.value || "");
+      return params.toString();
+    }
+
+    async function fetchData(options) {
+      options = options || {};
+      mainContent.classList.add("loading");
+      try {
+        var resp = await fetch("/api/gift-replies/data?" + buildQuery(), {
+          headers: { "X-Gift-Replies-Password": password },
+          cache: "no-store"
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+          var detail = await readError(resp);
+          loginError.textContent = detail || "密码错误";
+          loginError.classList.add("show");
+          loginOverlay.classList.remove("hidden");
+          pageEl.classList.remove("ready");
+          passwordInput.value = "";
+          passwordInput.focus();
+          stopRefresh();
+          return;
+        }
+
+        if (!resp.ok) {
+          throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        }
+
+        var data = await resp.json();
+        if (data.page > data.total_pages && data.total_pages > 0) {
+          page = data.total_pages;
+          await fetchData(options);
+          return;
+        }
+
+        loginOverlay.classList.add("hidden");
+        pageEl.classList.add("ready");
+        render(data);
+        if (options.resetTimer) {
+          resetRefreshTimer();
+        }
+      } catch (err) {
+        loginError.textContent = "加载失败：" + err.message;
+        loginError.classList.add("show");
+      } finally {
+        mainContent.classList.remove("loading");
+      }
+    }
+
+    async function readError(resp) {
+      try {
+        var data = await resp.json();
+        return data.detail || "";
+      } catch (err) {
+        return "";
+      }
+    }
+
+    function render(data) {
+      var summary = data.summary || {};
+      refreshSeconds = Number(data.refresh_interval_seconds || 60);
+      refreshSecondsEl.textContent = String(refreshSeconds);
+      generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
+
+      var total = Number(summary.total_gift_messages || 0);
+      var replied = Number(summary.replied_gift_messages || 0);
+      var rate = total > 0 ? (replied / total * 100).toFixed(1) : "0.0";
+      setText(totalGiftMessages, formatNumber(total));
+      setText(totalGiftCount, "礼物数 " + formatNumber(summary.total_gift_count || 0));
+      setText(repliedGiftMessages, formatNumber(replied));
+      setText(unrepliedGiftMessages, formatNumber(summary.unreplied_gift_messages || 0));
+      setText(giftKinds, formatNumber(summary.gift_kinds || 0));
+      setText(textReplies, formatNumber(summary.text_reply_messages || 0));
+      setText(audioReplies, formatNumber(summary.audio_reply_messages || 0));
+      setText(replyRate, "回复率 " + rate + "%");
+
+      syncGiftOptions(data.gift_catalog || []);
+      renderRows(data.items || []);
+      renderPaging(data);
+      renderFilterSummary(data);
+    }
+
+    function syncGiftOptions(catalog) {
+      var hash = catalog.map(function(item) {
+        return [item.gift_id, item.gift_name, item.total_messages].join(":");
+      }).join("|");
+      if (hash === lastCatalogHash) return;
+      lastCatalogHash = hash;
+
+      var selected = giftSelect.value;
+      giftSelect.textContent = "";
+      var all = document.createElement("option");
+      all.value = "";
+      all.textContent = "全部礼物";
+      giftSelect.appendChild(all);
+
+      catalog.forEach(function(item) {
+        var opt = document.createElement("option");
+        opt.value = item.gift_name || "";
+        opt.textContent = (item.gift_name || "未命名礼物") + " (" + formatNumber(item.total_messages || 0) + ")";
+        giftSelect.appendChild(opt);
+      });
+      giftSelect.value = selected;
+    }
+
+    function renderRows(items) {
+      giftRows.textContent = "";
+      var hasItems = items.length > 0;
+      tableWrap.style.display = hasItems ? "block" : "none";
+      emptyState.classList.toggle("show", !hasItems);
+
+      items.forEach(function(item) {
+        var tr = document.createElement("tr");
+        tr.appendChild(textCell(item.gift_bj_time || "-"));
+        tr.appendChild(userCell(item));
+        tr.appendChild(giftCell(item));
+        tr.appendChild(textCell(formatNumber(item.gift_count || 0)));
+        tr.appendChild(statusCell(item));
+        tr.appendChild(textCell(getReplyTime(item)));
+        tr.appendChild(replyCell(item));
+        giftRows.appendChild(tr);
+      });
+    }
+
+    function textCell(text) {
+      var td = makeCell();
+      setText(td, text);
+      return td;
+    }
+
+    function userCell(item) {
+      var td = makeCell();
+      td.appendChild(makeTextBlock(item.sender_name || "-", item.sender_id ? "ID " + item.sender_id : ""));
+      return td;
+    }
+
+    function giftCell(item) {
+      var td = makeCell();
+      var wrap = document.createElement("div");
+      wrap.className = "gift-cell";
+      if (item.gift_icon_url) {
+        var img = document.createElement("img");
+        img.className = "gift-icon";
+        img.src = item.gift_icon_url;
+        img.alt = "";
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        wrap.appendChild(img);
+      }
+      wrap.appendChild(makeTextBlock(item.gift_name || "-", item.gift_id ? "ID " + item.gift_id : ""));
+      td.appendChild(wrap);
+      return td;
+    }
+
+    function statusCell(item) {
+      var td = makeCell();
+      var tag = document.createElement("span");
+      var replied = item.reply_status === "replied";
+      tag.className = "tag " + (replied ? "replied" : "unreplied");
+      tag.textContent = replied ? "已回复" : "未回复";
+      td.appendChild(tag);
+      if (Number(item.reply_count || 0) > 1) {
+        var sub = document.createElement("div");
+        sub.className = "secondary-text";
+        sub.textContent = "共 " + formatNumber(item.reply_count) + " 次";
+        td.appendChild(sub);
+      }
+      return td;
+    }
+
+    function replyCell(item) {
+      var td = makeCell();
+      var text = getReplyText(item);
+      var secondary = getReplySecondary(item);
+      td.appendChild(makeTextBlock(text, secondary));
+      return td;
+    }
+
+    function getReplyTime(item) {
+      return item.latest_reply_bj_time || item.first_reply_bj_time || "-";
+    }
+
+    function getReplyText(item) {
+      if (!item.has_reply) return "未回复";
+      var type = item.latest_reply_type || item.first_reply_type || "";
+      var content = item.latest_reply_content || item.first_reply_content || "";
+      var duration = Number(item.first_reply_duration_seconds || 0);
+      if (type === "AUDIO_GIFT_REPLY") {
+        return duration > 0 ? "语音回复 " + duration + " 秒" : "语音回复";
+      }
+      return content || "文字回复";
+    }
+
+    function getReplySecondary(item) {
+      if (!item.has_reply) return "";
+      var type = item.latest_reply_type || item.first_reply_type || "";
+      if (type === "AUDIO_GIFT_REPLY") return "AUDIO_GIFT_REPLY";
+      if (type === "GIFTREPLY") return "GIFTREPLY";
+      return type;
+    }
+
+    function renderPaging(data) {
+      page = Number(data.page || 1);
+      pageSize = Number(data.page_size || pageSize);
+      pageSizeSelect.value = String(pageSize);
+      pageInfo.textContent = "第 " + formatNumber(page) + " / " + formatNumber(data.total_pages || 1) + " 页";
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= Number(data.total_pages || 1);
+    }
+
+    function renderFilterSummary(data) {
+      resultSummary.textContent = "共 " + formatNumber(data.total || 0) + " 条，当前页 " + formatNumber((data.items || []).length) + " 条";
+      var parts = [];
+      parts.push(statusLabel(statusFilter));
+      if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
+      if (senderInput.value.trim()) parts.push("用户：" + senderInput.value.trim());
+      if (replyTypeSelect.value !== "all") parts.push(replyTypeSelect.options[replyTypeSelect.selectedIndex].textContent);
+      if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
+      activeFilters.textContent = parts.join(" · ");
+    }
+
+    function statusLabel(value) {
+      if (value === "replied") return "已回复";
+      if (value === "unreplied") return "未回复";
+      return "全部状态";
+    }
+
+    function setStatus(value) {
+      statusFilter = value;
+      Array.prototype.forEach.call(statusSegment.querySelectorAll("button"), function(btn) {
+        var active = btn.getAttribute("data-status") === value;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+
+    function applyFilters() {
+      page = 1;
+      pageSize = Number(pageSizeSelect.value || 100);
+      fetchData({ resetTimer: true });
+    }
+
+    function resetFilters() {
+      setStatus("all");
+      giftSelect.value = "";
+      senderInput.value = "";
+      replyTypeSelect.value = "all";
+      pageSizeSelect.value = "100";
+      dateFromInput.value = "";
+      dateToInput.value = "";
+      applyFilters();
+    }
+
+    function stopRefresh() {
+      if (refreshTimer) {
+        window.clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    }
+
+    function resetRefreshTimer() {
+      stopRefresh();
+      refreshTimer = window.setInterval(function() {
+        fetchData({ resetTimer: false });
+      }, Math.max(refreshSeconds, 10) * 1000);
+    }
+
+    loginBtn.addEventListener("click", doLogin);
+    passwordInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") doLogin();
+    });
+
+    statusSegment.addEventListener("click", function(event) {
+      var button = event.target.closest("button[data-status]");
+      if (!button) return;
+      setStatus(button.getAttribute("data-status"));
+      applyFilters();
+    });
+
+    giftSelect.addEventListener("change", applyFilters);
+    replyTypeSelect.addEventListener("change", applyFilters);
+    pageSizeSelect.addEventListener("change", applyFilters);
+    applyBtn.addEventListener("click", applyFilters);
+    resetBtn.addEventListener("click", resetFilters);
+    senderInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") applyFilters();
+    });
+    dateFromInput.addEventListener("change", applyFilters);
+    dateToInput.addEventListener("change", applyFilters);
+
+    prevBtn.addEventListener("click", function() {
+      if (page <= 1) return;
+      page -= 1;
+      fetchData({ resetTimer: true });
+    });
+
+    nextBtn.addEventListener("click", function() {
+      page += 1;
+      fetchData({ resetTimer: true });
+    });
+  })();
+  </script>
+</body>
+</html>
