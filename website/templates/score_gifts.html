@@ -196,6 +196,20 @@
     .field input:focus,
     .field select:focus { border-color: var(--teal); }
 
+    .field input[type="date"] {
+      color-scheme: dark;
+    }
+
+    .field input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 1;
+      filter: invert(79%) sepia(23%) saturate(695%) hue-rotate(126deg) brightness(98%) contrast(91%);
+    }
+
+    .field input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      filter: invert(87%) sepia(65%) saturate(568%) hue-rotate(353deg) brightness(99%) contrast(90%);
+    }
+
     .segment {
       display: inline-grid;
       grid-template-columns: repeat(3, minmax(68px, 1fr));
