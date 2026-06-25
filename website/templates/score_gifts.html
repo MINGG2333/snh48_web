@@ -258,10 +258,11 @@
     }
 
     .jump-status {
+      display: inline;
+      margin-left: 8px;
       color: var(--muted);
       font-size: 12px;
-      align-self: center;
-      min-height: 20px;
+      font-weight: 500;
     }
 
     .panel {
@@ -284,6 +285,24 @@
 
     .panel-head h2 { font-size: 15px; font-weight: 740; }
     .panel-head span { color: var(--muted); font-size: 12px; }
+
+    .panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .mini-btn {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
 
     .bar-list {
       display: flex;
@@ -453,7 +472,7 @@
 
     .detail-row {
       display: grid;
-      grid-template-columns: 156px minmax(160px, 0.8fr) minmax(210px, 1fr) minmax(140px, 0.6fr) minmax(220px, 1.1fr);
+      grid-template-columns: 150px minmax(145px, 0.75fr) minmax(190px, 0.95fr) minmax(112px, 0.45fr) minmax(150px, 0.7fr) minmax(205px, 1fr);
       gap: 12px;
       padding: 12px;
       border-bottom: 1px solid rgba(44, 57, 75, 0.55);
@@ -482,6 +501,8 @@
     .primary-text { color: var(--text); font-size: 13px; font-weight: 680; word-break: break-word; }
     .secondary-text { color: var(--muted); font-size: 12px; margin-top: 3px; word-break: break-word; }
     .score-text { color: var(--gold); font-size: 16px; font-weight: 780; }
+    .fulfillment-cell .primary-text { color: var(--teal); }
+    .detail-row.source-live .fulfillment-cell .primary-text { color: var(--pink); }
 
     .gift-cell {
       display: flex;
@@ -534,6 +555,51 @@
       box-shadow: 0 0 0 1px rgba(240, 184, 75, 0.32);
     }
 
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .modal.hidden { display: none; }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 8, 12, 0.72);
+      backdrop-filter: blur(8px);
+    }
+
+    .modal-dialog {
+      position: relative;
+      width: min(780px, 100%);
+      max-height: min(760px, calc(100vh - 48px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-head {
+      min-height: 52px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .modal-head h2 { font-size: 16px; font-weight: 740; }
+    .modal-body { overflow: auto; }
+
     .btn:disabled {
       cursor: not-allowed;
       opacity: 0.45;
@@ -549,7 +615,8 @@
       .toolbar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .jump-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .analytics-grid { grid-template-columns: 1fr; }
-      .detail-row { grid-template-columns: 138px minmax(150px, 0.8fr) minmax(200px, 1fr) minmax(130px, 0.6fr); }
+      .detail-row { grid-template-columns: 138px minmax(150px, 0.8fr) minmax(190px, 1fr) minmax(120px, 0.55fr); }
+      .detail-row .fulfillment-cell,
       .detail-row .context-cell { grid-column: 2 / -1; }
     }
 
@@ -675,13 +742,13 @@
         </div>
         <div class="toolbar-grid jump-grid">
           <div class="field">
-            <label for="jumpDateInput">日期跳转</label>
+            <label for="jumpDateInput">日期跳转 <span class="jump-status" id="jumpStatus"></span></label>
             <input id="jumpDateInput" type="date">
           </div>
           <div class="actions">
             <button class="btn" id="jumpDateBtn" type="button">跳转</button>
           </div>
-          <div class="jump-status" id="jumpStatus"></div>
+          <div></div>
         </div>
       </section>
 
@@ -696,7 +763,10 @@
         <div class="panel">
           <div class="panel-head">
             <h2>送礼用户分布</h2>
-            <span id="senderDistributionCount">0 人</span>
+            <div class="panel-actions">
+              <span id="senderDistributionCount">0 人</span>
+              <button class="mini-btn" id="openSenderModalBtn" type="button">全部</button>
+            </div>
           </div>
           <div class="bar-list" id="senderBars"></div>
         </div>
@@ -713,6 +783,19 @@
         <div id="loadMoreSentinel"></div>
       </section>
     </main>
+  </div>
+
+  <div class="modal hidden" id="senderModal" role="dialog" aria-modal="true" aria-labelledby="senderModalTitle">
+    <div class="modal-backdrop" id="senderModalBackdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h2 id="senderModalTitle">送礼用户分布</h2>
+        <button class="mini-btn" id="closeSenderModalBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body">
+        <div class="bar-list" id="senderModalBars"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -732,6 +815,7 @@
     var refreshTimer = null;
     var refreshSeconds = 30;
     var lastCatalogHash = "";
+    var senderDistributionItems = [];
 
     var loginOverlay = document.getElementById("loginOverlay");
     var passwordInput = document.getElementById("passwordInput");
@@ -765,6 +849,11 @@
     var resetBtn = document.getElementById("resetBtn");
     var giftBars = document.getElementById("giftBars");
     var senderBars = document.getElementById("senderBars");
+    var senderModal = document.getElementById("senderModal");
+    var senderModalBars = document.getElementById("senderModalBars");
+    var openSenderModalBtn = document.getElementById("openSenderModalBtn");
+    var closeSenderModalBtn = document.getElementById("closeSenderModalBtn");
+    var senderModalBackdrop = document.getElementById("senderModalBackdrop");
     var giftDistributionCount = document.getElementById("giftDistributionCount");
     var senderDistributionCount = document.getElementById("senderDistributionCount");
     var resultSummary = document.getElementById("resultSummary");
@@ -959,8 +1048,15 @@
     }
 
     function renderSenderBars(items) {
+      senderDistributionItems = items;
       senderDistributionCount.textContent = formatNumber(items.length) + " 人";
-      renderBarList(senderBars, items, {
+      openSenderModalBtn.style.display = items.length > 10 ? "inline-flex" : "none";
+      renderBarList(senderBars, items.slice(0, 10), senderBarOptions(items));
+      if (!senderModal.classList.contains("hidden")) renderSenderModal();
+    }
+
+    function senderBarOptions(items) {
+      return {
         classPrefix: "sender",
         maxValue: maxScore(items),
         label: function(item) { return senderDisplayName(item); },
@@ -979,7 +1075,20 @@
         split: function(item) {
           return "房间 " + formatScore(item.room_score || 0) + " · 直播 " + formatScore(item.live_score || 0);
         }
-      });
+      };
+    }
+
+    function renderSenderModal() {
+      renderBarList(senderModalBars, senderDistributionItems, senderBarOptions(senderDistributionItems));
+    }
+
+    function openSenderModal() {
+      renderSenderModal();
+      senderModal.classList.remove("hidden");
+    }
+
+    function closeSenderModal() {
+      senderModal.classList.add("hidden");
     }
 
     function renderBarList(parent, items, options) {
@@ -1117,6 +1226,11 @@
       score.appendChild(sub);
       row.appendChild(score);
 
+      var fulfillment = document.createElement("div");
+      fulfillment.className = "fulfillment-cell";
+      fulfillment.appendChild(textBlock(fulfillmentPrimary(item), fulfillmentSecondary(item)));
+      row.appendChild(fulfillment);
+
       var context = document.createElement("div");
       context.className = "context-cell";
       context.appendChild(textBlock(contextPrimary(item), contextSecondary(item)));
@@ -1144,6 +1258,30 @@
         return item.live_title || item.live_bj_time || "直播弹幕";
       }
       return item.message_id ? "房间消息" : "房间记录";
+    }
+
+    function fulfillmentPrimary(item) {
+      if (item.fulfillment_label) return item.fulfillment_label;
+      if (item.source === "live") return "未兑换业务";
+      return item.room_has_reply ? "已回复" : "未回复";
+    }
+
+    function fulfillmentSecondary(item) {
+      if (item.source === "live") {
+        if (item.business_status === "redeemed") {
+          var businessParts = [];
+          if (item.business_type) businessParts.push(item.business_type);
+          if (item.business_content) businessParts.push(item.business_content);
+          if (item.business_offset) businessParts.push("弹幕 " + item.business_offset);
+          return businessParts.join(" · ");
+        }
+        return item.fulfillment_detail && item.fulfillment_detail !== "未兑换业务" ? item.fulfillment_detail : "";
+      }
+      var parts = [];
+      if (item.room_reply_count) parts.push(formatNumber(item.room_reply_count) + " 条");
+      if (item.room_first_reply_time) parts.push(item.room_first_reply_time);
+      if (item.room_first_reply_content) parts.push(item.room_first_reply_content);
+      return parts.join(" · ");
     }
 
     function contextSecondary(item) {
@@ -1407,6 +1545,12 @@
     });
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
+    openSenderModalBtn.addEventListener("click", openSenderModal);
+    closeSenderModalBtn.addEventListener("click", closeSenderModal);
+    senderModalBackdrop.addEventListener("click", closeSenderModal);
+    document.addEventListener("keydown", function(event) {
+      if (event.key === "Escape") closeSenderModal();
+    });
     jumpDateBtn.addEventListener("click", jumpToDate);
     jumpDateInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") jumpToDate();
