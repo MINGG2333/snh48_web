@@ -127,6 +127,7 @@ def get_room_messages_data(
     before_index: int | None = Query(None, ge=0),
     after_index: int | None = Query(None, ge=0),
     target_id: str = Query(""),
+    target_date: str = Query(""),
     msg_type: str = Query("all"),
     family: str = Query("all"),
     sender: str = Query(""),
@@ -149,10 +150,13 @@ def get_room_messages_data(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的媒体筛选")
     _validate_date("date_from", date_from)
     _validate_date("date_to", date_to)
+    _validate_date("target_date", target_date)
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="日期范围无效")
     if before_index is not None and after_index is not None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="消息游标无效")
+    if target_id and target_date:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="目标条件无效")
 
     rows, summary = _load_dataset()
     sender = sender.strip()
@@ -160,6 +164,7 @@ def get_room_messages_data(
     date_from = date_from.strip()
     date_to = date_to.strip()
     target_id = target_id.strip()
+    target_date = target_date.strip()
 
     if _is_unfiltered(
         msg_type=msg_type,
@@ -171,9 +176,13 @@ def get_room_messages_data(
         date_to=date_to,
     ):
         total = len(rows)
-        target_index = _find_row_index(rows, target_id) if target_id else None
+        target_index = _target_index(rows, target_id, target_date)
         if target_id and target_index is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标消息不在当前筛选结果中")
+        if target_date and target_index is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"当前筛选条件下没有 {target_date} 的消息")
+        if target_date and target_index is not None:
+            target_id = str(rows[target_index].get("id", ""))
         start, end = _chunk_bounds(total, limit, before_index, after_index, target_index)
         items = [_public_row(row) for row in rows[start:end]]
     else:
@@ -189,9 +198,13 @@ def get_room_messages_data(
         )
 
         total = len(filtered)
-        target_index = _find_row_index(filtered, target_id) if target_id else None
+        target_index = _target_index(filtered, target_id, target_date)
         if target_id and target_index is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标消息不在当前筛选结果中")
+        if target_date and target_index is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"当前筛选条件下没有 {target_date} 的消息")
+        if target_date and target_index is not None:
+            target_id = str(filtered[target_index].get("id", ""))
         start, end = _chunk_bounds(total, limit, before_index, after_index, target_index)
         items = [_public_row(row) for row in filtered[start:end]]
 
@@ -207,6 +220,8 @@ def get_room_messages_data(
         "has_more_newer": end < total,
         "target_id": target_id,
         "target_found": bool(target_id),
+        "target_date": target_date,
+        "target_date_found": bool(target_date and target_id),
         "summary": summary,
         "type_counts": summary.get("type_counts", []),
         "family_counts": summary.get("family_counts", []),
@@ -871,6 +886,23 @@ def _find_row_index(rows: list[dict[str, Any]], message_id: str) -> int | None:
     for idx, row in enumerate(rows):
         if row.get("id") == message_id:
             return idx
+    return None
+
+
+def _find_date_index(rows: list[dict[str, Any]], target_date: str) -> int | None:
+    if not target_date:
+        return None
+    for idx, row in enumerate(rows):
+        if row.get("date") == target_date:
+            return idx
+    return None
+
+
+def _target_index(rows: list[dict[str, Any]], target_id: str, target_date: str) -> int | None:
+    if target_id:
+        return _find_row_index(rows, target_id)
+    if target_date:
+        return _find_date_index(rows, target_date)
     return None
 
 

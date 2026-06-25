@@ -188,6 +188,16 @@
     .field input:focus,
     .field select:focus { border-color: var(--teal); }
 
+    .date-jump-control {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+    }
+
+    .date-jump-control .btn {
+      min-width: 62px;
+    }
+
     .family-strip {
       display: flex;
       gap: 6px;
@@ -767,7 +777,7 @@
           <button class="btn" id="resetBtn" type="button">重置</button>
         </div>
       </div>
-      <div class="filters" style="grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) 1fr;">
+      <div class="filters" style="grid-template-columns: minmax(150px, 180px) minmax(150px, 180px) minmax(150px, 180px) minmax(210px, 260px) 1fr;">
         <div class="field">
           <label for="dateFromInput">开始日期</label>
           <input id="dateFromInput" type="date">
@@ -783,6 +793,13 @@
             <option value="with">有媒体</option>
             <option value="without">无媒体</option>
           </select>
+        </div>
+        <div class="field">
+          <label for="jumpDateInput">跳转日期</label>
+          <div class="date-jump-control">
+            <input id="jumpDateInput" type="date">
+            <button class="btn" id="jumpDateBtn" type="button">跳转</button>
+          </div>
         </div>
         <div></div>
       </div>
@@ -857,6 +874,8 @@
     var limitSelect = document.getElementById("limitSelect");
     var dateFromInput = document.getElementById("dateFromInput");
     var dateToInput = document.getElementById("dateToInput");
+    var jumpDateInput = document.getElementById("jumpDateInput");
+    var jumpDateBtn = document.getElementById("jumpDateBtn");
     var mediaSelect = document.getElementById("mediaSelect");
     var applyBtn = document.getElementById("applyBtn");
     var resetBtn = document.getElementById("resetBtn");
@@ -923,6 +942,9 @@
         if (options.targetId) {
           params.set("target_id", options.targetId);
         }
+        if (options.targetDate) {
+          params.set("target_date", options.targetDate);
+        }
         var resp = await fetch("/api/room-messages/data?" + params.toString(), {
           headers: { "X-Room-Messages-Password": password },
           cache: "no-store"
@@ -948,6 +970,7 @@
         renderSummary(data);
         syncTypeOptions(data.type_counts || []);
 
+        var isTargetLoad = Boolean(options.targetId || options.targetDate);
         if (options.older) {
           prependMessages(data.items || []);
         } else if (options.newer) {
@@ -957,7 +980,7 @@
           loadedCount = 0;
           appendMessages(data.items || []);
           window.requestAnimationFrame(function() {
-            if (!options.targetId) {
+            if (!isTargetLoad) {
               chatScroll.scrollTop = chatScroll.scrollHeight;
             }
           });
@@ -988,13 +1011,13 @@
         if (loadedMessages) {
           loadedMessages.textContent = formatNumber(loadedCount);
         }
-        if (!options.targetId) {
+        if (!isTargetLoad) {
           fillViewportIfNeeded();
         }
         return data;
       } catch (err) {
-        if (options.targetId) {
-          showJumpStatus("没有在当前筛选结果中找到目标消息");
+        if (options.targetId || options.targetDate) {
+          showJumpStatus(err.message || "没有在当前筛选结果中找到目标消息");
         } else {
           loginError.textContent = "加载失败：" + err.message;
           loginError.classList.add("show");
@@ -1187,6 +1210,7 @@
       var wrap = document.createElement("article");
       wrap.className = "message family-" + safeClass(item.family || "event");
       wrap.dataset.messageId = item.id || "";
+      wrap.dataset.date = item.date || String(item.bj_time || "").slice(0, 10);
       wrap.dataset.ignored = item.ignored ? "true" : "false";
 
       var time = document.createElement("div");
@@ -1656,6 +1680,45 @@
       }
     }
 
+    async function jumpToDate() {
+      var targetDate = jumpDateInput ? jumpDateInput.value : "";
+      if (!targetDate) {
+        showJumpStatus("请选择要跳转的日期");
+        return;
+      }
+
+      var jumpToken = beginJump();
+      showJumpStatus("正在定位 " + targetDate + " 的第一条消息...");
+      setFilterPanelOpen(false);
+
+      await waitForStableLayout(jumpToken);
+      if (jumpToken !== activeJumpToken) return;
+      var loadedNode = findFirstDateNode(targetDate);
+      if (loadedNode) {
+        await scrollToNode(loadedNode, jumpToken, "已跳转到 " + targetDate);
+        return;
+      }
+
+      var data = await fetchChunk({
+        targetDate: targetDate,
+        limitOverride: Math.max(Number(limitSelect.value) || 100, 200),
+        statusText: "正在加载 " + targetDate + " 的消息..."
+      });
+      if (!data || jumpToken !== activeJumpToken) return;
+
+      await waitForStableLayout(jumpToken);
+      if (jumpToken !== activeJumpToken) return;
+      var targetId = data.target_id || "";
+      if (targetId && await scrollToMessage(targetId, jumpToken)) return;
+
+      var dateNode = findFirstDateNode(targetDate);
+      if (dateNode) {
+        await scrollToNode(dateNode, jumpToken, "已跳转到 " + targetDate);
+        return;
+      }
+      showJumpStatus("当前筛选条件下没有 " + targetDate + " 的消息");
+    }
+
     function beginJump() {
       activeJumpToken += 1;
       if (scrollAnimationFrame) {
@@ -1663,6 +1726,30 @@
         scrollAnimationFrame = null;
       }
       return activeJumpToken;
+    }
+
+    async function scrollToNode(node, jumpToken, doneText) {
+      if (!node) return false;
+      for (var attempt = 0; attempt < 3; attempt += 1) {
+        await waitForStableLayout(jumpToken);
+        if (jumpToken !== activeJumpToken) return true;
+        if (!node.isConnected) return false;
+
+        await animateScrollTo(targetScrollTopForNode(node), jumpToken);
+        await waitForStableLayout(jumpToken);
+        if (jumpToken !== activeJumpToken) return true;
+        if (node.isConnected && isMessageNearTargetPosition(node)) {
+          break;
+        }
+      }
+
+      if (!node.isConnected) return false;
+      node.classList.add("jump-highlight");
+      window.setTimeout(function() {
+        node.classList.remove("jump-highlight");
+      }, 1800);
+      showJumpStatus(doneText || "已跳转到目标消息");
+      return true;
     }
 
     async function scrollToMessage(messageId, jumpToken) {
@@ -1774,6 +1861,17 @@
       return null;
     }
 
+    function findFirstDateNode(targetDate) {
+      if (!targetDate) return null;
+      var nodes = messageList.children;
+      for (var i = 0; i < nodes.length; i += 1) {
+        if (nodes[i].dataset.date === targetDate) {
+          return nodes[i];
+        }
+      }
+      return null;
+    }
+
     function setLoadedIgnoredState(messageIds, ignored) {
       if (!Array.isArray(messageIds) || messageIds.length === 0) return;
       messageIds.forEach(function(messageId) {
@@ -1879,6 +1977,7 @@
       limitSelect.value = "100";
       dateFromInput.value = "";
       dateToInput.value = "";
+      if (jumpDateInput) jumpDateInput.value = "";
       mediaSelect.value = "all";
       reloadLatest();
     }
@@ -1901,6 +2000,14 @@
       setFilterPanelOpen(false);
     });
     resetBtn.addEventListener("click", resetFilters);
+    if (jumpDateBtn) {
+      jumpDateBtn.addEventListener("click", jumpToDate);
+    }
+    if (jumpDateInput) {
+      jumpDateInput.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") jumpToDate();
+      });
+    }
     updatePill.addEventListener("click", reloadLatest);
     if (unrepliedNav) {
       unrepliedNav.addEventListener("click", jumpToLatestUnrepliedGifts);
