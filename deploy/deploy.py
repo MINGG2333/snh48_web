@@ -74,6 +74,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             "https://cjy.plus/",
             "https://cjy.plus/timeline",
             "https://cjy.plus/gift-replies",
+            "https://cjy.plus/score-gifts",
             "https://cjy.plus/static/js/main.js",
             "https://cjy.plus/static/js/timeline.js",
             "https://cjy.plus/api/timeline/schedule",
@@ -104,6 +105,11 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies",
                 "delete": True,
             },
+            {
+                "type": "dir",
+                "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts",
+                "delete": True,
+            },
         ],
         "deploy_by_default": True,
     },
@@ -122,6 +128,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             "https://cjy.xn--6qq986b3xl/",
             "https://cjy.xn--6qq986b3xl/timeline",
             "https://cjy.xn--6qq986b3xl/gift-replies",
+            "https://cjy.xn--6qq986b3xl/score-gifts",
             "https://cjy.xn--6qq986b3xl/static/js/main.js",
             "https://cjy.xn--6qq986b3xl/static/js/timeline.js",
             "https://cjy.xn--6qq986b3xl/api/timeline/schedule",
@@ -660,6 +667,7 @@ mkdir -p /home/snh48-fan-hub/schedule_record
 mkdir -p /home/snh48-fan-hub/live_push_replays
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
+mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
 if [ ! -f .env ] && [ -f .env.example ]; then
   cp .env.example .env
   chmod 600 .env

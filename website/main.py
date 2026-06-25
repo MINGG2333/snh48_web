@@ -328,6 +328,23 @@ async def gift_replies_page(request: Request):
     )
 
 
+@app.get("/sg", response_class=HTMLResponse)
+@app.get("/score-gifts", response_class=HTMLResponse)
+async def score_gifts_page(request: Request):
+    """Admin page for scoring gift statistics."""
+    return templates.TemplateResponse(
+        "score_gifts.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 # ── API Routes ─────────────────────────────────────────────────────────────
 
 
@@ -424,6 +441,9 @@ app.include_router(ob_router)
 
 from website.gift_replies_api import router as gift_replies_router
 app.include_router(gift_replies_router)
+from website.score_gifts_api import router as score_gifts_router
+app.include_router(score_gifts_router)
+
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

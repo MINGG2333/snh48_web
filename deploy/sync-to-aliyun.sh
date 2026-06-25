@@ -16,7 +16,7 @@ LOG_TAG="[sync-to-aliyun][$(date '+%Y-%m-%d %H:%M:%S')]"
 
 echo "$LOG_TAG Starting sync..."
 
-ssh "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies'
+ssh "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts'
 
 # 1. schedule.csv（行程表，网站实时读取）
 rsync -az --partial /home/snh48-fan-hub/schedule_record/schedule.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/schedule.csv"
@@ -33,6 +33,10 @@ echo "$LOG_TAG live_covers done"
 # 4. gift_replies（礼物回复页小数据）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/"
 echo "$LOG_TAG gift_replies done"
+
+# 5. score_gifts（计分礼物页小数据）
+rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
+echo "$LOG_TAG score_gifts done"
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then
   PREWARM_LIMIT=${PREWARM_LIMIT:-120}

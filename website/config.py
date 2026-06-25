@@ -160,6 +160,21 @@ GIFT_REPLIES_DIR = os.getenv(
     ),
 )
 
+# ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
+# 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。
+SCORE_GIFTS_PASSWORD = os.getenv("SCORE_GIFTS_PASSWORD", GIFT_REPLIES_PASSWORD)
+SCORE_GIFTS_DATA_PATH = os.getenv(
+    "SCORE_GIFTS_DATA_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "score_gifts"
+        / "score_gifts.json"
+    ),
+)
+
 # 远程弹幕兜底读取。默认只硬拦截危险地址，域名白名单先用于灰度观察；
 # 确认历史弹幕源都覆盖后再开启 DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=true。
 DANMU_REMOTE_TIMEOUT_SECONDS = int(os.getenv("DANMU_REMOTE_TIMEOUT_SECONDS", "15"))

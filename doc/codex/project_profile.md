@@ -39,6 +39,7 @@
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
+- `room_record/陈嘉仪_161808449/score_gifts/`
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
 数据同步脚本：
@@ -90,6 +91,23 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航，仅 URL 访问并要求密码。
 - 默认每页 `100` 条，页面按数据文件里的 `refresh_interval_seconds` 自动刷新，当前为 `60` 秒。
 - 后端只读取 `gifts.csv` 和 `summary.json` 派生小数据，不读取或同步完整 `messages.csv`、语音原文件、图片归档或敏感配置。
+
+### 计分礼物管理页
+
+入口和文档：
+
+- 页面入口：`/score-gifts`，短入口：`/sg`
+- API：`/api/score-gifts/data`、`/api/score-gifts/summary`
+- 数据源：`SCORE_GIFTS_DATA_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/score_gifts.json`
+- 鉴权：默认复用 `GIFT_REPLIES_PASSWORD`；如需单独密码可设置 `SCORE_GIFTS_PASSWORD`；请求头 `X-Score-Gifts-Password`
+- 数据契约：`/home/snh48-fan-hub/doc/score_gift_data_contract.md`
+
+维护边界：
+
+- 页面不进入公开导航，仅 URL 访问并要求密码。
+- 后端只读取 `score_gifts.json` 派生小数据，不读取或同步完整 `messages.csv`、语音原文件、图片归档或敏感配置。
+- 页面按数据文件里的 `refresh_interval_seconds` 自动刷新；该值由 fan-hub 的 `config/room_monitor.json` 中 `gift_reply_export_interval_seconds` 热更新，和礼物回复页保持一致。
+- 阿里云只同步 `room_record/陈嘉仪_161808449/score_gifts/` 小目录，不同步整个 `room_record/陈嘉仪_161808449/`。
 
 ### 时光轴地图打开
 
@@ -190,6 +208,8 @@ python3 deploy/deploy.py deploy all --check-env
 curl -sS -D - -o /dev/null https://cjy.plus/
 curl -sS -D - -o /dev/null https://cjy.plus/timeline
 curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
+curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
+curl -sS -D - -o /dev/null https://cjy.plus/sg
 curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
 curl -sS -D - -o /dev/null https://cjy.plus/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
@@ -203,6 +223,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/timeline
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score-gifts
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/sg
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/qa/status
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/static/js/main.js
