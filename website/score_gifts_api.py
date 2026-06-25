@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/score-gifts", tags=["计分礼物页"])
 VALID_SOURCES = {"all", "room", "live"}
 VALID_SORTS = {"time_desc", "score_desc"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+UNKNOWN_SENDER_VALUES = {"", "?"}
 
 _cache_lock = threading.Lock()
 _cache_mtime_ns = -1
@@ -189,6 +190,8 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
             "date": str(item.get("date", "")),
             "sender_name": str(item.get("sender_name", "")),
             "sender_id": str(item.get("sender_id", "")),
+            "sender_id_source": str(item.get("sender_id_source", "")),
+            "sender_id_match_status": str(item.get("sender_id_match_status", "")),
             "receiver_name": str(item.get("receiver_name", "")),
             "gift_id": str(item.get("gift_id", "")),
             "gift_name": str(item.get("gift_name", "")),
@@ -229,7 +232,7 @@ def _filter_rows(
             continue
         if gift_lower and gift_lower not in row["gift_name"].lower():
             continue
-        if sender_lower and sender_lower not in row["sender_name"].lower():
+        if sender_lower and sender_lower not in _sender_search_text(row):
             continue
         row_date = row["date"] or row["event_time"][:10]
         if date_from and row_date < date_from:
@@ -305,12 +308,17 @@ def _sender_distribution(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         groups.setdefault(_sender_key(row), []).append(row)
 
     output: list[dict[str, Any]] = []
-    for sender_name, group in groups.items():
+    for sender_group_key, group in groups.items():
         room_rows = [row for row in group if row["source"] == "room"]
         live_rows = [row for row in group if row["source"] == "live"]
+        ids = _sender_ids(group)
+        names = _sender_names(group)
         output.append({
-            "sender_name": sender_name,
-            "sender_ids": sorted({row["sender_id"] for row in group if row["sender_id"]}),
+            "sender_key": sender_group_key,
+            "sender_identifier": ids[0] if ids else (names[0] if names else ""),
+            "sender_name": _sender_display_name(group, ids),
+            "sender_names": names,
+            "sender_ids": ids,
             "total_score": _sum_score(group),
             "room_score": _sum_score(room_rows),
             "live_score": _sum_score(live_rows),
@@ -322,7 +330,14 @@ def _sender_distribution(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "first_event_time": min((row["event_time"] for row in group if row["event_time"]), default=""),
             "latest_event_time": max((row["event_time"] for row in group if row["event_time"]), default=""),
         })
-    output.sort(key=lambda row: (-float(row["total_score"]), -int(row["total_count"]), str(row["sender_name"])))
+    output.sort(
+        key=lambda row: (
+            -float(row["total_score"]),
+            -int(row["total_count"]),
+            str(row["sender_name"]),
+            str(row["sender_identifier"]),
+        )
+    )
     return output
 
 
@@ -386,8 +401,50 @@ def _normalise_distribution(items: Any) -> list[dict[str, Any]]:
     return [item for item in items if isinstance(item, dict)]
 
 
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _valid_sender_name(value: Any) -> bool:
+    return _clean_text(value) not in UNKNOWN_SENDER_VALUES
+
+
+def _valid_sender_id(value: Any) -> bool:
+    return _clean_text(value) not in UNKNOWN_SENDER_VALUES
+
+
 def _sender_key(row: dict[str, Any]) -> str:
-    return str(row.get("sender_name") or row.get("sender_id") or "未知用户")
+    sender_id = _clean_text(row.get("sender_id"))
+    if _valid_sender_id(sender_id):
+        return f"id:{sender_id}"
+    sender_name = _clean_text(row.get("sender_name"))
+    if _valid_sender_name(sender_name):
+        return f"name:{sender_name}"
+    return "unknown:未知用户"
+
+
+def _sender_search_text(row: dict[str, Any]) -> str:
+    return " ".join((
+        _clean_text(row.get("sender_name")),
+        _clean_text(row.get("sender_id")),
+        _sender_key(row),
+    )).lower()
+
+
+def _sender_names(rows: list[dict[str, Any]]) -> list[str]:
+    return sorted({_clean_text(row.get("sender_name")) for row in rows if _valid_sender_name(row.get("sender_name"))})
+
+
+def _sender_ids(rows: list[dict[str, Any]]) -> list[str]:
+    return sorted({_clean_text(row.get("sender_id")) for row in rows if _valid_sender_id(row.get("sender_id"))})
+
+
+def _sender_display_name(rows: list[dict[str, Any]], ids: list[str]) -> str:
+    for row in rows:
+        name = _clean_text(row.get("sender_name"))
+        if _valid_sender_name(name):
+            return name
+    return f"ID {ids[0]}" if ids else "未知用户"
 
 
 def _gift_key(row: dict[str, Any]) -> tuple[str, str]:

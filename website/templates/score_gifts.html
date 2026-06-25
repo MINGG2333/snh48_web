@@ -247,9 +247,21 @@
 
     .analytics-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr);
       gap: 12px;
       margin-bottom: 16px;
+    }
+
+    .jump-grid {
+      margin-top: 10px;
+      grid-template-columns: minmax(160px, 220px) auto minmax(0, 1fr);
+    }
+
+    .jump-status {
+      color: var(--muted);
+      font-size: 12px;
+      align-self: center;
+      min-height: 20px;
     }
 
     .panel {
@@ -505,6 +517,23 @@
       align-items: center;
     }
 
+    .load-more {
+      padding: 12px 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    #loadMoreSentinel {
+      height: 1px;
+    }
+
+    .day-group.jump-highlight {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 1px rgba(240, 184, 75, 0.32);
+    }
+
     .btn:disabled {
       cursor: not-allowed;
       opacity: 0.45;
@@ -518,6 +547,7 @@
     @media (max-width: 1260px) {
       .kpi-grid { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
       .toolbar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .jump-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .analytics-grid { grid-template-columns: 1fr; }
       .detail-row { grid-template-columns: 138px minmax(150px, 0.8fr) minmax(200px, 1fr) minmax(130px, 0.6fr); }
       .detail-row .context-cell { grid-column: 2 / -1; }
@@ -534,6 +564,7 @@
       main { padding: 16px; }
       .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .toolbar-grid { grid-template-columns: 1fr; }
+      .jump-grid { grid-template-columns: 1fr; }
       .actions .btn { flex: 1; }
       .table-head, .pagination { align-items: flex-start; flex-direction: column; }
       .detail-list { padding: 12px; }
@@ -593,7 +624,7 @@
         <div class="kpi">
           <div class="label">送礼用户</div>
           <div class="value" id="uniqueSenders">0</div>
-          <div class="sub">按昵称合并</div>
+          <div class="sub">账号 ID 优先合并</div>
         </div>
         <div class="kpi">
           <div class="label">礼物种类</div>
@@ -620,7 +651,7 @@
           </div>
           <div class="field">
             <label for="senderInput">送礼用户</label>
-            <input id="senderInput" type="search" placeholder="昵称关键词">
+            <input id="senderInput" type="search" placeholder="昵称或账号 ID">
           </div>
           <div class="field">
             <label for="dateFromInput">开始日期</label>
@@ -642,17 +673,15 @@
             <button class="btn" id="resetBtn" type="button">重置</button>
           </div>
         </div>
-        <div class="toolbar-grid" style="margin-top:10px; grid-template-columns: minmax(140px, 180px) 1fr;">
+        <div class="toolbar-grid jump-grid">
           <div class="field">
-            <label for="pageSizeSelect">每页明细</label>
-            <select id="pageSizeSelect">
-              <option value="50">50 条</option>
-              <option value="100" selected>100 条</option>
-              <option value="200">200 条</option>
-              <option value="300">300 条</option>
-            </select>
+            <label for="jumpDateInput">日期跳转</label>
+            <input id="jumpDateInput" type="date">
           </div>
-          <div></div>
+          <div class="actions">
+            <button class="btn" id="jumpDateBtn" type="button">跳转</button>
+          </div>
+          <div class="jump-status" id="jumpStatus"></div>
         </div>
       </section>
 
@@ -671,13 +700,6 @@
           </div>
           <div class="bar-list" id="senderBars"></div>
         </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h2>每日分布</h2>
-            <span id="dailyDistributionCount">0 天</span>
-          </div>
-          <div class="daily-list" id="dailyRows"></div>
-        </div>
       </section>
 
       <section class="table-panel" id="detailPanel">
@@ -687,13 +709,8 @@
         </div>
         <div class="detail-list" id="detailList"></div>
         <div class="empty" id="emptyState">当前筛选条件下没有计分礼物</div>
-        <div class="pagination">
-          <div id="pageInfo">第 1 / 1 页</div>
-          <div class="pager-actions">
-            <button class="btn" id="prevBtn" type="button">上一页</button>
-            <button class="btn" id="nextBtn" type="button">下一页</button>
-          </div>
-        </div>
+        <div class="load-more" id="loadMoreState">已加载 0 条</div>
+        <div id="loadMoreSentinel"></div>
       </section>
     </main>
   </div>
@@ -705,6 +722,12 @@
     var password = "";
     var page = 1;
     var pageSize = 100;
+    var totalPages = 1;
+    var totalItems = 0;
+    var hasMore = false;
+    var loadingMore = false;
+    var loadedItems = [];
+    var loadObserver = null;
     var sourceFilter = "all";
     var refreshTimer = null;
     var refreshSeconds = 30;
@@ -735,22 +758,21 @@
     var dateFromInput = document.getElementById("dateFromInput");
     var dateToInput = document.getElementById("dateToInput");
     var sortSelect = document.getElementById("sortSelect");
-    var pageSizeSelect = document.getElementById("pageSizeSelect");
+    var jumpDateInput = document.getElementById("jumpDateInput");
+    var jumpDateBtn = document.getElementById("jumpDateBtn");
+    var jumpStatus = document.getElementById("jumpStatus");
     var applyBtn = document.getElementById("applyBtn");
     var resetBtn = document.getElementById("resetBtn");
     var giftBars = document.getElementById("giftBars");
     var senderBars = document.getElementById("senderBars");
-    var dailyRows = document.getElementById("dailyRows");
     var giftDistributionCount = document.getElementById("giftDistributionCount");
     var senderDistributionCount = document.getElementById("senderDistributionCount");
-    var dailyDistributionCount = document.getElementById("dailyDistributionCount");
     var resultSummary = document.getElementById("resultSummary");
     var activeFilters = document.getElementById("activeFilters");
     var detailList = document.getElementById("detailList");
     var emptyState = document.getElementById("emptyState");
-    var pageInfo = document.getElementById("pageInfo");
-    var prevBtn = document.getElementById("prevBtn");
-    var nextBtn = document.getElementById("nextBtn");
+    var loadMoreState = document.getElementById("loadMoreState");
+    var loadMoreSentinel = document.getElementById("loadMoreSentinel");
 
     function doLogin() {
       var value = passwordInput.value.trim();
@@ -760,9 +782,9 @@
       fetchData({ resetTimer: true });
     }
 
-    function buildQuery() {
+    function buildQuery(queryPage) {
       var params = new URLSearchParams();
-      params.set("page", String(page));
+      params.set("page", String(queryPage || page));
       params.set("page_size", String(pageSize));
       params.set("source", sourceFilter);
       params.set("gift_name", giftSelect.value || "");
@@ -775,22 +797,18 @@
 
     async function fetchData(options) {
       options = options || {};
+      page = 1;
+      loadedItems = [];
+      hasMore = false;
+      setLoadMoreText("正在加载...");
       dashboard.classList.add("loading");
       try {
-        var resp = await fetch("/api/score-gifts/data?" + buildQuery(), {
+        var resp = await fetch("/api/score-gifts/data?" + buildQuery(1), {
           headers: { "X-Score-Gifts-Password": password },
           cache: "no-store"
         });
 
-        if (resp.status === 401 || resp.status === 403) {
-          var detail = await readError(resp);
-          loginError.textContent = detail || "密码错误";
-          loginError.classList.add("show");
-          loginOverlay.classList.remove("hidden");
-          pageEl.classList.remove("ready");
-          passwordInput.value = "";
-          passwordInput.focus();
-          stopRefresh();
+        if (await handleAuthFailure(resp)) {
           return;
         }
 
@@ -799,15 +817,16 @@
         }
 
         var data = await resp.json();
-        if (data.page > data.total_pages && data.total_pages > 0) {
-          page = data.total_pages;
-          await fetchData(options);
-          return;
-        }
+        loadedItems = data.items || [];
+        page = Number(data.page || 1);
+        totalPages = Number(data.total_pages || 1);
+        totalItems = Number(data.total || loadedItems.length);
+        hasMore = page < totalPages;
 
         loginOverlay.classList.add("hidden");
         pageEl.classList.add("ready");
         render(data);
+        setupInfiniteScroll();
         if (options.resetTimer) resetRefreshTimer();
       } catch (err) {
         loginError.textContent = "加载失败：" + err.message;
@@ -815,6 +834,53 @@
       } finally {
         dashboard.classList.remove("loading");
       }
+    }
+
+    async function loadNextPage(options) {
+      options = options || {};
+      if (loadingMore || !hasMore) return false;
+      loadingMore = true;
+      var nextPage = page + 1;
+      setLoadMoreText("正在加载更多...");
+      try {
+        var resp = await fetch("/api/score-gifts/data?" + buildQuery(nextPage), {
+          headers: { "X-Score-Gifts-Password": password },
+          cache: "no-store"
+        });
+        if (await handleAuthFailure(resp)) return false;
+        if (!resp.ok) throw new Error(await readError(resp) || ("HTTP " + resp.status));
+
+        var data = await resp.json();
+        page = Number(data.page || nextPage);
+        totalPages = Number(data.total_pages || totalPages);
+        totalItems = Number(data.total || totalItems);
+        hasMore = page < totalPages;
+        appendItems(data.items || []);
+        renderDetails(loadedItems);
+        renderLoadState();
+        renderFilterSummary();
+        return true;
+      } catch (err) {
+        page = Math.max(1, nextPage - 1);
+        setLoadMoreText("加载失败：" + err.message);
+        return false;
+      } finally {
+        loadingMore = false;
+        if (!options.keepMessage) renderLoadState();
+      }
+    }
+
+    async function handleAuthFailure(resp) {
+      if (resp.status !== 401 && resp.status !== 403) return false;
+      var detail = await readError(resp);
+      loginError.textContent = detail || "密码错误";
+      loginError.classList.add("show");
+      loginOverlay.classList.remove("hidden");
+      pageEl.classList.remove("ready");
+      passwordInput.value = "";
+      passwordInput.focus();
+      stopRefresh();
+      return true;
     }
 
     async function readError(resp) {
@@ -847,10 +913,9 @@
       syncGiftOptions(data.gift_catalog || []);
       renderGiftBars(data.gift_distribution || []);
       renderSenderBars(data.sender_distribution || []);
-      renderDailyRows(data.daily_distribution || []);
-      renderDetails(data.items || []);
-      renderPaging(data);
-      renderFilterSummary(data);
+      renderDetails(loadedItems);
+      renderLoadState();
+      renderFilterSummary();
     }
 
     function syncGiftOptions(catalog) {
@@ -895,12 +960,20 @@
 
     function renderSenderBars(items) {
       senderDistributionCount.textContent = formatNumber(items.length) + " 人";
-      renderBarList(senderBars, items.slice(0, 12), {
+      renderBarList(senderBars, items, {
         classPrefix: "sender",
         maxValue: maxScore(items),
-        label: function(item) { return item.sender_name || "未知用户"; },
+        label: function(item) { return senderDisplayName(item); },
         meta: function(item) {
-          return "记录 " + formatNumber(item.records || 0) + " · 礼物 " + formatNumber(item.total_count || 0);
+          var parts = [];
+          var id = firstSenderId(item);
+          parts.push(id ? "ID " + id : "按昵称兜底");
+          if (Array.isArray(item.sender_names) && item.sender_names.length > 1) {
+            parts.push("昵称 " + item.sender_names.slice(0, 2).join(" / "));
+          }
+          parts.push("记录 " + formatNumber(item.records || 0));
+          parts.push("礼物 " + formatNumber(item.total_count || 0));
+          return parts.join(" · ");
         },
         value: function(item) { return item.total_score || 0; },
         split: function(item) {
@@ -961,56 +1034,6 @@
       });
     }
 
-    function renderDailyRows(items) {
-      dailyRows.textContent = "";
-      dailyDistributionCount.textContent = formatNumber(items.length) + " 天";
-      if (items.length === 0) {
-        dailyRows.appendChild(emptyInline("暂无数据"));
-        return;
-      }
-      var max = maxScore(items);
-      items.slice(0, 14).forEach(function(item) {
-        var row = document.createElement("div");
-        row.className = "daily-row";
-        var top = document.createElement("div");
-        top.className = "daily-top";
-        var date = document.createElement("div");
-        date.className = "daily-date";
-        date.textContent = item.date || "-";
-        var score = document.createElement("div");
-        score.className = "daily-score";
-        score.textContent = formatScore(item.total_score || 0);
-        top.appendChild(date);
-        top.appendChild(score);
-        row.appendChild(top);
-
-        var stack = document.createElement("div");
-        stack.className = "stack";
-        stack.style.setProperty("--room-share", roomShare(item) + "%");
-        var room = document.createElement("div");
-        room.className = "stack-room";
-        var live = document.createElement("div");
-        live.className = "stack-live";
-        stack.appendChild(room);
-        stack.appendChild(live);
-        row.appendChild(stack);
-
-        var meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = "房间 " + formatScore(item.room_score || 0) + " · 直播 " + formatScore(item.live_score || 0) + " · " + formatNumber(item.records || 0) + " 条";
-        row.appendChild(meta);
-
-        var track = document.createElement("div");
-        track.className = "bar-track";
-        var fill = document.createElement("div");
-        fill.className = "bar-fill";
-        fill.style.setProperty("--bar-width", percent(item.total_score || 0, max) + "%");
-        track.appendChild(fill);
-        row.appendChild(track);
-        dailyRows.appendChild(row);
-      });
-    }
-
     function renderDetails(items) {
       detailList.textContent = "";
       emptyState.classList.toggle("show", items.length === 0);
@@ -1032,6 +1055,7 @@
         var group = byDate[date];
         var section = document.createElement("article");
         section.className = "day-group";
+        section.setAttribute("data-date", date);
         var head = document.createElement("div");
         head.className = "day-head";
         var title = document.createElement("strong");
@@ -1065,7 +1089,7 @@
       row.appendChild(time);
 
       var sender = document.createElement("div");
-      sender.appendChild(textBlock(item.sender_name || "未知用户", item.sender_id ? "ID " + item.sender_id : ""));
+      sender.appendChild(textBlock(item.sender_name || "未知用户", senderMeta(item)));
       row.appendChild(sender);
 
       var gift = document.createElement("div");
@@ -1136,17 +1160,18 @@
       return roomParts.join(" · ");
     }
 
-    function renderPaging(data) {
-      page = Number(data.page || 1);
-      pageSize = Number(data.page_size || pageSize);
-      pageSizeSelect.value = String(pageSize);
-      pageInfo.textContent = "第 " + formatNumber(page) + " / " + formatNumber(data.total_pages || 1) + " 页";
-      prevBtn.disabled = page <= 1;
-      nextBtn.disabled = page >= Number(data.total_pages || 1);
+    function renderLoadState() {
+      var text = "已加载 " + formatNumber(loadedItems.length) + " / " + formatNumber(totalItems) + " 条";
+      if (hasMore) text += "，继续向下滚动";
+      loadMoreState.textContent = text;
     }
 
-    function renderFilterSummary(data) {
-      resultSummary.textContent = "共 " + formatNumber(data.total || 0) + " 条，当前页 " + formatNumber((data.items || []).length) + " 条";
+    function setLoadMoreText(text) {
+      loadMoreState.textContent = text;
+    }
+
+    function renderFilterSummary() {
+      resultSummary.textContent = "共 " + formatNumber(totalItems) + " 条，已加载 " + formatNumber(loadedItems.length) + " 条";
       var parts = [sourceText(sourceFilter)];
       if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
       if (senderInput.value.trim()) parts.push("用户：" + senderInput.value.trim());
@@ -1156,7 +1181,7 @@
 
     function applyFilters() {
       page = 1;
-      pageSize = Number(pageSizeSelect.value || 100);
+      jumpStatus.textContent = "";
       fetchData({ resetTimer: true });
     }
 
@@ -1166,11 +1191,119 @@
       senderInput.value = "";
       dateFromInput.value = "";
       dateToInput.value = "";
+      jumpDateInput.value = "";
+      jumpStatus.textContent = "";
       sortSelect.value = "time_desc";
-      pageSizeSelect.value = "100";
       page = 1;
       pageSize = 100;
       fetchData({ resetTimer: true });
+    }
+
+    function appendItems(items) {
+      var seen = {};
+      loadedItems.forEach(function(item) {
+        seen[item.id || item.event_time + item.gift_name + item.sender_name] = true;
+      });
+      items.forEach(function(item) {
+        var key = item.id || item.event_time + item.gift_name + item.sender_name;
+        if (seen[key]) return;
+        seen[key] = true;
+        loadedItems.push(item);
+      });
+    }
+
+    function setupInfiniteScroll() {
+      if (loadObserver) loadObserver.disconnect();
+      if ("IntersectionObserver" in window) {
+        loadObserver = new IntersectionObserver(function(entries) {
+          if (entries.some(function(entry) { return entry.isIntersecting; })) {
+            loadNextPage();
+          }
+        }, { rootMargin: "650px 0px" });
+        loadObserver.observe(loadMoreSentinel);
+      }
+    }
+
+    function checkNearBottom() {
+      if (!pageEl.classList.contains("ready")) return;
+      var scrollBottom = window.scrollY + window.innerHeight;
+      var docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      if (docHeight - scrollBottom < 720) loadNextPage();
+    }
+
+    async function jumpToDate() {
+      var target = jumpDateInput.value;
+      if (!target) return;
+      jumpStatus.textContent = "正在跳转到 " + target;
+      var section = findDateSection(target);
+      if (section) {
+        scrollToDateSection(section, target);
+        return;
+      }
+      if (!loadedItems.length) {
+        await fetchData({ resetTimer: true });
+      }
+
+      while (hasMore) {
+        var newest = newestLoadedDate();
+        var oldest = oldestLoadedDate();
+        if (newest && target > newest) break;
+        if (oldest && target > oldest && target < newest) break;
+        loadMoreSentinel.scrollIntoView({ behavior: "smooth", block: "end" });
+        await sleep(260);
+        var loaded = await loadNextPage({ keepMessage: true });
+        if (!loaded) break;
+        section = findDateSection(target);
+        if (section) {
+          scrollToDateSection(section, target);
+          return;
+        }
+      }
+      section = findDateSection(target);
+      if (section) {
+        scrollToDateSection(section, target);
+        return;
+      }
+      jumpStatus.textContent = "未找到 " + target + " 的计分礼物";
+      renderLoadState();
+    }
+
+    function findDateSection(date) {
+      return detailList.querySelector('.day-group[data-date="' + date + '"]');
+    }
+
+    function scrollToDateSection(section, date) {
+      Array.prototype.forEach.call(detailList.querySelectorAll(".jump-highlight"), function(node) {
+        node.classList.remove("jump-highlight");
+      });
+      section.classList.add("jump-highlight");
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      jumpStatus.textContent = "已定位到 " + date;
+      renderLoadState();
+    }
+
+    function newestLoadedDate() {
+      return loadedDateValues().reduce(function(max, date) {
+        return !max || date > max ? date : max;
+      }, "");
+    }
+
+    function oldestLoadedDate() {
+      return loadedDateValues().reduce(function(min, date) {
+        return !min || date < min ? date : min;
+      }, "");
+    }
+
+    function loadedDateValues() {
+      return loadedItems.map(function(item) {
+        return item.date || String(item.event_time || "").slice(0, 10);
+      }).filter(Boolean);
+    }
+
+    function sleep(ms) {
+      return new Promise(function(resolve) {
+        window.setTimeout(resolve, ms);
+      });
     }
 
     function setSource(value) {
@@ -1222,12 +1355,6 @@
       }, 0);
     }
 
-    function roomShare(item) {
-      var total = Number(item.total_score || 0);
-      if (!total) return 50;
-      return Math.max(0, Math.min(100, Number(item.room_score || 0) / total * 100));
-    }
-
     function sourceLabel(value) {
       if (value === "live") return "直播";
       if (value === "room") return "房间";
@@ -1238,6 +1365,23 @@
       if (value === "live") return "直播";
       if (value === "room") return "房间";
       return "全部来源";
+    }
+
+    function firstSenderId(item) {
+      return Array.isArray(item.sender_ids) && item.sender_ids.length ? String(item.sender_ids[0]) : "";
+    }
+
+    function senderDisplayName(item) {
+      return item.sender_name || item.sender_identifier || firstSenderId(item) || "未知用户";
+    }
+
+    function senderMeta(item) {
+      if (!item.sender_id) return "";
+      var parts = ["ID " + item.sender_id];
+      if (item.source === "live" && item.sender_id_source === "room_sender_identity_map") {
+        parts.push("昵称映射");
+      }
+      return parts.join(" · ");
     }
 
     function safeClass(value) {
@@ -1263,21 +1407,17 @@
     });
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
-    prevBtn.addEventListener("click", function() {
-      if (page <= 1) return;
-      page -= 1;
-      fetchData({ resetTimer: true });
+    jumpDateBtn.addEventListener("click", jumpToDate);
+    jumpDateInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") jumpToDate();
     });
-    nextBtn.addEventListener("click", function() {
-      page += 1;
-      fetchData({ resetTimer: true });
-    });
-    [giftSelect, dateFromInput, dateToInput, sortSelect, pageSizeSelect].forEach(function(node) {
+    [giftSelect, dateFromInput, dateToInput, sortSelect].forEach(function(node) {
       node.addEventListener("change", applyFilters);
     });
     senderInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") applyFilters();
     });
+    window.addEventListener("scroll", checkNearBottom, { passive: true });
   })();
   </script>
 </body>
