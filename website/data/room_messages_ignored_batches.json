@@ -1,5 +1,44 @@
 {
   "version": 1,
-  "updated_at": "2026-06-25 12:15:06",
-  "ignored_batches": []
+  "updated_at": "2026-06-25 17:35:59",
+  "ignored_batches": [
+    {
+      "batch_id": "5462900d-666c-48f8-b717-45349bc82a87:d7e12363-379a-4b1e-ba63-90ee4bf863ce",
+      "ignored_at": "2026-06-25 17:35:59",
+      "start_message_id": "5462900d-666c-48f8-b717-45349bc82a87",
+      "start_bj_time": "2026-06-23 19:00:19",
+      "end_message_id": "d7e12363-379a-4b1e-ba63-90ee4bf863ce",
+      "end_bj_time": "2026-06-25 13:32:05",
+      "count": 27,
+      "gift_message_ids": [
+        "5462900d-666c-48f8-b717-45349bc82a87",
+        "aafa78a2-0061-4e3a-ba94-5e1de1eec6d5",
+        "8c0de24c-b7db-492e-95ec-1a8161d9a059",
+        "87325c41-4d96-4c91-beb4-62bde73efbd4",
+        "cbee881f-54c0-45be-8820-b4e557b5293c",
+        "56d701b1-5c6c-436c-bdc0-084f47c62464",
+        "b7288543-4775-45df-bc87-4ad32afef592",
+        "dd003180-ccfe-4d18-b2d6-b37522e6aa2c",
+        "d20084a6-4324-46c2-9b2e-5ce917fc0e24",
+        "4ec30f31-667e-46d0-87b6-e9bdcd0ef413",
+        "460b1dbd-9a9e-4e83-9015-36133df6b886",
+        "117956e3-e9a1-4c17-8bf5-e47db6cb2b96",
+        "3efdff99-a15f-4b39-aac2-caed36a27205",
+        "29f637c7-922a-45f4-ad79-37a452160aa6",
+        "164b5f9f-912a-40ab-8d03-6d2b15c2876a",
+        "f96c8522-32b6-49f7-be99-e6f35997e8c4",
+        "26b0a098-4cd0-45fa-85b4-6bf431bf4b46",
+        "47a9e4da-b09a-4383-b5ee-88570810fdb7",
+        "5329a4a6-79a5-45eb-a113-61a68a3395b7",
+        "85af2d62-d32d-4434-bc48-f376b718d030",
+        "5255cb6e-c3d5-4a08-812f-12a991cd090d",
+        "e7d132cb-4683-4779-aa53-8d94d0bb0baa",
+        "bc272a15-ed01-45af-a021-6dc99975963b",
+        "60faabf6-2073-4b73-88e3-ca55f5f16e92",
+        "de287e00-e8da-4945-8077-15d75e55aba2",
+        "4424d8f3-2dfa-490f-bcc4-687b2a063156",
+        "d7e12363-379a-4b1e-ba63-90ee4bf863ce"
+      ]
+    }
+  ]
 }
