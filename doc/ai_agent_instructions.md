@@ -236,7 +236,7 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/scroller-admin` | 背景词管理 | ❌ 仅 URL 访问（需密码） |
 | `/ob` | 观察页 | ❌ 仅 URL 访问（需密码） |
 | `/gift-replies` / `/gr` | 礼物回复管理页 | ❌ 仅 URL 访问（需密码） |
-| `/room-messages` / `/rm` | 房间消息管理页 | ❌ 仅 URL 访问（需密码） |
+| `/room-messages` / `/room` | 房间消息管理页 | ❌ 仅 URL 访问（需密码） |
 | `/score-gifts` / `/sg` | 计分礼物管理页 | ❌ 仅 URL 访问（需密码） |
 
 ### 时光轴地图功能

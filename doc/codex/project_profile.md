@@ -98,7 +98,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/room-messages`，短入口：`/rm`
+- 页面入口：`/room-messages`，短入口：`/room`；旧短入口 `/rm` 保留兼容。
 - API：`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore`
 - 数据源：`ROOM_MESSAGES_CSV_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv`
 - 忽略状态：`ROOM_MESSAGES_IGNORE_PATH`，默认 `/home/snh48_web/website/data/room_messages_ignored_batches.json`

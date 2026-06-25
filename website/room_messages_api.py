@@ -342,9 +342,9 @@ def _sync_ignored_state_from_git() -> None:
     branch = cfg.ROOM_MESSAGES_IGNORE_GIT_BRANCH
     remote_ref = f"{remote}/{branch}"
     _git(["fetch", remote, branch])
-    exists = _git(["cat-file", "-e", f"{remote_ref}:{relpath}"], check=False).returncode == 0
-    if exists:
-        _git(["checkout", remote_ref, "--", relpath])
+    latest = _git(["show", f"{remote_ref}:{relpath}"], check=False)
+    if latest.returncode == 0:
+        _write_ignored_state_text(latest.stdout or "")
     elif not _ignore_path().exists():
         _write_ignored_state({"version": 1, "ignored_batches": []})
 
@@ -391,8 +391,9 @@ def _restore_ignored_state_from_git_best_effort() -> None:
     relpath = _ignore_git_relpath()
     remote_ref = f"{cfg.ROOM_MESSAGES_IGNORE_GIT_REMOTE}/{cfg.ROOM_MESSAGES_IGNORE_GIT_BRANCH}"
     try:
-        if _git(["cat-file", "-e", f"{remote_ref}:{relpath}"], check=False).returncode == 0:
-            _git(["checkout", remote_ref, "--", relpath])
+        latest = _git(["show", f"{remote_ref}:{relpath}"], check=False)
+        if latest.returncode == 0:
+            _write_ignored_state_text(latest.stdout or "")
     except _IgnoreGitSyncError:
         return
 
@@ -805,6 +806,14 @@ def _write_ignored_state(state: dict[str, Any]) -> None:
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def _write_ignored_state_text(content: str) -> None:
+    path = _ignore_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content if content.endswith("\n") else content + "\n", encoding="utf-8")
     tmp.replace(path)
 
 

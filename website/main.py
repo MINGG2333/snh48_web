@@ -329,7 +329,8 @@ async def gift_replies_page(request: Request):
     )
 
 
-@app.get("/rm", response_class=HTMLResponse)
+@app.get("/room", response_class=HTMLResponse)
+@app.get("/rm", response_class=HTMLResponse, include_in_schema=False)
 @app.get("/room-messages", response_class=HTMLResponse)
 async def room_messages_page(request: Request):
     """Admin page for room messages."""
