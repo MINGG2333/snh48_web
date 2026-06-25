@@ -515,8 +515,8 @@
     .primary-text { color: var(--text); font-size: 13px; font-weight: 680; word-break: break-word; }
     .secondary-text { color: var(--muted); font-size: 12px; margin-top: 3px; word-break: break-word; }
     .score-text { color: var(--gold); font-size: 16px; font-weight: 780; }
-    .fulfillment-cell .primary-text { color: var(--teal); }
-    .detail-row.source-live .fulfillment-cell .primary-text { color: var(--pink); }
+    .fulfillment-cell .primary-text.is-complete { color: var(--teal); }
+    .fulfillment-cell .primary-text.is-pending { color: var(--pink); }
 
     .gift-cell {
       display: flex;
@@ -1242,7 +1242,7 @@
 
       var fulfillment = document.createElement("div");
       fulfillment.className = "fulfillment-cell";
-      fulfillment.appendChild(textBlock(fulfillmentPrimary(item), fulfillmentSecondary(item)));
+      fulfillment.appendChild(fulfillmentBlock(item));
       row.appendChild(fulfillment);
 
       var context = document.createElement("div");
@@ -1265,6 +1265,21 @@
         wrap.appendChild(s);
       }
       return wrap;
+    }
+
+    function fulfillmentBlock(item) {
+      var primary = fulfillmentPrimary(item);
+      var wrap = textBlock(primary, fulfillmentSecondary(item));
+      var primaryNode = wrap.querySelector(".primary-text");
+      if (primaryNode) primaryNode.classList.add(fulfillmentToneClass(item, primary));
+      return wrap;
+    }
+
+    function fulfillmentToneClass(item, primary) {
+      if (item.source === "live") {
+        return item.business_status === "redeemed" || primary === "已兑换业务" ? "is-complete" : "is-pending";
+      }
+      return item.room_has_reply || primary === "已回复" ? "is-complete" : "is-pending";
     }
 
     function contextPrimary(item) {
