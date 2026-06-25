@@ -401,6 +401,59 @@
       margin-top: 2px;
     }
 
+    .distribution-more {
+      display: none;
+      width: calc(100% - 28px);
+      min-height: 42px;
+      margin: -3px 14px 14px;
+      border: 1px solid rgba(65, 185, 170, 0.34);
+      border-radius: 8px;
+      background: linear-gradient(90deg, rgba(65, 185, 170, 0.12), rgba(240, 184, 75, 0.08));
+      color: var(--text);
+      padding: 0 12px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+      text-align: left;
+    }
+
+    .distribution-more.show { display: flex; }
+
+    .distribution-more::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--teal), var(--gold), var(--pink));
+      opacity: 0.9;
+    }
+
+    .distribution-more:hover,
+    .distribution-more:focus-visible {
+      border-color: var(--gold);
+      outline: none;
+    }
+
+    .distribution-more-text {
+      font-size: 13px;
+      font-weight: 700;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .distribution-more-action {
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
     .daily-list {
       padding: 10px 14px 14px;
       display: flex;
@@ -833,6 +886,10 @@
             </div>
           </div>
           <div class="bar-list" id="senderBars"></div>
+          <button class="distribution-more" id="senderMoreBar" type="button" aria-haspopup="dialog" aria-controls="senderModal" aria-hidden="true">
+            <span class="distribution-more-text" id="senderMoreText"></span>
+            <span class="distribution-more-action">查看全部</span>
+          </button>
         </div>
       </section>
 
@@ -954,6 +1011,8 @@
     var resetBtn = document.getElementById("resetBtn");
     var giftBars = document.getElementById("giftBars");
     var senderBars = document.getElementById("senderBars");
+    var senderMoreBar = document.getElementById("senderMoreBar");
+    var senderMoreText = document.getElementById("senderMoreText");
     var senderModal = document.getElementById("senderModal");
     var senderModalBars = document.getElementById("senderModalBars");
     var openSenderModalBtn = document.getElementById("openSenderModalBtn");
@@ -1167,7 +1226,12 @@
     function renderSenderBars(items) {
       senderDistributionItems = items;
       senderDistributionCount.textContent = formatNumber(items.length) + " 人";
-      openSenderModalBtn.style.display = items.length > 10 ? "inline-flex" : "none";
+      var hiddenCount = Math.max(0, items.length - 10);
+      openSenderModalBtn.style.display = hiddenCount > 0 ? "inline-flex" : "none";
+      senderMoreBar.classList.toggle("show", hiddenCount > 0);
+      senderMoreBar.disabled = hiddenCount <= 0;
+      senderMoreBar.setAttribute("aria-hidden", hiddenCount > 0 ? "false" : "true");
+      senderMoreText.textContent = hiddenCount > 0 ? "还有 " + formatNumber(hiddenCount) + " 人未显示，点击查看完整分布" : "";
       renderBarList(senderBars, items.slice(0, 10), senderBarOptions(items));
       if (!senderModal.classList.contains("hidden")) renderSenderModal();
     }
@@ -1836,6 +1900,7 @@
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
     openSenderModalBtn.addEventListener("click", openSenderModal);
+    senderMoreBar.addEventListener("click", openSenderModal);
     closeSenderModalBtn.addEventListener("click", closeSenderModal);
     senderModalBackdrop.addEventListener("click", closeSenderModal);
     closeBusinessModalBtn.addEventListener("click", closeBusinessModal);
