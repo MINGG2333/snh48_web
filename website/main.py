@@ -348,6 +348,7 @@ async def room_messages_page(request: Request):
 
 
 @app.get("/sg", response_class=HTMLResponse)
+@app.get("/score", response_class=HTMLResponse)
 @app.get("/score-gifts", response_class=HTMLResponse)
 async def score_gifts_page(request: Request):
     """Admin page for scoring gift statistics."""
