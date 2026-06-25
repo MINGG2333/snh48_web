@@ -41,7 +41,6 @@
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
 - `room_record/陈嘉仪_161808449/messages.csv`
-- `room_record/陈嘉仪_161808449/room_messages_ignored_batches.json`（房间消息页忽略状态，文件存在时同步）
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
@@ -102,14 +101,14 @@ node script/obfuscate_js.cjs
 - 页面入口：`/room-messages`，短入口：`/rm`
 - API：`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore`
 - 数据源：`ROOM_MESSAGES_CSV_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv`
-- 忽略状态：`ROOM_MESSAGES_IGNORE_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_messages_ignored_batches.json`
+- 忽略状态：`ROOM_MESSAGES_IGNORE_PATH`，默认 `/home/snh48_web/website/data/room_messages_ignored_batches.json`
 - 鉴权：默认复用 `GIFT_REPLIES_PASSWORD`；如需单独密码可设置 `ROOM_MESSAGES_PASSWORD`；请求头 `X-Room-Messages-Password`
 
 维护边界：
 
 - 页面不进入公开导航，仅 URL 访问并要求密码。
 - 交互是聊天记录式加载：首次读取最新一批，向上滚动加载更早消息，不使用页码切换。
-- 为支持阿里云房间消息页，数据同步清单包含完整 `messages.csv` 和存在时的 `room_messages_ignored_batches.json`；不同步语音原文件、图片归档或敏感配置。
+- 为支持阿里云房间消息页，数据同步清单包含完整 `messages.csv`；忽略状态文件放在网站仓库 `website/data/room_messages_ignored_batches.json`，点击标记或撤销时通过 GitHub 同步到另一台网站服务器，不走腾讯云到阿里云的单向数据同步。
 
 ### 计分礼物管理页
 

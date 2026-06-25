@@ -177,14 +177,17 @@ ROOM_MESSAGES_CSV_PATH = os.getenv(
 )
 ROOM_MESSAGES_IGNORE_PATH = os.getenv(
     "ROOM_MESSAGES_IGNORE_PATH",
-    str(
-        PROJECT_ROOT.parent
-        / "snh48-fan-hub"
-        / "room_record"
-        / "陈嘉仪_161808449"
-        / "room_messages_ignored_batches.json"
-    ),
+    str(PROJECT_ROOT / "website" / "data" / "room_messages_ignored_batches.json"),
 )
+ROOM_MESSAGES_IGNORE_GIT_SYNC = os.getenv("ROOM_MESSAGES_IGNORE_GIT_SYNC", "true").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+ROOM_MESSAGES_IGNORE_GIT_REMOTE = os.getenv("ROOM_MESSAGES_IGNORE_GIT_REMOTE", "origin")
+ROOM_MESSAGES_IGNORE_GIT_BRANCH = os.getenv("ROOM_MESSAGES_IGNORE_GIT_BRANCH", "main")
+ROOM_MESSAGES_IGNORE_GIT_RETRIES = int(os.getenv("ROOM_MESSAGES_IGNORE_GIT_RETRIES", "2"))
+ROOM_MESSAGES_IGNORE_GIT_TIMEOUT_SECONDS = int(os.getenv("ROOM_MESSAGES_IGNORE_GIT_TIMEOUT_SECONDS", "30"))
 ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS = int(os.getenv("ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS", "60"))
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────

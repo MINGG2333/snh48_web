@@ -10,7 +10,10 @@ from __future__ import annotations
 import csv
 import hmac
 import json
+import os
 import re
+import subprocess
+import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -71,6 +74,14 @@ _cache_ignore_mtime_ns = -2
 _cache_rows: list[dict[str, Any]] = []
 _cache_summary: dict[str, Any] = {}
 _ignore_lock = threading.Lock()
+
+
+class _IgnoreGitSyncError(Exception):
+    """Raised when the ignored-state Git sync fails."""
+
+
+class _IgnoreGitRaceError(_IgnoreGitSyncError):
+    """Raised when another server pushed the state first."""
 
 
 async def verify_room_messages_password(
@@ -218,34 +229,7 @@ def ignore_latest_unreplied_gift_batch(
     """Mark the current latest un-replied gift batch as ignored."""
     response.headers["Cache-Control"] = "no-store"
     with _ignore_lock:
-        _, summary = _load_dataset()
-        batch = summary.get("latest_unreplied_gift_batch") or {}
-        gift_message_ids = [str(item) for item in batch.get("gift_message_ids") or [] if item]
-        if not gift_message_ids:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可忽略的未回复礼物")
-
-        state = _load_ignored_state()
-        ignored_ids = _ignored_gift_ids(state)
-        if set(gift_message_ids).issubset(ignored_ids):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="这批礼物已经被忽略")
-
-        ignored_batches = _ignored_batches(state)
-        ignored_batch = {
-            "batch_id": _batch_id(batch),
-            "ignored_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "start_message_id": batch.get("start_message_id", ""),
-            "start_bj_time": batch.get("start_bj_time", ""),
-            "end_message_id": batch.get("end_message_id", ""),
-            "end_bj_time": batch.get("end_bj_time", ""),
-            "count": len(gift_message_ids),
-            "gift_message_ids": gift_message_ids,
-        }
-        ignored_batches.append(ignored_batch)
-        _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
-        _invalidate_cache()
-        _, new_summary = _load_dataset()
-
-    return _summary_payload(new_summary) | {"ignored_batch": ignored_batch}
+        return _run_ignored_state_mutation(_ignore_latest_unreplied_gift_batch_once)
 
 
 @router.post("/undo-ignore")
@@ -256,15 +240,77 @@ def undo_latest_ignored_gift_batch(
     """Undo the most recently ignored gift batch."""
     response.headers["Cache-Control"] = "no-store"
     with _ignore_lock:
-        state = _load_ignored_state()
-        ignored_batches = _ignored_batches(state)
-        if not ignored_batches:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可撤销的忽略记录")
-        undone_batch = ignored_batches.pop()
-        _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
-        _invalidate_cache()
-        _, new_summary = _load_dataset()
+        return _run_ignored_state_mutation(_undo_latest_ignored_gift_batch_once)
 
+
+def _run_ignored_state_mutation(mutation) -> dict[str, Any]:
+    attempts = max(1, int(cfg.ROOM_MESSAGES_IGNORE_GIT_RETRIES or 1))
+    for attempt in range(attempts):
+        try:
+            _sync_ignored_state_from_git()
+            _invalidate_cache()
+            return mutation()
+        except _IgnoreGitRaceError:
+            _restore_ignored_state_from_git_best_effort()
+            _invalidate_cache()
+            if attempt < attempts - 1:
+                continue
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="忽略状态刚刚被另一台服务器更新，请重试",
+            )
+        except _IgnoreGitSyncError as exc:
+            _restore_ignored_state_from_git_best_effort()
+            _invalidate_cache()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"忽略状态同步到 GitHub 失败：{exc}",
+            ) from exc
+
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="忽略状态同步冲突，请重试")
+
+
+def _ignore_latest_unreplied_gift_batch_once() -> dict[str, Any]:
+    _, summary = _load_dataset()
+    batch = summary.get("latest_unreplied_gift_batch") or {}
+    gift_message_ids = [str(item) for item in batch.get("gift_message_ids") or [] if item]
+    if not gift_message_ids:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可忽略的未回复礼物")
+
+    state = _load_ignored_state()
+    ignored_ids = _ignored_gift_ids(state)
+    if set(gift_message_ids).issubset(ignored_ids):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="这批礼物已经被忽略")
+
+    ignored_batches = _ignored_batches(state)
+    ignored_batch = {
+        "batch_id": _batch_id(batch),
+        "ignored_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "start_message_id": batch.get("start_message_id", ""),
+        "start_bj_time": batch.get("start_bj_time", ""),
+        "end_message_id": batch.get("end_message_id", ""),
+        "end_bj_time": batch.get("end_bj_time", ""),
+        "count": len(gift_message_ids),
+        "gift_message_ids": gift_message_ids,
+    }
+    ignored_batches.append(ignored_batch)
+    _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
+    _commit_ignored_state_to_git(f"Ignore room message gift batch {ignored_batch['batch_id']}")
+    _invalidate_cache()
+    _, new_summary = _load_dataset()
+    return _summary_payload(new_summary) | {"ignored_batch": ignored_batch}
+
+
+def _undo_latest_ignored_gift_batch_once() -> dict[str, Any]:
+    state = _load_ignored_state()
+    ignored_batches = _ignored_batches(state)
+    if not ignored_batches:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可撤销的忽略记录")
+    undone_batch = ignored_batches.pop()
+    _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
+    _commit_ignored_state_to_git(f"Undo room message gift batch {undone_batch.get('batch_id', '')}")
+    _invalidate_cache()
+    _, new_summary = _load_dataset()
     return _summary_payload(new_summary) | {"undone_batch": undone_batch}
 
 
@@ -274,6 +320,120 @@ def _data_path() -> Path:
 
 def _ignore_path() -> Path:
     return Path(cfg.ROOM_MESSAGES_IGNORE_PATH)
+
+
+def _ignore_git_enabled() -> bool:
+    return bool(cfg.ROOM_MESSAGES_IGNORE_GIT_SYNC and _ignore_git_relpath())
+
+
+def _ignore_git_relpath() -> str:
+    try:
+        return _ignore_path().resolve().relative_to(Path(cfg.PROJECT_ROOT).resolve()).as_posix()
+    except ValueError:
+        return ""
+
+
+def _sync_ignored_state_from_git() -> None:
+    if not _ignore_git_enabled():
+        return
+
+    relpath = _ignore_git_relpath()
+    remote = cfg.ROOM_MESSAGES_IGNORE_GIT_REMOTE
+    branch = cfg.ROOM_MESSAGES_IGNORE_GIT_BRANCH
+    remote_ref = f"{remote}/{branch}"
+    _git(["fetch", remote, branch])
+    exists = _git(["cat-file", "-e", f"{remote_ref}:{relpath}"], check=False).returncode == 0
+    if exists:
+        _git(["checkout", remote_ref, "--", relpath])
+    elif not _ignore_path().exists():
+        _write_ignored_state({"version": 1, "ignored_batches": []})
+
+
+def _commit_ignored_state_to_git(message: str) -> None:
+    if not _ignore_git_enabled():
+        return
+
+    relpath = _ignore_git_relpath()
+    remote = cfg.ROOM_MESSAGES_IGNORE_GIT_REMOTE
+    branch = cfg.ROOM_MESSAGES_IGNORE_GIT_BRANCH
+    remote_ref = f"{remote}/{branch}"
+    _git(["fetch", remote, branch])
+
+    with tempfile.TemporaryDirectory(prefix="room-messages-git-index-") as tmp:
+        env = _git_env()
+        env["GIT_INDEX_FILE"] = str(Path(tmp) / "index")
+        _git(["read-tree", remote_ref], env=env)
+        _git(["add", "--", relpath], env=env)
+        if _git(["diff", "--cached", "--quiet", "--", relpath], check=False, env=env).returncode == 0:
+            return
+        tree = _git_output(["write-tree"], env=env).strip()
+        parent = _git_output(["rev-parse", remote_ref]).strip()
+        commit = _git_output(["commit-tree", tree, "-p", parent, "-m", message], env=env).strip()
+
+    push = _git(["push", remote, f"{commit}:refs/heads/{branch}"], check=False)
+    if push.returncode != 0:
+        stderr = (push.stderr or "").strip()
+        if "fetch first" in stderr or "non-fast-forward" in stderr or "stale info" in stderr:
+            raise _IgnoreGitRaceError("GitHub 上已有更新")
+        raise _IgnoreGitSyncError(_short_git_error(push))
+
+    _git(["update-ref", f"refs/remotes/{remote}/{branch}", commit])
+    current_branch = _git_output(["rev-parse", "--abbrev-ref", "HEAD"], check=False).strip()
+    can_fast_forward = _git(["merge-base", "--is-ancestor", "HEAD", commit], check=False).returncode == 0
+    if current_branch == branch and can_fast_forward:
+        _git(["update-ref", f"refs/heads/{branch}", commit])
+        _git(["reset", "-q", "--", relpath])
+
+
+def _restore_ignored_state_from_git_best_effort() -> None:
+    if not _ignore_git_enabled():
+        return
+    relpath = _ignore_git_relpath()
+    remote_ref = f"{cfg.ROOM_MESSAGES_IGNORE_GIT_REMOTE}/{cfg.ROOM_MESSAGES_IGNORE_GIT_BRANCH}"
+    try:
+        if _git(["cat-file", "-e", f"{remote_ref}:{relpath}"], check=False).returncode == 0:
+            _git(["checkout", remote_ref, "--", relpath])
+    except _IgnoreGitSyncError:
+        return
+
+
+def _git(args: list[str], *, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    cmd = ["git", "-C", str(cfg.PROJECT_ROOT), *args]
+    try:
+        result = subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=cfg.ROOM_MESSAGES_IGNORE_GIT_TIMEOUT_SECONDS,
+            env=env or _git_env(),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise _IgnoreGitSyncError("Git 操作超时") from exc
+    if check and result.returncode != 0:
+        raise _IgnoreGitSyncError(_short_git_error(result))
+    return result
+
+
+def _git_output(args: list[str], *, check: bool = True, env: dict[str, str] | None = None) -> str:
+    return _git(args, check=check, env=env).stdout or ""
+
+
+def _git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GIT_AUTHOR_NAME", "SNH48 Room Messages Bot")
+    env.setdefault("GIT_AUTHOR_EMAIL", "room-messages-bot@users.noreply.github.com")
+    env.setdefault("GIT_COMMITTER_NAME", env["GIT_AUTHOR_NAME"])
+    env.setdefault("GIT_COMMITTER_EMAIL", env["GIT_AUTHOR_EMAIL"])
+    return env
+
+
+def _short_git_error(result: subprocess.CompletedProcess) -> str:
+    stderr = (result.stderr or "").strip()
+    stdout = (result.stdout or "").strip()
+    return stderr or stdout or f"git exited {result.returncode}"
 
 
 def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
