@@ -36,7 +36,7 @@
 | 背景词管理 | `/scroller-admin` | 无 | `website/templates/scroller_admin.html` | `/api/scroller/*` | `SCROLLER_PASSWORD`；`X-Scroller-Password` 或登录 Cookie | `website/data/scroller_texts.json` |
 | 观察页 | `/ob` | 无 | `website/templates/ob.html` | `/api/ob/data`、`/api/ob/mark-read` | `OB_PASSWORD`；`X-Ob-Password` | 访问日志、通知中心数据 |
 | 礼物回复管理 | `/gift-replies` | `/gr` | `website/templates/gift_replies.html` | `/api/gift-replies/data`、`/api/gift-replies/summary` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/` |
-| 房间消息管理 | `/room-messages` | `/rm` | `website/templates/room_messages.html` | `/api/room-messages/data`、`/api/room-messages/summary` | `ROOM_MESSAGES_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Room-Messages-Password` | `ROOM_MESSAGES_CSV_PATH`，默认 fan-hub `messages.csv` |
+| 房间消息管理 | `/room-messages` | `/rm` | `website/templates/room_messages.html` | `/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore` | `ROOM_MESSAGES_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Room-Messages-Password` | `ROOM_MESSAGES_CSV_PATH`，默认 fan-hub `messages.csv`；`ROOM_MESSAGES_IGNORE_PATH`，默认 fan-hub `room_messages_ignored_batches.json` |
 | 计分礼物管理 | `/score-gifts` | `/sg` | `website/templates/score_gifts.html` | `/api/score-gifts/data`、`/api/score-gifts/summary` | `SCORE_GIFTS_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Score-Gifts-Password` | `SCORE_GIFTS_DATA_PATH`，默认 fan-hub `score_gifts.json` |
 
 ## 非页面入口

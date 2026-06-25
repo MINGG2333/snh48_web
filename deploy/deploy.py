@@ -110,6 +110,11 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv",
             },
             {
+                "type": "file",
+                "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_messages_ignored_batches.json",
+                "optional": True,
+            },
+            {
                 "type": "dir",
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts",
                 "delete": True,
@@ -711,7 +716,14 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
             opts += " --delete"
         src = src_path.rstrip("/") + "/" if is_dir else src_path
         dst = f"{dest['ssh']}:{dest_path.rstrip('/') + '/' if is_dir else dest_path}"
-        remote(source, f"rsync {opts} {quote(src)} {quote(dst)}", dry_run=args.dry_run)
+        sync_command = f"rsync {opts} {quote(src)} {quote(dst)}"
+        if item.get("optional"):
+            sync_command = (
+                f"if [ -e {quote(src_path)} ]; then "
+                f"{sync_command}; "
+                f"else echo optional data path missing: {quote(src_path)}; fi"
+            )
+        remote(source, sync_command, dry_run=args.dry_run)
 
 
 def add_env_check_args(parser: argparse.ArgumentParser) -> None:

@@ -175,6 +175,16 @@ ROOM_MESSAGES_CSV_PATH = os.getenv(
         / "messages.csv"
     ),
 )
+ROOM_MESSAGES_IGNORE_PATH = os.getenv(
+    "ROOM_MESSAGES_IGNORE_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "room_messages_ignored_batches.json"
+    ),
+)
 ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS = int(os.getenv("ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS", "60"))
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────

@@ -249,7 +249,7 @@
       min-height: 0;
       overflow-y: auto;
       overflow-anchor: none;
-      padding: 18px 18px 26px;
+      padding: 18px 18px 122px;
       scroll-behavior: auto;
     }
 
@@ -493,11 +493,19 @@
 
     .update-pill.show { display: block; }
 
-    .unreplied-nav {
+    .unreplied-panel {
       position: absolute;
       right: 18px;
       bottom: 18px;
       z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      width: max-content;
+      max-width: min(360px, calc(100vw - 36px));
+    }
+
+    .unreplied-nav {
       min-width: 118px;
       min-height: 42px;
       border: 1px solid rgba(240, 184, 75, 0.58);
@@ -524,6 +532,64 @@
       cursor: default;
       filter: none;
       box-shadow: none;
+    }
+
+    .ignore-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 7px;
+    }
+
+    .ignore-btn {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(21, 27, 35, 0.92);
+      color: var(--muted);
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 720;
+      white-space: nowrap;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.28);
+    }
+
+    .ignore-btn.mark {
+      border-color: rgba(227, 111, 111, 0.42);
+      color: #f1b2b2;
+      background: rgba(227, 111, 111, 0.12);
+    }
+
+    .ignore-btn.undo {
+      border-color: rgba(98, 168, 255, 0.42);
+      color: #b9d8ff;
+      background: rgba(98, 168, 255, 0.12);
+    }
+
+    .ignore-btn:hover,
+    .ignore-btn:focus-visible {
+      filter: brightness(1.12);
+      outline: none;
+    }
+
+    .ignore-btn:disabled {
+      border-color: var(--line);
+      background: rgba(21, 27, 35, 0.72);
+      color: var(--faint);
+      cursor: default;
+      filter: none;
+      box-shadow: none;
+    }
+
+    .ignored-badge {
+      min-height: 28px;
+      border: 1px solid rgba(227, 111, 111, 0.46);
+      border-radius: 8px;
+      background: rgba(227, 111, 111, 0.12);
+      color: #f1b2b2;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1.35;
     }
 
     .jump-status {
@@ -600,18 +666,25 @@
       .btn { min-height: 34px; }
       .actions .btn { flex: 1; }
       .chat-scroll {
-        padding: 14px 12px calc(112px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+        padding: 14px 12px calc(164px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
       }
       .update-pill {
         bottom: calc(14px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
       }
-      .unreplied-nav {
+      .unreplied-panel {
         right: 12px;
         bottom: calc(64px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+        max-width: calc(100vw - 24px);
+      }
+      .unreplied-nav {
         min-width: 0;
         min-height: 38px;
         padding: 0 11px;
         font-size: 12px;
+      }
+      .ignore-btn {
+        min-height: 32px;
+        padding: 0 9px;
       }
       .message {
         grid-template-columns: 1fr;
@@ -718,7 +791,13 @@
     <main class="chat-shell" id="chatShell">
       <div class="jump-status hidden" id="jumpStatus">正在加载目标消息...</div>
       <button class="update-pill" id="updatePill" type="button">有新消息，点击查看最新</button>
-      <button class="unreplied-nav" id="unrepliedNav" type="button" disabled>暂无未回</button>
+      <div class="unreplied-panel" id="unrepliedPanel">
+        <button class="unreplied-nav" id="unrepliedNav" type="button" disabled>暂无未回</button>
+        <div class="ignore-actions">
+          <button class="ignore-btn mark" id="ignoreBatchBtn" type="button" disabled>标记为忽略</button>
+          <button class="ignore-btn undo" id="undoIgnoreBtn" type="button" disabled>撤销</button>
+        </div>
+      </div>
       <div class="chat-scroll" id="chatScroll">
         <div class="chat-inner">
           <div class="loader hidden" id="topLoader">加载更早消息中...</div>
@@ -746,6 +825,8 @@
     var activeJumpToken = 0;
     var latestSeen = "";
     var latestUnrepliedGiftBatch = null;
+    var latestIgnoredBatch = null;
+    var ignoreActionBusy = false;
     var typeOptionsHash = "";
 
     var loginOverlay = document.getElementById("loginOverlay");
@@ -777,6 +858,8 @@
     var resetBtn = document.getElementById("resetBtn");
     var updatePill = document.getElementById("updatePill");
     var unrepliedNav = document.getElementById("unrepliedNav");
+    var ignoreBatchBtn = document.getElementById("ignoreBatchBtn");
+    var undoIgnoreBtn = document.getElementById("undoIgnoreBtn");
 
     updateViewportInsets();
     window.addEventListener("resize", updateViewportInsets);
@@ -907,14 +990,42 @@
       }
     }
 
+    async function postRoomMessagesAction(path) {
+      var resp = await fetch(path, {
+        method: "POST",
+        headers: { "X-Room-Messages-Password": password },
+        cache: "no-store"
+      });
+
+      if (resp.status === 401 || resp.status === 403) {
+        var detail = await readError(resp);
+        loginError.textContent = detail || "密码错误";
+        loginError.classList.add("show");
+        loginOverlay.classList.remove("hidden");
+        pageEl.classList.remove("ready");
+        stopRefresh();
+        throw new Error(detail || "密码错误");
+      }
+
+      if (!resp.ok) {
+        throw new Error(await readError(resp) || ("HTTP " + resp.status));
+      }
+
+      return resp.json();
+    }
+
     function renderSummary(data) {
       var summary = data.summary || {};
-      totalMessages.textContent = formatNumber(data.total || 0);
+      var total = typeof data.total === "number" ? data.total : summary.total_messages;
+      if (typeof total === "number") {
+        totalMessages.textContent = formatNumber(total);
+      }
       latestTime.textContent = "最新：" + (summary.latest_bj_time || "-");
       refreshSeconds = Number(data.refresh_interval_seconds || 60);
       refreshSecondsEl.textContent = String(refreshSeconds);
       latestSeen = summary.latest_bj_time || latestSeen;
       latestUnrepliedGiftBatch = summary.latest_unreplied_gift_batch || null;
+      latestIgnoredBatch = summary.latest_ignored_batch || null;
       renderUnrepliedNav();
     }
 
@@ -926,6 +1037,7 @@
         unrepliedNav.textContent = "暂无未回";
         unrepliedNav.title = "当前没有未回复礼物";
         unrepliedNav.setAttribute("aria-label", "当前没有未回复礼物");
+        renderIgnoreButtons(false);
         return;
       }
 
@@ -934,6 +1046,69 @@
       var startTime = latestUnrepliedGiftBatch.start_bj_time || "";
       unrepliedNav.title = startTime ? "跳转到 " + startTime + " 开始的最新未回复礼物" : "跳转到最新未回复礼物";
       unrepliedNav.setAttribute("aria-label", unrepliedNav.title);
+      renderIgnoreButtons(hasTarget);
+    }
+
+    function renderIgnoreButtons(hasTarget) {
+      var canUndo = latestIgnoredBatch && latestIgnoredBatch.batch_id;
+      if (ignoreBatchBtn) {
+        ignoreBatchBtn.disabled = ignoreActionBusy || !hasTarget;
+        ignoreBatchBtn.title = hasTarget ? "把当前最新一批未回礼物标记为忽略" : "当前没有可忽略的未回礼物";
+      }
+      if (undoIgnoreBtn) {
+        undoIgnoreBtn.disabled = ignoreActionBusy || !canUndo;
+        undoIgnoreBtn.title = canUndo ? "撤销最近一次忽略" : "当前没有可撤销的忽略记录";
+      }
+    }
+
+    function setIgnoreActionBusy(busy) {
+      ignoreActionBusy = busy;
+      renderUnrepliedNav();
+    }
+
+    async function markLatestBatchIgnored() {
+      var batch = latestUnrepliedGiftBatch || {};
+      if (!batch.start_message_id) {
+        showJumpStatus("当前没有可忽略的未回礼物");
+        return;
+      }
+
+      setIgnoreActionBusy(true);
+      showJumpStatus("正在标记忽略...");
+      try {
+        var data = await postRoomMessagesAction("/api/room-messages/ignore-latest-batch");
+        renderSummary(data);
+        setLoadedIgnoredState((data.ignored_batch && data.ignored_batch.gift_message_ids) || [], true);
+        showJumpStatus("已标记忽略");
+      } catch (err) {
+        if (err.message) {
+          showJumpStatus(err.message);
+        }
+      } finally {
+        setIgnoreActionBusy(false);
+      }
+    }
+
+    async function undoLatestIgnoredBatch() {
+      if (!latestIgnoredBatch || !latestIgnoredBatch.batch_id) {
+        showJumpStatus("当前没有可撤销的忽略记录");
+        return;
+      }
+
+      setIgnoreActionBusy(true);
+      showJumpStatus("正在撤销忽略...");
+      try {
+        var data = await postRoomMessagesAction("/api/room-messages/undo-ignore");
+        renderSummary(data);
+        setLoadedIgnoredState((data.undone_batch && data.undone_batch.gift_message_ids) || [], false);
+        showJumpStatus("已撤销忽略");
+      } catch (err) {
+        if (err.message) {
+          showJumpStatus(err.message);
+        }
+      } finally {
+        setIgnoreActionBusy(false);
+      }
     }
 
     function syncTypeOptions(typeCounts) {
@@ -985,6 +1160,7 @@
       var wrap = document.createElement("article");
       wrap.className = "message family-" + safeClass(item.family || "event");
       wrap.dataset.messageId = item.id || "";
+      wrap.dataset.ignored = item.ignored ? "true" : "false";
 
       var time = document.createElement("div");
       time.className = "time-col";
@@ -1076,6 +1252,10 @@
         });
       }
 
+      if (item.family === "gift" && item.ignored) {
+        actions.appendChild(createIgnoredBadge());
+      }
+
       if (item.family === "gift_reply" && item.gift_message_id) {
         actions.appendChild(createJumpButton(item.gift_message_id, "gift", "查看礼物"));
       } else if (item.reply_target && item.reply_target.id) {
@@ -1083,6 +1263,13 @@
       }
 
       return actions.childNodes.length ? actions : null;
+    }
+
+    function createIgnoredBadge() {
+      var badge = document.createElement("span");
+      badge.className = "ignored-badge";
+      badge.textContent = "已忽略";
+      return badge;
     }
 
     function createReplyTargetNode(target, fallbackQuote) {
@@ -1217,6 +1404,9 @@
         var data = await resp.json();
         if (data.summary) {
           latestUnrepliedGiftBatch = data.summary.latest_unreplied_gift_batch || null;
+          latestIgnoredBatch = data.summary.latest_ignored_batch || null;
+          refreshSeconds = Number(data.refresh_interval_seconds || refreshSeconds || 60);
+          refreshSecondsEl.textContent = String(refreshSeconds);
           renderUnrepliedNav();
         }
         var latest = data.summary && data.summary.latest_bj_time;
@@ -1544,6 +1734,40 @@
       return null;
     }
 
+    function setLoadedIgnoredState(messageIds, ignored) {
+      if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+      messageIds.forEach(function(messageId) {
+        var node = findMessageNode(String(messageId));
+        if (!node) return;
+        node.dataset.ignored = ignored ? "true" : "false";
+
+        var card = node.getElementsByClassName("card")[0];
+        if (!card) return;
+
+        var actions = card.getElementsByClassName("link-actions")[0];
+        if (ignored) {
+          if (!actions) {
+            actions = document.createElement("div");
+            actions.className = "link-actions";
+            card.appendChild(actions);
+          }
+          if (!actions.getElementsByClassName("ignored-badge")[0]) {
+            actions.appendChild(createIgnoredBadge());
+          }
+          return;
+        }
+
+        if (!actions) return;
+        var badge = actions.getElementsByClassName("ignored-badge")[0];
+        if (badge) {
+          actions.removeChild(badge);
+        }
+        if (actions.childNodes.length === 0) {
+          card.removeChild(actions);
+        }
+      });
+    }
+
     function waitForRender() {
       return new Promise(function(resolve) {
         window.requestAnimationFrame(function() {
@@ -1640,6 +1864,12 @@
     updatePill.addEventListener("click", reloadLatest);
     if (unrepliedNav) {
       unrepliedNav.addEventListener("click", jumpToLatestUnrepliedGifts);
+    }
+    if (ignoreBatchBtn) {
+      ignoreBatchBtn.addEventListener("click", markLatestBatchIgnored);
+    }
+    if (undoIgnoreBtn) {
+      undoIgnoreBtn.addEventListener("click", undoLatestIgnoredBatch);
     }
     if (filterToggle) {
       filterToggle.addEventListener("click", toggleFilterPanel);

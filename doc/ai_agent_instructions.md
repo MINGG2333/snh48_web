@@ -151,6 +151,7 @@ SCROLLER_PASSWORD=xxx          # 背景词管理密码
 GIFT_REPLIES_DIR=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
 ROOM_MESSAGES_PASSWORD=xxx     # 房间消息页密码（可选，默认复用礼物回复页密码）
 ROOM_MESSAGES_CSV_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv
+ROOM_MESSAGES_IGNORE_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_messages_ignored_batches.json
 SCORE_GIFTS_PASSWORD=xxx       # 计分礼物页密码（可选，默认复用礼物回复页密码）
 SCORE_GIFTS_DATA_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/score_gifts.json
 SITE_TITLE=心上珍藏集           # 网站标题

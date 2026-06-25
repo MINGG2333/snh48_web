@@ -38,7 +38,16 @@ echo "$LOG_TAG gift_replies done"
 rsync -az --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv"
 echo "$LOG_TAG messages.csv done"
 
-# 6. score_gifts（计分礼物页小数据）
+# 6. room_messages_ignored_batches.json（房间消息页忽略状态；首次未使用时可能不存在）
+IGNORED_BATCHES=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_messages_ignored_batches.json
+if [ -f "$IGNORED_BATCHES" ]; then
+  rsync -az --partial "$IGNORED_BATCHES" "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_messages_ignored_batches.json"
+  echo "$LOG_TAG room_messages_ignored_batches.json done"
+else
+  echo "$LOG_TAG room_messages_ignored_batches.json skipped"
+fi
+
+# 7. score_gifts（计分礼物页小数据）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"
 

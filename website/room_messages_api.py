@@ -67,8 +67,10 @@ TYPE_FAMILIES = {
 
 _cache_lock = threading.Lock()
 _cache_mtime_ns = -1
+_cache_ignore_mtime_ns = -2
 _cache_rows: list[dict[str, Any]] = []
 _cache_summary: dict[str, Any] = {}
+_ignore_lock = threading.Lock()
 
 
 async def verify_room_messages_password(
@@ -208,24 +210,88 @@ def get_room_messages_summary(
     }
 
 
+@router.post("/ignore-latest-batch")
+def ignore_latest_unreplied_gift_batch(
+    response: Response,
+    _=Depends(verify_room_messages_password),
+):
+    """Mark the current latest un-replied gift batch as ignored."""
+    response.headers["Cache-Control"] = "no-store"
+    with _ignore_lock:
+        _, summary = _load_dataset()
+        batch = summary.get("latest_unreplied_gift_batch") or {}
+        gift_message_ids = [str(item) for item in batch.get("gift_message_ids") or [] if item]
+        if not gift_message_ids:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可忽略的未回复礼物")
+
+        state = _load_ignored_state()
+        ignored_ids = _ignored_gift_ids(state)
+        if set(gift_message_ids).issubset(ignored_ids):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="这批礼物已经被忽略")
+
+        ignored_batches = _ignored_batches(state)
+        ignored_batch = {
+            "batch_id": _batch_id(batch),
+            "ignored_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "start_message_id": batch.get("start_message_id", ""),
+            "start_bj_time": batch.get("start_bj_time", ""),
+            "end_message_id": batch.get("end_message_id", ""),
+            "end_bj_time": batch.get("end_bj_time", ""),
+            "count": len(gift_message_ids),
+            "gift_message_ids": gift_message_ids,
+        }
+        ignored_batches.append(ignored_batch)
+        _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
+        _invalidate_cache()
+        _, new_summary = _load_dataset()
+
+    return _summary_payload(new_summary) | {"ignored_batch": ignored_batch}
+
+
+@router.post("/undo-ignore")
+def undo_latest_ignored_gift_batch(
+    response: Response,
+    _=Depends(verify_room_messages_password),
+):
+    """Undo the most recently ignored gift batch."""
+    response.headers["Cache-Control"] = "no-store"
+    with _ignore_lock:
+        state = _load_ignored_state()
+        ignored_batches = _ignored_batches(state)
+        if not ignored_batches:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可撤销的忽略记录")
+        undone_batch = ignored_batches.pop()
+        _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
+        _invalidate_cache()
+        _, new_summary = _load_dataset()
+
+    return _summary_payload(new_summary) | {"undone_batch": undone_batch}
+
+
 def _data_path() -> Path:
     return Path(cfg.ROOM_MESSAGES_CSV_PATH)
 
 
+def _ignore_path() -> Path:
+    return Path(cfg.ROOM_MESSAGES_IGNORE_PATH)
+
+
 def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    global _cache_mtime_ns, _cache_rows, _cache_summary
+    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_rows, _cache_summary
 
     path = _data_path()
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据未生成")
 
     stat = path.stat()
-    if _cache_mtime_ns == stat.st_mtime_ns:
+    ignore_mtime_ns = _ignore_mtime_ns()
+    if _cache_mtime_ns == stat.st_mtime_ns and _cache_ignore_mtime_ns == ignore_mtime_ns:
         return _cache_rows, _cache_summary
 
     with _cache_lock:
         stat = path.stat()
-        if _cache_mtime_ns == stat.st_mtime_ns:
+        ignore_mtime_ns = _ignore_mtime_ns()
+        if _cache_mtime_ns == stat.st_mtime_ns and _cache_ignore_mtime_ns == ignore_mtime_ns:
             return _cache_rows, _cache_summary
 
         rows: list[dict[str, Any]] = []
@@ -239,8 +305,12 @@ def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
 
         _attach_message_links(rows)
-        summary = _build_summary(rows, stat.st_mtime)
+        ignored_state = _load_ignored_state()
+        ignored_ids = _ignored_gift_ids(ignored_state)
+        _attach_ignored_gifts(rows, ignored_ids)
+        summary = _build_summary(rows, stat.st_mtime, ignored_state)
         _cache_mtime_ns = stat.st_mtime_ns
+        _cache_ignore_mtime_ns = ignore_mtime_ns
         _cache_rows = rows
         _cache_summary = summary
         return _cache_rows, _cache_summary
@@ -533,6 +603,117 @@ def _attach_message_links(rows: list[dict[str, Any]]) -> None:
             row["gift_message_id"] = row.get("reply_to_id", "")
 
 
+def _attach_ignored_gifts(rows: list[dict[str, Any]], ignored_ids: set[str]) -> None:
+    for row in rows:
+        if row.get("family") == "gift":
+            row["ignored"] = str(row.get("id", "")) in ignored_ids
+
+
+def _ignore_mtime_ns() -> int:
+    path = _ignore_path()
+    if not path.exists():
+        return -1
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return -1
+
+
+def _load_ignored_state() -> dict[str, Any]:
+    path = _ignore_path()
+    if not path.exists():
+        return {"version": 1, "ignored_batches": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "ignored_batches": []}
+    if not isinstance(data, dict):
+        return {"version": 1, "ignored_batches": []}
+    batches = data.get("ignored_batches")
+    if not isinstance(batches, list):
+        data["ignored_batches"] = []
+    return data
+
+
+def _write_ignored_state(state: dict[str, Any]) -> None:
+    path = _ignore_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ignored_batches": _ignored_batches(state),
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def _ignored_batches(state: dict[str, Any]) -> list[dict[str, Any]]:
+    batches = state.get("ignored_batches")
+    if not isinstance(batches, list):
+        return []
+    return [batch for batch in batches if isinstance(batch, dict)]
+
+
+def _ignored_gift_ids(state: dict[str, Any]) -> set[str]:
+    ignored: set[str] = set()
+    for batch in _ignored_batches(state):
+        for message_id in batch.get("gift_message_ids") or []:
+            if message_id:
+                ignored.add(str(message_id))
+    return ignored
+
+
+def _latest_ignored_batch(state: dict[str, Any]) -> dict[str, Any]:
+    batches = _ignored_batches(state)
+    if not batches:
+        return _empty_ignored_batch()
+    batch = batches[-1]
+    gift_ids = [str(item) for item in batch.get("gift_message_ids") or [] if item]
+    return {
+        "batch_id": batch.get("batch_id", ""),
+        "ignored_at": batch.get("ignored_at", ""),
+        "start_message_id": batch.get("start_message_id", ""),
+        "start_bj_time": batch.get("start_bj_time", ""),
+        "end_message_id": batch.get("end_message_id", ""),
+        "end_bj_time": batch.get("end_bj_time", ""),
+        "count": len(gift_ids) if gift_ids else int(batch.get("count") or 0),
+        "gift_message_ids": gift_ids,
+    }
+
+
+def _empty_ignored_batch() -> dict[str, Any]:
+    return {
+        "batch_id": "",
+        "ignored_at": "",
+        "start_message_id": "",
+        "start_bj_time": "",
+        "end_message_id": "",
+        "end_bj_time": "",
+        "count": 0,
+        "gift_message_ids": [],
+    }
+
+
+def _batch_id(batch: dict[str, Any]) -> str:
+    return f"{batch.get('start_message_id', '')}:{batch.get('end_message_id', '')}"
+
+
+def _invalidate_cache() -> None:
+    global _cache_mtime_ns, _cache_ignore_mtime_ns
+    _cache_mtime_ns = -1
+    _cache_ignore_mtime_ns = -2
+
+
+def _summary_payload(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "summary": summary,
+        "type_counts": summary.get("type_counts", []),
+        "family_counts": summary.get("family_counts", []),
+        "refresh_interval_seconds": cfg.ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS,
+    }
+
+
 def _reply_target(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row.get("id", ""),
@@ -555,12 +736,14 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if not key.startswith("_")}
 
 
-def _build_summary(rows: list[dict[str, Any]], mtime: float) -> dict[str, Any]:
+def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict[str, Any]) -> dict[str, Any]:
     type_counts: dict[str, int] = {}
     family_counts: dict[str, int] = {}
     for row in rows:
         type_counts[row["msg_type"]] = type_counts.get(row["msg_type"], 0) + 1
         family_counts[row["family"]] = family_counts.get(row["family"], 0) + 1
+    ignored_batches = _ignored_batches(ignored_state)
+    ignored_gift_ids = _ignored_gift_ids(ignored_state)
 
     return {
         "total_messages": len(rows),
@@ -569,6 +752,9 @@ def _build_summary(rows: list[dict[str, Any]], mtime: float) -> dict[str, Any]:
         "source_path": str(_data_path()),
         "source_mtime": datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S"),
         "type_kinds": len(type_counts),
+        "ignored_batch_count": len(ignored_batches),
+        "ignored_gift_count": len(ignored_gift_ids),
+        "latest_ignored_batch": _latest_ignored_batch(ignored_state),
         "latest_unreplied_gift_batch": _latest_unreplied_gift_batch(rows),
         "type_counts": [
             {
@@ -601,6 +787,7 @@ def _latest_unreplied_gift_batch(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "end_message_id": "",
             "end_bj_time": "",
             "count": 0,
+            "gift_message_ids": [],
         }
 
     batch_start_index = batch_end_index
@@ -615,11 +802,12 @@ def _latest_unreplied_gift_batch(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "end_message_id": end.get("id", ""),
         "end_bj_time": end.get("bj_time", ""),
         "count": batch_end_index - batch_start_index + 1,
+        "gift_message_ids": [str(row.get("id", "")) for row in gift_rows[batch_start_index : batch_end_index + 1] if row.get("id")],
     }
 
 
 def _is_unreplied_gift(row: dict[str, Any]) -> bool:
-    return row.get("family") == "gift" and int(row.get("reply_count") or 0) == 0
+    return row.get("family") == "gift" and int(row.get("reply_count") or 0) == 0 and not row.get("ignored")
 
 
 def _loads_json(value: Any) -> dict[str, Any]:
