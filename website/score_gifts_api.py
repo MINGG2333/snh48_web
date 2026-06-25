@@ -12,10 +12,13 @@ import json
 import os
 import re
 import threading
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
@@ -102,27 +105,14 @@ def get_score_gifts_data(
     """Return filtered score gift statistics and paginated detail rows."""
     response.headers["Cache-Control"] = "no-store"
 
-    source = source.strip().lower()
-    sort = sort.strip().lower()
-    if source not in VALID_SOURCES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的数据来源")
-    if sort not in VALID_SORTS:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的排序方式")
-    _validate_date("date_from", date_from)
-    _validate_date("date_to", date_to)
-    if date_from and date_to and date_from > date_to:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="日期范围无效")
-
-    doc = _load_dataset()
-    rows = _filter_rows(
-        _normalise_items(doc.get("items", [])),
+    doc, rows = _filtered_detail_rows(
         source=source,
-        gift_name=gift_name.strip(),
-        sender=sender.strip(),
-        date_from=date_from.strip(),
-        date_to=date_to.strip(),
+        gift_name=gift_name,
+        sender=sender,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
     )
-    rows = _sort_rows(rows, sort)
 
     total = len(rows)
     total_pages = max(1, ceil(total / page_size))
@@ -147,6 +137,37 @@ def get_score_gifts_data(
         "total": total,
         "total_pages": total_pages,
     }
+
+
+@router.get("/export.xlsx")
+def export_score_gifts_xlsx(
+    source: str = Query("all"),
+    gift_name: str = Query(""),
+    sender: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    sort: str = Query("time_desc"),
+    _=Depends(verify_score_gifts_password),
+):
+    """Export all filtered score gift detail rows as an XLSX workbook."""
+    doc, rows = _filtered_detail_rows(
+        source=source,
+        gift_name=gift_name,
+        sender=sender,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+    )
+    stamp = datetime.now(BJ_TZ).strftime("%Y%m%d_%H%M%S")
+    filename = f"score_gifts_{stamp}.xlsx"
+    return Response(
+        content=_build_score_gifts_xlsx(rows, str(doc.get("generated_at", ""))),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @router.get("/summary")
@@ -258,6 +279,40 @@ def _data_path() -> Path:
 
 def _business_state_path() -> Path:
     return _data_path().parent / LIVE_BUSINESS_STATE_FILENAME
+
+
+def _filtered_detail_rows(
+    *,
+    source: str,
+    gift_name: str,
+    sender: str,
+    date_from: str,
+    date_to: str,
+    sort: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    source = source.strip().lower()
+    sort = sort.strip().lower()
+    if source not in VALID_SOURCES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的数据来源")
+    if sort not in VALID_SORTS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的排序方式")
+    _validate_date("date_from", date_from)
+    _validate_date("date_to", date_to)
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="日期范围无效")
+
+    doc = _load_dataset()
+    items = _normalise_items(doc.get("items", []))
+    _apply_business_state_overrides(items)
+    rows = _filter_rows(
+        items,
+        source=source,
+        gift_name=gift_name.strip(),
+        sender=sender.strip(),
+        date_from=date_from.strip(),
+        date_to=date_to.strip(),
+    )
+    return doc, _sort_rows(rows, sort)
 
 
 def _load_dataset() -> dict[str, Any]:
@@ -546,6 +601,256 @@ def _normalise_distribution(items: Any) -> list[dict[str, Any]]:
     return [item for item in items if isinstance(item, dict)]
 
 
+EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("source_label", "来源"),
+    ("event_time", "送礼时间"),
+    ("date", "日期"),
+    ("sender_name", "送礼用户"),
+    ("sender_id", "送礼用户ID"),
+    ("sender_id_match_status", "用户ID匹配状态"),
+    ("receiver_name", "收礼成员"),
+    ("gift_id", "礼物ID"),
+    ("gift_name", "礼物"),
+    ("gift_count", "数量"),
+    ("unit_score", "单个分值"),
+    ("total_score", "总分值"),
+    ("score_source", "分值来源"),
+    ("fulfillment_label", "回复/业务状态"),
+    ("fulfillment_detail", "回复/业务详情"),
+    ("fulfillment_time", "回复/业务时间"),
+    ("room_reply_count", "房间回复数"),
+    ("room_first_reply_time", "房间首条回复时间"),
+    ("room_first_reply_content", "房间首条回复内容"),
+    ("business_status", "直播业务状态"),
+    ("business_type", "直播业务类型"),
+    ("business_content", "直播业务内容"),
+    ("business_offset", "业务弹幕偏移"),
+    ("business_review_status", "业务核实状态"),
+    ("business_reviewed_at", "业务核实时间"),
+    ("business_evidence", "业务证据"),
+    ("business_analysis_reasoning", "业务分析说明"),
+    ("live_title", "直播标题"),
+    ("live_bj_time", "直播时间"),
+    ("live_id", "直播ID"),
+    ("danmu_offset", "礼物弹幕偏移"),
+    ("danmu_line_number", "礼物弹幕行号"),
+    ("message_id", "房间消息ID"),
+    ("server_id", "房间服务端ID"),
+    ("raw_content", "原始内容"),
+    ("id", "记录ID"),
+)
+
+
+def _build_score_gifts_xlsx(rows: list[dict[str, Any]], generated_at: str) -> bytes:
+    workbook_files = {
+        "[Content_Types].xml": _xlsx_content_types(),
+        "_rels/.rels": _xlsx_root_rels(),
+        "xl/workbook.xml": _xlsx_workbook(),
+        "xl/_rels/workbook.xml.rels": _xlsx_workbook_rels(),
+        "xl/styles.xml": _xlsx_styles(),
+        "xl/worksheets/sheet1.xml": _xlsx_sheet(rows, generated_at),
+        "docProps/core.xml": _xlsx_core_props(),
+        "docProps/app.xml": _xlsx_app_props(),
+    }
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        for name, content in workbook_files.items():
+            archive.writestr(name, content.encode("utf-8"))
+    return output.getvalue()
+
+
+def _xlsx_sheet(rows: list[dict[str, Any]], generated_at: str) -> str:
+    all_rows: list[list[Any]] = [
+        ["计分礼物明细导出"],
+        ["数据生成时间", generated_at],
+        ["导出时间", _bj_now()],
+        [],
+        [label for _, label in EXPORT_COLUMNS],
+    ]
+    for row in rows:
+        all_rows.append([_export_cell_value(row, key) for key, _ in EXPORT_COLUMNS])
+
+    xml_rows = []
+    for row_index, values in enumerate(all_rows, start=1):
+        cells = []
+        for col_index, value in enumerate(values, start=1):
+            style = 2 if row_index <= 3 else (1 if row_index == 5 else 0)
+            cells.append(_xlsx_cell(row_index, col_index, value, style))
+        xml_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+
+    last_row = max(1, len(all_rows))
+    last_col = _xlsx_col_name(len(EXPORT_COLUMNS))
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<dimension ref="A1:{last_col}{last_row}"/>'
+        '<sheetViews><sheetView workbookViewId="0"><pane ySplit="5" topLeftCell="A6" activePane="bottomLeft" state="frozen"/>'
+        '<selection pane="bottomLeft"/></sheetView></sheetViews>'
+        '<sheetFormatPr defaultRowHeight="16"/>'
+        f'<cols>{_xlsx_columns()}</cols>'
+        f'<sheetData>{"".join(xml_rows)}</sheetData>'
+        f'<autoFilter ref="A5:{last_col}5"/>'
+        '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
+        '</worksheet>'
+    )
+
+
+def _export_cell_value(row: dict[str, Any], key: str) -> Any:
+    if key == "source_label":
+        return row.get("source_label") or _source_text(row.get("source"))
+    if key == "business_status":
+        status_value = row.get("business_status")
+        if status_value == "redeemed":
+            return "已兑换业务"
+        if status_value == "unredeemed":
+            return "未兑换业务"
+        if status_value == "uncertain":
+            return "待人工核实"
+        return status_value
+    if key == "business_review_status":
+        review = row.get("business_review_status")
+        if review == "verified":
+            return "已核实"
+        if review == "pending_review":
+            return "待核实"
+        if review == "pending_analysis":
+            return "待分析"
+        return review
+    return row.get(key)
+
+
+def _source_text(value: Any) -> str:
+    if value == "live":
+        return "直播"
+    if value == "room":
+        return "房间"
+    return _clean_text(value)
+
+
+def _xlsx_cell(row_index: int, col_index: int, value: Any, style: int) -> str:
+    ref = f"{_xlsx_col_name(col_index)}{row_index}"
+    style_attr = f' s="{style}"' if style else ""
+    if value is None:
+        value = ""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f'<c r="{ref}"{style_attr}><v>{value}</v></c>'
+    text = escape(_clean_text(value))
+    return f'<c r="{ref}" t="inlineStr"{style_attr}><is><t>{text}</t></is></c>'
+
+
+def _xlsx_col_name(index: int) -> str:
+    name = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        name = chr(65 + remainder) + name
+    return name
+
+
+def _xlsx_columns() -> str:
+    widths = [
+        10, 20, 12, 18, 16, 16, 14, 14, 16, 9, 11, 11,
+        24, 16, 30, 20, 12, 20, 34, 16, 16, 34, 16, 14,
+        20, 34, 38, 26, 20, 20, 16, 14, 22, 18, 34, 34,
+    ]
+    return "".join(
+        f'<col min="{index}" max="{index}" width="{width}" customWidth="1"/>'
+        for index, width in enumerate(widths, start=1)
+    )
+
+
+def _xlsx_content_types() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+        '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+        '</Types>'
+    )
+
+
+def _xlsx_root_rels() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
+        '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
+        '</Relationships>'
+    )
+
+
+def _xlsx_workbook() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="计分礼物明细" sheetId="1" r:id="rId1"/></sheets>'
+        '</workbook>'
+    )
+
+
+def _xlsx_workbook_rels() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        '</Relationships>'
+    )
+
+
+def _xlsx_styles() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font>'
+        '<font><b/><sz val="11"/><name val="Calibri"/></font>'
+        '<font><b/><sz val="14"/><name val="Calibri"/></font></fonts>'
+        '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF6"/><bgColor indexed="64"/></patternFill></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+        '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>'
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        '</styleSheet>'
+    )
+
+
+def _xlsx_core_props() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+        'xmlns:dcterms="http://purl.org/dc/terms/" '
+        'xmlns:dcmitype="http://purl.org/dc/dcmitype/" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+        '<dc:title>计分礼物明细导出</dc:title>'
+        '<dc:creator>snh48_web</dc:creator>'
+        f'<dcterms:created xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:created>'
+        f'<dcterms:modified xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:modified>'
+        '</cp:coreProperties>'
+    )
+
+
+def _xlsx_app_props() -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '
+        'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+        '<Application>snh48_web</Application>'
+        '</Properties>'
+    )
+
+
 def _bj_now() -> str:
     return datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -597,23 +902,85 @@ def _record_from_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _business_fields_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    status_value = _normalise_business_status(record.get("status") or record.get("business_status"))
+    review_status = _normalise_review_status(record.get("review_status") or record.get("business_review_status"))
+    if status_value in BUSINESS_STATUSES and review_status == "pending_analysis":
+        review_status = "pending_review"
+    business_type = _clean_text(record.get("business_type"))
+    business_content = _clean_text(record.get("business_content"))
+    evidence = _clean_text(record.get("evidence") or record.get("business_evidence"))
+    reasoning = _clean_text(record.get("reasoning") or record.get("business_analysis_reasoning"))
     return {
-        "business_status": _normalise_business_status(record.get("status")),
-        "business_type": _clean_text(record.get("business_type")),
-        "business_content": _clean_text(record.get("business_content")),
+        "fulfillment_status": status_value,
+        "fulfillment_label": _business_label(status_value),
+        "fulfillment_detail": _business_detail(status_value, business_type, business_content, evidence, reasoning),
+        "fulfillment_time": "",
+        "fulfillment_source": _clean_text(record.get("analysis_source")) or "codex_live_business_analysis",
+        "business_status": status_value,
+        "business_type": business_type,
+        "business_content": business_content,
         "business_offset": _clean_text(record.get("business_offset")),
         "business_line_number": _clean_text(record.get("business_line_number")),
-        "business_review_status": _clean_text(record.get("review_status")),
+        "business_window_seconds": _to_int(record.get("business_window_seconds"), 0),
+        "business_review_status": review_status,
         "business_reviewed_at": _clean_text(record.get("reviewed_at")),
+        "business_reviewed_by": _clean_text(record.get("reviewed_by")),
         "business_analysis_source": _clean_text(record.get("analysis_source")),
-        "business_analysis_reasoning": _clean_text(record.get("reasoning")),
-        "business_evidence": _clean_text(record.get("evidence")),
+        "business_analysis_model": _clean_text(record.get("analysis_model")),
+        "business_analysis_prompt_version": _to_int(record.get("analysis_prompt_version"), 1),
+        "business_analysis_at": _clean_text(record.get("analyzed_at")),
+        "business_analysis_confidence": _clean_text(record.get("confidence")),
+        "business_analysis_reasoning": reasoning,
+        "business_evidence": evidence,
     }
+
+
+def _apply_business_state_overrides(rows: list[dict[str, Any]]) -> None:
+    state = _load_business_state(_business_state_path())
+    records = state.get("records") if isinstance(state, dict) else {}
+    if not isinstance(records, dict):
+        return
+    for row in rows:
+        if row.get("source") != "live":
+            continue
+        record = records.get(row.get("id"))
+        if not isinstance(record, dict):
+            continue
+        signature = _live_business_item_signature(row)
+        if _clean_text(record.get("input_signature")) != signature:
+            continue
+        row.update(_business_fields_from_record(record))
 
 
 def _normalise_business_status(value: Any) -> str:
     value = _clean_text(value).lower()
     return value if value in BUSINESS_STATUSES else "pending_analysis"
+
+
+def _normalise_review_status(value: Any) -> str:
+    value = _clean_text(value).lower()
+    return value if value in {"pending_analysis", "pending_review", "verified"} else "pending_analysis"
+
+
+def _business_label(status_value: str) -> str:
+    if status_value == "redeemed":
+        return "已兑换业务"
+    if status_value == "unredeemed":
+        return "未兑换业务"
+    if status_value == "uncertain":
+        return "待人工核实"
+    return "待分析"
+
+
+def _business_detail(status_value: str, business_type: str, business_content: str, evidence: str, reasoning: str) -> str:
+    if status_value == "redeemed":
+        parts = [part for part in (business_type, business_content) if part]
+        return "：".join(parts) if parts else "已兑换业务"
+    if status_value == "unredeemed":
+        return business_content if business_content and business_content != "未兑换业务" else "未找到明确业务兑换"
+    if status_value == "uncertain":
+        return business_content or evidence or reasoning or "无法高置信度判断"
+    return "等待分析"
 
 
 def _live_business_item_signature(item: dict[str, Any]) -> str:

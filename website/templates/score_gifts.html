@@ -318,6 +318,11 @@
       white-space: nowrap;
     }
 
+    .mini-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+    }
+
     .bar-list {
       display: flex;
       flex-direction: column;
@@ -507,6 +512,28 @@
       border-bottom: 1px solid var(--line);
       color: var(--muted);
       font-size: 13px;
+    }
+
+    .table-head-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    #activeFilters {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .export-status {
+      color: var(--faint);
+      font-size: 12px;
+      white-space: nowrap;
     }
 
     .detail-list {
@@ -896,7 +923,11 @@
       <section class="table-panel" id="detailPanel">
         <div class="table-head">
           <div id="resultSummary">共 0 条</div>
-          <div id="activeFilters">全部来源</div>
+          <div class="table-head-actions">
+            <div id="activeFilters">全部来源</div>
+            <button class="mini-btn" id="exportDetailsBtn" type="button">导出 Excel</button>
+            <span class="export-status" id="exportStatus"></span>
+          </div>
         </div>
         <div class="detail-list" id="detailList"></div>
         <div class="empty" id="emptyState">当前筛选条件下没有计分礼物</div>
@@ -1034,6 +1065,8 @@
     var senderDistributionCount = document.getElementById("senderDistributionCount");
     var resultSummary = document.getElementById("resultSummary");
     var activeFilters = document.getElementById("activeFilters");
+    var exportDetailsBtn = document.getElementById("exportDetailsBtn");
+    var exportStatus = document.getElementById("exportStatus");
     var detailList = document.getElementById("detailList");
     var emptyState = document.getElementById("emptyState");
     var loadMoreState = document.getElementById("loadMoreState");
@@ -1057,6 +1090,13 @@
       params.set("date_from", dateFromInput.value || "");
       params.set("date_to", dateToInput.value || "");
       params.set("sort", sortSelect.value || "time_desc");
+      return params.toString();
+    }
+
+    function buildExportQuery() {
+      var params = new URLSearchParams(buildQuery(1));
+      params.delete("page");
+      params.delete("page_size");
       return params.toString();
     }
 
@@ -1671,6 +1711,36 @@
       activeFilters.textContent = parts.join(" · ");
     }
 
+    async function exportDetails() {
+      if (!password || exportDetailsBtn.disabled) return;
+      exportDetailsBtn.disabled = true;
+      exportStatus.textContent = "正在导出...";
+      try {
+        var resp = await fetch("/api/score-gifts/export.xlsx?" + buildExportQuery(), {
+          headers: { "X-Score-Gifts-Password": password },
+          cache: "no-store"
+        });
+        if (await handleAuthFailure(resp)) return;
+        if (!resp.ok) throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        var blob = await resp.blob();
+        var url = window.URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "score_gifts_" + compactTimestamp() + ".xlsx";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function() {
+          window.URL.revokeObjectURL(url);
+        }, 1000);
+        exportStatus.textContent = "已导出 " + formatNumber(totalItems) + " 条";
+      } catch (err) {
+        exportStatus.textContent = "导出失败：" + err.message;
+      } finally {
+        exportDetailsBtn.disabled = false;
+      }
+    }
+
     function applyFilters() {
       page = 1;
       jumpStatus.textContent = "";
@@ -1830,6 +1900,22 @@
       return number.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
     }
 
+    function compactTimestamp() {
+      var now = new Date();
+      function pad(value) {
+        return String(value).padStart(2, "0");
+      }
+      return [
+        now.getFullYear(),
+        pad(now.getMonth() + 1),
+        pad(now.getDate()),
+        "_",
+        pad(now.getHours()),
+        pad(now.getMinutes()),
+        pad(now.getSeconds())
+      ].join("");
+    }
+
     function maxScore(items) {
       return items.reduce(function(max, item) {
         return Math.max(max, Number(item.total_score || 0));
@@ -1899,6 +1985,7 @@
     });
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
+    exportDetailsBtn.addEventListener("click", exportDetails);
     openSenderModalBtn.addEventListener("click", openSenderModal);
     senderMoreBar.addEventListener("click", openSenderModal);
     closeSenderModalBtn.addEventListener("click", closeSenderModal);
