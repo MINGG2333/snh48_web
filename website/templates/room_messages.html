@@ -188,6 +188,16 @@
     .field input:focus,
     .field select:focus { border-color: var(--teal); }
 
+    .field input[type="date"] {
+      color-scheme: dark;
+    }
+
+    .field input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.92;
+      filter: invert(82%) sepia(12%) saturate(276%) hue-rotate(174deg) brightness(104%) contrast(92%);
+    }
+
     .family-strip {
       display: flex;
       gap: 6px;
