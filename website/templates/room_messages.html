@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site_title }} · 房间消息</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #1b2330;
+      --panel-3: #222c3a;
+      --line: #2d3848;
+      --text: #e6edf3;
+      --muted: #98a6b7;
+      --faint: #667384;
+      --teal: #40b8a8;
+      --blue: #62a8ff;
+      --gold: #f0b84b;
+      --green: #4cc27a;
+      --pink: #e77da5;
+      --violet: #a88af5;
+      --red: #e36f6f;
+      --orange: #df9554;
+      --ink: #0a0f15;
+      --visual-bottom-gap: 0px;
+    }
+
+    body {
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      line-height: 1.45;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      padding: 24px;
+    }
+
+    #loginOverlay.hidden { display: none; }
+
+    .login-box {
+      width: min(360px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+    }
+
+    .login-box h1 { font-size: 20px; margin-bottom: 8px; }
+    .login-box p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+
+    .login-box input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .login-box input:focus { border-color: var(--teal); }
+
+    .login-btn {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--teal);
+      color: var(--ink);
+      font-weight: 750;
+    }
+
+    .login-error {
+      display: none;
+      margin-top: 10px;
+      color: var(--red);
+      font-size: 13px;
+    }
+
+    .login-error.show { display: block; }
+
+    .page {
+      display: none;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    .page.ready { display: flex; }
+
+    .topbar {
+      flex: 0 0 auto;
+      border-bottom: 1px solid var(--line);
+      background: rgba(13, 17, 23, 0.96);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .topline {
+      padding: 14px 20px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .title h1 {
+      font-size: 19px;
+      font-weight: 720;
+    }
+
+    .title p {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+
+    .stats {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+
+    .stats strong { color: var(--teal); font-weight: 720; }
+
+    .mobile-filter-toggle {
+      display: none;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .filters {
+      padding: 0 20px 14px;
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr) minmax(160px, 220px) minmax(150px, 190px) minmax(150px, 190px) minmax(120px, 160px) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .field input:focus,
+    .field select:focus { border-color: var(--teal); }
+
+    .family-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 1px;
+    }
+
+    .chip {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--muted);
+      padding: 0 11px;
+      white-space: nowrap;
+    }
+
+    .chip.active {
+      color: var(--ink);
+      background: var(--teal);
+      border-color: var(--teal);
+      font-weight: 750;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 13px;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: var(--ink);
+      font-weight: 750;
+    }
+
+    .chat-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .chat-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-anchor: none;
+      padding: 18px 18px 26px;
+      scroll-behavior: auto;
+    }
+
+    .chat-inner {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    .loader {
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+      padding: 10px 0 16px;
+    }
+
+    .loader.hidden { display: none; }
+
+    .message {
+      display: grid;
+      grid-template-columns: 148px minmax(0, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: start;
+      overflow-anchor: none;
+    }
+
+    .time-col {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      padding-top: 9px;
+      position: sticky;
+      top: 0;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-left-width: 4px;
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 11px 12px;
+      min-width: 0;
+    }
+
+    .family-text .card { border-left-color: var(--teal); }
+    .family-reply .card { border-left-color: var(--blue); }
+    .family-gift .card { border-left-color: var(--gold); background: rgba(240, 184, 75, 0.08); }
+    .family-gift_reply .card { border-left-color: var(--green); background: rgba(76, 194, 122, 0.08); }
+    .family-media .card { border-left-color: var(--violet); }
+    .family-flipcard .card { border-left-color: var(--orange); }
+    .family-live .card { border-left-color: #54c7ec; }
+    .family-share .card { border-left-color: var(--pink); }
+    .family-event .card { border-left-color: var(--red); }
+
+    .msg-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .sender {
+      color: var(--text);
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .type-tag {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 0 9px;
+      color: var(--ink);
+      background: var(--teal);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .family-reply .type-tag { background: var(--blue); }
+    .family-gift .type-tag { background: var(--gold); }
+    .family-gift_reply .type-tag { background: var(--green); }
+    .family-media .type-tag { background: var(--violet); }
+    .family-flipcard .type-tag { background: var(--orange); }
+    .family-live .type-tag { background: #54c7ec; }
+    .family-share .type-tag { background: var(--pink); }
+    .family-event .type-tag { background: var(--red); }
+
+    .body {
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+
+    .gift-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .gift-icon {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+      border-radius: 6px;
+      border: 1px solid rgba(240, 184, 75, 0.35);
+      background: rgba(10, 15, 21, 0.82);
+    }
+
+    .gift-body {
+      min-width: 0;
+      line-height: 1.45;
+    }
+
+    .quote {
+      margin: 8px 0;
+      border-left: 3px solid var(--line);
+      background: rgba(255, 255, 255, 0.035);
+      color: var(--muted);
+      padding: 8px 10px;
+      border-radius: 6px;
+      word-break: break-word;
+      font-size: 13px;
+    }
+
+    .quote-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: var(--faint);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .quote-body {
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+
+    .quote .gift-line { gap: 7px; }
+    .quote .gift-icon {
+      flex-basis: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .detail {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 12px;
+      word-break: break-word;
+    }
+
+    .media {
+      margin-top: 10px;
+      max-width: 520px;
+    }
+
+    .media img {
+      max-width: min(420px, 100%);
+      max-height: 420px;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      display: block;
+    }
+
+    .media video,
+    .media audio {
+      width: min(520px, 100%);
+      display: block;
+    }
+
+    .link-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 9px;
+    }
+
+    .link-btn {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .link-btn:hover,
+    .link-btn:focus-visible {
+      border-color: var(--teal);
+      color: var(--teal);
+      outline: none;
+    }
+
+    .family-gift .link-btn[data-target-family="gift_reply"] {
+      border-color: rgba(76, 194, 122, 0.52);
+      background: rgba(76, 194, 122, 0.14);
+      color: #b8f5cf;
+      font-weight: 720;
+    }
+
+    .family-gift_reply .link-btn[data-target-family="gift"] {
+      border-color: rgba(240, 184, 75, 0.54);
+      background: rgba(240, 184, 75, 0.14);
+      color: #f4d492;
+      font-weight: 720;
+    }
+
+    .family-gift .link-btn[data-target-family="gift_reply"]:hover,
+    .family-gift .link-btn[data-target-family="gift_reply"]:focus-visible,
+    .family-gift_reply .link-btn[data-target-family="gift"]:hover,
+    .family-gift_reply .link-btn[data-target-family="gift"]:focus-visible {
+      filter: brightness(1.12);
+      outline: none;
+    }
+
+    .update-pill {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      border: 1px solid var(--teal);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--teal);
+      padding: 8px 14px;
+      font-size: 13px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+      display: none;
+    }
+
+    .update-pill.show { display: block; }
+
+    .unreplied-nav {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      z-index: 3;
+      min-width: 118px;
+      min-height: 42px;
+      border: 1px solid rgba(240, 184, 75, 0.58);
+      border-radius: 8px;
+      background: rgba(240, 184, 75, 0.14);
+      color: #f4d492;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 750;
+      white-space: nowrap;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    }
+
+    .unreplied-nav:hover,
+    .unreplied-nav:focus-visible {
+      filter: brightness(1.12);
+      outline: none;
+    }
+
+    .unreplied-nav:disabled {
+      border-color: var(--line);
+      background: rgba(21, 27, 35, 0.88);
+      color: var(--faint);
+      cursor: default;
+      filter: none;
+      box-shadow: none;
+    }
+
+    .jump-status {
+      position: absolute;
+      left: 50%;
+      top: 16px;
+      transform: translateX(-50%);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 8px 14px;
+      font-size: 13px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+      z-index: 2;
+    }
+
+    .jump-status.hidden { display: none; }
+
+    .message.jump-highlight .card {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 2px rgba(64, 184, 168, 0.26);
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 48px 12px;
+    }
+
+    .loading .chat-scroll { opacity: 0.68; }
+
+    @media (max-width: 1120px) {
+      .filters {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      body,
+      .page { height: 100dvh; }
+      .topline {
+        align-items: flex-start;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 10px 12px 9px;
+        gap: 8px;
+      }
+      .title { flex: 1 1 160px; min-width: 0; }
+      .title h1 { font-size: 18px; }
+      .title p { display: none; }
+      .mobile-filter-toggle { display: inline-flex; align-items: center; justify-content: center; }
+      .topbar.filters-open .mobile-filter-toggle {
+        border-color: var(--teal);
+        color: var(--teal);
+      }
+      .stats {
+        flex: 1 0 100%;
+        justify-content: flex-start;
+        gap: 5px 10px;
+        font-size: 12px;
+      }
+      .filters {
+        display: none;
+        grid-template-columns: 1fr !important;
+        padding: 0 12px 10px;
+        gap: 8px;
+      }
+      .topbar.filters-open .filters { display: grid; }
+      .field label { margin-bottom: 4px; }
+      .field input,
+      .field select,
+      .chip,
+      .btn { min-height: 34px; }
+      .actions .btn { flex: 1; }
+      .chat-scroll {
+        padding: 14px 12px calc(112px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+      }
+      .update-pill {
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+      }
+      .unreplied-nav {
+        right: 12px;
+        bottom: calc(64px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+        min-width: 0;
+        min-height: 38px;
+        padding: 0 11px;
+        font-size: 12px;
+      }
+      .message {
+        grid-template-columns: 1fr;
+        gap: 5px;
+      }
+      .time-col {
+        position: static;
+        text-align: left;
+        padding: 0 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h1>房间消息</h1>
+      <p>请输入房间消息页密码</p>
+      <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
+      <button class="login-btn" id="loginBtn">进入</button>
+      <div class="login-error" id="loginError">密码错误</div>
+    </div>
+  </div>
+
+  <div class="page" id="page">
+    <header class="topbar" id="topbar">
+      <div class="topline">
+        <div class="title">
+          <h1>房间消息</h1>
+          <p>完整房间消息记录，向上滚动加载更早内容</p>
+        </div>
+        <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
+        <div class="stats">
+          <span>总数 <strong id="totalMessages">0</strong></span>
+          <span id="latestTime">最新：-</span>
+          <span>刷新 <strong id="refreshSeconds">60</strong> 秒</span>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="field">
+          <label>消息分组</label>
+          <div class="family-strip" id="familyStrip">
+            <button class="chip active" type="button" data-family="all">全部</button>
+            <button class="chip" type="button" data-family="text">文本</button>
+            <button class="chip" type="button" data-family="reply">回复</button>
+            <button class="chip" type="button" data-family="gift">礼物</button>
+            <button class="chip" type="button" data-family="gift_reply">回礼物</button>
+            <button class="chip" type="button" data-family="media">媒体</button>
+            <button class="chip" type="button" data-family="flipcard">翻牌</button>
+            <button class="chip" type="button" data-family="live">直播</button>
+            <button class="chip" type="button" data-family="share">分享</button>
+            <button class="chip" type="button" data-family="event">事件</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="typeSelect">具体类型</label>
+          <select id="typeSelect">
+            <option value="all">全部类型</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="senderInput">发送者</label>
+          <input id="senderInput" type="search" placeholder="昵称关键词">
+        </div>
+        <div class="field">
+          <label for="keywordInput">内容关键词</label>
+          <input id="keywordInput" type="search" placeholder="消息/回复/礼物">
+        </div>
+        <div class="field">
+          <label for="limitSelect">每次加载</label>
+          <select id="limitSelect">
+            <option value="50">50 条</option>
+            <option value="100" selected>100 条</option>
+            <option value="200">200 条</option>
+            <option value="300">300 条</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="applyBtn" type="button">筛选</button>
+          <button class="btn" id="resetBtn" type="button">重置</button>
+        </div>
+      </div>
+      <div class="filters" style="grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) 1fr;">
+        <div class="field">
+          <label for="dateFromInput">开始日期</label>
+          <input id="dateFromInput" type="date">
+        </div>
+        <div class="field">
+          <label for="dateToInput">结束日期</label>
+          <input id="dateToInput" type="date">
+        </div>
+        <div class="field">
+          <label for="mediaSelect">媒体</label>
+          <select id="mediaSelect">
+            <option value="all">全部消息</option>
+            <option value="with">有媒体</option>
+            <option value="without">无媒体</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+    </header>
+
+    <main class="chat-shell" id="chatShell">
+      <div class="jump-status hidden" id="jumpStatus">正在加载目标消息...</div>
+      <button class="update-pill" id="updatePill" type="button">有新消息，点击查看最新</button>
+      <button class="unreplied-nav" id="unrepliedNav" type="button" disabled>暂无未回</button>
+      <div class="chat-scroll" id="chatScroll">
+        <div class="chat-inner">
+          <div class="loader hidden" id="topLoader">加载更早消息中...</div>
+          <div id="messageList"></div>
+          <div class="empty" id="emptyState" style="display:none;">当前筛选条件下没有消息</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+  (function() {
+    "use strict";
+
+    var password = "";
+    var selectedFamilies = ["all"];
+    var beforeIndex = null;
+    var hasMoreOlder = false;
+    var loading = false;
+    var loadedCount = 0;
+    var refreshSeconds = 60;
+    var refreshTimer = null;
+    var jumpStatusTimer = null;
+    var scrollAnimationFrame = null;
+    var activeJumpToken = 0;
+    var latestSeen = "";
+    var latestUnrepliedGiftBatch = null;
+    var typeOptionsHash = "";
+
+    var loginOverlay = document.getElementById("loginOverlay");
+    var passwordInput = document.getElementById("passwordInput");
+    var loginBtn = document.getElementById("loginBtn");
+    var loginError = document.getElementById("loginError");
+    var pageEl = document.getElementById("page");
+    var topbar = document.getElementById("topbar");
+    var filterToggle = document.getElementById("filterToggle");
+    var chatShell = document.getElementById("chatShell");
+    var chatScroll = document.getElementById("chatScroll");
+    var messageList = document.getElementById("messageList");
+    var topLoader = document.getElementById("topLoader");
+    var jumpStatus = document.getElementById("jumpStatus");
+    var emptyState = document.getElementById("emptyState");
+    var totalMessages = document.getElementById("totalMessages");
+    var loadedMessages = document.getElementById("loadedMessages");
+    var latestTime = document.getElementById("latestTime");
+    var refreshSecondsEl = document.getElementById("refreshSeconds");
+    var familyStrip = document.getElementById("familyStrip");
+    var typeSelect = document.getElementById("typeSelect");
+    var senderInput = document.getElementById("senderInput");
+    var keywordInput = document.getElementById("keywordInput");
+    var limitSelect = document.getElementById("limitSelect");
+    var dateFromInput = document.getElementById("dateFromInput");
+    var dateToInput = document.getElementById("dateToInput");
+    var mediaSelect = document.getElementById("mediaSelect");
+    var applyBtn = document.getElementById("applyBtn");
+    var resetBtn = document.getElementById("resetBtn");
+    var updatePill = document.getElementById("updatePill");
+    var unrepliedNav = document.getElementById("unrepliedNav");
+
+    updateViewportInsets();
+    window.addEventListener("resize", updateViewportInsets);
+    window.addEventListener("orientationchange", function() {
+      window.setTimeout(updateViewportInsets, 250);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", updateViewportInsets);
+      window.visualViewport.addEventListener("scroll", updateViewportInsets);
+    }
+
+    function updateViewportInsets() {
+      var gap = 0;
+      if (window.visualViewport) {
+        gap = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+      }
+      document.documentElement.style.setProperty("--visual-bottom-gap", Math.round(gap) + "px");
+    }
+
+    function doLogin() {
+      var value = passwordInput.value.trim();
+      if (!value) return;
+      password = value;
+      loginError.classList.remove("show");
+      reloadLatest();
+    }
+
+    function queryBase(limitOverride) {
+      var params = new URLSearchParams();
+      params.set("limit", String(limitOverride || limitSelect.value || "100"));
+      params.set("family", familyParam());
+      params.set("msg_type", typeSelect.value || "all");
+      params.set("sender", senderInput.value.trim());
+      params.set("keyword", keywordInput.value.trim());
+      params.set("has_media", mediaSelect.value || "all");
+      params.set("date_from", dateFromInput.value || "");
+      params.set("date_to", dateToInput.value || "");
+      return params;
+    }
+
+    async function fetchChunk(options) {
+      options = options || {};
+      if (loading) return null;
+      loading = true;
+      chatShell.classList.add("loading");
+      if (options.older) topLoader.classList.remove("hidden");
+      if (options.targetId) showJumpStatus(options.statusText || "正在加载目标消息...");
+
+      try {
+        var params = queryBase(options.limitOverride);
+        if (options.older && beforeIndex !== null) {
+          params.set("before_index", String(beforeIndex));
+        }
+        if (options.targetId) {
+          params.set("target_id", options.targetId);
+        }
+        var resp = await fetch("/api/room-messages/data?" + params.toString(), {
+          headers: { "X-Room-Messages-Password": password },
+          cache: "no-store"
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+          var detail = await readError(resp);
+          loginError.textContent = detail || "密码错误";
+          loginError.classList.add("show");
+          loginOverlay.classList.remove("hidden");
+          pageEl.classList.remove("ready");
+          stopRefresh();
+          return null;
+        }
+
+        if (!resp.ok) {
+          throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        }
+
+        var data = await resp.json();
+        loginOverlay.classList.add("hidden");
+        pageEl.classList.add("ready");
+        renderSummary(data);
+        syncTypeOptions(data.type_counts || []);
+
+        if (options.older) {
+          prependMessages(data.items || []);
+        } else {
+          messageList.textContent = "";
+          loadedCount = 0;
+          appendMessages(data.items || []);
+          window.requestAnimationFrame(function() {
+            if (!options.targetId) {
+              chatScroll.scrollTop = chatScroll.scrollHeight;
+            }
+          });
+          updatePill.classList.remove("show");
+          resetRefreshTimer();
+        }
+
+        beforeIndex = data.next_before_index;
+        hasMoreOlder = Boolean(data.has_more_older);
+        emptyState.style.display = data.total === 0 ? "block" : "none";
+        if (loadedMessages) {
+          loadedMessages.textContent = formatNumber(loadedCount);
+        }
+        if (!options.targetId) {
+          fillViewportIfNeeded();
+        }
+        return data;
+      } catch (err) {
+        if (options.targetId) {
+          showJumpStatus("没有在当前筛选结果中找到目标消息");
+        } else {
+          loginError.textContent = "加载失败：" + err.message;
+          loginError.classList.add("show");
+        }
+        return null;
+      } finally {
+        loading = false;
+        chatShell.classList.remove("loading");
+        topLoader.classList.add("hidden");
+      }
+    }
+
+    async function readError(resp) {
+      try {
+        var data = await resp.json();
+        return data.detail || "";
+      } catch (err) {
+        return "";
+      }
+    }
+
+    function renderSummary(data) {
+      var summary = data.summary || {};
+      totalMessages.textContent = formatNumber(data.total || 0);
+      latestTime.textContent = "最新：" + (summary.latest_bj_time || "-");
+      refreshSeconds = Number(data.refresh_interval_seconds || 60);
+      refreshSecondsEl.textContent = String(refreshSeconds);
+      latestSeen = summary.latest_bj_time || latestSeen;
+      latestUnrepliedGiftBatch = summary.latest_unreplied_gift_batch || null;
+      renderUnrepliedNav();
+    }
+
+    function renderUnrepliedNav() {
+      if (!unrepliedNav) return;
+      var hasTarget = latestUnrepliedGiftBatch && latestUnrepliedGiftBatch.start_message_id;
+      unrepliedNav.disabled = !hasTarget;
+      if (!hasTarget) {
+        unrepliedNav.textContent = "暂无未回";
+        unrepliedNav.title = "当前没有未回复礼物";
+        unrepliedNav.setAttribute("aria-label", "当前没有未回复礼物");
+        return;
+      }
+
+      var count = Number(latestUnrepliedGiftBatch.count || 0);
+      unrepliedNav.textContent = "最新一批未回礼物（" + formatNumber(count) + "条）";
+      var startTime = latestUnrepliedGiftBatch.start_bj_time || "";
+      unrepliedNav.title = startTime ? "跳转到 " + startTime + " 开始的最新未回复礼物" : "跳转到最新未回复礼物";
+      unrepliedNav.setAttribute("aria-label", unrepliedNav.title);
+    }
+
+    function syncTypeOptions(typeCounts) {
+      var hash = typeCounts.map(function(item) {
+        return [item.msg_type, item.count].join(":");
+      }).join("|");
+      if (hash === typeOptionsHash) return;
+      typeOptionsHash = hash;
+
+      var selected = typeSelect.value;
+      typeSelect.textContent = "";
+      var all = document.createElement("option");
+      all.value = "all";
+      all.textContent = "全部类型";
+      typeSelect.appendChild(all);
+
+      typeCounts.forEach(function(item) {
+        var opt = document.createElement("option");
+        opt.value = item.msg_type || "";
+        opt.textContent = (item.label || item.msg_type || "未知") + " (" + formatNumber(item.count || 0) + ")";
+        typeSelect.appendChild(opt);
+      });
+      typeSelect.value = selected || "all";
+    }
+
+    function appendMessages(items) {
+      items.forEach(function(item) {
+        messageList.appendChild(createMessageNode(item));
+      });
+      loadedCount += items.length;
+    }
+
+    function prependMessages(items) {
+      if (items.length === 0) return;
+      var oldHeight = chatScroll.scrollHeight;
+      var oldTop = chatScroll.scrollTop;
+      var frag = document.createDocumentFragment();
+      items.forEach(function(item) {
+        frag.appendChild(createMessageNode(item));
+      });
+      messageList.insertBefore(frag, messageList.firstChild);
+      loadedCount += items.length;
+      window.requestAnimationFrame(function() {
+        chatScroll.scrollTop = chatScroll.scrollHeight - oldHeight + oldTop;
+      });
+    }
+
+    function createMessageNode(item) {
+      var wrap = document.createElement("article");
+      wrap.className = "message family-" + safeClass(item.family || "event");
+      wrap.dataset.messageId = item.id || "";
+
+      var time = document.createElement("div");
+      time.className = "time-col";
+      time.textContent = item.bj_time || "-";
+      wrap.appendChild(time);
+
+      var card = document.createElement("div");
+      card.className = "card";
+
+      var head = document.createElement("div");
+      head.className = "msg-head";
+      var sender = document.createElement("div");
+      sender.className = "sender";
+      sender.textContent = item.sender_name || "未知用户";
+      head.appendChild(sender);
+      var tag = document.createElement("span");
+      tag.className = "type-tag";
+      tag.textContent = item.type_label || item.msg_type || "未知";
+      head.appendChild(tag);
+      card.appendChild(head);
+
+      if (item.reply_target) {
+        card.appendChild(createReplyTargetNode(item.reply_target, item.quote));
+      } else if (item.quote) {
+        card.appendChild(createPlainQuoteNode(item.quote));
+      }
+
+      if (item.family === "gift") {
+        card.appendChild(createGiftBodyNode(item));
+      } else {
+        var body = document.createElement("div");
+        body.className = "body";
+        body.textContent = item.body || item.title || item.raw_content || "-";
+        card.appendChild(body);
+      }
+
+      if (item.detail) {
+        var detail = document.createElement("div");
+        detail.className = "detail";
+        detail.textContent = item.detail;
+        card.appendChild(detail);
+      }
+
+      if (item.media_url && !(item.family === "gift" && item.media_kind === "image")) {
+        card.appendChild(createMediaNode(item));
+      }
+
+      var links = createLinkActionsNode(item);
+      if (links) {
+        card.appendChild(links);
+      }
+
+      wrap.appendChild(card);
+      return wrap;
+    }
+
+    function createGiftBodyNode(item) {
+      var line = document.createElement("div");
+      line.className = "gift-line";
+
+      if (item.media_url && item.media_kind === "image") {
+        var img = document.createElement("img");
+        img.className = "gift-icon";
+        img.src = item.media_url;
+        img.alt = "";
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        line.appendChild(img);
+      }
+
+      var body = document.createElement("div");
+      body.className = "body gift-body";
+      body.textContent = item.body || item.title || item.raw_content || "-";
+      line.appendChild(body);
+      return line;
+    }
+
+    function createLinkActionsNode(item) {
+      var actions = document.createElement("div");
+      actions.className = "link-actions";
+
+      if (item.family === "gift" && Array.isArray(item.reply_message_ids) && item.reply_message_ids.length > 0) {
+        item.reply_message_ids.forEach(function(replyId, index) {
+          actions.appendChild(createJumpButton(
+            replyId,
+            "gift_reply",
+            item.reply_message_ids.length > 1 ? "查看回礼 " + (index + 1) : "查看回礼"
+          ));
+        });
+      }
+
+      if (item.family === "gift_reply" && item.gift_message_id) {
+        actions.appendChild(createJumpButton(item.gift_message_id, "gift", "查看礼物"));
+      } else if (item.reply_target && item.reply_target.id) {
+        actions.appendChild(createJumpButton(item.reply_target.id, item.reply_target.family, "查看原消息"));
+      }
+
+      return actions.childNodes.length ? actions : null;
+    }
+
+    function createReplyTargetNode(target, fallbackQuote) {
+      var quote = document.createElement("div");
+      quote.className = "quote";
+
+      var meta = document.createElement("div");
+      meta.className = "quote-meta";
+      addMeta(meta, "回复");
+      addMeta(meta, target.sender_name || "未知用户");
+      addMeta(meta, target.bj_time || "-");
+      addMeta(meta, target.type_label || target.msg_type || "消息");
+      quote.appendChild(meta);
+
+      if (target.family === "gift") {
+        quote.appendChild(createGiftBodyNode({
+          media_url: target.media_url,
+          media_kind: target.media_kind,
+          body: targetText(target, fallbackQuote),
+          title: target.title,
+          raw_content: fallbackQuote,
+        }));
+      } else {
+        var body = document.createElement("div");
+        body.className = "quote-body";
+        body.textContent = targetText(target, fallbackQuote);
+        quote.appendChild(body);
+      }
+
+      return quote;
+    }
+
+    function createPlainQuoteNode(text) {
+      var quote = document.createElement("div");
+      quote.className = "quote";
+      var body = document.createElement("div");
+      body.className = "quote-body";
+      body.textContent = text;
+      quote.appendChild(body);
+      return quote;
+    }
+
+    function targetText(target, fallbackQuote) {
+      if (target.family === "gift") {
+        var parts = [target.gift_name || target.body || target.title || "礼物"];
+        if (target.gift_count) {
+          parts.push("x " + target.gift_count);
+        }
+        return parts.join(" ");
+      }
+      return target.body || target.title || fallbackQuote || "-";
+    }
+
+    function createJumpButton(targetId, targetFamily, label) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "link-btn";
+      button.dataset.targetId = targetId || "";
+      button.dataset.targetFamily = targetFamily || "";
+      button.textContent = label;
+      return button;
+    }
+
+    function createMediaNode(item) {
+      var media = document.createElement("div");
+      media.className = "media";
+      if (item.media_kind === "image") {
+        var img = document.createElement("img");
+        img.src = item.media_url;
+        img.alt = "";
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        media.appendChild(img);
+      } else if (item.media_kind === "audio") {
+        var audio = document.createElement("audio");
+        audio.controls = true;
+        audio.preload = "none";
+        audio.src = item.media_url;
+        media.appendChild(audio);
+      } else if (item.media_kind === "video") {
+        var video = document.createElement("video");
+        video.controls = true;
+        video.preload = "metadata";
+        video.src = item.media_url;
+        media.appendChild(video);
+      } else {
+        var link = document.createElement("a");
+        link.href = item.media_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "打开媒体";
+        media.appendChild(link);
+      }
+      return media;
+    }
+
+    function addMeta(parent, text) {
+      var span = document.createElement("span");
+      span.textContent = text;
+      parent.appendChild(span);
+    }
+
+    function reloadLatest() {
+      beforeIndex = null;
+      hasMoreOlder = false;
+      loadedCount = 0;
+      fetchChunk({ older: false });
+    }
+
+    function loadOlderIfNeeded() {
+      if (chatScroll.scrollTop > 160 || !hasMoreOlder || loading) return;
+      fetchChunk({ older: true });
+    }
+
+    function fillViewportIfNeeded() {
+      window.requestAnimationFrame(function() {
+        if (!hasMoreOlder || loading) return;
+        if (chatScroll.scrollHeight <= chatScroll.clientHeight + 120) {
+          fetchChunk({ older: true });
+        }
+      });
+    }
+
+    async function checkUpdates() {
+      if (!password || loading) return;
+      try {
+        var resp = await fetch("/api/room-messages/summary", {
+          headers: { "X-Room-Messages-Password": password },
+          cache: "no-store"
+        });
+        if (!resp.ok) return;
+        var data = await resp.json();
+        if (data.summary) {
+          latestUnrepliedGiftBatch = data.summary.latest_unreplied_gift_batch || null;
+          renderUnrepliedNav();
+        }
+        var latest = data.summary && data.summary.latest_bj_time;
+        if (latest && latestSeen && latest !== latestSeen) {
+          if (isNearBottom()) {
+            reloadLatest();
+          } else {
+            updatePill.classList.add("show");
+          }
+        }
+      } catch (err) {
+        return;
+      }
+    }
+
+    function isNearBottom() {
+      return chatScroll.scrollHeight - chatScroll.scrollTop - chatScroll.clientHeight < 180;
+    }
+
+    function stopRefresh() {
+      if (refreshTimer) {
+        window.clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    }
+
+    function resetRefreshTimer() {
+      stopRefresh();
+      refreshTimer = window.setInterval(checkUpdates, Math.max(refreshSeconds, 15) * 1000);
+    }
+
+    function setFilterPanelOpen(open) {
+      if (!topbar || !filterToggle) return;
+      topbar.classList.toggle("filters-open", open);
+      filterToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      filterToggle.textContent = open ? "收起" : "筛选";
+    }
+
+    function toggleFilterPanel() {
+      if (!topbar) return;
+      setFilterPanelOpen(!topbar.classList.contains("filters-open"));
+    }
+
+    function familyParam() {
+      return selectedFamilies.indexOf("all") !== -1 ? "all" : selectedFamilies.join(",");
+    }
+
+    function toggleFamily(value) {
+      if (value === "all") {
+        selectedFamilies = ["all"];
+        syncFamilyButtons();
+        return;
+      }
+
+      selectedFamilies = selectedFamilies.filter(function(item) {
+        return item !== "all";
+      });
+
+      var existing = selectedFamilies.indexOf(value);
+      if (existing >= 0) {
+        selectedFamilies.splice(existing, 1);
+      } else {
+        selectedFamilies.push(value);
+      }
+
+      if (selectedFamilies.length === 0) {
+        selectedFamilies = ["all"];
+      }
+      syncFamilyButtons();
+    }
+
+    function ensureFamilySelected(value) {
+      if (!value || selectedFamilies.indexOf("all") !== -1 || selectedFamilies.indexOf(value) !== -1) {
+        return;
+      }
+      selectedFamilies.push(value);
+      syncFamilyButtons();
+    }
+
+    function setFamiliesOnly(values) {
+      selectedFamilies = values.slice();
+      syncFamilyButtons();
+    }
+
+    function isGiftReplyFamilyView() {
+      return selectedFamilies.length === 2
+        && selectedFamilies.indexOf("gift") !== -1
+        && selectedFamilies.indexOf("gift_reply") !== -1;
+    }
+
+    function hasExtraFilters() {
+      return typeSelect.value !== "all"
+        || Boolean(senderInput.value.trim())
+        || Boolean(keywordInput.value.trim())
+        || Boolean(dateFromInput.value)
+        || Boolean(dateToInput.value)
+        || mediaSelect.value !== "all";
+    }
+
+    function clearExtraFilters() {
+      typeSelect.value = "all";
+      senderInput.value = "";
+      keywordInput.value = "";
+      dateFromInput.value = "";
+      dateToInput.value = "";
+      mediaSelect.value = "all";
+    }
+
+    function setFamilyAll() {
+      selectedFamilies = ["all"];
+      syncFamilyButtons();
+    }
+
+    function syncFamilyButtons() {
+      Array.prototype.forEach.call(familyStrip.querySelectorAll("button[data-family]"), function(btn) {
+        var value = btn.getAttribute("data-family");
+        var active = selectedFamilies.indexOf("all") !== -1 ? value === "all" : selectedFamilies.indexOf(value) !== -1;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+
+    async function jumpToMessage(targetId, targetFamily, options) {
+      options = options || {};
+      if (!targetId) return;
+      var jumpToken = beginJump();
+      showJumpStatus("正在跳转...");
+      if (!options.forceReload && await scrollToMessage(targetId, jumpToken)) return;
+
+      ensureFamilySelected(targetFamily);
+      if (typeSelect.value !== "all") {
+        typeSelect.value = "all";
+      }
+
+      showJumpStatus("正在加载目标消息...");
+      var data = await fetchChunk({
+        targetId: targetId,
+        limitOverride: options.limitOverride,
+        statusText: options.statusText
+      });
+      if (data && jumpToken === activeJumpToken) {
+        await waitForRender();
+        if (jumpToken !== activeJumpToken) return;
+        window.requestAnimationFrame(function() {
+          chatScroll.scrollTop = 0;
+          window.requestAnimationFrame(async function() {
+            if (!await scrollToMessage(targetId, jumpToken)) {
+              showJumpStatus("目标消息在列表中，但没有定位到卡片");
+            }
+          });
+        });
+      }
+    }
+
+    async function jumpToLatestUnrepliedGifts() {
+      var batch = latestUnrepliedGiftBatch || {};
+      var startId = batch.start_message_id || "";
+      if (!startId) {
+        showJumpStatus("当前没有未回复礼物");
+        return;
+      }
+
+      var endId = batch.end_message_id || startId;
+      var batchCount = Number(batch.count || 0);
+      var limitOverride = Math.min(500, Math.max(Number(limitSelect.value) || 100, batchCount + 20));
+      var jumpToken = beginJump();
+      showJumpStatus("正在定位最新未回复礼物...");
+
+      if (isGiftReplyFamilyView() && !hasExtraFilters()) {
+        await waitForStableLayout(jumpToken);
+        if (await scrollToMessage(startId, jumpToken)) return;
+        while (!findMessageNode(startId) && hasMoreOlder && jumpToken === activeJumpToken) {
+          showJumpStatus("正在加载这一批未回复礼物...");
+          var olderData = await fetchChunk({ older: true, limitOverride: limitOverride });
+          if (!olderData) break;
+          await waitForStableLayout(jumpToken);
+        }
+        if (jumpToken !== activeJumpToken) return;
+        if (await scrollToMessage(startId, jumpToken)) return;
+      }
+
+      if (!isGiftReplyFamilyView()) {
+        setFamiliesOnly(["gift", "gift_reply"]);
+      }
+      clearExtraFilters();
+      setFilterPanelOpen(false);
+
+      var data = await fetchChunk({
+        targetId: endId,
+        limitOverride: limitOverride,
+        statusText: "正在加载最新未回复礼物..."
+      });
+      if (!data || jumpToken !== activeJumpToken) return;
+
+      chatScroll.scrollTop = 0;
+      await waitForStableLayout(jumpToken);
+      while (!findMessageNode(startId) && hasMoreOlder && jumpToken === activeJumpToken) {
+        showJumpStatus("正在加载这一批未回复礼物...");
+        data = await fetchChunk({ older: true, limitOverride: limitOverride });
+        if (!data) break;
+        await waitForStableLayout(jumpToken);
+      }
+
+      if (jumpToken !== activeJumpToken) return;
+      if (!await scrollToMessage(startId, jumpToken)) {
+        showJumpStatus("未找到最新未回复礼物位置");
+      }
+    }
+
+    function beginJump() {
+      activeJumpToken += 1;
+      if (scrollAnimationFrame) {
+        window.cancelAnimationFrame(scrollAnimationFrame);
+        scrollAnimationFrame = null;
+      }
+      return activeJumpToken;
+    }
+
+    async function scrollToMessage(messageId, jumpToken) {
+      var node = findMessageNode(messageId);
+      if (!node) return false;
+
+      for (var attempt = 0; attempt < 3; attempt += 1) {
+        await waitForStableLayout(jumpToken);
+        if (jumpToken !== activeJumpToken) return true;
+
+        node = findMessageNode(messageId);
+        if (!node) return false;
+
+        await animateScrollTo(targetScrollTopForNode(node), jumpToken);
+        await waitForStableLayout(jumpToken);
+        if (jumpToken !== activeJumpToken) return true;
+
+        node = findMessageNode(messageId);
+        if (!node) return false;
+        if (isMessageNearTargetPosition(node)) {
+          await waitMs(180);
+          await waitForStableLayout(jumpToken);
+          if (jumpToken !== activeJumpToken) return true;
+          node = findMessageNode(messageId);
+          if (!node || isMessageNearTargetPosition(node)) {
+            break;
+          }
+        }
+      }
+
+      node = findMessageNode(messageId);
+      if (!node) return false;
+      node.classList.add("jump-highlight");
+      window.setTimeout(function() {
+        node.classList.remove("jump-highlight");
+      }, 1800);
+      showJumpStatus("已跳转到目标消息");
+      return true;
+    }
+
+    function targetScrollTopForNode(node) {
+      var nodeTop = node.getBoundingClientRect().top - chatScroll.getBoundingClientRect().top + chatScroll.scrollTop;
+      return Math.max(0, Math.round(nodeTop - targetViewportOffset()));
+    }
+
+    function targetViewportOffset() {
+      return Math.max(80, Math.round(chatScroll.clientHeight * 0.28));
+    }
+
+    function isMessageNearTargetPosition(node) {
+      var relativeTop = node.getBoundingClientRect().top - chatScroll.getBoundingClientRect().top;
+      var target = targetViewportOffset();
+      if (chatScroll.scrollTop <= 2) {
+        return relativeTop >= -8 && relativeTop <= target + 110;
+      }
+      return Math.abs(relativeTop - target) <= 44;
+    }
+
+    function animateScrollTo(targetTop, jumpToken) {
+      return new Promise(function(resolve) {
+        var startTop = chatScroll.scrollTop;
+        var delta = targetTop - startTop;
+        var distance = Math.abs(delta);
+        var duration = Math.min(1400, Math.max(380, distance * 0.55));
+        var startTime = null;
+
+        if (distance < 2) {
+          chatScroll.scrollTop = targetTop;
+          resolve();
+          return;
+        }
+
+        function step(timestamp) {
+          if (jumpToken !== activeJumpToken) {
+            resolve();
+            return;
+          }
+          if (startTime === null) {
+            startTime = timestamp;
+          }
+          var progress = Math.min(1, (timestamp - startTime) / duration);
+          var eased = easeInOutCubic(progress);
+          chatScroll.scrollTop = startTop + delta * eased;
+          if (progress < 1) {
+            scrollAnimationFrame = window.requestAnimationFrame(step);
+          } else {
+            scrollAnimationFrame = null;
+            resolve();
+          }
+        }
+
+        scrollAnimationFrame = window.requestAnimationFrame(step);
+      });
+    }
+
+    function easeInOutCubic(value) {
+      return value < 0.5
+        ? 4 * value * value * value
+        : 1 - Math.pow(-2 * value + 2, 3) / 2;
+    }
+
+    function findMessageNode(messageId) {
+      var nodes = messageList.children;
+      for (var i = 0; i < nodes.length; i += 1) {
+        if (nodes[i].dataset.messageId === messageId) {
+          return nodes[i];
+        }
+      }
+      return null;
+    }
+
+    function waitForRender() {
+      return new Promise(function(resolve) {
+        window.requestAnimationFrame(function() {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+    }
+
+    function waitMs(ms) {
+      return new Promise(function(resolve) {
+        window.setTimeout(resolve, ms);
+      });
+    }
+
+    function waitForStableLayout(jumpToken) {
+      return new Promise(function(resolve) {
+        var lastLayout = "";
+        var stableFrames = 0;
+        var frames = 0;
+
+        function check() {
+          if (jumpToken && jumpToken !== activeJumpToken) {
+            resolve();
+            return;
+          }
+
+          updateViewportInsets();
+          var layout = [
+            chatScroll.scrollHeight,
+            chatScroll.clientHeight,
+            messageList.children.length
+          ].join(":");
+          if (layout === lastLayout) {
+            stableFrames += 1;
+          } else {
+            stableFrames = 0;
+            lastLayout = layout;
+          }
+          frames += 1;
+
+          if (stableFrames >= 2 || frames >= 10) {
+            resolve();
+          } else {
+            window.requestAnimationFrame(check);
+          }
+        }
+
+        window.requestAnimationFrame(check);
+      });
+    }
+
+    function showJumpStatus(text) {
+      if (!jumpStatus) return;
+      jumpStatus.textContent = text;
+      jumpStatus.classList.remove("hidden");
+      if (jumpStatusTimer) {
+        window.clearTimeout(jumpStatusTimer);
+      }
+      jumpStatusTimer = window.setTimeout(function() {
+        jumpStatus.classList.add("hidden");
+      }, 2200);
+    }
+
+    function resetFilters() {
+      setFamilyAll();
+      typeSelect.value = "all";
+      senderInput.value = "";
+      keywordInput.value = "";
+      limitSelect.value = "100";
+      dateFromInput.value = "";
+      dateToInput.value = "";
+      mediaSelect.value = "all";
+      reloadLatest();
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("zh-CN");
+    }
+
+    function safeClass(value) {
+      return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
+
+    loginBtn.addEventListener("click", doLogin);
+    passwordInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") doLogin();
+    });
+    chatScroll.addEventListener("scroll", loadOlderIfNeeded);
+    applyBtn.addEventListener("click", function() {
+      reloadLatest();
+      setFilterPanelOpen(false);
+    });
+    resetBtn.addEventListener("click", resetFilters);
+    updatePill.addEventListener("click", reloadLatest);
+    if (unrepliedNav) {
+      unrepliedNav.addEventListener("click", jumpToLatestUnrepliedGifts);
+    }
+    if (filterToggle) {
+      filterToggle.addEventListener("click", toggleFilterPanel);
+    }
+    messageList.addEventListener("click", function(event) {
+      var button = event.target.closest("button[data-target-id]");
+      if (!button) return;
+      jumpToMessage(button.dataset.targetId, button.dataset.targetFamily);
+    });
+
+    familyStrip.addEventListener("click", function(event) {
+      var button = event.target.closest("button[data-family]");
+      if (!button) return;
+      toggleFamily(button.getAttribute("data-family"));
+      reloadLatest();
+    });
+
+    [typeSelect, limitSelect, mediaSelect, dateFromInput, dateToInput].forEach(function(node) {
+      node.addEventListener("change", reloadLatest);
+    });
+
+    [senderInput, keywordInput].forEach(function(node) {
+      node.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") reloadLatest();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -34,7 +34,11 @@ echo "$LOG_TAG live_covers done"
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/"
 echo "$LOG_TAG gift_replies done"
 
-# 5. score_gifts（计分礼物页小数据）
+# 5. messages.csv（房间消息页完整消息 CSV）
+rsync -az --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv"
+echo "$LOG_TAG messages.csv done"
+
+# 6. score_gifts（计分礼物页小数据）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"
 

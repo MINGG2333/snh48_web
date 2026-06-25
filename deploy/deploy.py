@@ -106,6 +106,10 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "delete": True,
             },
             {
+                "type": "file",
+                "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv",
+            },
+            {
                 "type": "dir",
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts",
                 "delete": True,

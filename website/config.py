@@ -102,6 +102,8 @@ QA_TIMEOUT_SECONDS = int(os.getenv("QA_TIMEOUT_SECONDS", "300"))
 QA_POLL_INTERVAL_MS = int(os.getenv("QA_POLL_INTERVAL_MS", "3000"))
 # 超时预警时间（秒），超过此时间前端显示警告
 QA_WARN_SECONDS = int(os.getenv("QA_WARN_SECONDS", "240"))
+# 是否在服务启动时后台预热 QA 知识库。默认开启，保持现有 QA 页面行为；调试管理页冷启动时可临时设为 false。
+QA_WARMUP_ON_STARTUP = os.getenv("QA_WARMUP_ON_STARTUP", "true").lower() in ("1", "true", "yes")
 
 # ── 通用公开端点限速（防滥用）────────────────────────────────────────────────
 # Scroller 登录限速（防暴力破解）
@@ -159,6 +161,21 @@ GIFT_REPLIES_DIR = os.getenv(
         / "gift_replies"
     ),
 )
+
+# ── Room Messages (口袋房间完整消息记录) ────────────────────────────────────
+# 默认复用礼物回复页密码；如需单独管理可设置 ROOM_MESSAGES_PASSWORD。
+ROOM_MESSAGES_PASSWORD = os.getenv("ROOM_MESSAGES_PASSWORD", GIFT_REPLIES_PASSWORD)
+ROOM_MESSAGES_CSV_PATH = os.getenv(
+    "ROOM_MESSAGES_CSV_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "messages.csv"
+    ),
+)
+ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS = int(os.getenv("ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS", "60"))
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。

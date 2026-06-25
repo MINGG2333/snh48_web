@@ -312,11 +312,29 @@ async def ob_page(request: Request):
     )
 
 
+@app.get("/gr", response_class=HTMLResponse)
 @app.get("/gift-replies", response_class=HTMLResponse)
 async def gift_replies_page(request: Request):
     """Admin page for gift reply status."""
     return templates.TemplateResponse(
         "gift_replies.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
+@app.get("/rm", response_class=HTMLResponse)
+@app.get("/room-messages", response_class=HTMLResponse)
+async def room_messages_page(request: Request):
+    """Admin page for room messages."""
+    return templates.TemplateResponse(
+        "room_messages.html",
         {
             "request": request,
             "site_title": cfg.SITE_TITLE,
@@ -373,15 +391,18 @@ async def startup():
     session_dir = get_session_dir()
     print(f"✓ Interaction log session started: {session_dir}")
 
-    try:
-        from website.qa_api.router import warmup_qa_engine_async
-        if warmup_qa_engine_async():
-            print("✓ QA engine warmup scheduled in background.")
-        else:
-            print("✓ QA engine warmup already running or ready.")
-    except Exception as e:
-        print(f"! QA engine not available at startup: {e}")
-        print("  You can still serve the frontend. Build the KB later via API.")
+    if cfg.QA_WARMUP_ON_STARTUP:
+        try:
+            from website.qa_api.router import warmup_qa_engine_async
+            if warmup_qa_engine_async():
+                print("✓ QA engine warmup scheduled in background.")
+            else:
+                print("✓ QA engine warmup already running or ready.")
+        except Exception as e:
+            print(f"! QA engine not available at startup: {e}")
+            print("  You can still serve the frontend. Build the KB later via API.")
+    else:
+        print("  QA engine startup warmup disabled; it will load lazily when QA is used.")
 
 
 def _backup_log_files(transcript_dir: Path) -> None:
@@ -441,9 +462,12 @@ app.include_router(ob_router)
 
 from website.gift_replies_api import router as gift_replies_router
 app.include_router(gift_replies_router)
+
+from website.room_messages_api import router as room_messages_router
+app.include_router(room_messages_router)
+
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)
-
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

@@ -13,6 +13,7 @@
 | 知识库子项目 | `transcript_analyze/` |
 | 数据生成工程 | `/mnt/zhitainew/snh48/snh48-fan-hub`（本地），`/home/snh48-fan-hub`（服务器） |
 | 数据对接文档 | `snh48-fan-hub/schedule_record/网站开发对接说明.md` |
+| 页面清单 | `doc/website_pages.md` |
 | 安全文档 | `doc/security/security_baseline.md` |
 | 部署手册 | `deploy/TODO.md` |
 
@@ -39,6 +40,7 @@
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
+- `room_record/陈嘉仪_161808449/messages.csv`
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
@@ -80,7 +82,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/gift-replies`
+- 页面入口：`/gift-replies`，短入口：`/gr`
 - API：`/api/gift-replies/data`、`/api/gift-replies/summary`
 - 数据源：`GIFT_REPLIES_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/`
 - 鉴权：独立环境变量 `GIFT_REPLIES_PASSWORD`，请求头 `X-Gift-Replies-Password`
@@ -89,8 +91,23 @@ node script/obfuscate_js.cjs
 维护边界：
 
 - 页面不进入公开导航，仅 URL 访问并要求密码。
-- 默认每页 `100` 条，页面按数据文件里的 `refresh_interval_seconds` 自动刷新，当前为 `60` 秒。
+- 默认每页 `100` 条，页面按数据文件里的 `refresh_interval_seconds` 自动刷新，默认 `30` 秒；运行时可在 fan-hub 的 `config/room_monitor.json` 中热更新。
 - 后端只读取 `gifts.csv` 和 `summary.json` 派生小数据，不读取或同步完整 `messages.csv`、语音原文件、图片归档或敏感配置。
+
+### 房间消息管理页
+
+入口和文档：
+
+- 页面入口：`/room-messages`，短入口：`/rm`
+- API：`/api/room-messages/data`、`/api/room-messages/summary`
+- 数据源：`ROOM_MESSAGES_CSV_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv`
+- 鉴权：默认复用 `GIFT_REPLIES_PASSWORD`；如需单独密码可设置 `ROOM_MESSAGES_PASSWORD`；请求头 `X-Room-Messages-Password`
+
+维护边界：
+
+- 页面不进入公开导航，仅 URL 访问并要求密码。
+- 交互是聊天记录式加载：首次读取最新一批，向上滚动加载更早消息，不使用页码切换。
+- 为支持阿里云房间消息页，数据同步清单包含完整 `messages.csv`；只同步 CSV，不同步语音原文件、图片归档或敏感配置。
 
 ### 计分礼物管理页
 
@@ -130,6 +147,18 @@ node script/obfuscate_js.cjs
 
 ## GitHub 同步部署命令
 
+### 多服务器发布顺序
+
+涉及网站页面、API、运行行为或用户可见功能时，默认按下面顺序，不要直接 `deploy all`：
+
+1. 先部署腾讯云，让 `https://cjy.plus` 生效。
+2. 在腾讯云执行本次任务相关烟测，并把验证结果和用户需要手动检查的 URL 发给用户。
+3. 明确说明“阿里云尚未同步”，等待用户手动验证腾讯云并确认可以继续。
+4. 用户确认后，再部署阿里云，并执行阿里云对应烟测。
+5. 如果本次还涉及运行数据同步，也在用户确认腾讯云验证通过后再执行腾讯云到阿里云的数据同步。
+
+`deploy all` 只在用户明确要求一次性同步两台服务器，或本次变更确认没有用户可见影响时使用。文档、Codex 规则和部署说明更新通常不需要重启，但仍应按用户要求决定是否同步到远端。
+
 推荐使用多服务器部署工具：
 
 ```bash
@@ -150,10 +179,10 @@ python3 deploy/deploy.py deploy all --no-restart
 
 | 变更范围 | 推荐命令 |
 |---|---|
-| Python 代码、依赖、`.env`、服务入口 | `python3 deploy/deploy.py deploy all` |
-| 仅文档、Codex 文件、部署说明 | `python3 deploy/deploy.py deploy all --no-restart` |
-| 仅静态 JS/CSS 产物、图片、模板 HTML | `python3 deploy/deploy.py deploy all --no-restart`，并验证目标页面 |
-| Nginx 配置、证书、CSP | `python3 deploy/deploy.py deploy all --nginx --no-restart`，只 reload Nginx |
+| Python 代码、依赖、`.env`、服务入口 | 先 `python3 deploy/deploy.py deploy tencent`，用户确认后 `python3 deploy/deploy.py deploy aliyun` |
+| 仅文档、Codex 文件、部署说明 | 通常可用 `--no-restart`；是否同步两台按用户目标决定 |
+| 仅静态 JS/CSS 产物、图片、模板 HTML | 先腾讯云 `--no-restart` 并验证目标页面，用户确认后阿里云 `--no-restart` |
+| Nginx 配置、证书、CSP | 先腾讯云 `--nginx --no-restart` 且 `nginx -t` 通过，用户确认后阿里云；只 reload Nginx |
 
 腾讯云：
 
@@ -208,6 +237,7 @@ python3 deploy/deploy.py deploy all --check-env
 curl -sS -D - -o /dev/null https://cjy.plus/
 curl -sS -D - -o /dev/null https://cjy.plus/timeline
 curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
+curl -sS -D - -o /dev/null https://cjy.plus/gr
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/sg
 curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
@@ -223,6 +253,7 @@ curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/timeline
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gr
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score-gifts
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/sg
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/qa/status
