@@ -175,6 +175,17 @@ ROOM_MESSAGES_CSV_PATH = os.getenv(
         / "messages.csv"
     ),
 )
+ROOM_AUDIO_TRANSCRIPTS_PATH = os.getenv(
+    "ROOM_AUDIO_TRANSCRIPTS_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "audio_transcripts"
+        / "room_audio_transcripts.jsonl"
+    ),
+)
 ROOM_MESSAGES_IGNORE_PATH = os.getenv(
     "ROOM_MESSAGES_IGNORE_PATH",
     str(PROJECT_ROOT / "website" / "data" / "room_messages_ignored_batches.json"),

@@ -111,6 +111,12 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "type": "dir",
+                "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts",
+                "delete": True,
+                "optional": True,
+            },
+            {
+                "type": "dir",
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts",
                 "delete": True,
             },
@@ -671,6 +677,7 @@ mkdir -p /home/snh48-fan-hub/schedule_record
 mkdir -p /home/snh48-fan-hub/live_push_replays
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
+mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
 if [ ! -f .env ] && [ -f .env.example ]; then
   cp .env.example .env

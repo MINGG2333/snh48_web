@@ -73,6 +73,7 @@ TYPE_FAMILIES = {
 _cache_lock = threading.Lock()
 _cache_mtime_ns = -1
 _cache_ignore_mtime_ns = -2
+_cache_transcripts_mtime_ns = -2
 _cache_rows: list[dict[str, Any]] = []
 _cache_summary: dict[str, Any] = {}
 _ignore_lock = threading.Lock()
@@ -356,6 +357,10 @@ def _ignore_path() -> Path:
     return Path(cfg.ROOM_MESSAGES_IGNORE_PATH)
 
 
+def _audio_transcripts_path() -> Path:
+    return Path(cfg.ROOM_AUDIO_TRANSCRIPTS_PATH)
+
+
 def _ignore_git_enabled() -> bool:
     return bool(cfg.ROOM_MESSAGES_IGNORE_GIT_SYNC and _ignore_git_relpath())
 
@@ -571,7 +576,7 @@ def _short_process_error(result: subprocess.CompletedProcess) -> str:
 
 
 def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_rows, _cache_summary
+    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_rows, _cache_summary
 
     path = _data_path()
     if not path.exists():
@@ -579,20 +584,32 @@ def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
 
     stat = path.stat()
     ignore_mtime_ns = _ignore_mtime_ns()
-    if _cache_mtime_ns == stat.st_mtime_ns and _cache_ignore_mtime_ns == ignore_mtime_ns:
+    transcripts_mtime_ns = _audio_transcripts_mtime_ns()
+    if (
+        _cache_mtime_ns == stat.st_mtime_ns
+        and _cache_ignore_mtime_ns == ignore_mtime_ns
+        and _cache_transcripts_mtime_ns == transcripts_mtime_ns
+    ):
         return _cache_rows, _cache_summary
 
     with _cache_lock:
         stat = path.stat()
         ignore_mtime_ns = _ignore_mtime_ns()
-        if _cache_mtime_ns == stat.st_mtime_ns and _cache_ignore_mtime_ns == ignore_mtime_ns:
+        transcripts_mtime_ns = _audio_transcripts_mtime_ns()
+        if (
+            _cache_mtime_ns == stat.st_mtime_ns
+            and _cache_ignore_mtime_ns == ignore_mtime_ns
+            and _cache_transcripts_mtime_ns == transcripts_mtime_ns
+        ):
             return _cache_rows, _cache_summary
 
+        transcripts = _load_audio_transcripts()
         rows: list[dict[str, Any]] = []
         try:
             with path.open("r", encoding="utf-8-sig", newline="") as f:
                 for row in csv.DictReader(f):
                     normalised = _normalise_row(row)
+                    _attach_audio_transcript(normalised, transcripts)
                     normalised["_row_index"] = len(rows)
                     rows.append(normalised)
         except OSError as exc:
@@ -605,6 +622,7 @@ def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         summary = _build_summary(rows, stat.st_mtime, ignored_state)
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_ignore_mtime_ns = ignore_mtime_ns
+        _cache_transcripts_mtime_ns = transcripts_mtime_ns
         _cache_rows = rows
         _cache_summary = summary
         return _cache_rows, _cache_summary
@@ -664,6 +682,58 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "raw_content": row.get("text_content", ""),
         "_search_text": search_text,
     }
+
+
+def _audio_transcripts_mtime_ns() -> int:
+    path = _audio_transcripts_path()
+    if not path.exists():
+        return -1
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return -1
+
+
+def _load_audio_transcripts() -> dict[str, dict[str, Any]]:
+    path = _audio_transcripts_path()
+    if not path.exists():
+        return {}
+
+    transcripts: dict[str, dict[str, Any]] = {}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                message_id = str(item.get("message_id") or "").strip()
+                transcript = str(item.get("transcript") or "").strip()
+                if not message_id or not transcript:
+                    continue
+                transcripts[message_id] = {
+                    "text": transcript,
+                    "source": "whisper",
+                    "updated_at": str(item.get("updated_at") or ""),
+                    "keyword_hit": bool(item.get("keyword_hit")),
+                }
+    except OSError:
+        return {}
+    return transcripts
+
+
+def _attach_audio_transcript(row: dict[str, Any], transcripts: dict[str, dict[str, Any]]) -> None:
+    if row.get("media_kind") != "audio":
+        return
+    transcript = transcripts.get(str(row.get("id", "")))
+    if transcript:
+        row["audio_transcript"] = transcript
+        row["_search_text"] = f"{row.get('_search_text', '')} {transcript.get('text', '')}".lower()
 
 
 def _parse_content(row: dict[str, str]) -> dict[str, str]:
@@ -1072,9 +1142,10 @@ def _batch_id(batch: dict[str, Any]) -> str:
 
 
 def _invalidate_cache() -> None:
-    global _cache_mtime_ns, _cache_ignore_mtime_ns
+    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns
     _cache_mtime_ns = -1
     _cache_ignore_mtime_ns = -2
+    _cache_transcripts_mtime_ns = -2
 
 
 def _summary_payload(summary: dict[str, Any]) -> dict[str, Any]:
@@ -1123,6 +1194,9 @@ def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict
         "latest_bj_time": rows[-1]["bj_time"] if rows else "",
         "source_path": str(_data_path()),
         "source_mtime": datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        "audio_transcripts_path": str(_audio_transcripts_path()),
+        "audio_transcripts_mtime": _audio_transcripts_mtime_label(),
+        "audio_transcript_count": sum(1 for row in rows if row.get("audio_transcript")),
         "type_kinds": len(type_counts),
         "ignored_batch_count": len(ignored_batches),
         "ignored_gift_count": len(ignored_gift_ids),
@@ -1142,6 +1216,13 @@ def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict
             for family, count in sorted(family_counts.items(), key=lambda item: (-item[1], item[0]))
         ],
     }
+
+
+def _audio_transcripts_mtime_label() -> str:
+    mtime_ns = _audio_transcripts_mtime_ns()
+    if mtime_ns < 0:
+        return ""
+    return datetime.fromtimestamp(mtime_ns / 1_000_000_000).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _latest_unreplied_gift_batch(rows: list[dict[str, Any]]) -> dict[str, Any]:

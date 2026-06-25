@@ -444,6 +444,30 @@
       display: block;
     }
 
+    .transcript {
+      width: min(520px, 100%);
+      margin-top: 8px;
+      border: 1px solid rgba(98, 168, 255, 0.28);
+      border-radius: 8px;
+      background: rgba(98, 168, 255, 0.08);
+      padding: 8px 10px;
+    }
+
+    .transcript-label {
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 720;
+      margin-bottom: 4px;
+    }
+
+    .transcript-text {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .link-actions {
       display: flex;
       flex-wrap: wrap;
@@ -1409,6 +1433,10 @@
         audio.preload = "none";
         audio.src = item.media_url;
         media.appendChild(audio);
+        var transcript = createAudioTranscriptNode(item.audio_transcript);
+        if (transcript) {
+          media.appendChild(transcript);
+        }
       } else if (item.media_kind === "video") {
         var video = document.createElement("video");
         video.controls = true;
@@ -1424,6 +1452,23 @@
         media.appendChild(link);
       }
       return media;
+    }
+
+    function createAudioTranscriptNode(transcript) {
+      if (!transcript || !String(transcript.text || "").trim()) return null;
+      var box = document.createElement("div");
+      box.className = "transcript";
+
+      var label = document.createElement("div");
+      label.className = "transcript-label";
+      label.textContent = "转录参考";
+      box.appendChild(label);
+
+      var text = document.createElement("div");
+      text.className = "transcript-text";
+      text.textContent = String(transcript.text || "").trim();
+      box.appendChild(text);
+      return box;
     }
 
     function addMeta(parent, text) {
