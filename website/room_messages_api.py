@@ -125,6 +125,7 @@ def get_room_messages_data(
     response: Response,
     limit: int = Query(100, ge=20, le=500),
     before_index: int | None = Query(None, ge=0),
+    after_index: int | None = Query(None, ge=0),
     target_id: str = Query(""),
     msg_type: str = Query("all"),
     family: str = Query("all"),
@@ -150,6 +151,8 @@ def get_room_messages_data(
     _validate_date("date_to", date_to)
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="日期范围无效")
+    if before_index is not None and after_index is not None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="消息游标无效")
 
     rows, summary = _load_dataset()
     sender = sender.strip()
@@ -171,8 +174,7 @@ def get_room_messages_data(
         target_index = _find_row_index(rows, target_id) if target_id else None
         if target_id and target_index is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标消息不在当前筛选结果中")
-        end = _chunk_end(total, before_index, target_index)
-        start = max(0, end - limit)
+        start, end = _chunk_bounds(total, limit, before_index, after_index, target_index)
         items = [_public_row(row) for row in rows[start:end]]
     else:
         filtered = _filter_rows(
@@ -190,8 +192,7 @@ def get_room_messages_data(
         target_index = _find_row_index(filtered, target_id) if target_id else None
         if target_id and target_index is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标消息不在当前筛选结果中")
-        end = _chunk_end(total, before_index, target_index)
-        start = max(0, end - limit)
+        start, end = _chunk_bounds(total, limit, before_index, after_index, target_index)
         items = [_public_row(row) for row in filtered[start:end]]
 
     return {
@@ -201,7 +202,9 @@ def get_room_messages_data(
         "start_index": start,
         "end_index": end,
         "next_before_index": start,
+        "next_after_index": end,
         "has_more_older": start > 0,
+        "has_more_newer": end < total,
         "target_id": target_id,
         "target_found": bool(target_id),
         "summary": summary,
@@ -845,10 +848,21 @@ def _parse_families(value: str) -> set[str] | None:
     return parts
 
 
-def _chunk_end(total: int, before_index: int | None, target_index: int | None) -> int:
+def _chunk_bounds(
+    total: int,
+    limit: int,
+    before_index: int | None,
+    after_index: int | None,
+    target_index: int | None,
+) -> tuple[int, int]:
     if target_index is not None:
-        return min(total, target_index + 1)
-    return total if before_index is None else min(before_index, total)
+        end = min(total, target_index + 1)
+        return max(0, end - limit), end
+    if after_index is not None:
+        start = min(after_index, total)
+        return start, min(total, start + limit)
+    end = total if before_index is None else min(before_index, total)
+    return max(0, end - limit), end
 
 
 def _find_row_index(rows: list[dict[str, Any]], message_id: str) -> int | None:

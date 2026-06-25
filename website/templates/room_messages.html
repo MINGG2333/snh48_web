@@ -714,7 +714,7 @@
       <div class="topline">
         <div class="title">
           <h1>房间消息</h1>
-          <p>完整房间消息记录，向上滚动加载更早内容</p>
+          <p>完整房间消息记录</p>
         </div>
         <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
         <div class="stats">
@@ -802,6 +802,7 @@
         <div class="chat-inner">
           <div class="loader hidden" id="topLoader">加载更早消息中...</div>
           <div id="messageList"></div>
+          <div class="loader hidden" id="bottomLoader">加载更新消息中...</div>
           <div class="empty" id="emptyState" style="display:none;">当前筛选条件下没有消息</div>
         </div>
       </div>
@@ -815,7 +816,9 @@
     var password = "";
     var selectedFamilies = ["all"];
     var beforeIndex = null;
+    var afterIndex = null;
     var hasMoreOlder = false;
+    var hasMoreNewer = false;
     var loading = false;
     var loadedCount = 0;
     var refreshSeconds = 60;
@@ -840,6 +843,7 @@
     var chatScroll = document.getElementById("chatScroll");
     var messageList = document.getElementById("messageList");
     var topLoader = document.getElementById("topLoader");
+    var bottomLoader = document.getElementById("bottomLoader");
     var jumpStatus = document.getElementById("jumpStatus");
     var emptyState = document.getElementById("emptyState");
     var totalMessages = document.getElementById("totalMessages");
@@ -906,12 +910,15 @@
       loading = true;
       chatShell.classList.add("loading");
       if (options.older) topLoader.classList.remove("hidden");
+      if (options.newer) bottomLoader.classList.remove("hidden");
       if (options.targetId) showJumpStatus(options.statusText || "正在加载目标消息...");
 
       try {
         var params = queryBase(options.limitOverride);
         if (options.older && beforeIndex !== null) {
           params.set("before_index", String(beforeIndex));
+        } else if (options.newer && afterIndex !== null) {
+          params.set("after_index", String(afterIndex));
         }
         if (options.targetId) {
           params.set("target_id", options.targetId);
@@ -943,6 +950,8 @@
 
         if (options.older) {
           prependMessages(data.items || []);
+        } else if (options.newer) {
+          appendMessages(data.items || []);
         } else {
           messageList.textContent = "";
           loadedCount = 0;
@@ -956,8 +965,25 @@
           resetRefreshTimer();
         }
 
-        beforeIndex = data.next_before_index;
-        hasMoreOlder = Boolean(data.has_more_older);
+        if (options.older) {
+          beforeIndex = data.next_before_index;
+          hasMoreOlder = Boolean(data.has_more_older);
+          if (afterIndex === null) {
+            afterIndex = data.next_after_index;
+            hasMoreNewer = Boolean(data.has_more_newer);
+          }
+        } else if (options.newer) {
+          afterIndex = data.next_after_index;
+          hasMoreNewer = Boolean(data.has_more_newer);
+          if (!hasMoreNewer) {
+            updatePill.classList.remove("show");
+          }
+        } else {
+          beforeIndex = data.next_before_index;
+          afterIndex = data.next_after_index;
+          hasMoreOlder = Boolean(data.has_more_older);
+          hasMoreNewer = Boolean(data.has_more_newer);
+        }
         emptyState.style.display = data.total === 0 ? "block" : "none";
         if (loadedMessages) {
           loadedMessages.textContent = formatNumber(loadedCount);
@@ -978,6 +1004,7 @@
         loading = false;
         chatShell.classList.remove("loading");
         topLoader.classList.add("hidden");
+        bottomLoader.classList.add("hidden");
       }
     }
 
@@ -1374,7 +1401,9 @@
 
     function reloadLatest() {
       beforeIndex = null;
+      afterIndex = null;
       hasMoreOlder = false;
+      hasMoreNewer = false;
       loadedCount = 0;
       fetchChunk({ older: false });
     }
@@ -1382,6 +1411,16 @@
     function loadOlderIfNeeded() {
       if (chatScroll.scrollTop > 160 || !hasMoreOlder || loading) return;
       fetchChunk({ older: true });
+    }
+
+    function loadNewerIfNeeded() {
+      if (!hasMoreNewer || loading || !isNearBottom()) return;
+      fetchChunk({ newer: true });
+    }
+
+    function loadMoreIfNeeded() {
+      loadOlderIfNeeded();
+      loadNewerIfNeeded();
     }
 
     function fillViewportIfNeeded() {
@@ -1411,6 +1450,7 @@
         }
         var latest = data.summary && data.summary.latest_bj_time;
         if (latest && latestSeen && latest !== latestSeen) {
+          hasMoreNewer = true;
           if (isNearBottom()) {
             reloadLatest();
           } else {
@@ -1855,7 +1895,7 @@
     passwordInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") doLogin();
     });
-    chatScroll.addEventListener("scroll", loadOlderIfNeeded);
+    chatScroll.addEventListener("scroll", loadMoreIfNeeded);
     applyBtn.addEventListener("click", function() {
       reloadLatest();
       setFilterPanelOpen(false);
