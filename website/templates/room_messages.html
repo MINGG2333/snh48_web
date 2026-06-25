@@ -188,16 +188,6 @@
     .field input:focus,
     .field select:focus { border-color: var(--teal); }
 
-    .date-jump-control {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-    }
-
-    .date-jump-control .btn {
-      min-width: 62px;
-    }
-
     .family-strip {
       display: flex;
       gap: 6px;
@@ -777,7 +767,11 @@
           <button class="btn" id="resetBtn" type="button">重置</button>
         </div>
       </div>
-      <div class="filters" style="grid-template-columns: minmax(150px, 180px) minmax(150px, 180px) minmax(150px, 180px) minmax(210px, 260px) 1fr;">
+      <div class="filters" style="grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) 1fr;">
+        <div class="field">
+          <label for="jumpDateInput">日期跳转</label>
+          <input id="jumpDateInput" type="date">
+        </div>
         <div class="field">
           <label for="dateFromInput">开始日期</label>
           <input id="dateFromInput" type="date">
@@ -793,13 +787,6 @@
             <option value="with">有媒体</option>
             <option value="without">无媒体</option>
           </select>
-        </div>
-        <div class="field">
-          <label for="jumpDateInput">跳转日期</label>
-          <div class="date-jump-control">
-            <input id="jumpDateInput" type="date">
-            <button class="btn" id="jumpDateBtn" type="button">跳转</button>
-          </div>
         </div>
         <div></div>
       </div>
@@ -875,7 +862,6 @@
     var dateFromInput = document.getElementById("dateFromInput");
     var dateToInput = document.getElementById("dateToInput");
     var jumpDateInput = document.getElementById("jumpDateInput");
-    var jumpDateBtn = document.getElementById("jumpDateBtn");
     var mediaSelect = document.getElementById("mediaSelect");
     var applyBtn = document.getElementById("applyBtn");
     var resetBtn = document.getElementById("resetBtn");
@@ -1076,7 +1062,16 @@
       latestSeen = summary.latest_bj_time || latestSeen;
       latestUnrepliedGiftBatch = summary.latest_unreplied_gift_batch || null;
       latestIgnoredBatch = summary.latest_ignored_batch || null;
+      syncDateJumpBounds(summary);
       renderUnrepliedNav();
+    }
+
+    function syncDateJumpBounds(summary) {
+      if (!jumpDateInput || !summary) return;
+      var firstDate = String(summary.first_bj_time || "").slice(0, 10);
+      var latestDate = String(summary.latest_bj_time || "").slice(0, 10);
+      if (firstDate) jumpDateInput.min = firstDate;
+      if (latestDate) jumpDateInput.max = latestDate;
     }
 
     function renderUnrepliedNav() {
@@ -1680,8 +1675,8 @@
       }
     }
 
-    async function jumpToDate() {
-      var targetDate = jumpDateInput ? jumpDateInput.value : "";
+    async function jumpToDate(targetDate) {
+      targetDate = targetDate || (jumpDateInput ? jumpDateInput.value : "");
       if (!targetDate) {
         showJumpStatus("请选择要跳转的日期");
         return;
@@ -2000,10 +1995,10 @@
       setFilterPanelOpen(false);
     });
     resetBtn.addEventListener("click", resetFilters);
-    if (jumpDateBtn) {
-      jumpDateBtn.addEventListener("click", jumpToDate);
-    }
     if (jumpDateInput) {
+      jumpDateInput.addEventListener("change", function() {
+        jumpToDate(jumpDateInput.value);
+      });
       jumpDateInput.addEventListener("keydown", function(event) {
         if (event.key === "Enter") jumpToDate();
       });
