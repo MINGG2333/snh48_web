@@ -11,7 +11,9 @@ import csv
 import hmac
 import json
 import os
+import posixpath
 import re
+import shlex
 import subprocess
 import tempfile
 import threading
@@ -82,6 +84,10 @@ class _IgnoreGitSyncError(Exception):
 
 class _IgnoreGitRaceError(_IgnoreGitSyncError):
     """Raised when another server pushed the state first."""
+
+
+class _IgnoreDirectSyncError(Exception):
+    """Raised when direct ignored-state sync to the peer server fails."""
 
 
 async def verify_room_messages_password(
@@ -244,11 +250,13 @@ def undo_latest_ignored_gift_batch(
 
 
 def _run_ignored_state_mutation(mutation) -> dict[str, Any]:
-    attempts = max(1, int(cfg.ROOM_MESSAGES_IGNORE_GIT_RETRIES or 1))
+    attempts = 1 if _ignore_direct_enabled() else max(1, int(cfg.ROOM_MESSAGES_IGNORE_GIT_RETRIES or 1))
     for attempt in range(attempts):
+        previous_text: str | None = None
         try:
-            _sync_ignored_state_from_git()
+            _sync_ignored_state_before_mutation()
             _invalidate_cache()
+            previous_text = _read_ignored_state_text()
             return mutation()
         except _IgnoreGitRaceError:
             _restore_ignored_state_from_git_best_effort()
@@ -259,6 +267,14 @@ def _run_ignored_state_mutation(mutation) -> dict[str, Any]:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="忽略状态刚刚被另一台服务器更新，请重试",
             )
+        except _IgnoreDirectSyncError as exc:
+            if previous_text is not None:
+                _write_ignored_state_text(previous_text)
+            _invalidate_cache()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"忽略状态同步到另一台服务器失败：{exc}",
+            ) from exc
         except _IgnoreGitSyncError as exc:
             _restore_ignored_state_from_git_best_effort()
             _invalidate_cache()
@@ -295,7 +311,7 @@ def _ignore_latest_unreplied_gift_batch_once() -> dict[str, Any]:
     }
     ignored_batches.append(ignored_batch)
     _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
-    _commit_ignored_state_to_git(f"Ignore room message gift batch {ignored_batch['batch_id']}")
+    _persist_ignored_state_after_mutation(f"Ignore room message gift batch {ignored_batch['batch_id']}")
     _invalidate_cache()
     _, new_summary = _load_dataset()
     return _summary_payload(new_summary) | {"ignored_batch": ignored_batch}
@@ -308,7 +324,7 @@ def _undo_latest_ignored_gift_batch_once() -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前没有可撤销的忽略记录")
     undone_batch = ignored_batches.pop()
     _write_ignored_state({"version": 1, "ignored_batches": ignored_batches})
-    _commit_ignored_state_to_git(f"Undo room message gift batch {undone_batch.get('batch_id', '')}")
+    _persist_ignored_state_after_mutation(f"Undo room message gift batch {undone_batch.get('batch_id', '')}")
     _invalidate_cache()
     _, new_summary = _load_dataset()
     return _summary_payload(new_summary) | {"undone_batch": undone_batch}
@@ -331,6 +347,99 @@ def _ignore_git_relpath() -> str:
         return _ignore_path().resolve().relative_to(Path(cfg.PROJECT_ROOT).resolve()).as_posix()
     except ValueError:
         return ""
+
+
+def _ignore_direct_enabled() -> bool:
+    return bool(cfg.ROOM_MESSAGES_IGNORE_DIRECT_SYNC and cfg.ROOM_MESSAGES_IGNORE_DIRECT_PEER.strip())
+
+
+def _sync_ignored_state_before_mutation() -> None:
+    if _ignore_direct_enabled():
+        _sync_ignored_state_from_peer()
+    elif _ignore_git_enabled():
+        _sync_ignored_state_from_git()
+
+
+def _persist_ignored_state_after_mutation(message: str) -> None:
+    if _ignore_direct_enabled():
+        _push_ignored_state_to_peer()
+    elif _ignore_git_enabled():
+        _commit_ignored_state_to_git(message)
+
+
+def _sync_ignored_state_from_peer() -> None:
+    remote_text = _read_peer_ignored_state_text()
+    remote_state = _normalise_ignored_state_text(remote_text)
+    local_state = _load_ignored_state()
+
+    if _ignored_state_fingerprint(remote_state) == _ignored_state_fingerprint(local_state):
+        return
+
+    if _ignored_state_updated_score(remote_state) >= _ignored_state_updated_score(local_state):
+        _write_ignored_state_text(remote_text)
+    else:
+        _push_ignored_state_to_peer()
+
+
+def _read_peer_ignored_state_text() -> str:
+    remote_path = shlex.quote(cfg.ROOM_MESSAGES_IGNORE_DIRECT_PATH)
+    empty_state = shlex.quote(_empty_ignored_state_text().rstrip("\n"))
+    command = f"if [ -f {remote_path} ]; then cat {remote_path}; else printf '%s\\n' {empty_state}; fi"
+    result = _direct_ssh(command)
+    content = result.stdout or ""
+    _normalise_ignored_state_text(content)
+    return content if content.endswith("\n") else content + "\n"
+
+
+def _push_ignored_state_to_peer() -> None:
+    content = _read_ignored_state_text()
+    _normalise_ignored_state_text(content)
+    remote_path_raw = cfg.ROOM_MESSAGES_IGNORE_DIRECT_PATH
+    remote_dir_raw = posixpath.dirname(remote_path_raw) or "."
+    remote_path = shlex.quote(remote_path_raw)
+    remote_dir = shlex.quote(remote_dir_raw)
+    tmp_template = shlex.quote(posixpath.join(remote_dir_raw, ".room_messages_ignored_batches.XXXXXX"))
+    command = (
+        "set -e; "
+        f"umask 077; mkdir -p {remote_dir}; "
+        f"tmp=$(mktemp {tmp_template}); "
+        'cat > "$tmp"; '
+        f"mv \"$tmp\" {remote_path}"
+    )
+    _direct_ssh(command, input_text=content)
+
+
+def _direct_ssh(command: str, *, input_text: str | None = None) -> subprocess.CompletedProcess:
+    cmd = [
+        "ssh",
+        "-F",
+        "/dev/null",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "LogLevel=ERROR",
+        "-o",
+        f"ConnectTimeout={cfg.ROOM_MESSAGES_IGNORE_DIRECT_CONNECT_TIMEOUT_SECONDS}",
+        cfg.ROOM_MESSAGES_IGNORE_DIRECT_PEER.strip(),
+        command,
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            check=False,
+            input=input_text,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=cfg.ROOM_MESSAGES_IGNORE_DIRECT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise _IgnoreDirectSyncError("SSH 操作超时") from exc
+    if result.returncode != 0:
+        raise _IgnoreDirectSyncError(_short_process_error(result))
+    return result
 
 
 def _sync_ignored_state_from_git() -> None:
@@ -435,6 +544,12 @@ def _short_git_error(result: subprocess.CompletedProcess) -> str:
     stderr = (result.stderr or "").strip()
     stdout = (result.stdout or "").strip()
     return stderr or stdout or f"git exited {result.returncode}"
+
+
+def _short_process_error(result: subprocess.CompletedProcess) -> str:
+    stderr = (result.stderr or "").strip()
+    stdout = (result.stdout or "").strip()
+    return stderr or stdout or f"command exited {result.returncode}"
 
 
 def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -778,6 +893,48 @@ def _ignore_mtime_ns() -> int:
         return path.stat().st_mtime_ns
     except OSError:
         return -1
+
+
+def _empty_ignored_state_text() -> str:
+    return json.dumps({"version": 1, "ignored_batches": []}, ensure_ascii=False) + "\n"
+
+
+def _read_ignored_state_text() -> str:
+    path = _ignore_path()
+    if not path.exists():
+        return _empty_ignored_state_text()
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return _empty_ignored_state_text()
+    _normalise_ignored_state_text(content)
+    return content if content.endswith("\n") else content + "\n"
+
+
+def _normalise_ignored_state_text(content: str) -> dict[str, Any]:
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise _IgnoreDirectSyncError("忽略状态 JSON 无效") from exc
+    if not isinstance(data, dict):
+        raise _IgnoreDirectSyncError("忽略状态不是对象")
+    batches = data.get("ignored_batches")
+    if not isinstance(batches, list):
+        data["ignored_batches"] = []
+    return data
+
+
+def _ignored_state_fingerprint(state: dict[str, Any]) -> str:
+    payload = {"ignored_batches": _ignored_batches(state)}
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _ignored_state_updated_score(state: dict[str, Any]) -> float:
+    value = str(state.get("updated_at") or "")
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").timestamp()
+    except ValueError:
+        return 0.0
 
 
 def _load_ignored_state() -> dict[str, Any]:
