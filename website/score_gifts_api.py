@@ -6,10 +6,13 @@ exposes password-protected statistics and detail rows for the admin dashboard.
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
+import os
 import re
 import threading
+from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
 from typing import Any
@@ -25,6 +28,28 @@ VALID_SOURCES = {"all", "room", "live"}
 VALID_SORTS = {"time_desc", "score_desc"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 UNKNOWN_SENDER_VALUES = {"", "?"}
+BJ_TZ = timezone(timedelta(hours=8))
+LIVE_BUSINESS_STATE_FILENAME = "live_business_fulfillments.json"
+BUSINESS_STATUSES = {"redeemed", "unredeemed", "uncertain"}
+SIGNATURE_FIELDS = (
+    "id",
+    "source",
+    "event_time",
+    "sender_name",
+    "sender_id",
+    "gift_id",
+    "gift_name",
+    "gift_count",
+    "unit_score",
+    "total_score",
+    "live_id",
+    "live_title",
+    "live_bj_time",
+    "danmu_offset",
+    "danmu_file",
+    "danmu_line_number",
+    "raw_content",
+)
 
 _cache_lock = threading.Lock()
 _cache_mtime_ns = -1
@@ -145,8 +170,94 @@ def get_score_gifts_summary(
     }
 
 
+@router.post("/business-review")
+async def update_score_gift_business_review(
+    request: Request,
+    _=Depends(verify_score_gifts_password),
+):
+    """Verify or manually override one live score-gift business result."""
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="JSON 格式无效") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请求体格式无效")
+
+    action = _clean_text(payload.get("action"))
+    item_id = _clean_text(payload.get("item_id"))
+    if action not in {"verify", "override"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
+    if not item_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少记录 ID")
+
+    doc = _load_dataset()
+    item = next((row for row in _normalise_items(doc.get("items", [])) if row["id"] == item_id), None)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
+    if item["source"] != "live":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="只有直播计分礼物支持业务核实")
+
+    state_path = _business_state_path()
+    state = _load_business_state(state_path)
+    records = state.setdefault("records", {})
+    if not isinstance(records, dict):
+        records = {}
+        state["records"] = records
+
+    signature = _live_business_item_signature(item)
+    existing = records.get(item_id)
+    if not isinstance(existing, dict) or _clean_text(existing.get("input_signature")) != signature:
+        existing = {}
+
+    if action == "verify":
+        current_status = _normalise_business_status(existing.get("status") or item.get("business_status"))
+        if current_status not in BUSINESS_STATUSES:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="当前记录还没有可核实的业务分析结果")
+        record = dict(existing)
+        record.update(_record_from_item(item))
+        record["status"] = current_status
+        record["review_status"] = "verified"
+        record["reviewed_at"] = _bj_now()
+        record["reviewed_by"] = "website"
+        record.setdefault("analysis_source", item.get("business_analysis_source") or "codex")
+    else:
+        current_status = _normalise_business_status(payload.get("business_status"))
+        if current_status not in BUSINESS_STATUSES:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请选择有效的兑换状态")
+        record = {
+            "item_id": item_id,
+            "input_signature": signature,
+            "status": current_status,
+            "business_type": _clean_text(payload.get("business_type")),
+            "business_content": _clean_text(payload.get("business_content")),
+            "business_offset": _clean_text(payload.get("business_offset")),
+            "business_line_number": _clean_text(payload.get("business_line_number")),
+            "evidence": _clean_text(payload.get("evidence")),
+            "reasoning": _clean_text(payload.get("reasoning") or "网站人工修正"),
+            "confidence": "high",
+            "review_status": "verified",
+            "analysis_source": "manual",
+            "analysis_model": "",
+            "analysis_prompt_version": _to_int(payload.get("analysis_prompt_version"), 1),
+            "analyzed_at": _bj_now(),
+            "reviewed_at": _bj_now(),
+            "reviewed_by": "website",
+            "business_window_seconds": 0,
+        }
+
+    record["item_id"] = item_id
+    record["input_signature"] = signature
+    records[item_id] = record
+    _save_business_state(state_path, state)
+    return {"ok": True, "item_id": item_id, "record": record, "fields": _business_fields_from_record(record)}
+
+
 def _data_path() -> Path:
     return Path(cfg.SCORE_GIFTS_DATA_PATH)
+
+
+def _business_state_path() -> Path:
+    return _data_path().parent / LIVE_BUSINESS_STATE_FILENAME
 
 
 def _load_dataset() -> dict[str, Any]:
@@ -234,6 +345,17 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
             "business_offset": str(item.get("business_offset", "")),
             "business_line_number": str(item.get("business_line_number", "")),
             "business_window_seconds": _to_int(item.get("business_window_seconds"), 0),
+            "business_review_status": str(item.get("business_review_status", "")),
+            "business_reviewed_at": str(item.get("business_reviewed_at", "")),
+            "business_reviewed_by": str(item.get("business_reviewed_by", "")),
+            "business_analysis_source": str(item.get("business_analysis_source", "")),
+            "business_analysis_model": str(item.get("business_analysis_model", "")),
+            "business_analysis_prompt_version": _to_int(item.get("business_analysis_prompt_version"), 0),
+            "business_analysis_at": str(item.get("business_analysis_at", "")),
+            "business_analysis_confidence": str(item.get("business_analysis_confidence", "")),
+            "business_analysis_reasoning": str(item.get("business_analysis_reasoning", "")),
+            "business_evidence": str(item.get("business_evidence", "")),
+            "business_input_signature": str(item.get("business_input_signature", "")),
         })
     return rows
 
@@ -422,6 +544,86 @@ def _normalise_distribution(items: Any) -> list[dict[str, Any]]:
     if not isinstance(items, list):
         return []
     return [item for item in items if isinstance(item, dict)]
+
+
+def _bj_now() -> str:
+    return datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _load_business_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"version": 1, "updated_at": "", "records": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="业务核实状态读取失败") from exc
+    if not isinstance(data, dict):
+        return {"version": 1, "updated_at": "", "records": {}}
+    if not isinstance(data.get("records"), dict):
+        data["records"] = {}
+    return data
+
+
+def _save_business_state(path: Path, state_doc: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    state_doc["version"] = _to_int(state_doc.get("version"), 1)
+    state_doc["updated_at"] = _bj_now()
+    state_doc.setdefault("records", {})
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_text(json.dumps(state_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="业务核实状态写入失败") from exc
+
+
+def _record_from_item(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "item_id": item["id"],
+        "input_signature": _live_business_item_signature(item),
+        "business_type": _clean_text(item.get("business_type")),
+        "business_content": _clean_text(item.get("business_content")),
+        "business_offset": _clean_text(item.get("business_offset")),
+        "business_line_number": _clean_text(item.get("business_line_number")),
+        "evidence": _clean_text(item.get("business_evidence")),
+        "reasoning": _clean_text(item.get("business_analysis_reasoning")),
+        "confidence": _clean_text(item.get("business_analysis_confidence")),
+        "analysis_source": _clean_text(item.get("business_analysis_source")) or "codex",
+        "analysis_model": _clean_text(item.get("business_analysis_model")),
+        "analysis_prompt_version": _to_int(item.get("business_analysis_prompt_version"), 1),
+        "analyzed_at": _clean_text(item.get("business_analysis_at")),
+        "business_window_seconds": _to_int(item.get("business_window_seconds"), 0),
+    }
+
+
+def _business_fields_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "business_status": _normalise_business_status(record.get("status")),
+        "business_type": _clean_text(record.get("business_type")),
+        "business_content": _clean_text(record.get("business_content")),
+        "business_offset": _clean_text(record.get("business_offset")),
+        "business_line_number": _clean_text(record.get("business_line_number")),
+        "business_review_status": _clean_text(record.get("review_status")),
+        "business_reviewed_at": _clean_text(record.get("reviewed_at")),
+        "business_analysis_source": _clean_text(record.get("analysis_source")),
+        "business_analysis_reasoning": _clean_text(record.get("reasoning")),
+        "business_evidence": _clean_text(record.get("evidence")),
+    }
+
+
+def _normalise_business_status(value: Any) -> str:
+    value = _clean_text(value).lower()
+    return value if value in BUSINESS_STATUSES else "pending_analysis"
+
+
+def _live_business_item_signature(item: dict[str, Any]) -> str:
+    payload = {field: _signature_value(item.get(field)) for field in SIGNATURE_FIELDS}
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _signature_value(value: Any) -> Any:
+    return _clean_text(value)
 
 
 def _clean_text(value: Any) -> str:

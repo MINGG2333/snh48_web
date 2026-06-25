@@ -517,6 +517,32 @@
     .score-text { color: var(--gold); font-size: 16px; font-weight: 780; }
     .fulfillment-cell .primary-text.is-complete { color: var(--teal); }
     .fulfillment-cell .primary-text.is-pending { color: var(--pink); }
+    .fulfillment-cell .primary-text.is-uncertain { color: var(--gold); }
+    .review-note {
+      display: inline-block;
+      margin-left: 4px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 620;
+    }
+
+    .fulfillment-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .edit-business-btn {
+      min-height: 26px;
+      border: 1px solid rgba(103, 168, 255, 0.44);
+      border-radius: 8px;
+      background: rgba(103, 168, 255, 0.1);
+      color: var(--blue);
+      padding: 0 9px;
+      font-size: 12px;
+      font-weight: 680;
+    }
 
     .gift-cell {
       display: flex;
@@ -613,6 +639,30 @@
 
     .modal-head h2 { font-size: 16px; font-weight: 740; }
     .modal-body { overflow: auto; }
+
+    .business-form {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .business-form .field textarea {
+      width: 100%;
+      min-height: 78px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 10px;
+      outline: none;
+      resize: vertical;
+    }
+
+    .business-form .field textarea:focus { border-color: var(--teal); }
+    .business-meta { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .business-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .business-error { display: none; color: var(--red); font-size: 13px; }
+    .business-error.show { display: block; }
 
     .btn:disabled {
       cursor: not-allowed;
@@ -812,6 +862,46 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="businessModal" role="dialog" aria-modal="true" aria-labelledby="businessModalTitle">
+    <div class="modal-backdrop" id="businessModalBackdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h2 id="businessModalTitle">核实业务兑换</h2>
+        <button class="mini-btn" id="closeBusinessModalBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body">
+        <form class="business-form" id="businessForm">
+          <div class="business-meta" id="businessMeta"></div>
+          <div class="field">
+            <label for="businessStatusSelect">兑换状态</label>
+            <select id="businessStatusSelect">
+              <option value="redeemed">已兑换业务</option>
+              <option value="unredeemed">未兑换业务</option>
+              <option value="uncertain">待人工核实</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="businessTypeInput">业务类型</label>
+            <input id="businessTypeInput" type="text" placeholder="点歌/唱歌、舞蹈、祝福、互动等">
+          </div>
+          <div class="field">
+            <label for="businessContentInput">兑换内容</label>
+            <textarea id="businessContentInput" placeholder="填写具体业务、歌曲名或说明"></textarea>
+          </div>
+          <div class="field">
+            <label for="businessEvidenceInput">证据弹幕</label>
+            <textarea id="businessEvidenceInput" placeholder="可填写关键弹幕原文或核实依据"></textarea>
+          </div>
+          <div class="business-error" id="businessError"></div>
+          <div class="business-form-actions">
+            <button class="btn" id="verifyBusinessBtn" type="button">确认已核实</button>
+            <button class="btn primary" id="saveBusinessBtn" type="submit">保存修正</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
   (function() {
     "use strict";
@@ -830,6 +920,7 @@
     var refreshSeconds = 30;
     var lastCatalogHash = "";
     var senderDistributionItems = [];
+    var editingBusinessItem = null;
 
     var loginOverlay = document.getElementById("loginOverlay");
     var passwordInput = document.getElementById("passwordInput");
@@ -868,6 +959,18 @@
     var openSenderModalBtn = document.getElementById("openSenderModalBtn");
     var closeSenderModalBtn = document.getElementById("closeSenderModalBtn");
     var senderModalBackdrop = document.getElementById("senderModalBackdrop");
+    var businessModal = document.getElementById("businessModal");
+    var businessModalBackdrop = document.getElementById("businessModalBackdrop");
+    var closeBusinessModalBtn = document.getElementById("closeBusinessModalBtn");
+    var businessForm = document.getElementById("businessForm");
+    var businessMeta = document.getElementById("businessMeta");
+    var businessStatusSelect = document.getElementById("businessStatusSelect");
+    var businessTypeInput = document.getElementById("businessTypeInput");
+    var businessContentInput = document.getElementById("businessContentInput");
+    var businessEvidenceInput = document.getElementById("businessEvidenceInput");
+    var businessError = document.getElementById("businessError");
+    var verifyBusinessBtn = document.getElementById("verifyBusinessBtn");
+    var saveBusinessBtn = document.getElementById("saveBusinessBtn");
     var giftDistributionCount = document.getElementById("giftDistributionCount");
     var senderDistributionCount = document.getElementById("senderDistributionCount");
     var resultSummary = document.getElementById("resultSummary");
@@ -1105,6 +1208,127 @@
       senderModal.classList.add("hidden");
     }
 
+    function openBusinessModal(item) {
+      editingBusinessItem = item;
+      businessError.classList.remove("show");
+      businessError.textContent = "";
+      businessMeta.textContent = [
+        item.event_time || "-",
+        item.sender_name || "未知用户",
+        item.gift_name || "-",
+        formatScore(item.total_score || 0) + " 分",
+        item.live_title || item.live_id || ""
+      ].filter(Boolean).join(" · ");
+      businessStatusSelect.value = normalBusinessStatus(item.business_status);
+      businessTypeInput.value = item.business_type || "";
+      businessContentInput.value = item.business_content || businessEditableContent(item);
+      businessEvidenceInput.value = item.business_evidence || item.business_analysis_reasoning || "";
+      businessModal.classList.remove("hidden");
+    }
+
+    function closeBusinessModal() {
+      businessModal.classList.add("hidden");
+      editingBusinessItem = null;
+    }
+
+    function normalBusinessStatus(value) {
+      if (value === "redeemed" || value === "unredeemed" || value === "uncertain") return value;
+      return "uncertain";
+    }
+
+    function businessEditableContent(item) {
+      if (item.business_status === "redeemed") return item.business_content || "";
+      if (item.business_status === "unredeemed") return item.fulfillment_detail || "未找到明确业务兑换";
+      return item.fulfillment_detail || "";
+    }
+
+    async function verifyBusiness() {
+      if (!editingBusinessItem) return;
+      await submitBusinessReview({
+        action: "verify",
+        item_id: editingBusinessItem.id
+      });
+    }
+
+    async function saveBusinessOverride(event) {
+      if (event) event.preventDefault();
+      if (!editingBusinessItem) return;
+      await submitBusinessReview({
+        action: "override",
+        item_id: editingBusinessItem.id,
+        business_status: businessStatusSelect.value,
+        business_type: businessTypeInput.value.trim(),
+        business_content: businessContentInput.value.trim(),
+        evidence: businessEvidenceInput.value.trim()
+      });
+    }
+
+    async function submitBusinessReview(payload) {
+      businessError.classList.remove("show");
+      businessError.textContent = "";
+      setBusinessSaving(true);
+      try {
+        var resp = await fetch("/api/score-gifts/business-review", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Score-Gifts-Password": password
+          },
+          body: JSON.stringify(payload),
+          cache: "no-store"
+        });
+        if (await handleAuthFailure(resp)) return;
+        if (!resp.ok) throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        var data = await resp.json();
+        updateLoadedBusinessItem(payload.item_id, data.fields || {}, data.record || {});
+        renderDetails(loadedItems);
+        closeBusinessModal();
+      } catch (err) {
+        businessError.textContent = "保存失败：" + err.message;
+        businessError.classList.add("show");
+      } finally {
+        setBusinessSaving(false);
+      }
+    }
+
+    function setBusinessSaving(saving) {
+      verifyBusinessBtn.disabled = saving;
+      saveBusinessBtn.disabled = saving;
+    }
+
+    function updateLoadedBusinessItem(itemId, fields, record) {
+      loadedItems.forEach(function(item) {
+        if (item.id !== itemId) return;
+        Object.keys(fields || {}).forEach(function(key) {
+          item[key] = fields[key];
+        });
+        if (record.review_status) item.business_review_status = record.review_status;
+        if (record.reviewed_at) item.business_reviewed_at = record.reviewed_at;
+        if (record.analysis_source) item.business_analysis_source = record.analysis_source;
+        if (record.reasoning) item.business_analysis_reasoning = record.reasoning;
+        if (record.evidence) item.business_evidence = record.evidence;
+        item.fulfillment_label = businessLabel(item.business_status);
+        item.fulfillment_detail = businessDetail(item);
+      });
+    }
+
+    function businessLabel(status) {
+      if (status === "redeemed") return "已兑换业务";
+      if (status === "uncertain") return "待人工核实";
+      if (status === "unredeemed") return "未兑换业务";
+      return "待分析";
+    }
+
+    function businessDetail(item) {
+      if (item.business_status === "redeemed") {
+        return [item.business_type, item.business_content].filter(Boolean).join("：") || "已兑换业务";
+      }
+      if (item.business_status === "uncertain") {
+        return item.business_content || item.business_evidence || item.business_analysis_reasoning || "待人工核实";
+      }
+      return item.business_content || "未找到明确业务兑换";
+    }
+
     function renderBarList(parent, items, options) {
       parent.textContent = "";
       if (items.length === 0) {
@@ -1243,6 +1467,19 @@
       var fulfillment = document.createElement("div");
       fulfillment.className = "fulfillment-cell";
       fulfillment.appendChild(fulfillmentBlock(item));
+      if (item.source === "live") {
+        var actions = document.createElement("div");
+        actions.className = "fulfillment-actions";
+        var editBtn = document.createElement("button");
+        editBtn.className = "edit-business-btn";
+        editBtn.type = "button";
+        editBtn.textContent = "编辑";
+        editBtn.addEventListener("click", function() {
+          openBusinessModal(item);
+        });
+        actions.appendChild(editBtn);
+        fulfillment.appendChild(actions);
+      }
       row.appendChild(fulfillment);
 
       var context = document.createElement("div");
@@ -1269,17 +1506,38 @@
 
     function fulfillmentBlock(item) {
       var primary = fulfillmentPrimary(item);
-      var wrap = textBlock(primary, fulfillmentSecondary(item));
+      var displayPrimary = primary + businessReviewSuffix(item);
+      var wrap = textBlock(displayPrimary, fulfillmentSecondary(item));
       var primaryNode = wrap.querySelector(".primary-text");
+      if (primaryNode && item.source === "live" && businessNeedsReview(item)) {
+        primaryNode.textContent = primary;
+        var note = document.createElement("span");
+        note.className = "review-note";
+        note.textContent = "（待核实）";
+        primaryNode.appendChild(note);
+      }
       if (primaryNode) primaryNode.classList.add(fulfillmentToneClass(item, primary));
       return wrap;
     }
 
     function fulfillmentToneClass(item, primary) {
       if (item.source === "live") {
-        return item.business_status === "redeemed" || primary === "已兑换业务" ? "is-complete" : "is-pending";
+        if (item.business_status === "redeemed" || primary === "已兑换业务") return "is-complete";
+        if (item.business_status === "uncertain" || primary === "待人工核实") return "is-uncertain";
+        return "is-pending";
       }
       return item.room_has_reply || primary === "已回复" ? "is-complete" : "is-pending";
+    }
+
+    function businessNeedsReview(item) {
+      if (item.source !== "live") return false;
+      var review = item.business_review_status || "";
+      var status = item.business_status || "";
+      return review === "pending_review" || status === "uncertain";
+    }
+
+    function businessReviewSuffix(item) {
+      return businessNeedsReview(item) ? "（待核实）" : "";
     }
 
     function contextPrimary(item) {
@@ -1291,7 +1549,7 @@
 
     function fulfillmentPrimary(item) {
       if (item.fulfillment_label) return item.fulfillment_label;
-      if (item.source === "live") return "未兑换业务";
+      if (item.source === "live") return "待分析";
       return item.room_has_reply ? "已回复" : "未回复";
     }
 
@@ -1303,6 +1561,9 @@
           if (item.business_content) businessParts.push(item.business_content);
           if (item.business_offset) businessParts.push("弹幕 " + item.business_offset);
           return businessParts.join(" · ");
+        }
+        if (item.business_status === "uncertain") {
+          return item.business_content || item.business_evidence || item.business_analysis_reasoning || item.fulfillment_detail || "";
         }
         return item.fulfillment_detail && item.fulfillment_detail !== "未兑换业务" ? item.fulfillment_detail : "";
       }
@@ -1577,8 +1838,15 @@
     openSenderModalBtn.addEventListener("click", openSenderModal);
     closeSenderModalBtn.addEventListener("click", closeSenderModal);
     senderModalBackdrop.addEventListener("click", closeSenderModal);
+    closeBusinessModalBtn.addEventListener("click", closeBusinessModal);
+    businessModalBackdrop.addEventListener("click", closeBusinessModal);
+    verifyBusinessBtn.addEventListener("click", verifyBusiness);
+    businessForm.addEventListener("submit", saveBusinessOverride);
     document.addEventListener("keydown", function(event) {
-      if (event.key === "Escape") closeSenderModal();
+      if (event.key === "Escape") {
+        closeSenderModal();
+        closeBusinessModal();
+      }
     });
     jumpDateBtn.addEventListener("click", jumpToDate);
     jumpDateInput.addEventListener("keydown", function(event) {
