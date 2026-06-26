@@ -11,6 +11,7 @@
 - 公开导航、页脚入口、仅 URL 访问的管理页都要登记。
 - 管理页必须写明密码来源和 API 请求头。
 - 新增短入口时保留清晰主入口，并在本文同时登记。
+- 新增页面或重要交互时必须按 `doc/codex/page_tracking_best_practices.md` 接入用户行为追踪；继承 `base.html` 的页面确认自动加载 tracker，独立模板必须显式加载 `/static/js/tracker.js`。
 - 用户可见页面改动部署时，默认先在腾讯云 `https://cjy.plus` 验证，等用户手动确认后再同步阿里云。
 - 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs`，并提交 `website/static/js-dist/`、`website/static/css-dist/`。
 

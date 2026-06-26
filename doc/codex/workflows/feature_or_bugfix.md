@@ -15,7 +15,7 @@
 例子：
 
 - Bug 修复：原问题不再复现，相关回归点通过。
-- 新页面：入口可达、状态完整、移动端/桌面端基本可用。
+- 新页面：入口可达、状态完整、移动端/桌面端基本可用，页面访问和关键操作已按 `doc/codex/page_tracking_best_practices.md` 接入追踪。
 - 新 API：鉴权、参数校验、错误码、日志和前端调用都符合预期。
 
 安全、网络、代理、环境变量等专项检查只在本次改动涉及相关范围或用户明确要求时作为额外验收项。
@@ -24,9 +24,11 @@
 
 - 保持改动范围集中，不顺手重构无关模块。
 - 新增接口先判断是否需要鉴权、限速、验证码、审计日志。
+- 新增页面、短入口或重要交互时，同步设计用户行为追踪；公共模板确认继承 `base.html`，独立模板显式加载 `tracker.js`。
 - 前端动态 HTML 优先用 DOM API 或转义；URL 做协议白名单。
 - 修改源 JS/CSS 后运行构建，提交 dist。
 - 修改 `.env` 相关行为时先更新 `.env.example`。
+- 管理页追踪 payload 只记录操作类型、结果、日期、数量、ID 和布尔状态；不要记录密码、token、Cookie、搜索关键词正文、弹幕正文或房间消息正文。
 
 ## 4. 验证
 
@@ -34,6 +36,7 @@
 
 - 后端：`python3 -m compileall -q website` 或项目测试。
 - 前端：`node --check`，必要时浏览器/截图验证。
+- 追踪：确认渲染 HTML 包含 `tracker.js`，操作后 `website/data/interaction_logs/session_*/user_events.jsonl` 有对应事件。
 - 构建：`node script/obfuscate_js.cjs`。
 - 部署：按 `deploy_via_git.md`。
 - 回归：至少覆盖用户提到的路径和最接近的相邻路径。

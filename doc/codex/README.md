@@ -10,6 +10,7 @@
 | `doc/codex/project_profile.md` | 本项目配置 | 域名、服务器、部署命令、运行时文件、项目验证命令、常见风险 |
 | `doc/codex/workflows/*.md` | 可跨项目复用 | 安全审计、功能修复、部署、任务确认等流程 |
 | `doc/codex/workflows/data_dependency.md` | 可跨项目复用 | 跨仓库数据契约、同步链路、生产方/消费方协作 |
+| `doc/codex/page_tracking_best_practices.md` | 本项目最佳实践 | 新页面和管理页的用户行为追踪要求、事件类型、验证命令和本次管理页追踪改造记录 |
 | `doc/codex/templates/*.md` | 可模板化迁移 | 新项目要填写的 profile、部署清单、安全检查清单 |
 | `doc/security/security_baseline.md` | 本项目事实记录 | 当前网站已实施的安全措施、线上验证命令、已知取舍 |
 
@@ -26,7 +27,8 @@
 1. 先读 `AGENTS.md`，确认当前任务类型。
 2. 读 `project_profile.md`，拿到本项目的具体命令和环境。
 3. 按对应 `workflows/` 文件执行。
-4. 如果要迁移到其他网站，先看 `PORTABILITY.md`，再复制 `templates/`。
+4. 新增页面、管理页或重要交互时，同时读 `page_tracking_best_practices.md`。
+5. 如果要迁移到其他网站，先看 `PORTABILITY.md`，再复制 `templates/`。
 
 ## 维护原则
 
