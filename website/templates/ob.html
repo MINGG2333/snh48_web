@@ -426,6 +426,7 @@
   </div>
 </div>
 
+<script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
 <script>
 (function() {
   'use strict';
@@ -452,10 +453,18 @@
   const modalClose = document.getElementById('modalClose');
   const notifNav = document.getElementById('notifNav');
 
+  function trackAdminEvent(eventType, data) {
+    if (!window._trackEvent) return;
+    window._trackEvent(eventType, Object.assign({
+      area: 'ob'
+    }, data || {}));
+  }
+
   // ── Login ──
   function doLogin() {
     const pw = passwordInput.value.trim();
     if (!pw) return;
+    trackAdminEvent('login_attempt', { action: 'ob_login', result: 'submitted' });
     obPassword = pw;
     loginError.classList.remove('show');
     fetchData();
@@ -466,6 +475,8 @@
 
   // ── Fetch Data ──
   async function fetchData() {
+    const wasLoginVisible = !loginOverlay.classList.contains('hidden');
+    const attemptedLogin = wasLoginVisible && Boolean(obPassword);
     try {
       const resp = await fetch('/api/ob/data', {
         headers: { 'X-Ob-Password': obPassword }
@@ -474,6 +485,9 @@
         loginError.classList.add('show');
         passwordInput.value = '';
         passwordInput.focus();
+        if (attemptedLogin) {
+          trackAdminEvent('login_attempt', { action: 'ob_login', result: 'failure' });
+        }
         return;
       }
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -481,6 +495,9 @@
       groupsData = data.groups || [];
       loginOverlay.classList.add('hidden');
       mainHeader.style.display = 'flex';
+      if (attemptedLogin) {
+        trackAdminEvent('login_attempt', { action: 'ob_login', result: 'success' });
+      }
       renderGroups();
     } catch (err) {
       loginError.textContent = '加载失败: ' + err.message;
@@ -545,6 +562,12 @@
     if (!group) return;
     currentGroupId = groupId;
     currentNotifIdx = -1;
+    trackAdminEvent('admin_modal', {
+      action: 'open_ob_group',
+      group_id: groupId,
+      event_count: group.events.length,
+      notification_count: group.notifications.length
+    });
 
     modalTitle.textContent = '用户活动记录 (' + group.events.length + ' 条)';
     modalUsers.textContent = '用户: ' + group.users.join(', ');
@@ -704,6 +727,10 @@
       'login_attempt': '🔑',
       'click': '👆',
       'screenshot': '📸',
+      'admin_filter': '🔎',
+      'admin_export': '📤',
+      'admin_update': '🛠️',
+      'admin_modal': '🪟',
     };
     return map[type] || '❓';
   }
@@ -751,14 +778,26 @@
   // ── Mark read on server ──
   async function markReadOnServer(eventId) {
     try {
-      await fetch('/api/ob/mark-read', {
+      const resp = await fetch('/api/ob/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
         body: JSON.stringify({ event_id: eventId }),
       });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      trackAdminEvent('admin_update', {
+        action: 'ob_mark_read',
+        result: 'success',
+        event_id: eventId
+      });
       // Immediately refresh data from server after successful mark
       fetchData();
-    } catch (_) {}
+    } catch (_) {
+      trackAdminEvent('admin_update', {
+        action: 'ob_mark_read',
+        result: 'failure',
+        event_id: eventId
+      });
+    }
   }
 
   // ── Mark all notifications as read for a group ──
@@ -788,6 +827,12 @@
     updateNotifCounts();
 
     // Persist to server
+    trackAdminEvent('admin_update', {
+      action: 'ob_mark_all_read',
+      result: 'submitted',
+      group_id: group.id,
+      count: toMark.length
+    });
     toMark.forEach(eid => {
       fetch('/api/ob/mark-read', {
         method: 'POST',

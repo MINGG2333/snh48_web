@@ -990,6 +990,7 @@
     </div>
   </div>
 
+  <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
   <script>
   (function() {
     "use strict";
@@ -1072,9 +1073,30 @@
     var loadMoreState = document.getElementById("loadMoreState");
     var loadMoreSentinel = document.getElementById("loadMoreSentinel");
 
+    function trackAdminEvent(eventType, data) {
+      if (!window._trackEvent) return;
+      window._trackEvent(eventType, Object.assign({
+        area: "score_gifts"
+      }, data || {}));
+    }
+
+    function scoreFilterPayload(action) {
+      return {
+        action: action || "apply_filters",
+        source: sourceFilter,
+        gift_name: giftSelect.value || "",
+        has_sender_query: Boolean(senderInput.value.trim()),
+        date_from: dateFromInput.value || "",
+        date_to: dateToInput.value || "",
+        sort: sortSelect.value || "time_desc",
+        total_items: totalItems
+      };
+    }
+
     function doLogin() {
       var value = passwordInput.value.trim();
       if (!value) return;
+      trackAdminEvent("login_attempt", { action: "score_gifts_login", result: "submitted" });
       password = value;
       loginError.classList.remove("show");
       fetchData({ resetTimer: true });
@@ -1107,6 +1129,7 @@
       hasMore = false;
       setLoadMoreText("正在加载...");
       dashboard.classList.add("loading");
+      var wasLoginVisible = !loginOverlay.classList.contains("hidden");
       try {
         var resp = await fetch("/api/score-gifts/data?" + buildQuery(1), {
           headers: { "X-Score-Gifts-Password": password },
@@ -1130,6 +1153,9 @@
 
         loginOverlay.classList.add("hidden");
         pageEl.classList.add("ready");
+        if (wasLoginVisible) {
+          trackAdminEvent("login_attempt", { action: "score_gifts_login", result: "success" });
+        }
         render(data);
         setupInfiniteScroll();
         if (options.resetTimer) resetRefreshTimer();
@@ -1177,6 +1203,7 @@
 
     async function handleAuthFailure(resp) {
       if (resp.status !== 401 && resp.status !== 403) return false;
+      var wasLoginVisible = !loginOverlay.classList.contains("hidden");
       var detail = await readError(resp);
       loginError.textContent = detail || "密码错误";
       loginError.classList.add("show");
@@ -1185,6 +1212,9 @@
       passwordInput.value = "";
       passwordInput.focus();
       stopRefresh();
+      if (wasLoginVisible) {
+        trackAdminEvent("login_attempt", { action: "score_gifts_login", result: "failure" });
+      }
       return true;
     }
 
@@ -1306,6 +1336,10 @@
     function openSenderModal() {
       renderSenderModal();
       senderModal.classList.remove("hidden");
+      trackAdminEvent("admin_modal", {
+        action: "open_sender_distribution",
+        total_senders: senderDistributionItems.length
+      });
     }
 
     function closeSenderModal() {
@@ -1328,6 +1362,12 @@
       businessContentInput.value = item.business_content || businessEditableContent(item);
       businessEvidenceInput.value = item.business_evidence || item.business_analysis_reasoning || "";
       businessModal.classList.remove("hidden");
+      trackAdminEvent("admin_modal", {
+        action: "open_business_review",
+        item_id: item.id || "",
+        source: item.source || "",
+        business_status: item.business_status || ""
+      });
     }
 
     function closeBusinessModal() {
@@ -1387,9 +1427,22 @@
         updateLoadedBusinessItem(payload.item_id, data.fields || {}, data.record || {});
         renderDetails(loadedItems);
         closeBusinessModal();
+        trackAdminEvent("admin_update", {
+          action: "score_gift_business_review",
+          review_action: payload.action,
+          result: "success",
+          business_status: payload.business_status || "",
+          item_id: payload.item_id
+        });
       } catch (err) {
         businessError.textContent = "保存失败：" + err.message;
         businessError.classList.add("show");
+        trackAdminEvent("admin_update", {
+          action: "score_gift_business_review",
+          review_action: payload.action,
+          result: "failure",
+          item_id: payload.item_id
+        });
       } finally {
         setBusinessSaving(false);
       }
@@ -1734,16 +1787,24 @@
           window.URL.revokeObjectURL(url);
         }, 1000);
         exportStatus.textContent = "已导出 " + formatNumber(totalItems) + " 条";
+        trackAdminEvent("admin_export", Object.assign(scoreFilterPayload("export_details"), {
+          result: "success",
+          exported_rows: totalItems
+        }));
       } catch (err) {
         exportStatus.textContent = "导出失败：" + err.message;
+        trackAdminEvent("admin_export", Object.assign(scoreFilterPayload("export_details"), {
+          result: "failure"
+        }));
       } finally {
         exportDetailsBtn.disabled = false;
       }
     }
 
-    function applyFilters() {
+    function applyFilters(action) {
       page = 1;
       jumpStatus.textContent = "";
+      trackAdminEvent("admin_filter", scoreFilterPayload(action || "apply_filters"));
       fetchData({ resetTimer: true });
     }
 
@@ -1758,7 +1819,7 @@
       sortSelect.value = "time_desc";
       page = 1;
       pageSize = 100;
-      fetchData({ resetTimer: true });
+      applyFilters("reset_filters");
     }
 
     function appendItems(items) {
@@ -1796,6 +1857,11 @@
     async function jumpToDate() {
       var target = jumpDateInput.value;
       if (!target) return;
+      trackAdminEvent("admin_filter", {
+        area: "score_gifts",
+        action: "jump_to_date",
+        target_date: target
+      });
       jumpStatus.textContent = "正在跳转到 " + target;
       var section = findDateSection(target);
       if (section) {

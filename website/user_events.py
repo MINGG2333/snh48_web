@@ -35,6 +35,10 @@ EVENT_TYPES = {
     "login_attempt": "🔑 登录尝试",
     "click": "👆 点击事件",
     "screenshot": "📸 截图保存",
+    "admin_filter": "🔎 管理页筛选",
+    "admin_export": "📤 管理页导出",
+    "admin_update": "🛠️ 管理页更新",
+    "admin_modal": "🪟 管理页弹窗",
     "other": "❓ 其他事件",
 }
 

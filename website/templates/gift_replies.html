@@ -640,6 +640,7 @@
     </main>
   </div>
 
+  <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
   <script>
   (function() {
     "use strict";
@@ -715,9 +716,30 @@
       return wrap;
     }
 
+    function trackAdminEvent(eventType, data) {
+      if (!window._trackEvent) return;
+      window._trackEvent(eventType, Object.assign({
+        area: "gift_replies"
+      }, data || {}));
+    }
+
+    function giftRepliesFilterPayload(action) {
+      return {
+        action: action || "apply_filters",
+        status: statusFilter,
+        gift_name: giftSelect.value || "",
+        has_sender_query: Boolean(senderInput.value.trim()),
+        reply_type: replyTypeSelect.value || "all",
+        date_from: dateFromInput.value || "",
+        date_to: dateToInput.value || "",
+        page_size: pageSizeSelect.value || String(pageSize)
+      };
+    }
+
     function doLogin() {
       var value = passwordInput.value.trim();
       if (!value) return;
+      trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "submitted" });
       password = value;
       loginError.classList.remove("show");
       fetchData({ resetTimer: true });
@@ -739,6 +761,7 @@
     async function fetchData(options) {
       options = options || {};
       mainContent.classList.add("loading");
+      var wasLoginVisible = !loginOverlay.classList.contains("hidden");
       try {
         var resp = await fetch("/api/gift-replies/data?" + buildQuery(), {
           headers: { "X-Gift-Replies-Password": password },
@@ -754,6 +777,9 @@
           passwordInput.value = "";
           passwordInput.focus();
           stopRefresh();
+          if (wasLoginVisible) {
+            trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "failure" });
+          }
           return;
         }
 
@@ -770,6 +796,9 @@
 
         loginOverlay.classList.add("hidden");
         pageEl.classList.add("ready");
+        if (wasLoginVisible) {
+          trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "success" });
+        }
         render(data);
         if (options.resetTimer) {
           resetRefreshTimer();
@@ -969,9 +998,10 @@
       });
     }
 
-    function applyFilters() {
+    function applyFilters(action) {
       page = 1;
       pageSize = Number(pageSizeSelect.value || 100);
+      trackAdminEvent("admin_filter", giftRepliesFilterPayload(action || "apply_filters"));
       fetchData({ resetTimer: true });
     }
 
@@ -983,7 +1013,7 @@
       pageSizeSelect.value = "100";
       dateFromInput.value = "";
       dateToInput.value = "";
-      applyFilters();
+      applyFilters("reset_filters");
     }
 
     function stopRefresh() {
@@ -1009,28 +1039,34 @@
       var button = event.target.closest("button[data-status]");
       if (!button) return;
       setStatus(button.getAttribute("data-status"));
-      applyFilters();
+      applyFilters("status_filter");
     });
 
-    giftSelect.addEventListener("change", applyFilters);
-    replyTypeSelect.addEventListener("change", applyFilters);
-    pageSizeSelect.addEventListener("change", applyFilters);
-    applyBtn.addEventListener("click", applyFilters);
+    giftSelect.addEventListener("change", function() { applyFilters("gift_filter"); });
+    replyTypeSelect.addEventListener("change", function() { applyFilters("reply_type_filter"); });
+    pageSizeSelect.addEventListener("change", function() { applyFilters("page_size_filter"); });
+    applyBtn.addEventListener("click", function() { applyFilters("apply_filters"); });
     resetBtn.addEventListener("click", resetFilters);
     senderInput.addEventListener("keydown", function(event) {
-      if (event.key === "Enter") applyFilters();
+      if (event.key === "Enter") applyFilters("sender_filter");
     });
-    dateFromInput.addEventListener("change", applyFilters);
-    dateToInput.addEventListener("change", applyFilters);
+    dateFromInput.addEventListener("change", function() { applyFilters("date_filter"); });
+    dateToInput.addEventListener("change", function() { applyFilters("date_filter"); });
 
     prevBtn.addEventListener("click", function() {
       if (page <= 1) return;
       page -= 1;
+      trackAdminEvent("admin_filter", Object.assign(giftRepliesFilterPayload("page_prev"), {
+        page: page
+      }));
       fetchData({ resetTimer: true });
     });
 
     nextBtn.addEventListener("click", function() {
       page += 1;
+      trackAdminEvent("admin_filter", Object.assign(giftRepliesFilterPayload("page_next"), {
+        page: page
+      }));
       fetchData({ resetTimer: true });
     });
   })();

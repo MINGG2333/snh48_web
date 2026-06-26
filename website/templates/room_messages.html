@@ -851,6 +851,7 @@
     </main>
   </div>
 
+  <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
   <script>
   (function() {
     "use strict";
@@ -908,6 +909,28 @@
     var ignoreBatchBtn = document.getElementById("ignoreBatchBtn");
     var undoIgnoreBtn = document.getElementById("undoIgnoreBtn");
 
+    function trackAdminEvent(eventType, data) {
+      if (!window._trackEvent) return;
+      window._trackEvent(eventType, Object.assign({
+        area: "room_messages"
+      }, data || {}));
+    }
+
+    function roomFilterPayload(action) {
+      return {
+        action: action || "apply_filters",
+        family: familyParam(),
+        msg_type: typeSelect.value || "all",
+        has_sender_query: Boolean(senderInput.value.trim()),
+        has_keyword_query: Boolean(keywordInput.value.trim()),
+        has_media: mediaSelect.value || "all",
+        date_from: dateFromInput.value || "",
+        date_to: dateToInput.value || "",
+        limit: limitSelect.value || "100",
+        loaded_count: loadedCount
+      };
+    }
+
     updateViewportInsets();
     window.addEventListener("resize", updateViewportInsets);
     window.addEventListener("orientationchange", function() {
@@ -929,6 +952,7 @@
     function doLogin() {
       var value = passwordInput.value.trim();
       if (!value) return;
+      trackAdminEvent("login_attempt", { action: "room_messages_login", result: "submitted" });
       password = value;
       loginError.classList.remove("show");
       reloadLatest();
@@ -955,6 +979,7 @@
       if (options.older) topLoader.classList.remove("hidden");
       if (options.newer) bottomLoader.classList.remove("hidden");
       if (options.targetId) showJumpStatus(options.statusText || "正在加载目标消息...");
+      var wasLoginVisible = !loginOverlay.classList.contains("hidden");
 
       try {
         var params = queryBase(options.limitOverride);
@@ -981,6 +1006,9 @@
           loginOverlay.classList.remove("hidden");
           pageEl.classList.remove("ready");
           stopRefresh();
+          if (wasLoginVisible) {
+            trackAdminEvent("login_attempt", { action: "room_messages_login", result: "failure" });
+          }
           return null;
         }
 
@@ -991,6 +1019,9 @@
         var data = await resp.json();
         loginOverlay.classList.add("hidden");
         pageEl.classList.add("ready");
+        if (wasLoginVisible) {
+          trackAdminEvent("login_attempt", { action: "room_messages_login", result: "success" });
+        }
         renderSummary(data);
         syncTypeOptions(data.type_counts || []);
 
@@ -1153,6 +1184,10 @@
       var batch = latestUnrepliedGiftBatch || {};
       if (!batch.start_message_id) {
         showJumpStatus("当前没有可忽略的未回礼物");
+        trackAdminEvent("admin_update", {
+          action: "ignore_latest_unreplied_gift_batch",
+          result: "no_target"
+        });
         return;
       }
 
@@ -1163,10 +1198,20 @@
         renderSummary(data);
         setLoadedIgnoredState((data.ignored_batch && data.ignored_batch.gift_message_ids) || [], true);
         showJumpStatus("已标记忽略");
+        trackAdminEvent("admin_update", {
+          action: "ignore_latest_unreplied_gift_batch",
+          result: "success",
+          batch_count: Number(batch.count || 0)
+        });
       } catch (err) {
         if (err.message) {
           showJumpStatus(err.message);
         }
+        trackAdminEvent("admin_update", {
+          action: "ignore_latest_unreplied_gift_batch",
+          result: "failure",
+          batch_count: Number(batch.count || 0)
+        });
       } finally {
         setIgnoreActionBusy(false);
       }
@@ -1175,9 +1220,14 @@
     async function undoLatestIgnoredBatch() {
       if (!latestIgnoredBatch || !latestIgnoredBatch.batch_id) {
         showJumpStatus("当前没有可撤销的忽略记录");
+        trackAdminEvent("admin_update", {
+          action: "undo_latest_ignored_batch",
+          result: "no_target"
+        });
         return;
       }
 
+      var batch = latestIgnoredBatch;
       setIgnoreActionBusy(true);
       showJumpStatus("正在撤销忽略...");
       try {
@@ -1185,10 +1235,20 @@
         renderSummary(data);
         setLoadedIgnoredState((data.undone_batch && data.undone_batch.gift_message_ids) || [], false);
         showJumpStatus("已撤销忽略");
+        trackAdminEvent("admin_update", {
+          action: "undo_latest_ignored_batch",
+          result: "success",
+          batch_id: batch.batch_id
+        });
       } catch (err) {
         if (err.message) {
           showJumpStatus(err.message);
         }
+        trackAdminEvent("admin_update", {
+          action: "undo_latest_ignored_batch",
+          result: "failure",
+          batch_id: batch.batch_id
+        });
       } finally {
         setIgnoreActionBusy(false);
       }
@@ -1477,12 +1537,15 @@
       parent.appendChild(span);
     }
 
-    function reloadLatest() {
+    function reloadLatest(action) {
       beforeIndex = null;
       afterIndex = null;
       hasMoreOlder = false;
       hasMoreNewer = false;
       loadedCount = 0;
+      if (action) {
+        trackAdminEvent("admin_filter", roomFilterPayload(action));
+      }
       fetchChunk({ older: false });
     }
 
@@ -1650,6 +1713,11 @@
     async function jumpToMessage(targetId, targetFamily, options) {
       options = options || {};
       if (!targetId) return;
+      trackAdminEvent("admin_filter", {
+        action: "jump_to_message",
+        target_family: targetFamily || "",
+        force_reload: Boolean(options.forceReload)
+      });
       var jumpToken = beginJump();
       showJumpStatus("正在跳转...");
       if (!options.forceReload && await scrollToMessage(targetId, jumpToken)) return;
@@ -1684,9 +1752,16 @@
       var startId = batch.start_message_id || "";
       if (!startId) {
         showJumpStatus("当前没有未回复礼物");
+        trackAdminEvent("admin_filter", Object.assign(roomFilterPayload("jump_latest_unreplied_gifts"), {
+          result: "no_target"
+        }));
         return;
       }
 
+      trackAdminEvent("admin_filter", Object.assign(roomFilterPayload("jump_latest_unreplied_gifts"), {
+        result: "started",
+        batch_count: Number(batch.count || 0)
+      }));
       var endId = batch.end_message_id || startId;
       var batchCount = Number(batch.count || 0);
       var limitOverride = Math.min(500, Math.max(Number(limitSelect.value) || 100, batchCount + 20));
@@ -1741,6 +1816,9 @@
         return;
       }
 
+      trackAdminEvent("admin_filter", Object.assign(roomFilterPayload("jump_to_date"), {
+        target_date: targetDate
+      }));
       var jumpToken = beginJump();
       showJumpStatus("正在定位 " + targetDate + " 的第一条消息...");
       setFilterPanelOpen(false);
@@ -2033,7 +2111,7 @@
       dateToInput.value = "";
       if (jumpDateInput) jumpDateInput.value = "";
       mediaSelect.value = "all";
-      reloadLatest();
+      reloadLatest("reset_filters");
     }
 
     function formatNumber(value) {
@@ -2050,7 +2128,7 @@
     });
     chatScroll.addEventListener("scroll", loadMoreIfNeeded);
     applyBtn.addEventListener("click", function() {
-      reloadLatest();
+      reloadLatest("apply_filters");
       setFilterPanelOpen(false);
     });
     resetBtn.addEventListener("click", resetFilters);
@@ -2062,7 +2140,9 @@
         if (event.key === "Enter") jumpToDate();
       });
     }
-    updatePill.addEventListener("click", reloadLatest);
+    updatePill.addEventListener("click", function() {
+      reloadLatest("load_newer");
+    });
     if (unrepliedNav) {
       unrepliedNav.addEventListener("click", jumpToLatestUnrepliedGifts);
     }
@@ -2085,16 +2165,18 @@
       var button = event.target.closest("button[data-family]");
       if (!button) return;
       toggleFamily(button.getAttribute("data-family"));
-      reloadLatest();
+      reloadLatest("family_filter");
     });
 
     [typeSelect, limitSelect, mediaSelect, dateFromInput, dateToInput].forEach(function(node) {
-      node.addEventListener("change", reloadLatest);
+      node.addEventListener("change", function() {
+        reloadLatest("change_filters");
+      });
     });
 
     [senderInput, keywordInput].forEach(function(node) {
       node.addEventListener("keydown", function(event) {
-        if (event.key === "Enter") reloadLatest();
+        if (event.key === "Enter") reloadLatest("text_filter");
       });
     });
   })();
