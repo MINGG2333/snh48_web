@@ -12,6 +12,14 @@
 set -euo pipefail
 
 ALIYUN=${ALIYUN:-root@8.210.188.184}
+LOCK_FILE=${ALIYUN_SYNC_LOCK_FILE:-/tmp/snh48_sync_to_aliyun.lock}
+if [ "${SYNC_TO_ALIYUN_LOCKED:-0}" != "1" ]; then
+  if ! env SYNC_TO_ALIYUN_LOCKED=1 ALIYUN_SYNC_LOCK_FILE="$LOCK_FILE" flock -n "$LOCK_FILE" bash "$0" "$@"; then
+    echo "[sync-to-aliyun][$(date '+%Y-%m-%d %H:%M:%S')] previous sync still running, skipped"
+  fi
+  exit 0
+fi
+
 LOG_TAG="[sync-to-aliyun][$(date '+%Y-%m-%d %H:%M:%S')]"
 
 echo "$LOG_TAG Starting sync..."

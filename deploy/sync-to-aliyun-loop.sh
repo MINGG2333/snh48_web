@@ -13,16 +13,11 @@ if [ "$INTERVAL" -lt 5 ]; then
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-LOCK_FILE=${ALIYUN_SYNC_LOCK_FILE:-/tmp/snh48_sync_to_aliyun.lock}
 
 echo "[sync-to-aliyun-loop][$(date '+%Y-%m-%d %H:%M:%S')] starting interval=${INTERVAL}s"
 while true; do
   started_at=$(date +%s)
-  if flock -n "$LOCK_FILE" bash "$SCRIPT_DIR/sync-to-aliyun.sh"; then
-    :
-  else
-    echo "[sync-to-aliyun-loop][$(date '+%Y-%m-%d %H:%M:%S')] previous sync still running, skipped"
-  fi
+  bash "$SCRIPT_DIR/sync-to-aliyun.sh"
   finished_at=$(date +%s)
   elapsed=$((finished_at - started_at))
   sleep_for=$((INTERVAL - elapsed))
