@@ -16,7 +16,7 @@ LOG_TAG="[sync-to-aliyun][$(date '+%Y-%m-%d %H:%M:%S')]"
 
 echo "$LOG_TAG Starting sync..."
 
-ssh "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts'
+ssh "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts'
 
 # 1. schedule.csv（行程表，网站实时读取）
 rsync -az --partial /home/snh48-fan-hub/schedule_record/schedule.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/schedule.csv"
@@ -34,9 +34,9 @@ echo "$LOG_TAG live_covers done"
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/"
 echo "$LOG_TAG gift_replies done"
 
-# 5. messages.csv（房间消息页完整消息 CSV）
-rsync -az --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv"
-echo "$LOG_TAG messages.csv done"
+# 5. messages_shards（房间消息页分片小数据；旧分片稳定，新消息只更新最后一个小文件和 manifest）
+rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/"
+echo "$LOG_TAG messages_shards done"
 
 # 6. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/"

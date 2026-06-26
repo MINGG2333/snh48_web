@@ -1,9 +1,9 @@
 """
 Room messages API router.
 
-Exposes a password-protected, cursor-based view over the room_monitor
-messages.csv dataset. The CSV is cached in memory and reloaded when the file
-mtime changes.
+Exposes a password-protected, cursor-based view over the room_monitor messages
+dataset. The API prefers derived JSONL shards for cheaper cross-cloud sync and
+falls back to messages.csv when shards are unavailable.
 """
 from __future__ import annotations
 
@@ -353,6 +353,14 @@ def _data_path() -> Path:
     return Path(cfg.ROOM_MESSAGES_CSV_PATH)
 
 
+def _shards_dir() -> Path:
+    return Path(cfg.ROOM_MESSAGES_SHARDS_DIR)
+
+
+def _shards_manifest_path() -> Path:
+    return _shards_dir() / "manifest.json"
+
+
 def _ignore_path() -> Path:
     return Path(cfg.ROOM_MESSAGES_IGNORE_PATH)
 
@@ -578,7 +586,7 @@ def _short_process_error(result: subprocess.CompletedProcess) -> str:
 def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_rows, _cache_summary
 
-    path = _data_path()
+    source_kind, path = _dataset_source()
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据未生成")
 
@@ -604,28 +612,103 @@ def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             return _cache_rows, _cache_summary
 
         transcripts = _load_audio_transcripts()
-        rows: list[dict[str, Any]] = []
-        try:
-            with path.open("r", encoding="utf-8-sig", newline="") as f:
-                for row in csv.DictReader(f):
-                    normalised = _normalise_row(row)
-                    _attach_audio_transcript(normalised, transcripts)
-                    normalised["_row_index"] = len(rows)
-                    rows.append(normalised)
-        except OSError as exc:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
+        if source_kind == "shards":
+            rows, source_path, source_mtime = _load_sharded_rows(path, transcripts)
+        else:
+            rows, source_path, source_mtime = _load_csv_rows(path, transcripts), str(path), stat.st_mtime
 
         _attach_message_links(rows)
         ignored_state = _load_ignored_state()
         ignored_ids = _ignored_gift_ids(ignored_state)
         _attach_ignored_gifts(rows, ignored_ids)
-        summary = _build_summary(rows, stat.st_mtime, ignored_state)
+        summary = _build_summary(rows, source_mtime, ignored_state, source_path)
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_ignore_mtime_ns = ignore_mtime_ns
         _cache_transcripts_mtime_ns = transcripts_mtime_ns
         _cache_rows = rows
         _cache_summary = summary
         return _cache_rows, _cache_summary
+
+
+def _dataset_source() -> tuple[str, Path]:
+    manifest_path = _shards_manifest_path()
+    if manifest_path.exists():
+        return "shards", manifest_path
+    return "csv", _data_path()
+
+
+def _load_csv_rows(path: Path, transcripts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                normalised = _normalise_row(row)
+                _attach_audio_transcript(normalised, transcripts)
+                normalised["_row_index"] = len(rows)
+                rows.append(normalised)
+    except OSError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
+    return rows
+
+
+def _load_sharded_rows(
+    manifest_path: Path,
+    transcripts: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str, float]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息分片索引读取失败") from exc
+    if not isinstance(manifest, dict):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息分片索引格式无效")
+    chunks = manifest.get("chunks")
+    if not isinstance(chunks, list):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息分片列表格式无效")
+
+    base_dir = manifest_path.parent
+    fieldnames = [str(field) for field in manifest.get("fieldnames", []) if field]
+    rows: list[dict[str, Any]] = []
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        rel = str(chunk.get("file") or "")
+        if not rel or rel.startswith("/") or ".." in Path(rel).parts:
+            continue
+        chunk_path = base_dir / rel
+        try:
+            with chunk_path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    fields: dict[str, Any] | None
+                    if isinstance(payload, list):
+                        fields = {field: payload[index] if index < len(payload) else "" for index, field in enumerate(fieldnames)}
+                    else:
+                        fields = payload.get("fields") if isinstance(payload, dict) else None
+                    if not isinstance(fields, dict):
+                        continue
+                    normalised = _normalise_row({str(key): "" if value is None else str(value) for key, value in fields.items()})
+                    _attach_audio_transcript(normalised, transcripts)
+                    normalised["_row_index"] = len(rows)
+                    rows.append(normalised)
+        except OSError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息分片读取失败") from exc
+
+    source_mtime = _manifest_source_mtime(manifest, manifest_path)
+    return rows, str(base_dir), source_mtime
+
+
+def _manifest_source_mtime(manifest: dict[str, Any], manifest_path: Path) -> float:
+    source_mtime_ns = manifest.get("source_mtime_ns")
+    try:
+        return int(source_mtime_ns) / 1_000_000_000
+    except (TypeError, ValueError):
+        return manifest_path.stat().st_mtime
 
 
 def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
@@ -1179,7 +1262,7 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if not key.startswith("_")}
 
 
-def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict[str, Any]) -> dict[str, Any]:
+def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict[str, Any], source_path: str) -> dict[str, Any]:
     type_counts: dict[str, int] = {}
     family_counts: dict[str, int] = {}
     for row in rows:
@@ -1192,7 +1275,7 @@ def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict
         "total_messages": len(rows),
         "first_bj_time": rows[0]["bj_time"] if rows else "",
         "latest_bj_time": rows[-1]["bj_time"] if rows else "",
-        "source_path": str(_data_path()),
+        "source_path": source_path,
         "source_mtime": datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S"),
         "audio_transcripts_path": str(_audio_transcripts_path()),
         "audio_transcripts_mtime": _audio_transcripts_mtime_label(),

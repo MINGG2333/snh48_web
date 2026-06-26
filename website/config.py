@@ -175,6 +175,16 @@ ROOM_MESSAGES_CSV_PATH = os.getenv(
         / "messages.csv"
     ),
 )
+ROOM_MESSAGES_SHARDS_DIR = os.getenv(
+    "ROOM_MESSAGES_SHARDS_DIR",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "messages_shards"
+    ),
+)
 ROOM_AUDIO_TRANSCRIPTS_PATH = os.getenv(
     "ROOM_AUDIO_TRANSCRIPTS_PATH",
     str(
