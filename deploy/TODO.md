@@ -7,7 +7,7 @@
 
 - `deploy/deploy.py`：当前推荐的多服务器部署工具，用于腾讯云、阿里云和新增 Ubuntu 服务器的代码同步、可选服务重启、可选 Nginx 同步和烟测。说明见 `deploy/DEPLOY_TOOL.md`。
 - `deploy/deploy.sh`：旧版 CentOS/OpenCloudOS 初始化脚本，只保留作历史兼容。它不是日常部署入口，也不能完成完整迁移。
-- `deploy/sync-to-aliyun.sh`：只同步腾讯云到阿里云的时光轴运行数据，不部署代码。
+- `deploy/sync-to-aliyun.sh`：同步腾讯云到阿里云的网站必要运行数据，不部署代码。
 
 ---
 
@@ -663,7 +663,7 @@ USE_OBFUSCATED_JS=true               # 使用混淆后的 JS 文件
 | 措施 | 涉及文件 | 效果 |
 |------|----------|------|
 | **关键配置后移** | `main.py` → `qa.html` → `qa.js` | QA 配置通过 Jinja2 服务端注入 `window.__QA_CONFIG__`，静态 JS 文件零参数暴露；攻击者直接读 JS 只能看到误导性假值 |
-| **关键数据后移** | `timeline_api/router.py` → `timeline.js` | 手动事件数据不再硬编码，从 `website/data/manual_events.csv` 动态加载，修改后无需重启 |
+| **关键数据后移** | `timeline_api/router.py` → `timeline.js` | 手动事件数据不再硬编码，从运行数据 `website/data/manual_events.csv` 动态加载，修改后无需重启 |
 | **密码存储安全** | `scroller_api/router.py` → `scroller-admin.js` | 管理密码改用 HttpOnly Cookie（HMAC 哈希），JS 无法读取，防止 XSS 窃取 |
 | **公开端点限速** | `rate_limiter.py` + 各 router | 公开可写、公开查询和管理登录尝试端点均设置 IP 限速 |
 | **JS 代码混淆** | `script/obfuscate_js.cjs` | 7 个 JS 文件混淆为乱码（变量名随机化、字符串加密、控制流平坦化），通过 `USE_OBFUSCATED_JS=true` 启用 |
@@ -712,7 +712,7 @@ git commit -m "重新构建 JS/CSS"
 ### 注意事项
 
 - 后端重启后 Scroller 管理员需重新登录（Cookie 使用服务端随机密钥签名，重启后旧 Cookie 失效）
-- 手动事件数据现在在 `website/data/manual_events.csv` 中维护，修改后**无需重启**，刷新时光轴页面即可看到更新
+- 手动事件数据现在在运行数据 `website/data/manual_events.csv` 中维护，修改后**无需重启**，刷新时光轴页面即可看到更新；仓库内 `website/data/manual_events.example.csv` 只保留字段格式示例。
 - CSV 列说明：`id`（唯一标识）, `date`（YYYY-MM-DD）, `title`, `type`（milestone/tour/show/event）, `typeLabel`（显示文字）, `description`, `image`（单张封面）, `icon`（Font Awesome 图标）, `link`（外部链接）, `images`（多图，分号分隔）
 - 所有限速在服务重启后会重置（除 IP 日配额外）
 - 新增 `innerHTML` 前必须先转义所有后端/CSV/第三方数据，URL 只允许 `http:`、`https:` 或同源相对路径
@@ -957,13 +957,14 @@ curl -s -o /dev/null -w '%{http_code}' https://cjy.我爱你/image-proxy/health
 python3 script/prewarm_image_proxy.py --base-url https://cjy.xn--6qq986b3xl --limit 120 --workers 8
 ```
 
-### 13. 同步时光轴数据（从腾讯云）
+### 13. 同步网站必要数据（从腾讯云）
 
-时光轴依赖 `snh48-fan-hub` 的三个数据集：
+时光轴依赖 `snh48-fan-hub` 的派生数据，以及网站仓库内的手动事件 CSV：
 
 | 数据 | 路径 | 大小 | 用途 |
 |------|------|------|------|
 | 📅 行程表 | `schedule_record/schedule.csv` | 188 KB | 时光轴日程 |
+| 📝 手动事件 | `/home/snh48_web/website/data/manual_events.csv` | 小型 CSV | 手动维护的时光轴事件；不由 Git 跟踪 |
 | 🎬 直播汇总 | `live_push_replays/陈嘉仪_161808449/summary.csv` | 104 KB | 直播信息 |
 | 🖼️ 直播封面 | `room_record/陈嘉仪_161808449/live_covers/` | 96 MB | 122 张封面图 |
 | 🎁 礼物回复 | `room_record/陈嘉仪_161808449/gift_replies/` | 小型 CSV/JSON | 礼物回复页 |
@@ -1039,7 +1040,7 @@ python3 deploy/deploy.py deploy tencent
 
 ### 数据文件同步
 
-行程、回放汇总或直播封面数据更新后需要同步到阿里云。推荐在本地通过部署工具触发腾讯云到阿里云的 rsync：
+行程、手动事件、回放汇总或直播封面数据更新后需要同步到阿里云。推荐在本地通过部署工具触发腾讯云到阿里云的 rsync：
 
 ```bash
 python3 deploy/deploy.py sync-data tencent aliyun
@@ -1053,6 +1054,7 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 | 数据 | 源路径（腾讯云） | 目标（阿里云） | 说明 |
 |------|----------------|---------------|------|
 | `schedule.csv` | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 行程表，网站实时读取 |
+| `manual_events.csv` | `/home/snh48_web/website/data/manual_events.csv` | 同路径 | 手动事件表，网站实时读取；不由 Git 跟踪 |
 | `live_push_replays/` | `/home/snh48-fan-hub/live_push_replays/` | 同路径 | 直播回放汇总（含封面缩略图） |
 | `room_record/…/live_covers/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面图 |
 | `room_record/…/gift_replies/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复页数据 |
@@ -1082,13 +1084,16 @@ crontab -e
 # 1. schedule.csv
 rsync -az --partial /home/snh48-fan-hub/schedule_record/schedule.csv root@8.210.188.184:/home/snh48-fan-hub/schedule_record/schedule.csv
 
-# 2. live_push_replays（仅陈嘉仪数据）
+# 2. manual_events.csv
+rsync -az --partial /home/snh48_web/website/data/manual_events.csv root@8.210.188.184:/home/snh48_web/website/data/manual_events.csv
+
+# 3. live_push_replays（仅陈嘉仪数据）
 rsync -az --delete --partial /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
 
-# 3. live_covers（直播封面原图）
+# 4. live_covers（直播封面原图）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
 
-# 4. gift_replies（礼物回复页小数据）
+# 5. gift_replies（礼物回复页小数据）
 rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/
 ```
 

@@ -53,7 +53,7 @@
 
 | 数据来源 | 字段 | 代码路径 | 可能域名 | 触发方式 | 风险说明 |
 |----------|------|----------|----------|----------|----------|
-| `website/data/manual_events.csv` | `image`、`images`、`link` | `website/timeline_api/router.py` → `website/static/js/timeline.js` | 当前为 `www.snh48.com` | 时光轴卡片/弹窗加载图片；用户点击链接 | 仓库内可控，风险较低；若替换为高频外站图片可能被视为盗链 |
+| `website/data/manual_events.csv` | `image`、`images`、`link` | `website/timeline_api/router.py` → `website/static/js/timeline.js` | 当前为 `www.snh48.com` | 时光轴卡片/弹窗加载图片；用户点击链接 | 运行数据，由腾讯云同步到阿里云；若替换为高频外站图片可能被视为盗链 |
 | 服务器 `schedule.csv` | `cover_url`、`event_images`、`image_urls` | `read_schedule()` → `timeline.js` | `sinaimg.cn`、`hdslb.com`、其他 HTTPS 图源 | 时光轴卡片/弹窗加载图片 | URL 来自运行时数据；前端允许任意 HTTPS 图片；`.sinaimg.cn` 会被改写到 `/image-proxy/` |
 | 服务器 `schedule.csv` | `event_link`、`source_url`、`video_urls`、`snh48_bilibili_urls`、`snh48_weibo_urls`、`chenjiayi_weibo_urls` | `read_schedule()` → `buildSourceLinks()` | 微博、B站、活动页等 | 用户点击弹窗链接 | 能跳转到任意 HTTPS URL；前端会过滤危险协议，但不限制域名 |
 | 服务器 `summary.csv` | `live_cover_url` | `read_live_pushes()` | `source3.48.cn` | 直播卡片/弹窗加载封面 | 服务端拼接为 `https://source3.48.cn{path}`，但高流量直连官方图源仍可能触发防盗链/限流 |

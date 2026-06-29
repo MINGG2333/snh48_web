@@ -32,11 +32,12 @@
 |------|----------------------|----------|
 | 本地 | 功能验证副本，路径 `/mnt/zhitainew/snh48/snh48-fan-hub` | 与腾讯云全量工程通过 GitHub 同步，主要用于验证脚本和对接逻辑 |
 | 腾讯云 | 全量代码和数据生成服务器，路径 `/home/snh48-fan-hub` | 常驻采集、监控、生成网站数据，供内地版暨测试版网站使用 |
-| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub` | 从腾讯云直接同步最小数据集，供香港版暨对外公开版网站使用 |
+| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub`，另含网站仓库内手动事件 CSV | 从腾讯云直接同步最小数据集，供香港版暨对外公开版网站使用 |
 
 网站必要数据集：
 
 - `schedule_record/schedule.csv`
+- `/home/snh48_web/website/data/manual_events.csv`（网站运行数据手动事件 CSV，接口按请求读取；格式示例见 `website/data/manual_events.example.csv`）
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
@@ -52,7 +53,7 @@ python3 deploy/deploy.py sync-data tencent aliyun
 bash deploy/sync-to-aliyun.sh
 ```
 
-`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。两者都是把必要数据从腾讯云同步到阿里云。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。两者都是把必要数据从腾讯云同步到阿里云。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 数据同步后如需预热图片代理缓存：
 

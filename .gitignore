@@ -17,6 +17,7 @@ kb_qa.log
 # Website data
 website/data/interaction_logs/
 website/data/complaints/
+website/data/manual_events.csv
 
 # Environment
 .env

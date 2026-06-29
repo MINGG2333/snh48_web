@@ -14,7 +14,7 @@
 | 无重启同步 | 已支持 | 加 `--no-restart` 后只做远端 Git 更新和验证，适合文档、Codex 规则、已构建静态资源等更新 |
 | 同步 Nginx 配置 | 已支持 | 部署时加 `--nginx`，会复制或生成 Nginx 配置，先 `nginx -t`，再 reload |
 | 检查远端 `.env` 键 | 已支持 | `check-env` 只比较键名，不输出真实值；可在环境变量变更后使用 |
-| 同步运行数据 | 部分支持 | `sync-data` 目前面向时光轴数据，按 target 中配置的路径同步，不覆盖 `.env`、证书和用户运行数据 |
+| 同步运行数据 | 部分支持 | `sync-data` 目前面向网站必要运行数据，按 target 中配置的路径同步，不覆盖 `.env`、证书和用户运行数据 |
 | 预热图片代理缓存 | 已支持 | `prewarm-image-cache` 或 `sync-data --prewarm` 会访问最新图片 URL，降低首次打开失败率 |
 | 全新 Ubuntu 服务器初始化 | 半自动支持 | `bootstrap-ubuntu` 会安装基础依赖、clone 仓库、创建 venv 和 systemd，但不会处理云安全组、DNS、证书、真实 `.env` 和完整数据迁移 |
 
@@ -138,7 +138,7 @@ python3 deploy/deploy.py --config deploy/targets.local.json deploy huawei --ngin
 
 ## 运行数据同步
 
-从腾讯云同步工具已配置的时光轴数据到阿里云：
+从腾讯云同步工具已配置的网站必要运行数据到阿里云：
 
 ```bash
 python3 deploy/deploy.py sync-data tencent aliyun
@@ -150,13 +150,13 @@ python3 deploy/deploy.py sync-data tencent aliyun
 python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 ```
 
-从腾讯云同步工具已配置的时光轴数据到新增目标：
+从腾讯云同步工具已配置的网站必要运行数据到新增目标：
 
 ```bash
 python3 deploy/deploy.py --config deploy/targets.local.json sync-data tencent huawei
 ```
 
-这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。腾讯云到阿里云已有 `deploy/sync-to-aliyun.sh`，新服务器需要先配置对应 SSH key。
+这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。腾讯云到阿里云已有 `deploy/sync-to-aliyun.sh`，新服务器需要先配置对应 SSH key。`website/data/manual_events.csv` 不由 Git 跟踪，作为运行数据同步；仓库里的 `website/data/manual_events.example.csv` 只用于说明字段格式。
 
 只预热目标站点图片代理缓存：
 
