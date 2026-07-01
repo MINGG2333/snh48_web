@@ -8,6 +8,7 @@
 - `deploy/deploy.py`：当前推荐的多服务器部署工具，用于腾讯云、阿里云和新增 Ubuntu 服务器的代码同步、可选服务重启、可选 Nginx 同步和烟测。说明见 `deploy/DEPLOY_TOOL.md`。
 - `deploy/deploy.sh`：旧版 CentOS/OpenCloudOS 初始化脚本，只保留作历史兼容。它不是日常部署入口，也不能完成完整迁移。
 - `deploy/sync-to-aliyun.sh`：同步腾讯云到阿里云的网站必要运行数据，不部署代码。
+- `deploy/sync-to-aliyun-if-changed.sh`：自动同步入口，每分钟检查源数据指纹，只有变化时才调用 `sync-to-aliyun.sh`；实际同步复用同一条 SSH 连接。
 
 ---
 
@@ -1072,10 +1073,10 @@ bash deploy/sync-to-aliyun.sh
 # 手动执行并预热阿里云图片缓存
 PREWARM_IMAGE_PROXY=1 bash deploy/sync-to-aliyun.sh
 
-# 添加定时任务（每10分钟自动同步）
+# 添加定时任务（每分钟检查一次，有变化才同步）
 crontab -e
 # 加入以下行：
-*/10 * * * * bash /home/snh48_web/deploy/sync-to-aliyun.sh >> /var/log/snh48/sync-to-aliyun.log 2>&1
+* * * * * bash /home/snh48_web/deploy/sync-to-aliyun-if-changed.sh >> /var/log/snh48/sync-to-aliyun.log 2>&1
 ```
 
 #### 手动同步命令

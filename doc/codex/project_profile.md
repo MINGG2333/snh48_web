@@ -52,9 +52,10 @@
 ```bash
 python3 deploy/deploy.py sync-data tencent aliyun
 bash deploy/sync-to-aliyun.sh
+bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。两者都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。自动同步使用 `deploy/sync-to-aliyun-if-changed.sh` 每分钟检查本地源数据指纹，只有变化时才执行 rsync；实际同步时复用同一条 SSH 连接，避免持续高频 SSH/rsync。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 数据同步后如需预热图片代理缓存：
 
@@ -69,7 +70,7 @@ python3 deploy/deploy.py prewarm-image-cache aliyun
 python3 -m compileall -q website
 for f in website/static/js/*.js website/static/js-dist/*.js; do node --check "$f" || exit 1; done
 python3 -m py_compile deploy/deploy.py
-for f in deploy/deploy.sh deploy/sync-to-aliyun.sh; do bash -n "$f" || exit 1; done
+for f in deploy/deploy.sh deploy/sync-to-aliyun.sh deploy/sync-to-aliyun-if-changed.sh; do bash -n "$f" || exit 1; done
 git diff --check
 ```
 

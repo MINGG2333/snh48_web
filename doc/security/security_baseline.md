@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-06-11
+> 更新日期：2026-07-02
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -22,6 +22,7 @@
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、余额查询、OB/礼物回复页登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
+| 腾讯云到阿里云数据同步限频 | 自动任务每分钟只做本地源数据指纹检查；源数据变化时才执行 `rsync`，且一次同步内复用同一条 SSH 连接 | 降低常驻高频 SSH/rsync 出站行为被云厂商风控误判或放大的风险，同时保留 1 分钟内同步延迟 | 不要恢复 15 秒常驻同步循环；新增同步目录时必须纳入指纹检查和既有连接复用脚本 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |
@@ -37,6 +38,7 @@
 | P0 | 图片首次加载慢或上游被限流 | 代码库新增 `script/prewarm_image_proxy.py`，可按 `schedule.csv` 日期倒序预热最新微博图片 | 数据同步后限量预热，确认最新行程图片可正常加载 |
 | P0 | `danmu_url` SSRF/大响应 | 代码库已加入危险地址拦截、非标准端口拦截、响应大小上限、本地 URL 缓存和白名单灰度告警；默认不强制域名白名单 | 本地弹幕、远程兜底弹幕都能加载；远程失败时视频播放不失败 |
 | P1 | DeepSeek QA 被刷 | 已有密码、限速、日配额、并发限制和余额缓存 | 观察日志和额度消耗；暂不加验证码 |
+| P1 | 腾讯云到阿里云运行数据同步产生高频出站特征 | 已停用 15 秒常驻循环；cron 改为每分钟运行 `sync-to-aliyun-if-changed.sh`，只有源数据变化时调用 `sync-to-aliyun.sh`，实际同步复用 SSH 连接 | `crontab -l` 无 `sync-to-aliyun-loop.sh`；`pgrep` 无常驻同步进程；同步日志没有 15 秒连续触发 |
 | P1 | CSV 任意 HTTPS 图片/链接/HLS | 仍处于兼容模式，暂不强制白名单，避免旧内容失败 | 后续先统计历史域名，再告警，最后按字段拦截 |
 | P2 | CDN/外部脚本供应链 | 仍使用 CDN，`hls.js@latest` 尚未固定或自托管 | 后续固定版本并自托管，再收窄 CSP |
 
