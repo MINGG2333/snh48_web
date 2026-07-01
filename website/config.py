@@ -251,8 +251,13 @@ DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST = os.getenv(
 ).lower() in ("1", "true", "yes")
 DANMU_REMOTE_CACHE_DIR = os.getenv("DANMU_REMOTE_CACHE_DIR", "")
 
-# ── Schedule CSV (行程表，由 schedule_monitor.py 生成) ──────────────────────
-# 服务器上：/home/snh48-fan-hub/schedule_record/schedule.csv
+# ── Event/Schedule CSV (事件/行程，由 fan-hub Codex 流程维护) ──────────────
+# 主文件：/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
+EVENTS_CSV_PATH = os.getenv(
+    "EVENTS_CSV_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "chenjiayi_events.csv"),
+)
+# 兼容副本：/home/snh48-fan-hub/schedule_record/schedule.csv
 SCHEDULE_CSV_PATH = os.getenv(
     "SCHEDULE_CSV_PATH",
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "schedule.csv"),

@@ -26,7 +26,7 @@
 
 ## 数据生成工程依赖
 
-本网站运行时读取 `snh48-fan-hub` 生成的数据。修改 `/timeline`、直播回放、图片代理、`SCHEDULE_CSV_PATH`、`LIVE_PUSH_REPLAY_ROOT` 或相关展示逻辑前，先确认这份数据契约。
+本网站运行时读取 `snh48-fan-hub` 生成的数据。修改 `/timeline`、直播回放、图片代理、`EVENTS_CSV_PATH`、`SCHEDULE_CSV_PATH`、`LIVE_PUSH_REPLAY_ROOT` 或相关展示逻辑前，先确认这份数据契约。
 
 | 环境 | `snh48-fan-hub` 角色 | 同步策略 |
 |------|----------------------|----------|
@@ -36,7 +36,8 @@
 
 网站必要数据集：
 
-- `schedule_record/schedule.csv`
+- `schedule_record/chenjiayi_events.csv`（事件/行程主文件，网站优先读取）
+- `schedule_record/schedule.csv`（事件/行程兼容副本，旧配置和回退读取）
 - `/home/snh48_web/website/data/manual_events.csv`（网站运行数据手动事件 CSV，接口按请求读取；格式示例见 `website/data/manual_events.example.csv`）
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
@@ -53,7 +54,7 @@ python3 deploy/deploy.py sync-data tencent aliyun
 bash deploy/sync-to-aliyun.sh
 ```
 
-`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。两者都是把必要数据从腾讯云同步到阿里云。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。两者都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 数据同步后如需预热图片代理缓存：
 

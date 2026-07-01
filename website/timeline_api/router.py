@@ -469,17 +469,32 @@ TYPE_LABEL_MAP = {
 }
 
 
-def read_schedule() -> List[Dict[str, Any]]:
-    """Read schedule.csv, return list of timeline-ready event dicts."""
-    csv_path_str = cfg.SCHEDULE_CSV_PATH
-    if not csv_path_str:
-        return []
+def _find_schedule_csv() -> Optional[Path]:
+    """Locate the primary event CSV, falling back to schedule.csv compatibility paths."""
+    candidates = [
+        cfg.EVENTS_CSV_PATH,
+        cfg.SCHEDULE_CSV_PATH,
+        "/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv",
+        "/home/snh48-fan-hub/schedule_record/schedule.csv",
+    ]
+    seen = set()
+    for value in candidates:
+        if not value:
+            continue
+        path = Path(value)
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        if path.exists():
+            return path
+    return None
 
-    csv_path = Path(csv_path_str)
-    # Also try the server path
-    if not csv_path.exists():
-        csv_path = Path("/home/snh48-fan-hub/schedule_record/schedule.csv")
-    if not csv_path.exists():
+
+def read_schedule() -> List[Dict[str, Any]]:
+    """Read the Chen Jiayi event CSV, return timeline-ready event dicts."""
+    csv_path = _find_schedule_csv()
+    if not csv_path:
         return []
 
     records = []

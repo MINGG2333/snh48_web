@@ -88,6 +88,10 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "data_paths": [
             {
                 "type": "file",
+                "path": "/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv",
+            },
+            {
+                "type": "file",
                 "path": "/home/snh48-fan-hub/schedule_record/schedule.csv",
             },
             {
