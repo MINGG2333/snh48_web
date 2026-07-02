@@ -63,7 +63,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。房间消息忽略状态 `website/data/room_messages_ignored_batches.json` 也不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`，多服务器间通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 自动同步运行状态口径：
 
@@ -136,7 +136,7 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航，仅 URL 访问并要求密码。
 - 交互是聊天记录式加载：首次读取最新一批，向上滚动加载更早消息，不使用页码切换。
 - 语音转录参考是按 `message_id` 关联的派生小文本数据；缺失时页面隐藏转录块，不影响音频消息展示。
-- 为支持阿里云房间消息页，数据同步清单同步派生的 `messages_shards/` 分片目录，不再每轮传完整 `messages.csv`。忽略状态文件放在网站仓库 `website/data/room_messages_ignored_batches.json`，点击标记或撤销时优先通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 配置的 SSH 直连同步到另一台网站服务器，不走腾讯云到阿里云的单向数据同步。GitHub 同步代码暂时保留为未配置直连时的兜底方案。
+- 为支持阿里云房间消息页，数据同步清单同步派生的 `messages_shards/` 分片目录，不再每轮传完整 `messages.csv`。忽略状态文件位于 `website/data/room_messages_ignored_batches.json`，但它是运行数据，不由 Git 跟踪；点击标记或撤销时优先通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 配置的 SSH 直连同步到另一台网站服务器，不走腾讯云到阿里云的单向数据同步，也不要恢复 GitHub 同步作为生产路径。
 
 ### 计分礼物管理页
 
@@ -302,9 +302,12 @@ curl -I --connect-timeout 5 http://8.210.188.184:8000
 
 ## 远端运行时文件
 
+完整迁移清单见 `doc/runtime_migration.md`。
+
 这些文件可能出现在服务器 `git status --short` 中，通常是运行期数据，不要作为代码冲突处理：
 
 - `nohup.out`
+- `website/data/room_messages_ignored_batches.json`
 - `website/data/balance_log.csv`
 - `website/data/ip_clients.json`
 - `website/data/ip_daily_quota.json`

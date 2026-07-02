@@ -200,7 +200,7 @@ ROOM_MESSAGES_IGNORE_PATH = os.getenv(
     "ROOM_MESSAGES_IGNORE_PATH",
     str(PROJECT_ROOT / "website" / "data" / "room_messages_ignored_batches.json"),
 )
-ROOM_MESSAGES_IGNORE_GIT_SYNC = os.getenv("ROOM_MESSAGES_IGNORE_GIT_SYNC", "true").lower() not in (
+ROOM_MESSAGES_IGNORE_GIT_SYNC = os.getenv("ROOM_MESSAGES_IGNORE_GIT_SYNC", "false").lower() not in (
     "0",
     "false",
     "no",

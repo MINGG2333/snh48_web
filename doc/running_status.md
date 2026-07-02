@@ -85,6 +85,7 @@ systemctl status nginx
 
 - `schedule_record/images/`：图片通过网站 `/image-proxy/` 访问。
 - 完整原始房间消息、语音原文件、Cookie、Token、`.env`、`config/`、日志和缓存。
+- 房间消息忽略状态 `website/data/room_messages_ignored_batches.json`：这是网站运行数据，不由 Git 跟踪，也不进入 `core` / `dynamic` 单向拉取；两台网站服务器通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。
 - 阿里云不是 `snh48-fan-hub` 的 Git checkout，不在阿里云生成 fan-hub 数据。
 
 ## 旧推送方案状态
