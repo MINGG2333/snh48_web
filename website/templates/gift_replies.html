@@ -513,7 +513,7 @@
           <p>送礼消息、回礼物消息与未回复列表</p>
         </div>
         <div class="refresh">
-          <div>数据每 <strong id="refreshSeconds">60</strong> 秒刷新</div>
+          <div>数据每 <strong id="refreshSeconds">30</strong> 秒刷新</div>
           <div id="generatedAt">生成时间：-</div>
         </div>
       </div>
@@ -650,7 +650,7 @@
     var pageSize = 100;
     var statusFilter = "all";
     var refreshTimer = null;
-    var refreshSeconds = 60;
+    var refreshSeconds = 30;
     var lastCatalogHash = "";
 
     var loginOverlay = document.getElementById("loginOverlay");
@@ -822,7 +822,7 @@
 
     function render(data) {
       var summary = data.summary || {};
-      refreshSeconds = Number(data.refresh_interval_seconds || 60);
+      refreshSeconds = Number(data.refresh_interval_seconds || 30);
       refreshSecondsEl.textContent = String(refreshSeconds);
       generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
 
@@ -1027,7 +1027,7 @@
       stopRefresh();
       refreshTimer = window.setInterval(function() {
         fetchData({ resetTimer: false });
-      }, Math.max(refreshSeconds, 10) * 1000);
+      }, Math.max(refreshSeconds, 1) * 1000);
     }
 
     loginBtn.addEventListener("click", doLogin);

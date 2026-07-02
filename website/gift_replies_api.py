@@ -102,7 +102,7 @@ def get_gift_replies_data(
     return {
         "generated_at": summary_doc.get("generated_at", ""),
         "timezone": summary_doc.get("timezone", "Asia/Shanghai"),
-        "refresh_interval_seconds": _to_int(summary_doc.get("refresh_interval_seconds"), 60),
+        "refresh_interval_seconds": _to_int(summary_doc.get("refresh_interval_seconds"), 30),
         "default_page_size": _to_int(summary_doc.get("default_page_size"), 100),
         "summary": summary_doc.get("summary", {}),
         "gift_catalog": _normalise_catalog(summary_doc.get("gift_catalog", [])),
@@ -125,7 +125,7 @@ def get_gift_replies_summary(
     return {
         "generated_at": summary_doc.get("generated_at", ""),
         "timezone": summary_doc.get("timezone", "Asia/Shanghai"),
-        "refresh_interval_seconds": _to_int(summary_doc.get("refresh_interval_seconds"), 60),
+        "refresh_interval_seconds": _to_int(summary_doc.get("refresh_interval_seconds"), 30),
         "default_page_size": _to_int(summary_doc.get("default_page_size"), 100),
         "summary": summary_doc.get("summary", {}),
         "gift_catalog": _normalise_catalog(summary_doc.get("gift_catalog", [])),
