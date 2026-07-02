@@ -90,6 +90,13 @@ python3 deploy/deploy.py deploy all --nginx --no-restart
 
 服务器可能存在日志、缓存、用户数据、限速状态等未跟踪文件。除非用户明确要求，部署时不要删除它们。
 
+如果某个历史上被 Git 跟踪的文件改为运行数据并加入 `.gitignore`，第一次部署到其他服务器前要单独处理：
+
+- 先备份目标服务器上的现有文件，例如 `website/data/room_messages_ignored_batches.json`。
+- 确认仓库提交中已有格式示例文件和迁移说明。
+- 远端 `git pull --ff-only` 如因该文件本地修改而停止，不要 checkout 覆盖；先保留运行文件，再按本次迁移方案把它从 Git 跟踪中移出。
+- 拉取完成后确认运行文件仍在目标路径，且不是空文件或示例文件。
+
 ## 6. 失败处理
 
 - `git pull` 冲突：停止，报告冲突文件，不强行覆盖。
