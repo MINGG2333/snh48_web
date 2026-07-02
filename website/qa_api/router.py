@@ -247,6 +247,8 @@ _tasks: Dict[str, AsyncTask] = {}
 @router.get("/status")
 def get_status():
     """Check if the knowledge base is ready."""
+    if _qa_engine is None and not _qa_engine_loading:
+        warmup_qa_engine_async()
     status_payload = dict(_qa_status)
     status_payload["loading"] = _qa_engine_loading
     return status_payload
