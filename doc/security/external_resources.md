@@ -23,7 +23,7 @@
 | 图片首次加载速度 | 新增 `script/prewarm_image_proxy.py`，可在 `schedule.csv` 同步后预热最新微博图片 | 预热后用户更少遇到第一张慢图；预热只请求有限数量图片，不会批量压用户浏览器 | 在数据同步流程中按量运行预热，例如 `--limit 120 --workers 8` |
 | `danmu_url` 服务端兜底抓取 | 代码库已加入本地 URL 缓存、内网/localhost/非 http(s)/非标准端口拦截、响应大小上限和域名白名单灰度模式 | 仍保持本地弹幕优先；远程失败时接口返回可解析 JSON，不阻断视频播放 | 部署 Python 服务；盘点历史 `danmu_url` 后再决定是否强制域名白名单 |
 | DeepSeek QA 被刷 | 已有密码、IP/用户限速、日配额、并发限制、余额接口缓存 | 维持现有使用体验 | 按日志观察，暂不加验证码 |
-| 腾讯云到阿里云数据同步出站 | 已停用 15 秒常驻同步循环；自动任务改为每分钟本地指纹检查，源数据变化时才 rsync，且同步时复用 SSH 连接 | 运行数据仍可在 1 分钟内同步；无用户可见影响 | 结合腾讯云站内信确认告警目标；不要恢复高频常驻循环 |
+| 阿里云主动拉取腾讯云运行数据 | 已停用腾讯云侧自动推送；自动任务改为阿里云每分钟通过 SSH 检查腾讯云源数据指纹，源数据变化时才从腾讯云拉取 | 运行数据仍可在 1 分钟内同步；无用户可见影响 | 结合腾讯云站内信确认告警目标；不要恢复腾讯云高频主动出站同步 |
 | CSV 任意 HTTPS 图片/链接/HLS | 尚未强制白名单；已在文档中要求先告警后拦截 | 暂不影响旧图片、旧链接和旧回放 | 后续先统计历史域名，再按字段逐步启用白名单 |
 | CDN/外部脚本与 `hls.js@latest` | 尚未自托管，仍保留宽 CSP 兼容 | 不影响当前页面加载和回放 | 后续固定版本并自托管，再收窄 CSP |
 
@@ -83,7 +83,7 @@
 | `https://api.deepseek.com/user/balance` | `website/balance_api/router.py` | `/api/balance` | IP 限速、成功结果缓存 | 公开状态接口会触发服务端请求；当前已有缓存和限速降低压力 |
 | `danmu_url` 任意 URL | `website/timeline_api/router.py` 的 `_read_text_url()` | `/api/timeline/danmu?live_id=...`，且本地弹幕文件缺失 | 仅能按 `live_id` 选中 CSV 行，不能由前端直接传 URL；15 秒超时 | 如果 `summary.csv` 被污染，服务器可能请求非预期 URL，存在 SSRF、出口 IP 被限流、访问内网地址等风险 |
 | `/image-proxy/` 上游代理 | `deploy/nginx.conf`、`deploy/nginx-aliyun.conf` | 浏览器访问被改写后的新浪图片路径或直接请求 `/image-proxy/...` | 生产入口经 Nginx `/image-proxy/` 反代到本机或内网 `8899`；当前安全组不公网放行 `8899`；代理写死上游为 `wx1.sinaimg.cn`；代码库 Nginx 配置已加入共享缓存、缓存锁、stale 缓存、7 天浏览器缓存、温和 IP 限速和 `X-Cache-Status` | 这是本站服务器/代理出口风险点；即使 `8899` 不公网开放，公网用户仍可经 `443` 请求 `/image-proxy/...`；代码库已通过缓存和温和限速降低刷量影响，线上需部署验证 |
-| `ssh/rsync` 到阿里云 `8.210.188.184:22` | `deploy/sync-to-aliyun-if-changed.sh`、`deploy/sync-to-aliyun.sh`、root crontab | 腾讯云同步网站必要运行数据到阿里云 | cron 每分钟仅做本地指纹检查；源数据变化时才执行同步；`sync-to-aliyun.sh` 在一次同步内复用同一条 SSH 连接；脚本有 flock 防重入 | 仍属于服务器主动出站 SSH；如腾讯云站内信指向该目标，应保留低频同步并继续观察风控记录 |
+| 阿里云 `ssh/rsync` 到腾讯云 `124.222.72.203:22` | `deploy/sync-from-tencent-if-changed.sh`、`deploy/sync-from-tencent.sh`、阿里云 root crontab | 阿里云主动拉取网站必要运行数据 | 阿里云 cron 每分钟通过 SSH 检查腾讯云源数据指纹；源数据变化时才执行拉取；`sync-from-tencent.sh` 在一次同步内复用同一条 SSH 连接；脚本有 flock 防重入 | 连接由阿里云主动发起，降低腾讯云主动对外 SSH/rsync 被风控误判的概率；腾讯云仍会作为 SSH 服务端发送数据 |
 
 ## `snh48-fan-hub` 图片代理核对
 
@@ -116,7 +116,7 @@
 - 新增任何 CDN、外部脚本、外部样式、字体、图片、HLS、地图、API 或代理路径时，必须同步更新本文件。
 - 需要修改 CSP 时，同步维护 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf` 和 `deploy/deploy.py` 的 `SECURITY_CSP`。
 - 服务端出站请求不得直接接受前端传入的任意 URL；确需动态 URL 时必须做协议、域名、端口、内网地址、响应大小和超时限制。
-- 腾讯云到阿里云运行数据同步不得恢复 15 秒常驻循环；新增目录时必须同时更新 `sync-to-aliyun-if-changed.sh` 的指纹列表和 `sync-to-aliyun.sh` 的连接复用同步逻辑。
+- 腾讯云到阿里云运行数据同步不得恢复 15 秒常驻循环，也不得把腾讯云主动推送脚本放回生产 cron；新增目录时必须同时更新 `sync-from-tencent-if-changed.sh` 的远端指纹列表和 `sync-from-tencent.sh` 的拉取逻辑。
 - 运行时 CSV 中的 URL 字段建议按用途做 allowlist：图片、来源链接、视频/HLS、地图地点分别校验，不要只做“允许任意 HTTPS”。
 - 高流量图片尽量使用本地缓存或受控代理；直连官方图片时继续使用 `referrerpolicy="no-referrer"`，并避免预加载大量历史图片。
 - 外部脚本优先固定版本并自托管；暂不自托管时至少避免 `@latest`。

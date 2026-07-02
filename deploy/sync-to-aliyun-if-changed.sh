@@ -1,5 +1,6 @@
 #!/bin/bash
-# Run Tencent -> Aliyun sync only when source data files changed.
+# Manual fallback for Tencent -> Aliyun push sync.
+# Production automatic sync runs on Aliyun via sync-from-tencent-if-changed.sh.
 
 set -euo pipefail
 

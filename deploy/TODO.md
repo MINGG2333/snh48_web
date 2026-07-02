@@ -7,8 +7,9 @@
 
 - `deploy/deploy.py`：当前推荐的多服务器部署工具，用于腾讯云、阿里云和新增 Ubuntu 服务器的代码同步、可选服务重启、可选 Nginx 同步和烟测。说明见 `deploy/DEPLOY_TOOL.md`。
 - `deploy/deploy.sh`：旧版 CentOS/OpenCloudOS 初始化脚本，只保留作历史兼容。它不是日常部署入口，也不能完成完整迁移。
-- `deploy/sync-to-aliyun.sh`：同步腾讯云到阿里云的网站必要运行数据，不部署代码。
-- `deploy/sync-to-aliyun-if-changed.sh`：自动同步入口，每分钟检查源数据指纹，只有变化时才调用 `sync-to-aliyun.sh`；实际同步复用同一条 SSH 连接。
+- `deploy/sync-from-tencent.sh`：阿里云主动从腾讯云拉取网站必要运行数据，不部署代码。
+- `deploy/sync-from-tencent-if-changed.sh`：生产自动同步入口，在阿里云每分钟检查腾讯云源数据指纹，有变化才调用 `sync-from-tencent.sh`。
+- `deploy/sync-to-aliyun.sh` / `deploy/sync-to-aliyun-if-changed.sh`：腾讯云手动推送到阿里云的临时兜底，不作为生产自动任务。
 
 ---
 
@@ -1041,7 +1042,7 @@ python3 deploy/deploy.py deploy tencent
 
 ### 数据文件同步
 
-行程、手动事件、回放汇总或直播封面数据更新后需要同步到阿里云。推荐在本地通过部署工具触发腾讯云到阿里云的 rsync：
+行程、手动事件、回放汇总或直播封面数据更新后需要同步到阿里云。生产自动同步由阿里云主动拉取；本地部署工具仍可作为手动兜底触发一次性同步：
 
 ```bash
 python3 deploy/deploy.py sync-data tencent aliyun
@@ -1054,48 +1055,40 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 
 | 数据 | 源路径（腾讯云） | 目标（阿里云） | 说明 |
 |------|----------------|---------------|------|
-| `schedule.csv` | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 行程表，网站实时读取 |
+| `chenjiayi_events.csv` | `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 行程主文件，网站优先读取 |
+| `schedule.csv` | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 行程兼容副本，旧配置和回退读取 |
 | `manual_events.csv` | `/home/snh48_web/website/data/manual_events.csv` | 同路径 | 手动事件表，网站实时读取；不由 Git 跟踪 |
 | `live_push_replays/` | `/home/snh48-fan-hub/live_push_replays/` | 同路径 | 直播回放汇总（含封面缩略图） |
 | `room_record/…/live_covers/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面图 |
 | `room_record/…/gift_replies/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复页数据 |
+| `room_record/…/messages_shards/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 同路径 | 房间消息页分片数据 |
+| `room_record/…/audio_transcripts/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 房间消息页语音转录小数据 |
+| `room_record/…/score_gifts/` | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物页数据 |
 
 > ⚠️ `schedule_record/images/`（约740MB）**不需要同步**，图片通过代理服务访问。
 
 #### 自动同步（推荐）
 
-已配置 ssh-key 免密登录时，也可在**腾讯云服务器**（snh48-fan-hub 所在机器）上执行兼容脚本：
+生产自动同步在**阿里云服务器**上执行，由阿里云主动 SSH 到腾讯云读取数据：
 
 ```bash
-# 手动执行
-bash deploy/sync-to-aliyun.sh
+# 阿里云手动执行，从腾讯云拉取
+bash deploy/sync-from-tencent.sh
 
-# 手动执行并预热阿里云图片缓存
-PREWARM_IMAGE_PROXY=1 bash deploy/sync-to-aliyun.sh
+# 阿里云手动执行并预热阿里云图片缓存
+PREWARM_IMAGE_PROXY=1 bash deploy/sync-from-tencent.sh
 
-# 添加定时任务（每分钟检查一次，有变化才同步）
+# 在阿里云添加定时任务（每分钟检查一次腾讯云源数据，有变化才拉取）
 crontab -e
 # 加入以下行：
-* * * * * bash /home/snh48_web/deploy/sync-to-aliyun-if-changed.sh >> /var/log/snh48/sync-to-aliyun.log 2>&1
+* * * * * bash /home/snh48_web/deploy/sync-from-tencent-if-changed.sh >> /var/log/snh48/sync-from-tencent.log 2>&1
 ```
 
 #### 手动同步命令
 
 ```bash
-# 1. schedule.csv
-rsync -az --partial /home/snh48-fan-hub/schedule_record/schedule.csv root@8.210.188.184:/home/snh48-fan-hub/schedule_record/schedule.csv
-
-# 2. manual_events.csv
-rsync -az --partial /home/snh48_web/website/data/manual_events.csv root@8.210.188.184:/home/snh48_web/website/data/manual_events.csv
-
-# 3. live_push_replays（仅陈嘉仪数据）
-rsync -az --delete --partial /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ root@8.210.188.184:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
-
-# 4. live_covers（直播封面原图）
-rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
-
-# 5. gift_replies（礼物回复页小数据）
-rsync -az --delete --partial /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ root@8.210.188.184:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/
+# 阿里云执行，主动从腾讯云拉取完整必要数据集
+bash /home/snh48_web/deploy/sync-from-tencent.sh
 ```
 
 > 同步后无需重启服务。

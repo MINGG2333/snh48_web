@@ -156,7 +156,7 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 python3 deploy/deploy.py --config deploy/targets.local.json sync-data tencent huawei
 ```
 
-这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。腾讯云到阿里云已有 `deploy/sync-to-aliyun.sh`，新服务器需要先配置对应 SSH key。线上自动同步使用 `deploy/sync-to-aliyun-if-changed.sh` 每分钟检查一次本地源数据指纹，只有变化时才执行 rsync；实际同步时复用同一条 SSH 连接，避免持续高频 SSH/rsync。`website/data/manual_events.csv` 不由 Git 跟踪，作为运行数据同步；仓库里的 `website/data/manual_events.example.csv` 只用于说明字段格式。
+这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。线上腾讯云到阿里云的自动数据同步不使用该推送入口，而是在阿里云 cron 中运行 `deploy/sync-from-tencent-if-changed.sh`，由阿里云每分钟检查腾讯云源数据指纹，有变化时调用 `deploy/sync-from-tencent.sh` 主动拉取。`deploy/sync-to-aliyun.sh` 只作为腾讯云临时手动推送兜底。`website/data/manual_events.csv` 不由 Git 跟踪，作为运行数据同步；仓库里的 `website/data/manual_events.example.csv` 只用于说明字段格式。
 
 只预热目标站点图片代理缓存：
 

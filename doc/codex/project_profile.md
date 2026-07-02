@@ -32,7 +32,7 @@
 |------|----------------------|----------|
 | 本地 | 功能验证副本，路径 `/mnt/zhitainew/snh48/snh48-fan-hub` | 与腾讯云全量工程通过 GitHub 同步，主要用于验证脚本和对接逻辑 |
 | 腾讯云 | 全量代码和数据生成服务器，路径 `/home/snh48-fan-hub` | 常驻采集、监控、生成网站数据，供内地版暨测试版网站使用 |
-| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub`，另含网站仓库内手动事件 CSV | 从腾讯云直接同步最小数据集，供香港版暨对外公开版网站使用 |
+| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub`，另含网站仓库内手动事件 CSV | 由阿里云 cron 主动从腾讯云拉取最小数据集，供香港版暨对外公开版网站使用 |
 
 网站必要数据集：
 
@@ -51,11 +51,13 @@
 
 ```bash
 python3 deploy/deploy.py sync-data tencent aliyun
+bash deploy/sync-from-tencent.sh
+bash deploy/sync-from-tencent-if-changed.sh
 bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-`deploy.py sync-data` 是本地推荐入口；`deploy/sync-to-aliyun.sh` 是兼容脚本，应在腾讯云网站工程 `/home/snh48_web` 上执行。自动同步使用 `deploy/sync-to-aliyun-if-changed.sh` 每分钟检查本地源数据指纹，只有变化时才执行 rsync；实际同步时复用同一条 SSH 连接，避免持续高频 SSH/rsync。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取。`deploy/sync-to-aliyun.sh` 和 `deploy/sync-to-aliyun-if-changed.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 数据同步后如需预热图片代理缓存：
 
@@ -70,7 +72,7 @@ python3 deploy/deploy.py prewarm-image-cache aliyun
 python3 -m compileall -q website
 for f in website/static/js/*.js website/static/js-dist/*.js; do node --check "$f" || exit 1; done
 python3 -m py_compile deploy/deploy.py
-for f in deploy/deploy.sh deploy/sync-to-aliyun.sh deploy/sync-to-aliyun-if-changed.sh; do bash -n "$f" || exit 1; done
+for f in deploy/deploy.sh deploy/sync-to-aliyun.sh deploy/sync-to-aliyun-if-changed.sh deploy/sync-from-tencent.sh deploy/sync-from-tencent-if-changed.sh; do bash -n "$f" || exit 1; done
 git diff --check
 ```
 
@@ -163,7 +165,7 @@ node script/obfuscate_js.cjs
 2. 在腾讯云执行本次任务相关烟测，并把验证结果和用户需要手动检查的 URL 发给用户。
 3. 明确说明“阿里云尚未同步”，等待用户手动验证腾讯云并确认可以继续。
 4. 用户确认后，再部署阿里云，并执行阿里云对应烟测。
-5. 如果本次还涉及运行数据同步，也在用户确认腾讯云验证通过后再执行腾讯云到阿里云的数据同步。
+5. 如果本次还涉及运行数据同步，也在用户确认腾讯云验证通过后再执行或等待阿里云从腾讯云拉取数据。
 
 `deploy all` 只在用户明确要求一次性同步两台服务器，或本次变更确认没有用户可见影响时使用。文档、Codex 规则和部署说明更新通常不需要重启，但仍应按用户要求决定是否同步到远端。
 

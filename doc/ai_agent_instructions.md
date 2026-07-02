@@ -79,7 +79,7 @@
 | **同步但不重启** | 文档、Codex 规则、部署说明、静态资源或模板更新可用 `--no-restart`；用户可见更新仍按腾讯云先验、阿里云后同步 |
 | **同步 Nginx 配置** | 使用 `--nginx --no-restart`，会先运行远端 `nginx -t`；用户可见更新仍按腾讯云先验、阿里云后同步 |
 | **检查远端 .env 键** | `python3 deploy/deploy.py check-env all`，只输出键名不输出真实值 |
-| **同步网站必要数据** | 手动触发：`python3 deploy/deploy.py sync-data tencent aliyun --prewarm`；自动同步：腾讯云 cron 每分钟运行 `deploy/sync-to-aliyun-if-changed.sh`，仅源数据变化时 rsync，且同步时复用 SSH 连接 |
+| **同步网站必要数据** | 自动同步：阿里云 cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，检查腾讯云源数据指纹，有变化才从腾讯云拉取；手动兜底：在阿里云运行 `bash deploy/sync-from-tencent.sh` |
 | **重启服务** | Python 代码、依赖、`.env` 或服务入口变更才需要；普通 `deploy` 会自动处理 |
 
 ### 3. 配置修改（.env 文件）
