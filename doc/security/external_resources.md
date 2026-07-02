@@ -116,7 +116,7 @@
 - 新增任何 CDN、外部脚本、外部样式、字体、图片、HLS、地图、API 或代理路径时，必须同步更新本文件。
 - 需要修改 CSP 时，同步维护 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf` 和 `deploy/deploy.py` 的 `SECURITY_CSP`。
 - 服务端出站请求不得直接接受前端传入的任意 URL；确需动态 URL 时必须做协议、域名、端口、内网地址、响应大小和超时限制。
-- 腾讯云到阿里云运行数据同步不得恢复 15 秒常驻循环，也不得把腾讯云主动推送脚本放回生产 cron；新增目录时必须同时更新 `sync-from-tencent-if-changed.sh` 的远端指纹列表和 `sync-from-tencent.sh` 的拉取逻辑。
+- 腾讯云到阿里云运行数据同步不得恢复 15 秒常驻循环，也不得把腾讯云主动推送脚本放回生产 cron；新增目录时必须同时更新 `sync-from-tencent-if-changed.sh` 的分组远端指纹列表、`sync-from-tencent.sh` 的分组拉取逻辑，以及每日检查和运行状态文档。
 - 当前腾讯云主机安全/登录风险白名单包含阿里云 `8.210.188.184`，用于阿里云主动拉取时的 SSH 登录告警降噪。停用阿里云、替换服务器或新增同步目标时，必须提醒用户删除旧 IP 或新增新 IP。
 - 运行时 CSV 中的 URL 字段建议按用途做 allowlist：图片、来源链接、视频/HLS、地图地点分别校验，不要只做“允许任意 HTTPS”。
 - 高流量图片尽量使用本地缓存或受控代理；直连官方图片时继续使用 `referrerpolicy="no-referrer"`，并避免预加载大量历史图片。

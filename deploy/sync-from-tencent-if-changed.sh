@@ -8,20 +8,39 @@ STATE_FILE=${TENCENT_PULL_STATE_FILE:-/tmp/snh48_sync_from_tencent.state}
 LOCK_FILE=${TENCENT_PULL_CHANGE_LOCK_FILE:-/tmp/snh48_sync_from_tencent_change.lock}
 
 fingerprint() {
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$TENCENT" 'bash -s' <<'REMOTE_FINGERPRINT'
+  local group=$1
+  ssh \
+    -o BatchMode=yes \
+    -o ConnectTimeout=10 \
+    -o ServerAliveInterval=15 \
+    -o ServerAliveCountMax=2 \
+    "$TENCENT" 'bash -s' "$group" <<'REMOTE_FINGERPRINT'
 set -euo pipefail
 
-sources=(
-  /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
-  /home/snh48-fan-hub/schedule_record/schedule.csv
-  /home/snh48_web/website/data/manual_events.csv
-  /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449
-  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
-  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
-  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards
-  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
-  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
-)
+group=$1
+case "$group" in
+  core)
+    sources=(
+      /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
+      /home/snh48-fan-hub/schedule_record/schedule.csv
+      /home/snh48_web/website/data/manual_events.csv
+      /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
+    )
+    ;;
+  dynamic)
+    sources=(
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
+    )
+    ;;
+  *)
+    echo "unknown sync group: $group" >&2
+    exit 2
+    ;;
+esac
 
 for src in "${sources[@]}"; do
   if [ -e "$src" ]; then
@@ -40,19 +59,35 @@ if ! flock -n 9; then
   exit 0
 fi
 
-current=$(fingerprint)
-previous=""
-if [ -f "$STATE_FILE" ]; then
-  previous=$(cat "$STATE_FILE" 2>/dev/null || true)
-fi
+groups=(core dynamic)
+changed_groups=()
+current_values=()
 
-if [ "$current" = "$previous" ]; then
+for group in "${groups[@]}"; do
+  current=$(fingerprint "$group")
+  previous=""
+  group_state_file="${STATE_FILE}.${group}"
+  if [ -f "$group_state_file" ]; then
+    previous=$(cat "$group_state_file" 2>/dev/null || true)
+  fi
+  current_values+=("$group=$current")
+  if [ "$current" != "$previous" ]; then
+    changed_groups+=("$group")
+  fi
+done
+
+if [ "${#changed_groups[@]}" -eq 0 ]; then
   echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] no source changes, skipped"
   exit 0
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] source changed, pulling..."
-bash "$SCRIPT_DIR/sync-from-tencent.sh"
-printf '%s\n' "$current" > "$STATE_FILE"
+changed_csv=$(IFS=,; echo "${changed_groups[*]}")
+echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] source changed groups=$changed_csv, pulling..."
+bash "$SCRIPT_DIR/sync-from-tencent.sh" "${changed_groups[@]}"
+for item in "${current_values[@]}"; do
+  group=${item%%=*}
+  value=${item#*=}
+  printf '%s\n' "$value" > "${STATE_FILE}.${group}"
+done
 echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] state updated"

@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-07-02
+> 更新日期：2026-07-03
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -19,10 +19,10 @@
 | 弹幕远程兜底保护 | `danmu_local_path` 优先；远程 `danmu_url` 成功后写本地 URL 缓存；硬拦截内网/localhost/非 http(s)/非标准端口，并限制响应大小 | 降低 SSRF 和大响应拖垮风险，同时保留历史弹幕可用性 | 域名白名单默认只告警不强制，需盘点历史源后再收紧 |
 | 可信代理 IP | 后端只在请求来源命中 `TRUSTED_PROXY_PEERS` 时采信 `X-Real-IP` / `X-Forwarded-For`，默认仅信任本机 | 降低客户端或同内网机器伪造 IP 绕过限速的风险 | Nginx 统一设置 `X-Forwarded-For $remote_addr`；多层反代需显式配置真实代理 IP |
 | QA 访问控制 | 提问、异步提问、异步结果轮询均要求 `SITE_PASSWORD`；轮询还绑定 `X-Client-Id` 和一次性 `poll_token` | 防止知道 task_id 的人直接读取异步结果 | 前端自动保存并发送 `poll_token`，用户不需要记忆 |
-| 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、余额查询、OB/礼物回复页登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
+| 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、余额查询、OB/礼物回复页/房间消息页登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
-| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取，且一次同步内复用同一条 SSH 连接 | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留 1 分钟内同步延迟 | 不要恢复腾讯云侧 15 秒常驻同步循环；新增同步目录时必须纳入阿里云拉取脚本 |
+| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留 1 分钟内同步延迟；动态小数据变化时不再反复同步低频目录 | 不要恢复腾讯云侧 15 秒常驻同步循环；新增同步目录时必须纳入阿里云拉取脚本和检查文档 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |
@@ -38,7 +38,7 @@
 | P0 | 图片首次加载慢或上游被限流 | 代码库新增 `script/prewarm_image_proxy.py`，可按 `schedule.csv` 日期倒序预热最新微博图片 | 数据同步后限量预热，确认最新行程图片可正常加载 |
 | P0 | `danmu_url` SSRF/大响应 | 代码库已加入危险地址拦截、非标准端口拦截、响应大小上限、本地 URL 缓存和白名单灰度告警；默认不强制域名白名单 | 本地弹幕、远程兜底弹幕都能加载；远程失败时视频播放不失败 |
 | P1 | DeepSeek QA 被刷 | 已有密码、限速、日配额、并发限制和余额缓存 | 观察日志和额度消耗；暂不加验证码 |
-| P1 | 腾讯云到阿里云运行数据同步产生高频出站特征 | 已停用腾讯云侧自动推送；阿里云 cron 每分钟运行 `sync-from-tencent-if-changed.sh`，只有腾讯云源数据变化时调用 `sync-from-tencent.sh` 主动拉取 | 腾讯云 `crontab -l` 无 `sync-to-aliyun-loop.sh` 和 `sync-to-aliyun-if-changed.sh` 自动任务；阿里云 cron 有 `sync-from-tencent-if-changed.sh`；同步日志没有 15 秒连续触发 |
+| P1 | 腾讯云到阿里云运行数据同步产生高频出站特征 | 已停用腾讯云侧自动推送；阿里云 cron 每分钟运行 `sync-from-tencent-if-changed.sh`，只有腾讯云源数据变化时调用 `sync-from-tencent.sh` 主动拉取对应分组 | 腾讯云 `crontab -l` 无未注释的 `sync-to-aliyun*` 自动任务，旧推送日志不持续更新；阿里云 cron 有 `sync-from-tencent-if-changed.sh`；同步日志没有 15 秒连续触发。动态小数据持续更新时，每分钟 `source changed groups=dynamic, pulling...` 可以是正常现象，长期 `groups=core,dynamic` 需要排查 |
 | P1 | CSV 任意 HTTPS 图片/链接/HLS | 仍处于兼容模式，暂不强制白名单，避免旧内容失败 | 后续先统计历史域名，再告警，最后按字段拦截 |
 | P2 | CDN/外部脚本供应链 | 仍使用 CDN，`hls.js@latest` 尚未固定或自托管 | 后续固定版本并自托管，再收窄 CSP |
 

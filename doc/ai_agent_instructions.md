@@ -79,7 +79,8 @@
 | **同步但不重启** | 文档、Codex 规则、部署说明、静态资源或模板更新可用 `--no-restart`；用户可见更新仍按腾讯云先验、阿里云后同步 |
 | **同步 Nginx 配置** | 使用 `--nginx --no-restart`，会先运行远端 `nginx -t`；用户可见更新仍按腾讯云先验、阿里云后同步 |
 | **检查远端 .env 键** | `python3 deploy/deploy.py check-env all`，只输出键名不输出真实值 |
-| **同步网站必要数据** | 自动同步：阿里云 cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，检查腾讯云源数据指纹，有变化才从腾讯云拉取；手动兜底：在阿里云运行 `bash deploy/sync-from-tencent.sh` |
+| **查看运行数据同步状态** | 只读检查：在阿里云查看 `crontab -l`、`tail -n 80 /var/log/snh48/sync-from-tencent.log`；在腾讯云确认旧 `sync-to-aliyun*` cron/进程未恢复。每分钟 `source changed groups=dynamic, pulling...` 可能是动态小数据持续更新，不要直接当作异常 |
+| **同步网站必要数据** | 自动同步：阿里云 cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，分组检查腾讯云源数据指纹，有变化才从腾讯云拉取对应分组；手动兜底优先在阿里云运行 `bash deploy/sync-from-tencent.sh`，也可只传 `core` 或 `dynamic`。腾讯云 `sync-to-aliyun*` 只可作为临时兜底，不得恢复为生产 cron 或 15 秒常驻循环 |
 | **重启服务** | Python 代码、依赖、`.env` 或服务入口变更才需要；普通 `deploy` 会自动处理 |
 
 ### 3. 配置修改（.env 文件）

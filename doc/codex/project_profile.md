@@ -63,7 +63,21 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取。`deploy/sync-to-aliyun.sh` 和 `deploy/sync-to-aliyun-if-changed.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+
+自动同步运行状态口径：
+
+- 阿里云 cron：`* * * * * bash /home/snh48_web/deploy/sync-from-tencent-if-changed.sh >> /var/log/snh48/sync-from-tencent.log 2>&1`
+- 阿里云日志：`/var/log/snh48/sync-from-tencent.log`
+- 阿里云状态文件：`/tmp/snh48_sync_from_tencent.state.core`、`/tmp/snh48_sync_from_tencent.state.dynamic`
+- 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
+- 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
+
+同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录和计分礼物。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+
+排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`score_gifts/` 等派生小数据在后台持续更新时，动态组源数据指纹会持续变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
+
+修改同步方向、频率、源路径、目标路径或服务器 IP 时，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`；并验证阿里云 cron 已启用、腾讯云旧推送 cron/进程已停用、稳定小文件两端 hash 一致。
 
 数据同步后如需预热图片代理缓存：
 
