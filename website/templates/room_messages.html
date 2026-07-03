@@ -327,6 +327,8 @@
     }
 
     .sender {
+      flex: 1 1 auto;
+      min-width: 0;
       color: var(--text);
       font-weight: 700;
       word-break: break-word;
@@ -344,6 +346,27 @@
       font-size: 12px;
       font-weight: 750;
       white-space: nowrap;
+    }
+
+    .room-tag {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 0 8px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 12px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .room-small .room-tag {
+      border-color: rgba(240, 184, 75, 0.48);
+      color: #f4d492;
+      background: rgba(240, 184, 75, 0.12);
     }
 
     .family-reply .type-tag { background: var(--blue); }
@@ -784,6 +807,14 @@
           </select>
         </div>
         <div class="field">
+          <label for="roomSelect">房间</label>
+          <select id="roomSelect">
+            <option value="all">全部房间</option>
+            <option value="main">公开房间</option>
+            <option value="small">小房间</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="senderInput">发送者</label>
           <input id="senderInput" type="search" placeholder="昵称关键词">
         </div>
@@ -895,6 +926,7 @@
     var refreshSecondsEl = document.getElementById("refreshSeconds");
     var familyStrip = document.getElementById("familyStrip");
     var typeSelect = document.getElementById("typeSelect");
+    var roomSelect = document.getElementById("roomSelect");
     var senderInput = document.getElementById("senderInput");
     var keywordInput = document.getElementById("keywordInput");
     var limitSelect = document.getElementById("limitSelect");
@@ -921,6 +953,7 @@
         action: action || "apply_filters",
         family: familyParam(),
         msg_type: typeSelect.value || "all",
+        room_type: roomSelect.value || "all",
         has_sender_query: Boolean(senderInput.value.trim()),
         has_keyword_query: Boolean(keywordInput.value.trim()),
         has_media: mediaSelect.value || "all",
@@ -963,6 +996,7 @@
       params.set("limit", String(limitOverride || limitSelect.value || "100"));
       params.set("family", familyParam());
       params.set("msg_type", typeSelect.value || "all");
+      params.set("room_type", roomSelect.value || "all");
       params.set("sender", senderInput.value.trim());
       params.set("keyword", keywordInput.value.trim());
       params.set("has_media", mediaSelect.value || "all");
@@ -1301,10 +1335,11 @@
 
     function createMessageNode(item) {
       var wrap = document.createElement("article");
-      wrap.className = "message family-" + safeClass(item.family || "event");
+      wrap.className = "message family-" + safeClass(item.family || "event") + " room-" + safeClass(item.room_type || "main");
       wrap.dataset.messageId = item.id || "";
       wrap.dataset.date = item.date || String(item.bj_time || "").slice(0, 10);
       wrap.dataset.ignored = item.ignored ? "true" : "false";
+      wrap.dataset.roomType = item.room_type || "main";
 
       var time = document.createElement("div");
       time.className = "time-col";
@@ -1320,6 +1355,10 @@
       sender.className = "sender";
       sender.textContent = item.sender_name || "未知用户";
       head.appendChild(sender);
+      var roomTag = document.createElement("span");
+      roomTag.className = "room-tag";
+      roomTag.textContent = item.room_label || (item.room_type === "small" ? "小房间" : "公开房间");
+      head.appendChild(roomTag);
       var tag = document.createElement("span");
       tag.className = "type-tag";
       tag.textContent = item.type_label || item.msg_type || "未知";
@@ -1680,6 +1719,7 @@
 
     function hasExtraFilters() {
       return typeSelect.value !== "all"
+        || roomSelect.value !== "all"
         || Boolean(senderInput.value.trim())
         || Boolean(keywordInput.value.trim())
         || Boolean(dateFromInput.value)
@@ -1689,6 +1729,7 @@
 
     function clearExtraFilters() {
       typeSelect.value = "all";
+      roomSelect.value = "all";
       senderInput.value = "";
       keywordInput.value = "";
       dateFromInput.value = "";
@@ -2104,6 +2145,7 @@
     function resetFilters() {
       setFamilyAll();
       typeSelect.value = "all";
+      roomSelect.value = "all";
       senderInput.value = "";
       keywordInput.value = "";
       limitSelect.value = "100";
@@ -2168,7 +2210,7 @@
       reloadLatest("family_filter");
     });
 
-    [typeSelect, limitSelect, mediaSelect, dateFromInput, dateToInput].forEach(function(node) {
+    [typeSelect, roomSelect, limitSelect, mediaSelect, dateFromInput, dateToInput].forEach(function(node) {
       node.addEventListener("change", function() {
         reloadLatest("change_filters");
       });

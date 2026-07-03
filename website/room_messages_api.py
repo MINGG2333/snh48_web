@@ -30,7 +30,12 @@ router = APIRouter(prefix="/api/room-messages", tags=["房间消息页"])
 
 VALID_FAMILIES = {"all", "text", "reply", "gift", "gift_reply", "media", "flipcard", "live", "share", "event"}
 VALID_MEDIA_FILTERS = {"all", "with", "without"}
+VALID_ROOM_TYPES = {"all", "main", "small"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ROOM_TYPE_LABELS = {
+    "main": "公开房间",
+    "small": "小房间",
+}
 
 TYPE_LABELS = {
     "TEXT": "文本",
@@ -134,6 +139,7 @@ def get_room_messages_data(
     sender: str = Query(""),
     keyword: str = Query(""),
     has_media: str = Query("all"),
+    room_type: str = Query("all"),
     date_from: str = Query(""),
     date_to: str = Query(""),
     _=Depends(verify_room_messages_password),
@@ -146,9 +152,12 @@ def get_room_messages_data(
         msg_type = "ALL"
     families = _parse_families(family)
     has_media = has_media.strip().lower()
+    room_type = room_type.strip().lower() or "all"
 
     if has_media not in VALID_MEDIA_FILTERS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的媒体筛选")
+    if room_type not in VALID_ROOM_TYPES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的房间筛选")
     _validate_date("date_from", date_from)
     _validate_date("date_to", date_to)
     _validate_date("target_date", target_date)
@@ -173,6 +182,7 @@ def get_room_messages_data(
         sender=sender,
         keyword=keyword,
         has_media=has_media,
+        room_type=room_type,
         date_from=date_from,
         date_to=date_to,
     ):
@@ -194,6 +204,7 @@ def get_room_messages_data(
             sender=sender,
             keyword=keyword,
             has_media=has_media,
+            room_type=room_type,
             date_from=date_from,
             date_to=date_to,
         )
@@ -226,6 +237,7 @@ def get_room_messages_data(
         "summary": summary,
         "type_counts": summary.get("type_counts", []),
         "family_counts": summary.get("family_counts", []),
+        "room_counts": summary.get("room_counts", []),
         "refresh_interval_seconds": cfg.ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS,
     }
 
@@ -714,6 +726,8 @@ def _manifest_source_mtime(manifest: dict[str, Any], manifest_path: Path) -> flo
 def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
     msg_type = row.get("msg_type", "")
     family = TYPE_FAMILIES.get(msg_type, "event")
+    room_type = _normalise_room_type(row.get("room_type", ""))
+    room_label = row.get("room_label", "") or ROOM_TYPE_LABELS.get(room_type, room_type or "房间")
     parsed = _parse_content(row)
     media_url = parsed.get("media_url") or row.get("media_url", "")
     media_kind = parsed.get("media_kind") or _media_kind_for_type(msg_type)
@@ -733,6 +747,7 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
             parsed.get("body", ""),
             parsed.get("quote", ""),
             parsed.get("detail", ""),
+            room_label,
         )
         if value
     ).lower()
@@ -747,6 +762,10 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "family": family,
         "sender_name": row.get("sender_name", ""),
         "sender_id": row.get("sender_id", ""),
+        "room_type": room_type,
+        "room_label": room_label,
+        "room_channel_id": row.get("room_channel_id", ""),
+        "room_server_id": row.get("room_server_id", ""),
         "reply_to_id": row.get("reply_to_id", ""),
         "reply_text": row.get("reply_text", ""),
         "gift_name": row.get("gift_name", ""),
@@ -765,6 +784,13 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "raw_content": row.get("text_content", ""),
         "_search_text": search_text,
     }
+
+
+def _normalise_room_type(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"small", "small_room", "yklz", "private"}:
+        return "small"
+    return "main"
 
 
 def _audio_transcripts_mtime_ns() -> int:
@@ -957,6 +983,7 @@ def _filter_rows(
     sender: str,
     keyword: str,
     has_media: str,
+    room_type: str,
     date_from: str,
     date_to: str,
 ) -> list[dict[str, Any]]:
@@ -977,6 +1004,8 @@ def _filter_rows(
             continue
         if has_media == "without" and (row["media_url"] or row["media_path"]):
             continue
+        if room_type != "all" and row["room_type"] != room_type:
+            continue
         if date_from and row["date"] < date_from:
             continue
         if date_to and row["date"] > date_to:
@@ -992,6 +1021,7 @@ def _is_unfiltered(
     sender: str,
     keyword: str,
     has_media: str,
+    room_type: str,
     date_from: str,
     date_to: str,
 ) -> bool:
@@ -1001,6 +1031,7 @@ def _is_unfiltered(
         and not sender
         and not keyword
         and has_media == "all"
+        and room_type == "all"
         and not date_from
         and not date_to
     )
@@ -1246,6 +1277,9 @@ def _reply_target(row: dict[str, Any]) -> dict[str, Any]:
         "bj_time": row.get("bj_time", ""),
         "sender_name": row.get("sender_name", ""),
         "sender_id": row.get("sender_id", ""),
+        "room_type": row.get("room_type", "main"),
+        "room_label": row.get("room_label", ROOM_TYPE_LABELS["main"]),
+        "room_channel_id": row.get("room_channel_id", ""),
         "msg_type": row.get("msg_type", ""),
         "type_label": row.get("type_label", ""),
         "family": row.get("family", ""),
@@ -1265,9 +1299,11 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
 def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict[str, Any], source_path: str) -> dict[str, Any]:
     type_counts: dict[str, int] = {}
     family_counts: dict[str, int] = {}
+    room_counts: dict[str, int] = {}
     for row in rows:
         type_counts[row["msg_type"]] = type_counts.get(row["msg_type"], 0) + 1
         family_counts[row["family"]] = family_counts.get(row["family"], 0) + 1
+        room_counts[row["room_type"]] = room_counts.get(row["room_type"], 0) + 1
     ignored_batches = _ignored_batches(ignored_state)
     ignored_gift_ids = _ignored_gift_ids(ignored_state)
 
@@ -1281,6 +1317,14 @@ def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict
         "audio_transcripts_mtime": _audio_transcripts_mtime_label(),
         "audio_transcript_count": sum(1 for row in rows if row.get("audio_transcript")),
         "type_kinds": len(type_counts),
+        "room_counts": [
+            {
+                "room_type": room_type,
+                "label": ROOM_TYPE_LABELS.get(room_type, room_type),
+                "count": count,
+            }
+            for room_type, count in sorted(room_counts.items(), key=lambda item: (item[0] != "main", item[0]))
+        ],
         "ignored_batch_count": len(ignored_batches),
         "ignored_gift_count": len(ignored_gift_ids),
         "latest_ignored_batch": _latest_ignored_batch(ignored_state),
