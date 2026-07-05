@@ -2,6 +2,8 @@
 
 本文件记录每天需要做的基础网站检查项。检查时按当前任务目标选择执行，不把某一次专项排查扩展成所有部署的固定验收。
 
+HTTPS 证书不是每日必查项；阿里云已建立月度提醒机制，详见 `doc/ops/https_certificate_reminder.md`。处理 HTTPS、Nginx、证书或阿里云部署问题时，应额外检查 `certbot.timer`、月度提醒 cron 和 `/var/log/snh48/https-cert-reminder.log`。
+
 ## 1. 腾讯云到阿里云必要数据同步
 
 目的：确认阿里云正在主动从腾讯云拉取网站必要运行数据，并确认旧的腾讯云主动推送任务没有恢复。

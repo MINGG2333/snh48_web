@@ -1,6 +1,6 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-07-03 03:20 CST +0800
+更新日期：2026-07-05 20:20 CST +0800
 
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
 
@@ -36,6 +36,22 @@ Nginx：
 nginx -t
 systemctl status nginx
 ```
+
+## 阿里云 HTTPS 证书与月度提醒
+
+阿里云公开站 `cjy.我爱你` / `cjy.xn--6qq986b3xl` 使用 Let's Encrypt / Certbot 证书。2026-07-05 已确认线上 HTTPS 可用，证书到期时间为 `2026-09-02 00:09:46+00:00`，服务器存在 `certbot.timer`。
+
+| 项 | 当前值 |
+|----|--------|
+| 证书路径 | `/etc/letsencrypt/live/cjy.xn--6qq986b3xl/fullchain.pem` |
+| 私钥路径 | `/etc/letsencrypt/live/cjy.xn--6qq986b3xl/privkey.pem` |
+| 自动续期 | 阿里云 `certbot.timer` |
+| 月度提醒脚本 | `/home/snh48_web/script/check_https_certificate.py` |
+| 月度提醒 cron | `0 10 1 * * cd /home/snh48_web && /usr/bin/python3 script/check_https_certificate.py --host cjy.xn--6qq986b3xl --cert-file /etc/letsencrypt/live/cjy.xn--6qq986b3xl/fullchain.pem --output /home/snh48_web/website/data/ops_reminders/https_certificate.md >> /var/log/snh48/https-cert-reminder.log 2>&1` |
+| 提醒日志 | `/var/log/snh48/https-cert-reminder.log` |
+| 最新提醒报告 | `/home/snh48_web/website/data/ops_reminders/https_certificate.md` |
+
+操作细节见 `doc/ops/https_certificate_reminder.md`。证书仍有效且 Certbot 自动续期存在时，不要手动替换证书。
 
 ## 腾讯云到阿里云的数据同步任务
 

@@ -29,6 +29,7 @@
 - `.env` 不提交真实值。新增或修改环境变量时，必须先更新 `.env.example`；在让配置生效前，必须明确提醒用户按 `.env.example` 检查并修改服务器 `.env`。部署时只在服务器上补齐必要项，且不要输出密码明文。
 - 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs`，并提交 `website/static/js-dist/`、`website/static/css-dist/`。
 - 修改 Nginx 配置时必须运行 `nginx -t`。部署验收按本次任务目标选择，不把专项检查固化成所有任务的通用标准。
+- 阿里云 HTTPS 证书由 Certbot 管理，月度提醒机制见 `doc/ops/https_certificate_reminder.md`；处理阿里云、HTTPS、Nginx 或证书问题时先读该文档并运行 `script/check_https_certificate.py`，证书仍有效时不要手动替换。
 - 网站运行依赖 `/home/snh48-fan-hub` 的行程、回放、直播封面和图片代理数据；修改 `/timeline`、回放、图片代理或相关环境变量前，先读本项目 profile 的数据工程段落和 `snh48-fan-hub/schedule_record/网站开发对接说明.md`。
 - `snh48-fan-hub` 的腾讯云实例是全量代码和数据生成源；阿里云只接收网站需要的最小数据集。不要把阿里云当作数据生成环境，也不要从网站仓库覆盖 fan-hub 运行数据。
 - 腾讯云到阿里云的网站必要运行数据自动同步方式，以 `doc/codex/project_profile.md` 的“数据生成工程依赖/数据同步脚本”为准；当前应由阿里云 cron 主动从腾讯云拉取，不要恢复腾讯云侧 15 秒常驻同步循环或自动推送任务。改同步方向、频率、路径或目标服务器前，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md` 和 `doc/security/security_baseline.md`，并验证新旧 cron、日志和进程状态。

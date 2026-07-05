@@ -24,6 +24,14 @@
 | 腾讯云 | `cjy.plus` | `124.222.72.203` | screen 会话 | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
 | 阿里云香港 | `cjy.我爱你` / `cjy.xn--6qq986b3xl` | `8.210.188.184` | `systemd` 服务 `snh48-aliyun` | `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`，来源 `deploy/nginx-aliyun.conf` |
 
+### 阿里云 HTTPS 证书与月度提醒
+
+- 阿里云公开站 HTTPS 使用 Let's Encrypt / Certbot，证书路径为 `/etc/letsencrypt/live/cjy.xn--6qq986b3xl/fullchain.pem`，私钥路径为 `/etc/letsencrypt/live/cjy.xn--6qq986b3xl/privkey.pem`。
+- Nginx 仓库配置来源为 `deploy/nginx-aliyun.conf`，线上路径为 `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`。
+- Certbot 自动续期由阿里云 `certbot.timer` 负责；不要在证书仍有效、自动续期存在时手动替换。
+- 月度提醒机制见 `doc/ops/https_certificate_reminder.md`。阿里云 root cron 每月运行 `script/check_https_certificate.py`，日志写入 `/var/log/snh48/https-cert-reminder.log`，最新报告写入 `/home/snh48_web/website/data/ops_reminders/https_certificate.md`。
+- 2026-07-05 检查结论：线上 HTTPS 可用，证书到期时间为 `2026-09-02 00:09:46+00:00`，阿里云存在 `certbot.timer`。
+
 ### 云安全与登录白名单
 
 - 2026-07-03：因阿里云主动拉取腾讯云运行数据会每分钟从 `8.210.188.184` 登录腾讯云 `124.222.72.203`，用户已在腾讯云主机安全/登录风险白名单中加入阿里云 IP `8.210.188.184`。

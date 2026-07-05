@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-07-03
+> 更新日期：2026-07-05
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -11,6 +11,7 @@
 | 类别 | 措施 | 主要效果 | 维护注意 |
 |------|------|----------|----------|
 | Nginx 安全头 | HSTS、CSP、X-Frame-Options、X-Content-Type-Options、Referrer-Policy | 降低点击劫持、MIME 嗅探、明文降级、外部脚本注入风险 | 腾讯云和阿里云两份 Nginx 配置必须同步维护 |
+| 阿里云 HTTPS 证书续期提醒 | Let's Encrypt / Certbot 自动续期；月度 cron 运行 `script/check_https_certificate.py` 并写入 `/var/log/snh48/https-cert-reminder.log` | 降低证书过期未发现导致 HTTPS 不可用的风险 | 证书仍有效且 `certbot.timer` 存在时不要手动替换；机制细节见 `doc/ops/https_certificate_reminder.md` |
 | CSP HLS 兼容 | `connect-src 'self' https:`、`media-src 'self' https: blob:`、`worker-src 'self' blob:` | 保持外部 `.m3u8` 回放和 hls.js worker 可用 | 新增 CDN、外部图片、外部 API 时必须更新 CSP |
 | 后端端口收敛 | 生产环境 `HOST=127.0.0.1`，云安全组关闭公网 `8000` | 防止用户绕过 Nginx 安全头和 HTTPS | 临时调试后必须恢复本机监听并关闭安全组 |
 | 图片代理端口收敛 | 生产安全组不公网放行 `8899`，公网只经 HTTPS `/image-proxy/` 到 Nginx | 防止外部绕过 Nginx 安全头、限速和缓存策略直接刷图片代理 | `/image-proxy/` 仍是公网入口，需要继续加限速和共享缓存 |
