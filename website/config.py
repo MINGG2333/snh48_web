@@ -237,6 +237,26 @@ SCORE_GIFTS_DATA_PATH = os.getenv(
     ),
 )
 
+# ── Memories (粉丝与陈嘉仪的互动记忆) ─────────────────────────────────
+# 页面访问/提交密码；留空则记忆页 API 禁用，避免未设置密码时误公开。
+MEMORIES_VIEW_PASSWORD = os.getenv("MEMORIES_VIEW_PASSWORD", "")
+# 应援会模式密码：可查看待审内容、通过/拒绝审核、标记应援会确认。
+MEMORIES_FANCLUB_PASSWORD = os.getenv("MEMORIES_FANCLUB_PASSWORD", "")
+# 本人模式密码：可查看已公开待确认记忆并标记本人确认。
+MEMORIES_IDOL_PASSWORD = os.getenv("MEMORIES_IDOL_PASSWORD", "")
+MEMORIES_DATA_PATH = os.getenv(
+    "MEMORIES_DATA_PATH",
+    str(PROJECT_ROOT / "website" / "data" / "memories" / "memories.json"),
+)
+MEMORIES_START_DATE = os.getenv("MEMORIES_START_DATE", "2025-09-01")
+MEMORIES_SUBMIT_ENABLED = os.getenv("MEMORIES_SUBMIT_ENABLED", "true").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+MEMORIES_SUBMIT_MAX_PER_WINDOW = int(os.getenv("MEMORIES_SUBMIT_MAX_PER_WINDOW", "5"))
+MEMORIES_SUBMIT_WINDOW_SECONDS = int(os.getenv("MEMORIES_SUBMIT_WINDOW_SECONDS", "600"))
+
 # 远程弹幕兜底读取。默认只硬拦截危险地址，域名白名单先用于灰度观察；
 # 确认历史弹幕源都覆盖后再开启 DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=true。
 DANMU_REMOTE_TIMEOUT_SECONDS = int(os.getenv("DANMU_REMOTE_TIMEOUT_SECONDS", "15"))

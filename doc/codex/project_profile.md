@@ -53,6 +53,7 @@
 - `schedule_record/chenjiayi_events.csv`（事件/行程主文件，网站优先读取）
 - `schedule_record/schedule.csv`（事件/行程兼容副本，旧配置和回退读取）
 - `/home/snh48_web/website/data/manual_events.csv`（网站运行数据手动事件 CSV，接口按请求读取；格式示例见 `website/data/manual_events.example.csv`）
+- `/home/snh48_web/website/data/memories/memories.json`（记忆页运行数据；格式示例见 `website/data/memories/memories.example.json`）
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
@@ -71,7 +72,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的手动运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 作为格式示例。房间消息忽略状态 `website/data/room_messages_ignored_batches.json` 也不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`，多服务器间通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 和记忆页 `memories.json` 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 和 `website/data/memories/memories.example.json` 作为格式示例。房间消息忽略状态 `website/data/room_messages_ignored_batches.json` 也不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`，多服务器间通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 自动同步运行状态口径：
 
@@ -81,7 +82,7 @@ bash deploy/sync-to-aliyun-if-changed.sh
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录和计分礼物。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录和计分礼物。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
 排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`score_gifts/` 等派生小数据在后台持续更新时，动态组源数据指纹会持续变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 
@@ -163,6 +164,24 @@ node script/obfuscate_js.cjs
 - `/api/score-gifts/business-review` 只写入 `score_gifts/` 下的 `live_business_fulfillments.json`，用于人工确认或修正直播计分礼物的业务兑换结果。
 - 页面按数据文件里的 `refresh_interval_seconds` 自动刷新；该值由 fan-hub 的 `config/room_monitor.json` 中 `gift_reply_export_interval_seconds` 热更新，和礼物回复页保持一致。
 - 阿里云只同步 `room_record/陈嘉仪_161808449/score_gifts/` 小目录，不同步整个 `room_record/陈嘉仪_161808449/`。
+
+### 记忆页
+
+入口和文档：
+
+- 页面入口：`/memories`，短入口：`/memory`
+- API：`/api/memories/data`、`/api/memories/submit`、`/api/memories/manage`、`/api/memories/review`
+- 数据源：`MEMORIES_DATA_PATH`，默认 `/home/snh48_web/website/data/memories/memories.json`
+- 鉴权：普通访问/提交使用 `MEMORIES_VIEW_PASSWORD` 和请求头 `X-Memories-Password`；应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` 和 `X-Memories-Fanclub-Password`；本人模式使用 `MEMORIES_IDOL_PASSWORD` 和 `X-Memories-Idol-Password`
+- 产品说明：`doc/memories.md`
+
+维护边界：
+
+- 页面记录“记忆”，不做粉丝贡献榜或排名。
+- 普通 API 不返回平台 ID；后台数据保留平台 ID 用于去重和核对。
+- `memories.json` 是运行数据，不由 Git 跟踪；仓库只保留 `website/data/memories/memories.example.json`。
+- 初始数据可由 `python3 script/build_memories_seed.py` 从 fan-hub 的礼物回复、直播计分礼物和时光轴行程生成。
+- 多服务器生产建议腾讯云作为写入源；阿里云通过 `core` 组拉取副本。如需阿里云也开放提交，必须先设计双向合并或统一写入 API。
 
 ### 时光轴地图打开
 
@@ -256,6 +275,9 @@ SECURE_COOKIES=true
 USE_OBFUSCATED_JS=true
 TRUSTED_PROXY_PEERS=127.0.0.1,::1
 GIFT_REPLIES_PASSWORD=独立礼物回复页密码
+MEMORIES_VIEW_PASSWORD=记忆页访问密码
+MEMORIES_FANCLUB_PASSWORD=记忆页应援会模式密码
+MEMORIES_IDOL_PASSWORD=记忆页本人模式密码
 ```
 
 如需新增或修改 `.env` 项，先更新根目录 `.env.example`，再提醒用户同步服务器真实 `.env`。
@@ -278,6 +300,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
 curl -sS -D - -o /dev/null https://cjy.plus/gr
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/sg
+curl -sS -D - -o /dev/null https://cjy.plus/memories
+curl -sS -D - -o /dev/null https://cjy.plus/memory
 curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
 curl -sS -D - -o /dev/null https://cjy.plus/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
@@ -294,6 +318,8 @@ curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gr
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score-gifts
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/sg
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/memories
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/memory
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/qa/status
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/static/js/main.js

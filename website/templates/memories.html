@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}记忆 - {{ site_title }}{% endblock %}
+{% block description %}记录陈嘉仪和粉丝之间真实存在过的喜欢、回应与共同记忆{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/memories.css?v={{ static_version('css/memories.css') }}">
+{% endblock %}
+
+{% block header %}
+<nav class="memories-nav">
+    <a class="memories-brand" href="/">
+        <i class="fas fa-star"></i>
+        <span>{{ site_title }}</span>
+    </a>
+    <div class="memories-nav-links">
+        <a href="/timeline"><i class="fas fa-clock"></i> 时光轴</a>
+        <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+        <a href="/about"><i class="fas fa-circle-info"></i> 关于</a>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="memories-login" id="memoriesLogin">
+    <form class="memories-login-box" id="memoriesLoginForm">
+        <div class="login-mark"><i class="fas fa-book-open"></i></div>
+        <h1>记忆</h1>
+        <p>输入访问密码后查看和登记粉丝与陈嘉仪之间的记忆。</p>
+        <input id="memoriesPassword" type="password" autocomplete="current-password" placeholder="访问密码">
+        <button type="submit"><i class="fas fa-unlock-keyhole"></i> 进入</button>
+        <div class="login-error" id="memoriesLoginError"></div>
+    </form>
+</div>
+
+<main class="memories-page" id="memoriesApp" hidden>
+    <section class="memories-hero">
+        <div class="hero-copy">
+            <p class="eyebrow">Memories</p>
+            <h1>记忆</h1>
+            <p class="hero-text">这个网站记录“被喜欢过的证据”，不是记录“谁更喜欢她”。它记录的不是“谁更爱她”，而是“这些喜欢曾经真实存在过”。</p>
+        </div>
+        <div class="hero-principles" aria-label="页面原则">
+            <span><i class="fas fa-scale-balanced"></i> 人人平等</span>
+            <span><i class="fas fa-heart"></i> 不排名</span>
+            <span><i class="fas fa-seedling"></i> 每条都叫记忆</span>
+        </div>
+    </section>
+
+    <section class="memory-stats" aria-label="记忆统计">
+        <div class="stat-item">
+            <span class="stat-label">已展示记忆</span>
+            <strong id="memoryTotal">0</strong>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">待确认</span>
+            <strong id="memoryPending">0</strong>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">记忆类型</span>
+            <strong id="memoryTypeKinds">0</strong>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">来源平台</span>
+            <strong id="memoryPlatformKinds">0</strong>
+        </div>
+    </section>
+
+    <section class="memories-toolbar" aria-label="筛选记忆">
+        <div class="field">
+            <label for="memoryTypeFilter">类型</label>
+            <select id="memoryTypeFilter"></select>
+        </div>
+        <div class="field">
+            <label for="memoryPlatformFilter">平台</label>
+            <select id="memoryPlatformFilter"></select>
+        </div>
+        <div class="field">
+            <label for="memoryConfirmFilter">确认状态</label>
+            <select id="memoryConfirmFilter">
+                <option value="all">全部状态</option>
+                <option value="unconfirmed">待确认</option>
+                <option value="fanclub_confirmed">应援会确认</option>
+                <option value="idol_confirmed">本人确认</option>
+            </select>
+        </div>
+        <div class="field search-field">
+            <label for="memorySearch">搜索</label>
+            <input id="memorySearch" type="search" placeholder="昵称、标题、来源">
+        </div>
+        <div class="toolbar-actions">
+            <button id="memoryApplyFilters" type="button"><i class="fas fa-filter"></i> 筛选</button>
+            <button id="memoryResetFilters" class="ghost" type="button"><i class="fas fa-rotate-left"></i> 重置</button>
+        </div>
+    </section>
+
+    <section class="mode-strip" aria-label="管理模式">
+        <div>
+            <strong id="memoryModeLabel">普通模式</strong>
+            <span id="memoryModeHint">普通模式只显示已经通过展示审核的记忆。</span>
+        </div>
+        <form id="memoryModeForm" class="mode-form">
+            <select id="memoryModeSelect" aria-label="选择模式">
+                <option value="fanclub">应援会模式</option>
+                <option value="idol">本人模式</option>
+            </select>
+            <input id="memoryModePassword" type="password" autocomplete="current-password" placeholder="模式密码">
+            <button type="submit"><i class="fas fa-user-shield"></i> 进入模式</button>
+            <button id="memoryExitMode" class="ghost" type="button" hidden><i class="fas fa-door-open"></i> 退出</button>
+        </form>
+    </section>
+
+    <section class="memories-workspace">
+        <div class="memories-list-panel">
+            <div class="list-head">
+                <div>
+                    <h2>记忆列表</h2>
+                    <p id="memoryListMeta">正在读取记忆...</p>
+                </div>
+                <button id="memoryRefresh" class="icon-btn" type="button" title="刷新记忆" aria-label="刷新记忆">
+                    <i class="fas fa-arrows-rotate"></i>
+                </button>
+            </div>
+            <div class="memory-list" id="memoryList"></div>
+            <div class="memory-pagination">
+                <button id="memoryPrevPage" class="ghost" type="button"><i class="fas fa-chevron-left"></i> 上一页</button>
+                <span id="memoryPageLabel">第 1 页</span>
+                <button id="memoryNextPage" class="ghost" type="button">下一页 <i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+
+        <aside class="memory-submit-panel">
+            <div class="submit-head">
+                <h2>登记一条记忆</h2>
+                <p>不需要证明谁更爱她，只要这份喜欢真实存在过。</p>
+            </div>
+            <form id="memorySubmitForm" class="memory-form">
+                <div class="field">
+                    <label for="submitType">记忆类型</label>
+                    <select id="submitType" required></select>
+                </div>
+                <div class="field">
+                    <label for="submitTitle">标题</label>
+                    <input id="submitTitle" type="text" maxlength="80" required placeholder="例如：某次直播里被她念到名字">
+                </div>
+                <div class="field">
+                    <label for="submitOccurredAt">发生时间</label>
+                    <input id="submitOccurredAt" type="text" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM">
+                </div>
+                <div class="field">
+                    <label for="submitActor">相关昵称</label>
+                    <input id="submitActor" type="text" maxlength="80" placeholder="可留空；平台昵称即可">
+                </div>
+                <div class="field">
+                    <label for="submitPlatform">平台</label>
+                    <select id="submitPlatform"></select>
+                </div>
+                <div class="field">
+                    <label for="submitSourceUrl">来源链接</label>
+                    <input id="submitSourceUrl" type="url" placeholder="微博、B站、抖音、小红书等链接，可选">
+                </div>
+                <div class="field">
+                    <label for="submitSummary">记忆内容</label>
+                    <textarea id="submitSummary" maxlength="1200" required placeholder="写清楚发生了什么。私密或半私密互动可以模糊化，不需要公开细节。"></textarea>
+                </div>
+                <div class="field">
+                    <label for="submitTags">标签</label>
+                    <input id="submitTags" type="text" placeholder="用逗号分隔，例如：直播,生日,剪辑">
+                </div>
+                <label class="check-row">
+                    <input id="submitSoftPrivate" type="checkbox">
+                    <span>这条记忆涉及私密或半私密互动，公开内容已经模糊化</span>
+                </label>
+                <button type="submit" class="submit-btn"><i class="fas fa-paper-plane"></i> 提交记忆</button>
+                <div class="submit-result" id="memorySubmitResult"></div>
+            </form>
+        </aside>
+    </section>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/memories.js?v={{ static_version('js/memories.js') }}"></script>
+{% endblock %}

@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-07-05
+> 更新日期：2026-07-06
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -20,10 +20,11 @@
 | 弹幕远程兜底保护 | `danmu_local_path` 优先；远程 `danmu_url` 成功后写本地 URL 缓存；硬拦截内网/localhost/非 http(s)/非标准端口，并限制响应大小 | 降低 SSRF 和大响应拖垮风险，同时保留历史弹幕可用性 | 域名白名单默认只告警不强制，需盘点历史源后再收紧 |
 | 可信代理 IP | 后端只在请求来源命中 `TRUSTED_PROXY_PEERS` 时采信 `X-Real-IP` / `X-Forwarded-For`，默认仅信任本机 | 降低客户端或同内网机器伪造 IP 绕过限速的风险 | Nginx 统一设置 `X-Forwarded-For $remote_addr`；多层反代需显式配置真实代理 IP |
 | QA 访问控制 | 提问、异步提问、异步结果轮询均要求 `SITE_PASSWORD`；轮询还绑定 `X-Client-Id` 和一次性 `poll_token` | 防止知道 task_id 的人直接读取异步结果 | 前端自动保存并发送 `poll_token`，用户不需要记忆 |
-| 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、余额查询、OB/礼物回复页/房间消息页登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
+| 记忆页访问控制 | `/api/memories/*` 普通访问/提交要求 `MEMORIES_VIEW_PASSWORD`；应援会模式和本人模式使用独立密码；普通数据接口不返回平台 ID | 降低小房间、半私密互动和后台身份标识误公开风险 | 真实密码只放服务器 `.env`；阿里云作为副本展示时可设置 `MEMORIES_SUBMIT_ENABLED=false` |
+| 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
-| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留 1 分钟内同步延迟；动态小数据变化时不再反复同步低频目录 | 不要恢复腾讯云侧 15 秒常驻同步循环；新增同步目录时必须纳入阿里云拉取脚本和检查文档 |
+| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留 1 分钟内同步延迟；动态小数据变化时不再反复同步低频目录 | 不要恢复腾讯云侧 15 秒常驻同步循环；新增同步目录时必须纳入阿里云拉取脚本和检查文档。记忆页 `memories.json` 当前在 `core` 组单向拉取，避免两站数据漂移 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |
@@ -53,6 +54,9 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1
 DANMU_REMOTE_TIMEOUT_SECONDS=15
 DANMU_REMOTE_MAX_BYTES=20971520
 DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=false
+MEMORIES_VIEW_PASSWORD=独立记忆页访问密码
+MEMORIES_FANCLUB_PASSWORD=独立应援会模式密码
+MEMORIES_IDOL_PASSWORD=独立本人模式密码
 ```
 
 云安全组只应公网放行 `80/443`，以及必要的 SSH `22` 管理入口；`22` 建议限制来源 IP 或配套强认证。不应公网放行后端 `8000` 或图片代理 `8899`。如果备案前或故障排查需要临时暴露 `8000`/`8899`，完成后必须撤销。

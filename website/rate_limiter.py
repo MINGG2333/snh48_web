@@ -124,6 +124,12 @@ complaint_limiter = SlidingWindowLimiter(
     window_seconds=cfg.COMPLAINT_WINDOW_SECONDS,
 )
 
+# Memories submission anti-spam
+memories_submit_limiter = SlidingWindowLimiter(
+    max_requests=cfg.MEMORIES_SUBMIT_MAX_PER_WINDOW,
+    window_seconds=cfg.MEMORIES_SUBMIT_WINDOW_SECONDS,
+)
+
 # Balance status endpoint anti-flood
 balance_limiter = SlidingWindowLimiter(
     max_requests=cfg.BALANCE_MAX_PER_WINDOW,
@@ -442,6 +448,7 @@ def get_rate_limiter_stats() -> dict:
         "email_submit_limiter": email_submit_limiter.stats,
         "track_event_limiter": track_event_limiter.stats,
         "complaint_limiter": complaint_limiter.stats,
+        "memories_submit_limiter": memories_submit_limiter.stats,
         "balance_limiter": balance_limiter.stats,
         "ob_login_limiter": ob_login_limiter.stats,
         "active_tasks": len(_active_tasks),
@@ -494,6 +501,16 @@ def check_complaint_limit(ip: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="投诉提交过于频繁，请稍后再试",
+        )
+
+
+def check_memories_submit_limit(ip: str) -> None:
+    """Rate-limit memories submissions (anti-spam)."""
+    allowed, count = memories_submit_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="记忆提交过于频繁，请稍后再试",
         )
 
 

@@ -32,6 +32,7 @@ EVENT_TYPES = {
     "qa_timeout": "🤖 问答超时",
     "email_submit": "📧 邮箱提交",
     "complaint_submit": "📋 投诉提交",
+    "memory_submit": "📝 记忆提交",
     "login_attempt": "🔑 登录尝试",
     "click": "👆 点击事件",
     "screenshot": "📸 截图保存",

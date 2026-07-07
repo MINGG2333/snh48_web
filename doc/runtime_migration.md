@@ -16,6 +16,7 @@
 | `/home/snh48_web/.env` | 必须 | 生产密码、API key、监听、安全和数据路径配置 | 手动安全迁移，按 `.env.example` 补齐；不要输出明文 |
 | `/home/snh48_web/deploy/targets.local.json` | 需要时迁移 | 部署目标本地覆盖配置 | 手动迁移；不存在时按部署目标重新生成 |
 | `/home/snh48_web/website/data/manual_events.csv` | 必须 | 时光轴手动事件运行数据 | 腾讯云为源；阿里云由 `sync-from-tencent.sh core` 拉取；新服务器迁移时直接复制 |
+| `/home/snh48_web/website/data/memories/memories.json` | 必须 | 记忆页运行数据 | 腾讯云为源；阿里云由 `sync-from-tencent.sh core` 拉取；新服务器迁移时直接复制 |
 | `/home/snh48_web/website/data/room_messages_ignored_batches.json` | 必须 | 房间消息页“忽略未回礼物批次”状态 | 不由 Git 跟踪；两台线上服务器通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步；迁移前分别备份两端并以 `updated_at` 较新的文件为准 |
 | `/home/snh48_web/website/data/scroller_texts.json` | 必须 | 首页背景词内容 | 当前由 Git 跟踪；迁移时仍建议核对线上文件是否有未提交修改 |
 | `/home/snh48_web/website/data/balance_log.csv` | 可选 | DeepSeek 余额查询历史 | 需要保留审计历史时复制；丢失不影响网站运行 |
@@ -56,6 +57,6 @@
 
 1. `python3 deploy/deploy.py check-env <target>` 确认必要环境变量存在。
 2. `python3 -m compileall -q website` 确认代码可导入。
-3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/gift-replies`、`/room-messages`、`/score-gifts`。
-4. 核对 `manual_events.csv` 和 `room_messages_ignored_batches.json` 在新服务器存在且不是空文件覆盖。
+3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/gift-replies`、`/room-messages`、`/score-gifts`、`/memories`。
+4. 核对 `manual_events.csv`、`memories.json` 和 `room_messages_ignored_batches.json` 在新服务器存在且不是空文件覆盖。
 5. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。

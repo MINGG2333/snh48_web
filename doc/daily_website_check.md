@@ -47,6 +47,14 @@ sha256sum /home/snh48_web/website/data/manual_events.csv
 ssh -o BatchMode=yes -o ConnectTimeout=8 root@124.222.72.203 \
   "sha256sum /home/snh48_web/website/data/manual_events.csv"
 
+if [ -e /home/snh48_web/website/data/memories/memories.json ]; then
+  sha256sum /home/snh48_web/website/data/memories/memories.json
+  ssh -o BatchMode=yes -o ConnectTimeout=8 root@124.222.72.203 \
+    "sha256sum /home/snh48_web/website/data/memories/memories.json"
+else
+  echo "memories.json not generated on this server yet"
+fi
+
 # 6. 可选：确认阿里云网站接口能读取行程和手动事件数据
 curl -sS --connect-timeout 8 -D - -o /tmp/aliyun_schedule.json https://cjy.xn--6qq986b3xl/api/timeline/schedule
 wc -c /tmp/aliyun_schedule.json
@@ -95,6 +103,7 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] chenjiayi_events.csv done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] schedule.csv done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] manual_events.csv done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] memories.json done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_push_replays done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_covers done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] gift_replies done
@@ -107,7 +116,7 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 
 - 腾讯云生产 cron 没有启用 `sync-to-aliyun-loop.sh`、`sync-to-aliyun-if-changed.sh` 或 `sync-to-aliyun.sh`；旧任务注释行可以保留。
 - 腾讯云 `/var/log/snh48/sync-to-aliyun.log` 不再持续产生新记录。
-- `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv` 两端 hash 一致。
+- `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv`、`memories.json` 两端 hash 一致；如果腾讯云尚未生成 `memories.json`，日志中的 `memories.json skipped (source missing)` 属于预期。
 - 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`score_gifts/` 如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟。
 - 只有动态小数据变化时，日志应优先显示 `groups=dynamic`；不应每次都同步 `live_covers` 和 `live_push_replays`。
 

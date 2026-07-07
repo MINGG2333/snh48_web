@@ -365,6 +365,23 @@ async def score_gifts_page(request: Request):
     )
 
 
+@app.get("/memory", response_class=HTMLResponse)
+@app.get("/memories", response_class=HTMLResponse)
+async def memories_page(request: Request):
+    """Password-protected page for fan and Chen Jiayi memories."""
+    return templates.TemplateResponse(
+        "memories.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 # ── API Routes ─────────────────────────────────────────────────────────────
 
 
@@ -470,6 +487,9 @@ app.include_router(room_messages_router)
 
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)
+
+from website.memories_api import router as memories_router
+app.include_router(memories_router)
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updated_at": "2026-07-06T00:00:00+08:00",
+  "items": [
+    {
+      "id": "MEM-EXAMPLE-0001",
+      "memory_type": "idol_reply",
+      "title": "一条收到回复的房间礼物记忆",
+      "occurred_at": "2026-07-06 17:39:14",
+      "summary": "某位粉丝在口袋48房间送出礼物后，收到了陈嘉仪的回复。",
+      "public_note": "这是一条格式示例，不是真实数据。",
+      "actor": {
+        "display_name": "示例昵称",
+        "platform": "pocket48",
+        "platform_label": "口袋48",
+        "platform_id": "hidden-in-public"
+      },
+      "source": {
+        "kind": "pocket48_room_gift_reply",
+        "label": "口袋48房间礼物回复",
+        "url": "",
+        "external_id": "example-source-id"
+      },
+      "media": {
+        "image_url": "",
+        "thumbnail_url": ""
+      },
+      "privacy_level": "public",
+      "evidence_public": true,
+      "tags": ["示例"],
+      "audit_status": "auto_approved",
+      "audit_reason": "示例数据",
+      "visibility": "public",
+      "confirmation_status": "unconfirmed",
+      "confirmed_by": "",
+      "confirmed_at": "",
+      "created_by": "system_seed",
+      "created_at": "2026-07-06T00:00:00+08:00",
+      "updated_at": "2026-07-06T00:00:00+08:00"
+    }
+  ]
+}

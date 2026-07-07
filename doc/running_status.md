@@ -1,6 +1,6 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-07-05 20:20 CST +0800
+更新日期：2026-07-06 20:20 CST +0800
 
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
 
@@ -83,6 +83,7 @@ systemctl status nginx
 | `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 事件/行程主文件，网站优先读取 |
 | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 兼容副本 |
 | `/home/snh48_web/website/data/manual_events.csv` | 同路径 | 网站手动事件运行数据 |
+| `/home/snh48_web/website/data/memories/memories.json` | 同路径 | 记忆页运行数据，腾讯云为写入源 |
 | `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
@@ -94,7 +95,7 @@ systemctl status nginx
 
 | 分组 | 内容 | 典型频率 |
 |------|------|----------|
-| `core` | 事件/行程 CSV、手动事件 CSV、直播回放汇总、直播封面 | 低频或人工更新 |
+| `core` | 事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总、直播封面 | 低频或人工更新 |
 | `dynamic` | 礼物回复、房间消息分片、语音转录、计分礼物 | 后台导出脚本持续更新 |
 
 不作为常规同步项：
@@ -102,6 +103,7 @@ systemctl status nginx
 - `schedule_record/images/`：图片通过网站 `/image-proxy/` 访问。
 - 完整原始房间消息、语音原文件、Cookie、Token、`.env`、`config/`、日志和缓存。
 - 房间消息忽略状态 `website/data/room_messages_ignored_batches.json`：这是网站运行数据，不由 Git 跟踪，也不进入 `core` / `dynamic` 单向拉取；两台网站服务器通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。
+- 记忆页 `memories.json` 进入 `core` 单向拉取。生产上建议腾讯云开放写入、阿里云只作为副本展示；如果阿里云也开放提交，需要先设计双向合并或统一写入 API。
 - 阿里云不是 `snh48-fan-hub` 的 Git checkout，不在阿里云生成 fan-hub 数据。
 
 ## 旧推送方案状态
@@ -131,7 +133,7 @@ systemctl status nginx
 
 - `source changed groups=dynamic, pulling...` 每分钟出现不一定异常。礼物回复、计分礼物、房间消息分片、语音转录等运行数据持续写入时，动态组源数据指纹会持续变化。
 - `source changed groups=core,dynamic, pulling...` 如果长期每分钟出现，需要确认 `core` 组是否真的持续变化；否则检查状态文件是否被删除或无法写入。
-- 稳定小文件如 `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv` 应可以用 `sha256sum` 严格比对。
+- 稳定小文件如 `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv`、`memories.json` 应可以用 `sha256sum` 严格比对。
 - 动态目录只能按同步日志、mtime 和 1 到 2 分钟延迟判断，不要要求瞬时 hash 完全一致。
 - 修改同步目录、同步方向或云服务器 IP 时，必须同步更新 `doc/codex/project_profile.md`、`doc/daily_website_check.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`。
 - 如果新增同步目标或更换阿里云 IP，需要提醒用户更新腾讯云登录风险白名单。

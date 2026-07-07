@@ -36,7 +36,7 @@ ssh -M -S "$CONTROL_PATH" -fN "$ALIYUN"
 SSH_MUX=(ssh -S "$CONTROL_PATH")
 RSYNC_RSH="ssh -S $CONTROL_PATH"
 
-"${SSH_MUX[@]}" "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48_web/website/data'
+"${SSH_MUX[@]}" "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48_web/website/data /home/snh48_web/website/data/memories'
 
 # 1. chenjiayi_events.csv（事件/行程主文件，网站优先读取）
 rsync -az --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv"
@@ -50,27 +50,35 @@ echo "$LOG_TAG schedule.csv done"
 rsync -az --partial -e "$RSYNC_RSH" /home/snh48_web/website/data/manual_events.csv "$ALIYUN:/home/snh48_web/website/data/manual_events.csv"
 echo "$LOG_TAG manual_events.csv done"
 
-# 4. live_push_replays（仅同步陈嘉仪的数据）
+# 4. memories.json（记忆页运行数据；腾讯云为写入源，阿里云为副本）
+if [ -e /home/snh48_web/website/data/memories/memories.json ]; then
+  rsync -az --partial -e "$RSYNC_RSH" /home/snh48_web/website/data/memories/memories.json "$ALIYUN:/home/snh48_web/website/data/memories/memories.json"
+  echo "$LOG_TAG memories.json done"
+else
+  echo "$LOG_TAG memories.json skipped (source missing)"
+fi
+
+# 5. live_push_replays（仅同步陈嘉仪的数据）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/"
 echo "$LOG_TAG live_push_replays done"
 
-# 5. live_covers（直播封面原图）
+# 6. live_covers（直播封面原图）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/"
 echo "$LOG_TAG live_covers done"
 
-# 6. gift_replies（礼物回复页小数据）
+# 7. gift_replies（礼物回复页小数据）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/"
 echo "$LOG_TAG gift_replies done"
 
-# 7. messages_shards（房间消息页分片小数据；旧分片稳定，新消息只更新最后一个小文件和 manifest）
+# 8. messages_shards（房间消息页分片小数据；旧分片稳定，新消息只更新最后一个小文件和 manifest）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/"
 echo "$LOG_TAG messages_shards done"
 
-# 8. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
+# 9. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/"
 echo "$LOG_TAG audio_transcripts done"
 
-# 9. score_gifts（计分礼物页小数据）
+# 10. score_gifts（计分礼物页小数据）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"
 
