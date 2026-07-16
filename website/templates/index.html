@@ -70,6 +70,12 @@
 {% endblock %}
 
 {% block content %}
+{% set debut_300 = debut_300 | default({
+    'active': false,
+    'featured_text': '',
+    'formal_date': '2026-07-31',
+    'trigger_date': '2026-07-31'
+}) %}
 <!-- Fullscreen background -->
 <div class="hero-bg" id="heroBg">
     <div class="hero-overlay"></div>
