@@ -366,6 +366,243 @@ body {
   gap: 6px;
 }
 
+/* ── 出道 300 天首页庆祝 ─────────────────────────────────────────────── */
+.celebration-replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 9px 18px;
+  border: 1px solid rgba(255, 224, 138, 0.5);
+  border-radius: 999px;
+  color: #fff3bd;
+  background: linear-gradient(120deg, rgba(255, 107, 157, 0.2), rgba(192, 132, 252, 0.2));
+  box-shadow: 0 0 28px rgba(255, 107, 157, 0.16);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.celebration-replay:hover,
+.celebration-replay:focus-visible {
+  transform: translateY(-2px);
+  border-color: #ffe08a;
+  box-shadow: 0 0 34px rgba(255, 224, 138, 0.25);
+  outline: none;
+}
+
+.debut-celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 24px;
+  color: #fff;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 107, 157, 0.24), transparent 34%),
+    radial-gradient(circle at 20% 20%, rgba(192, 132, 252, 0.23), transparent 32%),
+    linear-gradient(145deg, rgba(8, 5, 24, 0.98), rgba(28, 8, 43, 0.98));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.42s ease, visibility 0.42s ease;
+}
+
+.debut-celebration[hidden] {
+  display: none;
+}
+
+.debut-celebration.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.celebration-open {
+  overflow: hidden;
+}
+
+.celebration-stage {
+  position: relative;
+  z-index: 3;
+  width: min(760px, 92vw);
+  padding: clamp(28px, 5vw, 54px);
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 32px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45), inset 0 1px rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(16px);
+  transform: scale(0.82) translateY(24px);
+  opacity: 0;
+}
+
+.is-visible .celebration-stage {
+  animation: celebration-stage-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.12s forwards;
+}
+
+.celebration-kicker {
+  color: #ffe08a;
+  font-size: clamp(0.72rem, 1.8vw, 0.95rem);
+  font-weight: 700;
+  letter-spacing: 0.42em;
+}
+
+.celebration-number {
+  margin: -2px 0 -18px;
+  font-size: clamp(6.5rem, 25vw, 13rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.08em;
+  background: linear-gradient(145deg, #fff 10%, #ffe08a 42%, #ff6b9d 72%, #c084fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 32px rgba(255, 107, 157, 0.42));
+}
+
+.celebration-stage h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 4.5vw, 2.7rem);
+  letter-spacing: 0.08em;
+}
+
+.celebration-stage p {
+  margin: 18px 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(0.95rem, 2.5vw, 1.15rem);
+  line-height: 1.9;
+}
+
+.celebration-date {
+  color: rgba(255, 224, 138, 0.84);
+  font-size: 0.82rem;
+  letter-spacing: 0.18em;
+}
+
+.celebration-skip {
+  position: absolute;
+  z-index: 5;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  padding: 10px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(8, 5, 24, 0.38);
+  font: inherit;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.celebration-skip:hover,
+.celebration-skip:focus-visible {
+  color: #fff;
+  border-color: rgba(255, 224, 138, 0.8);
+  outline: none;
+}
+
+.celebration-progress {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.celebration-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #ff6b9d, #ffe08a, #c084fc);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.is-visible .celebration-progress span {
+  animation: celebration-progress 10s linear forwards;
+}
+
+.celebration-glow {
+  position: absolute;
+  z-index: 1;
+  width: min(52vw, 620px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 224, 138, 0.18);
+  border-radius: 50%;
+  box-shadow: inset 0 0 80px rgba(255, 107, 157, 0.12), 0 0 80px rgba(192, 132, 252, 0.11);
+}
+
+.celebration-glow-one { animation: celebration-orbit 12s linear infinite; }
+.celebration-glow-two { width: min(70vw, 820px); animation: celebration-orbit 18s linear reverse infinite; }
+
+.celebration-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.celebration-confetti-piece {
+  position: absolute;
+  top: -10%;
+  left: var(--confetti-x);
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.88;
+  animation: celebration-confetti-fall var(--confetti-duration) linear var(--confetti-delay) infinite;
+}
+
+@keyframes celebration-stage-in {
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes celebration-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes celebration-orbit {
+  from { transform: rotate(0deg) scale(0.92); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  to { transform: rotate(360deg) scale(0.92); }
+}
+
+@keyframes celebration-confetti-fall {
+  from { transform: translate3d(0, -10vh, 0) rotate(0deg); }
+  to { transform: translate3d(var(--confetti-drift), 120vh, 0) rotate(var(--confetti-rotate)); }
+}
+
+@media (max-width: 560px) {
+  .debut-celebration { padding: 16px; }
+  .celebration-stage { border-radius: 24px; }
+  .celebration-number { margin-bottom: -10px; }
+  .celebration-skip { font-size: 0.82rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-visible .celebration-stage {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .celebration-glow,
+  .celebration-confetti-piece {
+    animation: none;
+  }
+  .is-visible .celebration-progress span {
+    animation: none;
+    transform: scaleX(1);
+  }
+  .debut-celebration,
+  .celebration-replay {
+    transition: none;
+  }
+}
+
 /* ── Buttons ──────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;

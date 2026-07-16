@@ -35,6 +35,7 @@
   // ── DOM Setup ─────────────────────────────────────────────────────────
   const container = document.getElementById('scrollContainer');
   if (!container) return;
+  const featuredText = (container.dataset.featuredText || '').trim();
 
   // Make sure container covers the full viewport
   container.style.cssText = `
@@ -50,6 +51,22 @@
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
+  function applyTextStyle(el, text, isFeatured) {
+    if (isFeatured) {
+      el.style.color = '#ffe08a';
+      el.style.fontWeight = '700';
+      el.style.textShadow = '0 0 16px rgba(255,224,138,0.85), 0 0 42px rgba(255,107,157,0.55)';
+    } else if (text === '陈嘉仪') {
+      el.style.color = '#ffb3c6';
+      el.style.fontWeight = '400';
+      el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
+    } else {
+      el.style.color = pick(CONFIG.colors);
+      el.style.fontWeight = '400';
+      el.style.textShadow = '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)';
+    }
+  }
+
   // ── Create all scrolling lines ────────────────────────────────────────
   const lines = [];
   const lineEls = [];
@@ -57,14 +74,9 @@
   for (let i = 0; i < CONFIG.lineCount; i++) {
     const el = document.createElement('div');
     el.className = 'scroll-text';
-    el.textContent = pick(CONFIG.texts);
-    // Special glow for "陈嘉仪"
-    if (el.textContent === '陈嘉仪') {
-      el.style.color = '#ffb3c6';
-      el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
-    } else {
-      el.style.color = pick(CONFIG.colors);
-    }
+    const isFeatured = Boolean(featuredText) && i === 0;
+    el.textContent = isFeatured ? featuredText : pick(CONFIG.texts);
+    applyTextStyle(el, el.textContent, isFeatured);
     // Random font size
     const fontSize = CONFIG.minFontSize + Math.random() * (CONFIG.maxFontSize - CONFIG.minFontSize);
     el.style.fontSize = fontSize + 'px';
@@ -88,6 +100,7 @@
       textWidth: 0,        // will be measured
       viewWidth: 0,
       fontSize,
+      isFeatured,
     };
 
     lines.push(state);
@@ -131,14 +144,8 @@
         if (line.x > vw + 50) {
           line.x = -line.textWidth - 50 - Math.random() * 100;
           // Optionally change text/color when looping
-          line.el.textContent = pick(CONFIG.texts);
-          if (line.el.textContent === '陈嘉仪') {
-            line.el.style.color = '#ffb3c6';
-            line.el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
-          } else {
-            line.el.style.color = pick(CONFIG.colors);
-            line.el.style.textShadow = '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)';
-          }
+          line.el.textContent = line.isFeatured ? featuredText : pick(CONFIG.texts);
+          applyTextStyle(line.el, line.el.textContent, line.isFeatured);
           // Re-measure after text change
           line.textWidth = line.el.offsetWidth;
         }
@@ -148,14 +155,8 @@
         // If fully off-screen to the left, reset to right
         if (line.x + line.textWidth < -50) {
           line.x = vw + 50 + Math.random() * 100;
-          line.el.textContent = pick(CONFIG.texts);
-          if (line.el.textContent === '陈嘉仪') {
-            line.el.style.color = '#ffb3c6';
-            line.el.style.textShadow = '0 0 18px rgba(255,107,157,0.7), 0 0 40px rgba(255,107,157,0.3)';
-          } else {
-            line.el.style.color = pick(CONFIG.colors);
-            line.el.style.textShadow = '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)';
-          }
+          line.el.textContent = line.isFeatured ? featuredText : pick(CONFIG.texts);
+          applyTextStyle(line.el, line.el.textContent, line.isFeatured);
           line.textWidth = line.el.offsetWidth;
         }
       }

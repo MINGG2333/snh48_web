@@ -9,7 +9,9 @@ import os
 import random
 import sys
 import time
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -63,6 +65,29 @@ def static_version(filename: str) -> str:
     if filepath.exists():
         return str(int(os.path.getmtime(filepath)))
     return "1"
+
+
+def _parse_iso_date(value: str, fallback: date | None = None) -> date | None:
+    """Parse a YYYY-MM-DD setting without letting a bad env value break pages."""
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _debut_300_context() -> dict[str, object]:
+    """Return the formal milestone date and today's homepage trigger state."""
+    formal_date = _parse_iso_date(cfg.DEBUT_300_DATE, date(2026, 7, 31))
+    test_date = _parse_iso_date(cfg.DEBUT_300_TEST_DATE)
+    trigger_date = test_date or formal_date
+    today_bj = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    return {
+        "active": today_bj == trigger_date,
+        "formal_date": formal_date.isoformat(),
+        "trigger_date": trigger_date.isoformat(),
+        "is_test": bool(test_date),
+        "featured_text": "祝贺嘉仪出道300天！",
+    }
 
 
 # ── Favicon (random rotation) ──────────────────────────────────────────────
@@ -119,6 +144,7 @@ async def index(request: Request):
             "site_icp": cfg.SITE_ICP,
             "site_police_icp": cfg.SITE_POLICE_ICP,
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "debut_300": _debut_300_context(),
             "static_version": static_version,
         },
     )

@@ -289,6 +289,11 @@ MANUAL_EVENTS_CSV_PATH = os.getenv(
     str(WEBSITE_DIR / "data" / "manual_events.csv"),
 )
 
+# ── 出道 300 天庆祝 ────────────────────────────────────────────────────────
+# 正式里程碑日期始终用于时光轴；测试日期只覆盖主页庆祝的触发日。
+DEBUT_300_DATE = os.getenv("DEBUT_300_DATE", "2026-07-31").strip() or "2026-07-31"
+DEBUT_300_TEST_DATE = os.getenv("DEBUT_300_TEST_DATE", "").strip()
+
 # ── JS Obfuscation ──────────────────────────────────────────────────────────
 # 设置为 "true" 时使用混淆后的 JS（static/js-dist/），否则使用源文件（static/js/）
 USE_OBFUSCATED_JS = os.getenv("USE_OBFUSCATED_JS", "").lower() in ("1", "true", "yes")

@@ -76,10 +76,17 @@
 </div>
 
 <!-- Scrolling text container -->
-<div id="scrollContainer"></div>
+<div id="scrollContainer"{% if debut_300.active %} data-featured-text="{{ debut_300.featured_text }}"{% endif %}></div>
 
 <!-- Center content -->
 <div class="hero-content" id="heroContent">
+    {% if debut_300.active %}
+    <button class="celebration-replay" id="celebrationReplay" type="button"
+            data-track="debut_300_replay">
+        <i class="fas fa-star" aria-hidden="true"></i>
+        出道300天快乐 · 再看庆祝
+    </button>
+    {% endif %}
     <h1 class="hero-title">{{ site_title }}</h1>
     <p class="hero-subtitle">{{ site_description }}</p>
     <div class="hero-actions">
@@ -96,6 +103,28 @@
         <span><i class="fas fa-link"></i> 多媒体链接</span>
     </div>
 </div>
+
+{% if debut_300.active %}
+<section class="debut-celebration" id="debutCelebration" hidden
+         data-duration="10000" data-celebration-key="{{ debut_300.trigger_date }}"
+         role="dialog" aria-modal="true" aria-labelledby="debutCelebrationTitle">
+    <div class="celebration-glow celebration-glow-one" aria-hidden="true"></div>
+    <div class="celebration-glow celebration-glow-two" aria-hidden="true"></div>
+    <div class="celebration-confetti" id="celebrationConfetti" aria-hidden="true"></div>
+    <button class="celebration-skip" id="celebrationSkip" type="button"
+            data-track="debut_300_skip">
+        跳过动画 <i class="fas fa-forward" aria-hidden="true"></i>
+    </button>
+    <div class="celebration-stage">
+        <div class="celebration-kicker">CHEN JIAYI · DAY</div>
+        <div class="celebration-number" aria-hidden="true">300</div>
+        <h2 id="debutCelebrationTitle">陈嘉仪 出道300天快乐</h2>
+        <p>三百个日夜的热爱与成长<br>愿每一次登台，都比星光更闪耀</p>
+        <div class="celebration-date">2025.10.05 — {{ debut_300.formal_date | replace('-', '.') }}</div>
+    </div>
+    <div class="celebration-progress" aria-hidden="true"><span></span></div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block footer_links %}{% endblock %}
@@ -105,4 +134,5 @@
 
 {% block extra_scripts %}
 <script src="/static/js/scroller.js?v={{ static_version('js/scroller.js') }}"></script>
+<script src="/static/js/celebration.js?v={{ static_version('js/celebration.js') }}"></script>
 {% endblock %}

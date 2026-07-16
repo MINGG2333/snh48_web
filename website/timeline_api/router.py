@@ -628,47 +628,69 @@ def _find_manual_csv() -> Optional[Path]:
 def read_manual_events() -> List[Dict[str, Any]]:
     """Read manual_events.csv, return list of timeline-ready event dicts."""
     csv_path = _find_manual_csv()
-    if not csv_path:
-        return []
-
     records = []
-    try:
-        with open(csv_path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                ev_id = (row.get("id") or "").strip()
-                date_str = (row.get("date") or "").strip()
-                if not ev_id or not date_str:
-                    continue
+    if csv_path:
+        try:
+            with open(csv_path, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    ev_id = (row.get("id") or "").strip()
+                    date_str = (row.get("date") or "").strip()
+                    if not ev_id or not date_str:
+                        continue
 
-                title = (row.get("title") or "").strip()
-                ev_type = (row.get("type") or "event").strip()
-                type_label = (row.get("typeLabel") or ev_type).strip()
-                description = (row.get("description") or "").strip()
-                image = (row.get("image") or "").strip() or None
-                icon = (row.get("icon") or "fa-calendar").strip()
-                link = (row.get("link") or "").strip() or None
+                    title = (row.get("title") or "").strip()
+                    ev_type = (row.get("type") or "event").strip()
+                    type_label = (row.get("typeLabel") or ev_type).strip()
+                    description = (row.get("description") or "").strip()
+                    image = (row.get("image") or "").strip() or None
+                    icon = (row.get("icon") or "fa-calendar").strip()
+                    link = (row.get("link") or "").strip() or None
 
-                # Images: semicolon-separated URLs
-                images_raw = (row.get("images") or "").strip()
-                images = [u.strip() for u in images_raw.split(";") if u.strip()] if images_raw else []
+                    # Images: semicolon-separated URLs
+                    images_raw = (row.get("images") or "").strip()
+                    images = [u.strip() for u in images_raw.split(";") if u.strip()] if images_raw else []
 
-                records.append({
-                    "id": ev_id,
-                    "source": "manual",
-                    "date": date_str,
-                    "title": title,
-                    "type": ev_type,
-                    "typeLabel": type_label,
-                    "description": description,
-                    "image": image,
-                    "icon": icon,
-                    "link": link,
-                    "images": images,
-                })
-    except (IOError, csv.Error) as e:
-        print(f"[timeline_api] Error reading manual events CSV: {e}")
-        return []
+                    records.append({
+                        "id": ev_id,
+                        "source": "manual",
+                        "date": date_str,
+                        "title": title,
+                        "type": ev_type,
+                        "typeLabel": type_label,
+                        "description": description,
+                        "image": image,
+                        "icon": icon,
+                        "link": link,
+                        "images": images,
+                    })
+        except (IOError, csv.Error) as e:
+            print(f"[timeline_api] Error reading manual events CSV: {e}")
+
+    # Keep this milestone in website code so a Tencent-only preview does not
+    # modify manual_events.csv and get pulled automatically by Aliyun.
+    if not any(record.get("id") == "debut-300" for record in records):
+        try:
+            milestone_date = datetime.strptime(cfg.DEBUT_300_DATE, "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            milestone_date = "2026-07-31"
+        records.append({
+            "id": "debut-300",
+            "source": "manual",
+            "date": milestone_date,
+            "title": "陈嘉仪出道300天",
+            "type": "milestone",
+            "typeLabel": "里程碑",
+            "description": (
+                "从2025年10月5日《B·RISE 梦之门》新生公演首演算起，"
+                "陈嘉仪迎来出道第300天。300天的舞台、成长与闪耀，"
+                "都值得被认真珍藏。祝嘉仪出道300天快乐，继续勇敢发光！"
+            ),
+            "image": None,
+            "icon": "fa-star",
+            "link": None,
+            "images": [],
+        })
 
     return records
 
