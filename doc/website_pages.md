@@ -1,6 +1,6 @@
 # 网站页面清单
 
-> 最后更新：2026-07-06
+> 最后更新：2026-07-17
 
 本文记录当前网站所有前端页面入口、可见性、鉴权方式和主要代码位置。新增、删除、改名页面，或新增短入口、改变密码策略时，需要同步更新本文。
 
@@ -19,10 +19,10 @@
 
 | 页面 | 路由 | 入口位置 | 模板 | 主要脚本/API | 备注 |
 |------|------|----------|------|--------------|------|
-| 首页 | `/` | 公开首页 | `website/templates/index.html` | `website/static/js/main.js`、`website/static/js/scroller.js`、`/api/scroller/texts`、`/api/balance` | 全屏背景和飘动文字 |
+| 首页 | `/` | 公开首页 | `website/templates/index.html` | `website/static/js/main.js`、`website/static/js/scroller.js`、`website/static/js/celebration.js`、`/api/scroller/texts`、`/api/balance` | 全屏背景和飘动文字；从出道第300天起，每逢整百天展示8天庆祝动画，已达到的整百天祝福永久进入飘屏 |
 | 关于 | `/about` | 公开导航 | `website/templates/about.html` | `website/static/js/about.js` | 站点介绍 |
 | AI 问答 | `/qa` | 公开导航 | `website/templates/qa.html` | `website/static/js/qa.js`、`/api/qa/*` | 页面可访问；问答能力需要 `SITE_PASSWORD` |
-| 时光轴 | `/timeline` | 公开导航 | `website/templates/timeline.html` | `website/static/js/timeline.js`、`/api/timeline/*` | 行程、直播、回放和地图入口 |
+| 时光轴 | `/timeline` | 公开导航 | `website/templates/timeline.html` | `website/static/js/timeline.js`、`/api/timeline/*` | 行程、直播、回放和地图入口；整百天里程碑到达后自动加入并永久保留 |
 | 直播回放 | `/replay/{live_id}` | 由时光轴/直播卡片进入 | `website/templates/replay.html` | 回放数据来自 `LIVE_PUSH_REPLAY_ROOT` | `live_id` 为动态参数 |
 | 服务条款 | `/terms` | 页脚 | `website/templates/terms.html` | 无专用脚本 | 法务页面 |
 | 隐私政策 | `/privacy` | 页脚 | `website/templates/privacy.html` | 无专用脚本 | 法务页面 |

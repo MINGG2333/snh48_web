@@ -35,7 +35,18 @@
   // ── DOM Setup ─────────────────────────────────────────────────────────
   const container = document.getElementById('scrollContainer');
   if (!container) return;
-  const featuredText = (container.dataset.featuredText || '').trim();
+  const featuredTexts = (container.dataset.featuredTexts || container.dataset.featuredText || '')
+    .split('||')
+    .map(text => text.trim())
+    .filter(Boolean);
+  let featuredCursor = 0;
+
+  function nextFeaturedText() {
+    if (featuredTexts.length === 0) return '';
+    const text = featuredTexts[featuredCursor % featuredTexts.length];
+    featuredCursor += 1;
+    return text;
+  }
 
   // Make sure container covers the full viewport
   container.style.cssText = `
@@ -74,8 +85,8 @@
   for (let i = 0; i < CONFIG.lineCount; i++) {
     const el = document.createElement('div');
     el.className = 'scroll-text';
-    const isFeatured = Boolean(featuredText) && i === 0;
-    el.textContent = isFeatured ? featuredText : pick(CONFIG.texts);
+    const isFeatured = featuredTexts.length > 0 && i === 0;
+    el.textContent = isFeatured ? nextFeaturedText() : pick(CONFIG.texts);
     applyTextStyle(el, el.textContent, isFeatured);
     // Random font size
     const fontSize = CONFIG.minFontSize + Math.random() * (CONFIG.maxFontSize - CONFIG.minFontSize);
@@ -144,7 +155,7 @@
         if (line.x > vw + 50) {
           line.x = -line.textWidth - 50 - Math.random() * 100;
           // Optionally change text/color when looping
-          line.el.textContent = line.isFeatured ? featuredText : pick(CONFIG.texts);
+          line.el.textContent = line.isFeatured ? nextFeaturedText() : pick(CONFIG.texts);
           applyTextStyle(line.el, line.el.textContent, line.isFeatured);
           // Re-measure after text change
           line.textWidth = line.el.offsetWidth;
@@ -155,7 +166,7 @@
         // If fully off-screen to the left, reset to right
         if (line.x + line.textWidth < -50) {
           line.x = vw + 50 + Math.random() * 100;
-          line.el.textContent = line.isFeatured ? featuredText : pick(CONFIG.texts);
+          line.el.textContent = line.isFeatured ? nextFeaturedText() : pick(CONFIG.texts);
           applyTextStyle(line.el, line.el.textContent, line.isFeatured);
           line.textWidth = line.el.offsetWidth;
         }

@@ -76,15 +76,17 @@
 </div>
 
 <!-- Scrolling text container -->
-<div id="scrollContainer"{% if debut_300.active %} data-featured-text="{{ debut_300.featured_text }}"{% endif %}></div>
+<div id="scrollContainer"{% if debut_300.featured_text %}
+     data-featured-text="{{ debut_300.featured_text }}"
+     data-featured-texts="{{ debut_300.featured_text }}"{% endif %}></div>
 
 <!-- Center content -->
 <div class="hero-content" id="heroContent">
     {% if debut_300.active %}
     <button class="celebration-replay" id="celebrationReplay" type="button"
-            data-track="debut_300_replay">
+            data-track="debut_milestone_replay">
         <i class="fas fa-star" aria-hidden="true"></i>
-        出道300天快乐 · 再看庆祝
+        出道{{ debut_300.milestone_day | default(300) }}天快乐 · 再看庆祝
     </button>
     {% endif %}
     <h1 class="hero-title">{{ site_title }}</h1>
@@ -112,15 +114,15 @@
     <div class="celebration-glow celebration-glow-two" aria-hidden="true"></div>
     <div class="celebration-confetti" id="celebrationConfetti" aria-hidden="true"></div>
     <button class="celebration-skip" id="celebrationSkip" type="button"
-            data-track="debut_300_skip">
+            data-track="debut_milestone_skip">
         跳过动画 <i class="fas fa-forward" aria-hidden="true"></i>
     </button>
     <div class="celebration-stage">
         <div class="celebration-kicker">CHEN JIAYI · DAY</div>
-        <div class="celebration-number" aria-hidden="true">300</div>
-        <h2 id="debutCelebrationTitle">陈嘉仪 出道300天快乐</h2>
-        <p>三百个日夜的热爱与成长<br>愿每一次登台，都比星光更闪耀</p>
-        <div class="celebration-date">2025.10.05 — {{ debut_300.formal_date | replace('-', '.') }}</div>
+        <div class="celebration-number" aria-hidden="true">{{ debut_300.milestone_day | default(300) }}</div>
+        <h2 id="debutCelebrationTitle">陈嘉仪 出道{{ debut_300.milestone_day | default(300) }}天快乐</h2>
+        <p>每一个日夜的热爱与成长<br>愿每一次登台，都比星光更闪耀</p>
+        <div class="celebration-date">{{ debut_300.debut_date | default('2025-10-05') | replace('-', '.') }} — {{ debut_300.formal_date | replace('-', '.') }}</div>
     </div>
     <div class="celebration-progress" aria-hidden="true"><span></span></div>
 </section>

@@ -289,10 +289,13 @@ MANUAL_EVENTS_CSV_PATH = os.getenv(
     str(WEBSITE_DIR / "data" / "manual_events.csv"),
 )
 
-# ── 出道 300 天庆祝 ────────────────────────────────────────────────────────
-# 正式里程碑日期始终用于时光轴；测试日期只覆盖主页庆祝的触发日。
+# ── 出道整百天庆祝 ────────────────────────────────────────────────────────
+# 第 300 天是整百天计算基准；此后每隔指定天数自动生成永久飘屏和时光轴事件。
 DEBUT_300_DATE = os.getenv("DEBUT_300_DATE", "2026-07-31").strip() or "2026-07-31"
 DEBUT_300_TEST_DATE = os.getenv("DEBUT_300_TEST_DATE", "").strip()
+DEBUT_MILESTONE_INTERVAL_DAYS = max(1, int(os.getenv("DEBUT_MILESTONE_INTERVAL_DAYS", "100")))
+# 7 表示里程碑当天至第 7 天（含）显示动画，共 8 个自然日。
+DEBUT_CELEBRATION_DAYS_AFTER = max(0, int(os.getenv("DEBUT_CELEBRATION_DAYS_AFTER", "7")))
 
 # ── JS Obfuscation ──────────────────────────────────────────────────────────
 # 设置为 "true" 时使用混淆后的 JS（static/js-dist/），否则使用源文件（static/js/）

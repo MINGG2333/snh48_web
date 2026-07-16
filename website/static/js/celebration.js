@@ -1,4 +1,4 @@
-/** Homepage celebration for Chen Jiayi's 300th debut day. */
+/** Homepage celebration for Chen Jiayi's recurring hundred-day milestones. */
 (function() {
   'use strict';
 

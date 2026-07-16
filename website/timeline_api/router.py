@@ -15,7 +15,7 @@ import csv
 import hashlib
 import ipaddress
 import socket
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
@@ -25,6 +25,7 @@ import re
 from fastapi import APIRouter, Query
 
 from website import config as cfg
+from website.debut_milestones import debut_date, milestone_date, timeline_milestone_days
 
 router = APIRouter(prefix="/api/timeline", tags=["时光轴"])
 
@@ -625,7 +626,7 @@ def _find_manual_csv() -> Optional[Path]:
     return None
 
 
-def read_manual_events() -> List[Dict[str, Any]]:
+def read_manual_events(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """Read manual_events.csv, return list of timeline-ready event dicts."""
     csv_path = _find_manual_csv()
     records = []
@@ -667,24 +668,26 @@ def read_manual_events() -> List[Dict[str, Any]]:
         except (IOError, csv.Error) as e:
             print(f"[timeline_api] Error reading manual events CSV: {e}")
 
-    # Keep this milestone in website code so a Tencent-only preview does not
-    # modify manual_events.csv and get pulled automatically by Aliyun.
-    if not any(record.get("id") == "debut-300" for record in records):
-        try:
-            milestone_date = datetime.strptime(cfg.DEBUT_300_DATE, "%Y-%m-%d").date().isoformat()
-        except ValueError:
-            milestone_date = "2026-07-31"
+    # Keep recurring milestones in website code so they appear automatically
+    # without modifying manual_events.csv or cross-cloud runtime data.
+    today = on_date or datetime.now(BJT).date()
+    existing_ids = {record.get("id") for record in records}
+    debut_date_text = debut_date().strftime("%Y年%m月%d日")
+    for day_number in timeline_milestone_days(today):
+        event_id = f"debut-{day_number}"
+        if event_id in existing_ids:
+            continue
         records.append({
-            "id": "debut-300",
+            "id": event_id,
             "source": "manual",
-            "date": milestone_date,
-            "title": "陈嘉仪出道300天",
+            "date": milestone_date(day_number).isoformat(),
+            "title": f"陈嘉仪出道{day_number}天",
             "type": "milestone",
             "typeLabel": "里程碑",
             "description": (
-                "从2025年10月5日《B·RISE 梦之门》新生公演首演算起，"
-                "陈嘉仪迎来出道第300天。300天的舞台、成长与闪耀，"
-                "都值得被认真珍藏。祝嘉仪出道300天快乐，继续勇敢发光！"
+                f"从{debut_date_text}《B·RISE 梦之门》新生公演首演算起，"
+                f"陈嘉仪迎来出道第{day_number}天。{day_number}天的舞台、成长与闪耀，"
+                f"都值得被认真珍藏。祝嘉仪出道{day_number}天快乐，继续勇敢发光！"
             ),
             "image": None,
             "icon": "fa-star",
