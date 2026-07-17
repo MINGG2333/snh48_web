@@ -38,6 +38,7 @@
 | 观察页 | `/ob` | 无 | `website/templates/ob.html` | `/api/ob/data`、`/api/ob/mark-read` | `OB_PASSWORD`；`X-Ob-Password` | 访问日志、通知中心数据 |
 | 礼物回复管理 | `/gift-replies` | `/gr` | `website/templates/gift_replies.html` | `/api/gift-replies/data`、`/api/gift-replies/summary` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/` |
 | 房间消息管理 | `/room-messages` | `/room` | `website/templates/room_messages.html` | `/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore` | `ROOM_MESSAGES_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Room-Messages-Password` | `ROOM_MESSAGES_SHARDS_DIR`，默认 fan-hub `messages_shards/`；回退 `ROOM_MESSAGES_CSV_PATH`；公开房间/小房间由 `room_type`、`room_label` 标识；`ROOM_AUDIO_TRANSCRIPTS_PATH`，默认 fan-hub `audio_transcripts/room_audio_transcripts.jsonl`；`ROOM_MESSAGES_IGNORE_PATH`，默认 `website/data/room_messages_ignored_batches.json`；`ROOM_MESSAGES_IGNORE_DIRECT_*` 用于两台网站服务器直连同步忽略状态 |
+| 成员房间上麦回放 | `/room-voice-replays` | `/radio`；兼容 `/radio-replays` | `website/templates/room_voice_replays.html` | `/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/segments/{filename}` | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；HttpOnly Cookie 或 `X-Room-Voice-Replays-Password` | `ROOM_VOICE_REPLAYS_DIR`，默认 fan-hub `room_voice_replays/`；公开房间/小房间独立会话，音频分段和同期消息用 `session_id` 归为整体；设置 `noindex,nofollow` |
 | 计分礼物管理 | `/score-gifts` | `/sg` | `website/templates/score_gifts.html` | `/api/score-gifts/data`、`/api/score-gifts/summary` | `SCORE_GIFTS_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Score-Gifts-Password` | `SCORE_GIFTS_DATA_PATH`，默认 fan-hub `score_gifts.json` |
 | 记忆页 | `/memories` | `/memory` | `website/templates/memories.html` | `/api/memories/data`、`/api/memories/submit`、`/api/memories/manage`、`/api/memories/review` | `MEMORIES_VIEW_PASSWORD`；`X-Memories-Password`。应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` / `X-Memories-Fanclub-Password`；本人模式使用 `MEMORIES_IDOL_PASSWORD` / `X-Memories-Idol-Password` | `MEMORIES_DATA_PATH`，默认 `website/data/memories/memories.json`；格式示例见 `website/data/memories/memories.example.json`；初始数据可由 `script/build_memories_seed.py` 从 fan-hub 派生 |
 
@@ -68,6 +69,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
 curl -sS -D - -o /dev/null https://cjy.plus/gr
 curl -sS -D - -o /dev/null https://cjy.plus/room-messages
 curl -sS -D - -o /dev/null https://cjy.plus/room
+curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
+curl -sS -D - -o /dev/null https://cjy.plus/radio
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/sg
 curl -sS -D - -o /dev/null https://cjy.plus/memories

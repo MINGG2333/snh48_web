@@ -54,6 +54,7 @@ mkdir -p \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts \
+  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays \
   /home/snh48_web/website/data \
   /home/snh48_web/website/data/memories
 
@@ -114,6 +115,10 @@ if [ "$sync_dynamic" -eq 1 ]; then
   # 10. score_gifts（计分礼物页小数据）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/
   echo "$LOG_TAG score_gifts done"
+
+  # 11. room_voice_replays（已结束上麦的网页音频分段、session 元数据和同期消息）
+  rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/
+  echo "$LOG_TAG room_voice_replays done"
 fi
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then

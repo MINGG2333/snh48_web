@@ -349,6 +349,24 @@ async def room_messages_page(request: Request):
     )
 
 
+@app.get("/radio", response_class=HTMLResponse)
+@app.get("/radio-replays", response_class=HTMLResponse)
+@app.get("/room-voice-replays", response_class=HTMLResponse)
+async def room_voice_replays_page(request: Request):
+    """Password-protected member-room voice replay page."""
+    return templates.TemplateResponse(
+        "room_voice_replays.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/sg", response_class=HTMLResponse)
 @app.get("/score", response_class=HTMLResponse)
 @app.get("/score-gifts", response_class=HTMLResponse)
@@ -486,6 +504,9 @@ app.include_router(gift_replies_router)
 
 from website.room_messages_api import router as room_messages_router
 app.include_router(room_messages_router)
+
+from website.room_voice_replays_api import router as room_voice_replays_router
+app.include_router(room_voice_replays_router)
 
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)

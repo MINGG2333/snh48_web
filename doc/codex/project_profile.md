@@ -59,6 +59,7 @@
 - `room_record/陈嘉仪_161808449/gift_replies/`
 - `room_record/陈嘉仪_161808449/messages_shards/`（包含公开房间和小房间消息，按 `room_type` / `room_label` 标识来源）
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
+- `room_record/陈嘉仪_161808449/room_voice_replays/`（只同步派生 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
@@ -82,9 +83,9 @@ bash deploy/sync-to-aliyun-if-changed.sh
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录和计分礼物。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包和计分礼物。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
-排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`score_gifts/` 等派生小数据在后台持续更新时，动态组源数据指纹会持续变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
+排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/` 等派生数据在后台持续更新时，动态组源数据指纹会持续变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 
 修改同步方向、频率、源路径、目标路径或服务器 IP 时，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`；并验证阿里云 cron 已启用、腾讯云旧推送 cron/进程已停用、稳定小文件两端 hash 一致。
 
@@ -146,6 +147,23 @@ node script/obfuscate_js.cjs
 - 交互是聊天记录式加载：首次读取最新一批，向上滚动加载更早消息，不使用页码切换。
 - 语音转录参考是按 `message_id` 关联的派生小文本数据；缺失时页面隐藏转录块，不影响音频消息展示。
 - 为支持阿里云房间消息页，数据同步清单同步派生的 `messages_shards/` 分片目录，不再每轮传完整 `messages.csv`。忽略状态文件位于 `website/data/room_messages_ignored_batches.json`，但它是运行数据，不由 Git 跟踪；点击标记或撤销时优先通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 配置的 SSH 直连同步到另一台网站服务器，不走腾讯云到阿里云的单向数据同步，也不要恢复 GitHub 同步作为生产路径。
+
+### 成员房间上麦回放页
+
+入口和文档：
+
+- 页面入口：`/room-voice-replays`，短入口：`/radio`；兼容入口 `/radio-replays`
+- API：`/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/sessions/{session_id}/segments/{filename}`
+- 数据源：`ROOM_VOICE_REPLAYS_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/`
+- 鉴权：`ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Room-Voice-Replays-Password`
+- 数据契约：`/home/snh48-fan-hub/doc/room_voice_replay_data_contract.md`
+
+维护边界：
+
+- 页面不进入公开导航并设置 `noindex,nofollow`；会话元数据、同期消息和 M4A 都必须先鉴权。
+- 音频只通过校验后的固定文件名和支持 HTTP Range 的 API 提供，不把回放目录挂到 `/static`。
+- 页面按整场墙钟时间同步消息，并根据 `wall_start_offset_seconds` 切换多个音频段；断流缺口应如实显示。
+- 数据同步只包含 `room_voice_replays/` 发布包；腾讯云 `live_record/room_voice/` 的原始 FLV、日志和短时流 URL不得同步。
 
 ### 计分礼物管理页
 
@@ -275,6 +293,7 @@ SECURE_COOKIES=true
 USE_OBFUSCATED_JS=true
 TRUSTED_PROXY_PEERS=127.0.0.1,::1
 GIFT_REPLIES_PASSWORD=独立礼物回复页密码
+ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码
 MEMORIES_VIEW_PASSWORD=记忆页访问密码
 MEMORIES_FANCLUB_PASSWORD=记忆页应援会模式密码
 MEMORIES_IDOL_PASSWORD=记忆页本人模式密码
@@ -300,6 +319,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
 curl -sS -D - -o /dev/null https://cjy.plus/gr
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/sg
+curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
+curl -sS -D - -o /dev/null https://cjy.plus/radio
 curl -sS -D - -o /dev/null https://cjy.plus/memories
 curl -sS -D - -o /dev/null https://cjy.plus/memory
 curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
@@ -318,6 +339,8 @@ curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gr
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score-gifts
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/sg
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room-voice-replays
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/radio
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/memories
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/memory
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/api/qa/status

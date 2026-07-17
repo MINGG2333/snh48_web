@@ -222,6 +222,17 @@ ROOM_MESSAGES_IGNORE_DIRECT_CONNECT_TIMEOUT_SECONDS = int(
 ROOM_MESSAGES_IGNORE_DIRECT_TIMEOUT_SECONDS = int(os.getenv("ROOM_MESSAGES_IGNORE_DIRECT_TIMEOUT_SECONDS", "10"))
 ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS = int(os.getenv("ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS", "60"))
 
+# ── Room Voice Replays (成员房间上麦录音与同期消息) ───────────────────────
+# 默认复用房间消息页密码；音频只能通过鉴权 API 读取，不做静态目录挂载。
+ROOM_VOICE_REPLAYS_PASSWORD = os.getenv("ROOM_VOICE_REPLAYS_PASSWORD") or ROOM_MESSAGES_PASSWORD
+ROOM_VOICE_REPLAYS_DIR = os.getenv("ROOM_VOICE_REPLAYS_DIR") or str(
+    PROJECT_ROOT.parent
+    / "snh48-fan-hub"
+    / "room_record"
+    / "陈嘉仪_161808449"
+    / "room_voice_replays"
+)
+
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。
 SCORE_GIFTS_PASSWORD = os.getenv("SCORE_GIFTS_PASSWORD", GIFT_REPLIES_PASSWORD)

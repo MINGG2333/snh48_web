@@ -1,6 +1,6 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-07-06 20:20 CST +0800
+更新日期：2026-07-17 CST +0800
 
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
 
@@ -57,6 +57,8 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
+> 2026-07-17 代码已把 `room_voice_replays/` 加入 `dynamic` 组目标清单；按分阶段发布规则，阿里云 checkout 和 cron 实际加载的新清单要等腾讯云页面经用户确认后再部署。本段表格描述本次提交后的目标口径，未确认前不得据此宣称阿里云已同步上麦回放。
+
 | 项 | 当前值 |
 |----|--------|
 | 自动任务所在服务器 | 阿里云香港 |
@@ -89,6 +91,7 @@ systemctl status nginx
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 同路径 | 房间消息分片小数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 语音转录文本数据 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；原始 FLV 不同步 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物派生小数据 |
 
 同步分组：
@@ -96,12 +99,12 @@ systemctl status nginx
 | 分组 | 内容 | 典型频率 |
 |------|------|----------|
 | `core` | 事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总、直播封面 | 低频或人工更新 |
-| `dynamic` | 礼物回复、房间消息分片、语音转录、计分礼物 | 后台导出脚本持续更新 |
+| `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物 | 后台导出或上麦会话结束时更新 |
 
 不作为常规同步项：
 
 - `schedule_record/images/`：图片通过网站 `/image-proxy/` 访问。
-- 完整原始房间消息、语音原文件、Cookie、Token、`.env`、`config/`、日志和缓存。
+- 完整原始房间消息、普通语音原文件、上麦原始 FLV、Cookie、Token、`.env`、`config/`、日志和缓存。
 - 房间消息忽略状态 `website/data/room_messages_ignored_batches.json`：这是网站运行数据，不由 Git 跟踪，也不进入 `core` / `dynamic` 单向拉取；两台网站服务器通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。
 - 记忆页 `memories.json` 进入 `core` 单向拉取。生产上建议腾讯云开放写入、阿里云只作为副本展示；如果阿里云也开放提交，需要先设计双向合并或统一写入 API。
 - 阿里云不是 `snh48-fan-hub` 的 Git checkout，不在阿里云生成 fan-hub 数据。

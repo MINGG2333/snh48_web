@@ -35,6 +35,7 @@ case "$group" in
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays
     )
     ;;
   *)
