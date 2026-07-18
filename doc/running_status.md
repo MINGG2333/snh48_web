@@ -1,8 +1,10 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-07-17 CST +0800
+更新日期：2026-07-19 CST +0800
 
 腾讯云成员房间上麦回放发布专项复核：2026-07-17 16:13 CST +0800
+
+阿里云成员房间上麦回放发布与同步专项复核：2026-07-19 04:51 CST +0800
 
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
 
@@ -11,7 +13,7 @@
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
 | 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 上麦回放发布后 checkout `416a943`；采样 screen `3116510.snh48`、Python PID `3116514`；本机和阿里云外部节点验证 `/room-voice-replays`、`/radio` 为 200，未登录 sessions API 为 401，时光轴为 200 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 只保留网站必要数据副本，不作为数据生成环境 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `3a7b05b`；PID `2899269`，enabled、active/running、`NRestarts=0`；`/room-voice-replays` 公网 200、未登录 sessions API 401、时光轴 200；只保留网站必要数据副本，不作为数据生成环境 |
 
 ## 常用状态命令
 
@@ -61,7 +63,7 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
-> 2026-07-17 代码已把 `room_voice_replays/` 加入 `dynamic` 组目标清单；按分阶段发布规则，阿里云 checkout 和 cron 实际加载的新清单要等腾讯云页面经用户确认后再部署。本段表格描述本次提交后的目标口径，未确认前不得据此宣称阿里云已同步上麦回放。
+> 2026-07-19 用户确认腾讯云页面后，阿里云已快进到 `3a7b05b` 并加载把 `room_voice_replays/` 纳入 `dynamic` 组的新脚本。04:50 手动同步成功，04:51 cron 又自动检测到 dynamic 变化并记录 `room_voice_replays done`、`state updated`。腾讯云与阿里云 `manifest.json` SHA-256 同为 `7679687352fc2cc210d3ecbbb55dcaa53a466556098d7680954aa8ff8bda2f82`，当时 `session_count=0`；原始 FLV 未同步。
 
 | 项 | 当前值 |
 |----|--------|
