@@ -41,6 +41,8 @@
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 房间语音转录文本 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 密码保护的成员房间上麦回放发布包 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 计分礼物页派生小数据 | `sync-from-tencent.sh dynamic` |
+| `/home/snh48-fan-hub/flip_chat.html` | 密码保护的翻牌记录 HTML | `sync-from-tencent.sh dynamic` |
+| `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |
 
 如果新服务器要接替腾讯云成为数据生成源，还必须迁移 fan-hub 的代码、虚拟环境、采集配置、Cookie/Token、systemd/cron/screen 任务和历史原始数据；这些不属于网站仓库，不要从 `/home/snh48_web` 覆盖。
 
@@ -58,6 +60,6 @@
 
 1. `python3 deploy/deploy.py check-env <target>` 确认必要环境变量存在。
 2. `python3 -m compileall -q website` 确认代码可导入。
-3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/gift-replies`、`/room-messages`、`/room-voice-replays`、`/score-gifts`、`/memories`。
+3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/gift-replies`、`/room-messages`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、`/memories`。
 4. 核对 `manual_events.csv`、`memories.json` 和 `room_messages_ignored_batches.json` 在新服务器存在且不是空文件覆盖。
 5. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。

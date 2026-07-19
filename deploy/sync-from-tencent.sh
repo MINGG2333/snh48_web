@@ -55,6 +55,8 @@ mkdir -p \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays \
+  /home/snh48-fan-hub/flip_data/audio \
+  /home/snh48-fan-hub/flip_data/video \
   /home/snh48_web/website/data \
   /home/snh48_web/website/data/memories
 
@@ -119,6 +121,30 @@ if [ "$sync_dynamic" -eq 1 ]; then
   # 11. room_voice_replays（已结束上麦的网页音频分段、session 元数据和同期消息）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/
   echo "$LOG_TAG room_voice_replays done"
+
+  # 12. flip_chat.html（密码保护的翻牌聊天页 HTML；不含 Token/配置）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -e /home/snh48-fan-hub/flip_chat.html'; then
+    rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_chat.html" /home/snh48-fan-hub/flip_chat.html
+    echo "$LOG_TAG flip_chat.html done"
+  else
+    echo "$LOG_TAG flip_chat.html skipped (source missing)"
+  fi
+
+  # 13. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/flip_data/audio'; then
+    rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/audio/" /home/snh48-fan-hub/flip_data/audio/
+    echo "$LOG_TAG flip_data/audio done"
+  else
+    echo "$LOG_TAG flip_data/audio skipped (source missing)"
+  fi
+
+  # 14. flip_data/video（翻牌页本地视频依赖；不同步 metadata、Token 或配置）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/flip_data/video'; then
+    rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/video/" /home/snh48-fan-hub/flip_data/video/
+    echo "$LOG_TAG flip_data/video done"
+  else
+    echo "$LOG_TAG flip_data/video skipped (source missing)"
+  fi
 fi
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then

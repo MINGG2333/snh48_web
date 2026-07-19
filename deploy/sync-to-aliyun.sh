@@ -36,7 +36,7 @@ ssh -M -S "$CONTROL_PATH" -fN "$ALIYUN"
 SSH_MUX=(ssh -S "$CONTROL_PATH")
 RSYNC_RSH="ssh -S $CONTROL_PATH"
 
-"${SSH_MUX[@]}" "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48_web/website/data /home/snh48_web/website/data/memories'
+"${SSH_MUX[@]}" "$ALIYUN" 'mkdir -p /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video /home/snh48_web/website/data /home/snh48_web/website/data/memories'
 
 # 1. chenjiayi_events.csv（事件/行程主文件，网站优先读取）
 rsync -az --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv"
@@ -85,6 +85,30 @@ echo "$LOG_TAG score_gifts done"
 # 11. room_voice_replays（已结束上麦的网页音频分段、session 元数据和同期消息）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/"
 echo "$LOG_TAG room_voice_replays done"
+
+# 12. flip_chat.html（密码保护的翻牌聊天页 HTML；不含 Token/配置）
+if [ -e /home/snh48-fan-hub/flip_chat.html ]; then
+  rsync -az --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_chat.html "$ALIYUN:/home/snh48-fan-hub/flip_chat.html"
+  echo "$LOG_TAG flip_chat.html done"
+else
+  echo "$LOG_TAG flip_chat.html skipped (source missing)"
+fi
+
+# 13. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）
+if [ -d /home/snh48-fan-hub/flip_data/audio ]; then
+  rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/audio/ "$ALIYUN:/home/snh48-fan-hub/flip_data/audio/"
+  echo "$LOG_TAG flip_data/audio done"
+else
+  echo "$LOG_TAG flip_data/audio skipped (source missing)"
+fi
+
+# 14. flip_data/video（翻牌页本地视频依赖；不同步 metadata、Token 或配置）
+if [ -d /home/snh48-fan-hub/flip_data/video ]; then
+  rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/video/ "$ALIYUN:/home/snh48-fan-hub/flip_data/video/"
+  echo "$LOG_TAG flip_data/video done"
+else
+  echo "$LOG_TAG flip_data/video skipped (source missing)"
+fi
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then
   PREWARM_LIMIT=${PREWARM_LIMIT:-120}

@@ -1,6 +1,6 @@
 # 外部资源与出站请求清单
 
-> 更新日期：2026-07-03
+> 更新日期：2026-07-20
 >
 > 适用范围：网站运行时会让浏览器或服务器访问站外资源的代码路径。`package-lock.json`、GitHub 仓库地址、npm/pip 下载地址等构建或部署供应链不计入网站运行时外链。
 
@@ -23,7 +23,7 @@
 | 图片首次加载速度 | 新增 `script/prewarm_image_proxy.py`，可在 `schedule.csv` 同步后预热最新微博图片 | 预热后用户更少遇到第一张慢图；预热只请求有限数量图片，不会批量压用户浏览器 | 在数据同步流程中按量运行预热，例如 `--limit 120 --workers 8` |
 | `danmu_url` 服务端兜底抓取 | 代码库已加入本地 URL 缓存、内网/localhost/非 http(s)/非标准端口拦截、响应大小上限和域名白名单灰度模式 | 仍保持本地弹幕优先；远程失败时接口返回可解析 JSON，不阻断视频播放 | 部署 Python 服务；盘点历史 `danmu_url` 后再决定是否强制域名白名单 |
 | DeepSeek QA 被刷 | 已有密码、IP/用户限速、日配额、并发限制、余额接口缓存 | 维持现有使用体验 | 按日志观察，暂不加验证码 |
-| 阿里云主动拉取腾讯云运行数据 | 已停用腾讯云侧自动推送；自动任务改为阿里云每分钟通过 SSH 检查腾讯云源数据指纹，源数据变化时才从腾讯云拉取；阿里云 IP `8.210.188.184` 已加入腾讯云主机安全登录风险白名单 | 运行数据仍可在 1 分钟内同步；无用户可见影响 | 如果停用阿里云、迁移服务器或新增同步目标，必须提醒用户在腾讯云控制台删除旧白名单 IP 或新增新服务器 IP；不要恢复腾讯云高频主动出站同步 |
+| 阿里云主动拉取腾讯云运行数据 | 已停用腾讯云侧自动推送；自动任务改为阿里云每分钟通过 SSH 检查腾讯云源数据指纹，源数据变化时才从腾讯云拉取；阿里云 IP `8.210.188.184` 已加入腾讯云主机安全登录风险白名单；翻牌页只新增 HTML 和音视频最小依赖 | 运行数据仍可在 1 分钟内同步；无公开用户可见影响 | 如果停用阿里云、迁移服务器或新增同步目标，必须提醒用户在腾讯云控制台删除旧白名单 IP 或新增新服务器 IP；不要恢复腾讯云高频主动出站同步；不要把翻牌 metadata、Token 或配置同步到阿里云 |
 | CSV 任意 HTTPS 图片/链接/HLS | 尚未强制白名单；已在文档中要求先告警后拦截 | 暂不影响旧图片、旧链接和旧回放 | 后续先统计历史域名，再按字段逐步启用白名单 |
 | CDN/外部脚本与 `hls.js@latest` | 尚未自托管，仍保留宽 CSP 兼容 | 不影响当前页面加载和回放 | 后续固定版本并自托管，再收窄 CSP |
 
@@ -59,6 +59,7 @@
 | 服务器 `schedule.csv` | `event_link`、`source_url`、`video_urls`、`snh48_bilibili_urls`、`snh48_weibo_urls`、`chenjiayi_weibo_urls` | `read_schedule()` → `buildSourceLinks()` | 微博、B站、活动页等 | 用户点击弹窗链接 | 能跳转到任意 HTTPS URL；前端会过滤危险协议，但不限制域名 |
 | 服务器 `summary.csv` | `live_cover_url` | `read_live_pushes()` | `source3.48.cn` | 直播卡片/弹窗加载封面 | 服务端拼接为 `https://source3.48.cn{path}`，但高流量直连官方图源仍可能触发防盗链/限流 |
 | 服务器 `summary.csv` | `play_url` | `/replay/{live_id}` → `hls.js` | HLS/CDN 域名不固定 | 用户打开回放页后浏览器拉取 `.m3u8` 和分片 | CSP 允许任意 HTTPS 连接与媒体；若数据被污染，访问者浏览器会请求非预期 HLS 域名 |
+| `flip_chat.html` | `answerMediaUrl` / 官方下载链接 | `/api/flip-cards/html` | `mp4.48.cn` 等口袋48媒体 CDN | 本地媒体缺失时浏览器播放 CDN 媒体；用户点击“官方下载” | 翻牌页本身需要密码；优先使用本地 `flip_data/audio|video`，外链只作为下载或缺失兜底；CSP 当前允许 HTTPS 媒体 |
 
 当前前端控制点：
 
@@ -83,7 +84,7 @@
 | `https://api.deepseek.com/user/balance` | `website/balance_api/router.py` | `/api/balance` | IP 限速、成功结果缓存 | 公开状态接口会触发服务端请求；当前已有缓存和限速降低压力 |
 | `danmu_url` 任意 URL | `website/timeline_api/router.py` 的 `_read_text_url()` | `/api/timeline/danmu?live_id=...`，且本地弹幕文件缺失 | 仅能按 `live_id` 选中 CSV 行，不能由前端直接传 URL；15 秒超时 | 如果 `summary.csv` 被污染，服务器可能请求非预期 URL，存在 SSRF、出口 IP 被限流、访问内网地址等风险 |
 | `/image-proxy/` 上游代理 | `deploy/nginx.conf`、`deploy/nginx-aliyun.conf` | 浏览器访问被改写后的新浪图片路径或直接请求 `/image-proxy/...` | 生产入口经 Nginx `/image-proxy/` 反代到本机或内网 `8899`；当前安全组不公网放行 `8899`；代理写死上游为 `wx1.sinaimg.cn`；代码库 Nginx 配置已加入共享缓存、缓存锁、stale 缓存、7 天浏览器缓存、温和 IP 限速和 `X-Cache-Status` | 这是本站服务器/代理出口风险点；即使 `8899` 不公网开放，公网用户仍可经 `443` 请求 `/image-proxy/...`；代码库已通过缓存和温和限速降低刷量影响，线上需部署验证 |
-| 阿里云 `ssh/rsync` 到腾讯云 `124.222.72.203:22` | `deploy/sync-from-tencent-if-changed.sh`、`deploy/sync-from-tencent.sh`、阿里云 root crontab | 阿里云主动拉取网站必要运行数据 | 阿里云 cron 每分钟通过 SSH 检查腾讯云源数据指纹；源数据变化时才执行拉取；`sync-from-tencent.sh` 在一次同步内复用同一条 SSH 连接；脚本有 flock 防重入；腾讯云主机安全已对白名单 IP `8.210.188.184` 降噪 | 连接由阿里云主动发起，降低腾讯云主动对外 SSH/rsync 被风控误判的概率；腾讯云仍会作为 SSH 服务端发送数据；白名单只适用于当前阿里云 IP |
+| 阿里云 `ssh/rsync` 到腾讯云 `124.222.72.203:22` | `deploy/sync-from-tencent-if-changed.sh`、`deploy/sync-from-tencent.sh`、阿里云 root crontab | 阿里云主动拉取网站必要运行数据 | 阿里云 cron 每分钟通过 SSH 检查腾讯云源数据指纹；源数据变化时才执行拉取；`sync-from-tencent.sh` 在一次同步内复用同一条 SSH 连接；脚本有 flock 防重入；腾讯云主机安全已对白名单 IP `8.210.188.184` 降噪；翻牌页只拉取 `flip_chat.html` 和 `flip_data/audio|video` | 连接由阿里云主动发起，降低腾讯云主动对外 SSH/rsync 被风控误判的概率；腾讯云仍会作为 SSH 服务端发送数据；白名单只适用于当前阿里云 IP；不要扩大到 `flip_data/metadata/`、Token 或配置 |
 
 ## `snh48-fan-hub` 图片代理核对
 

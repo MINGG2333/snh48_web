@@ -367,6 +367,23 @@ async def room_voice_replays_page(request: Request):
     )
 
 
+@app.get("/flip", response_class=HTMLResponse)
+@app.get("/flip-cards", response_class=HTMLResponse)
+async def flip_cards_page(request: Request):
+    """Password-protected Pocket48 flip-card record page."""
+    return templates.TemplateResponse(
+        "flip_cards.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/sg", response_class=HTMLResponse)
 @app.get("/score", response_class=HTMLResponse)
 @app.get("/score-gifts", response_class=HTMLResponse)
@@ -507,6 +524,9 @@ app.include_router(room_messages_router)
 
 from website.room_voice_replays_api import router as room_voice_replays_router
 app.include_router(room_voice_replays_router)
+
+from website.flip_cards_api import router as flip_cards_router
+app.include_router(flip_cards_router)
 
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)

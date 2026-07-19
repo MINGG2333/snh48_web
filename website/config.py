@@ -68,6 +68,10 @@ SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
 # 留空则观察页功能将被禁用
 OB_PASSWORD = os.getenv("OB_PASSWORD", "")
 
+# 翻牌记录页密码。默认复用 OB_PASSWORD；如需单独管理可设置 FLIP_CARDS_PASSWORD。
+# 翻牌记录和媒体都只能通过鉴权 API 读取，不做静态目录挂载。
+FLIP_CARDS_PASSWORD = os.getenv("FLIP_CARDS_PASSWORD") or OB_PASSWORD
+
 # 礼物回复页管理密码（独立密码，环境变量 GIFT_REPLIES_PASSWORD）
 # 留空则礼物回复页 API 将被禁用
 GIFT_REPLIES_PASSWORD = os.getenv("GIFT_REPLIES_PASSWORD", "")
@@ -231,6 +235,14 @@ ROOM_VOICE_REPLAYS_DIR = os.getenv("ROOM_VOICE_REPLAYS_DIR") or str(
     / "room_record"
     / "陈嘉仪_161808449"
     / "room_voice_replays"
+)
+
+# ── Flip Cards (口袋48翻牌记录 HTML 与本地媒体) ───────────────────────
+FLIP_CARDS_HTML_PATH = os.getenv("FLIP_CARDS_HTML_PATH") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_chat.html"
+)
+FLIP_CARDS_DATA_DIR = os.getenv("FLIP_CARDS_DATA_DIR") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data"
 )
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────

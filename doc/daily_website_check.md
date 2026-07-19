@@ -111,6 +111,9 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] audio_transcripts done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] score_gifts done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_chat.html done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/audio done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/video done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] All sync completed
 [sync-from-tencent-if-changed][YYYY-MM-DD HH:MM:SS] state updated
 ```
@@ -118,12 +121,12 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 - 腾讯云生产 cron 没有启用 `sync-to-aliyun-loop.sh`、`sync-to-aliyun-if-changed.sh` 或 `sync-to-aliyun.sh`；旧任务注释行可以保留。
 - 腾讯云 `/var/log/snh48/sync-to-aliyun.log` 不再持续产生新记录。
 - `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv`、`memories.json` 两端 hash 一致；如果腾讯云尚未生成 `memories.json`，日志中的 `memories.json skipped (source missing)` 属于预期。
-- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/` 如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟。
+- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_chat.html`、`flip_data/audio/`、`flip_data/video/` 如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟。
 - 只有动态小数据变化时，日志应优先显示 `groups=dynamic`；不应每次都同步 `live_covers` 和 `live_push_replays`。
 
 ### 异常判断
 
-- 如果日志每分钟都是 `source changed groups=dynamic, pulling...`：先检查腾讯云动态导出目录最近 mtime。礼物回复、计分礼物、房间消息分片、语音转录持续更新，或上麦录音会话正在发布/核对同期消息时，这是正常现象，不代表指纹判断失效。
+- 如果日志每分钟都是 `source changed groups=dynamic, pulling...`：先检查腾讯云动态导出目录最近 mtime。礼物回复、计分礼物、房间消息分片、语音转录持续更新，上麦录音会话正在发布/核对同期消息，或翻牌 HTML/音视频刚更新时，这是正常现象，不代表指纹判断失效。
 - 如果动态数据变化却总是 `groups=core,dynamic`：检查 `core` 目录是否真的持续变化；如果没有，检查状态文件 `/tmp/snh48_sync_from_tencent.state.core` 是否被删除或无法写入。
 - 如果反复出现 `previous check still running, skipped` 或 `previous sync still running, skipped`：检查 SSH 是否卡住、网络是否异常，以及 `/tmp/snh48_sync_from_tencent*.lock` 是否被长期持有。
 - 如果阿里云日志出现 `Permission denied` 或 `Host key verification failed`：检查阿里云到腾讯云的 SSH 免密登录、known_hosts 和腾讯云登录白名单。

@@ -13,7 +13,7 @@
 实施范围：
 
 - 公共页面：已通过 `website/templates/base.html` 自动加载 `/static/js/tracker.js`。
-- 独立模板：`score_gifts.html`、`room_messages.html`、`room_voice_replays.html`、`gift_replies.html`、`ob.html` 手动补充 tracker 引用。
+- 独立模板：`score_gifts.html`、`room_messages.html`、`room_voice_replays.html`、`flip_cards.html`、`gift_replies.html`、`ob.html` 手动补充 tracker 引用。
 - 后端标签：在 `website/user_events.py` 增加 `admin_filter`、`admin_export`、`admin_update`、`admin_modal`。
 
 关键过程：

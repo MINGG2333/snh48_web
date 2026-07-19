@@ -61,6 +61,8 @@
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（只同步派生 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
+- `flip_chat.html`（密码保护的翻牌记录 HTML，由 fan-hub 脚本生成）
+- `flip_data/audio/`、`flip_data/video/`（仅翻牌页本地播放依赖；不含 `flip_data/metadata/`）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
 数据同步脚本：
@@ -73,7 +75,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv` 和 `schedule.csv` 都保留脚本同步。手动事件 CSV 和记忆页 `memories.json` 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 和 `website/data/memories/memories.example.json` 作为格式示例。房间消息忽略状态 `website/data/room_messages_ignored_batches.json` 也不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`，多服务器间通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv`、`schedule.csv`、`flip_chat.html` 和翻牌音视频目录都保留脚本同步。手动事件 CSV 和记忆页 `memories.json` 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 和 `website/data/memories/memories.example.json` 作为格式示例。房间消息忽略状态 `website/data/room_messages_ignored_batches.json` 也不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`，多服务器间通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
 
 自动同步运行状态口径：
 
@@ -83,9 +85,9 @@ bash deploy/sync-to-aliyun-if-changed.sh
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包和计分礼物。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物、`flip_chat.html` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
-排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/` 等派生数据在后台持续更新时，动态组源数据指纹会持续变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
+排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_chat.html` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 
 修改同步方向、频率、源路径、目标路径或服务器 IP 时，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`；并验证阿里云 cron 已启用、腾讯云旧推送 cron/进程已停用、稳定小文件两端 hash 一致。
 
@@ -164,6 +166,23 @@ node script/obfuscate_js.cjs
 - 音频只通过校验后的固定文件名和支持 HTTP Range 的 API 提供，不把回放目录挂到 `/static`。
 - 页面按整场墙钟时间同步消息，并根据 `wall_start_offset_seconds` 切换多个音频段；断流缺口应如实显示。
 - 数据同步只包含 `room_voice_replays/` 发布包；腾讯云 `live_record/room_voice/` 的原始 FLV、日志和短时流 URL不得同步。
+
+### 翻牌记录页
+
+入口和文档：
+
+- 页面入口：`/flip-cards`，短入口：`/flip`
+- API：`/api/flip-cards/login`、`/status`、`/html`、`/flip_data/audio/{filename}`、`/flip_data/video/{filename}`
+- 数据源：`FLIP_CARDS_HTML_PATH`，默认 `/home/snh48-fan-hub/flip_chat.html`；`FLIP_CARDS_DATA_DIR`，默认 `/home/snh48-fan-hub/flip_data/`
+- 鉴权：`FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Flip-Cards-Password`
+- 产物说明：`/home/snh48-fan-hub/doc/flip_artifacts.md`
+
+维护边界：
+
+- 页面不进入公开导航并设置 `noindex,nofollow`；登录页、生成后的 HTML 和本地 MP3/MP4 都必须先鉴权。
+- 后端只读取 fan-hub 已生成的 `flip_chat.html`，并按文件名从 `flip_data/audio/`、`flip_data/video/` 流式读取本地媒体；不得把 `flip_data/` 挂到 `/static`。
+- 阿里云只同步在线查看必要的 `flip_chat.html`、`flip_data/audio/` 和 `flip_data/video/`；不常规同步 `flip_data/metadata/`、账号 Token、Cookie、脚本运行日志或下载缓存。
+- 翻牌 HTML 仍由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；网站只负责鉴权发布，不负责拉取口袋48数据。
 
 ### 计分礼物管理页
 
@@ -292,6 +311,10 @@ HOST=127.0.0.1
 SECURE_COOKIES=true
 USE_OBFUSCATED_JS=true
 TRUSTED_PROXY_PEERS=127.0.0.1,::1
+OB_PASSWORD=观察页密码；翻牌页未单独设置时复用
+FLIP_CARDS_PASSWORD=独立翻牌页密码；留空复用 OB_PASSWORD
+FLIP_CARDS_HTML_PATH=/home/snh48-fan-hub/flip_chat.html
+FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 GIFT_REPLIES_PASSWORD=独立礼物回复页密码
 ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码
 MEMORIES_VIEW_PASSWORD=记忆页访问密码

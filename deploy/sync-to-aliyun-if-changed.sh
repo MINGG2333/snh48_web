@@ -19,6 +19,9 @@ sources=(
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays
+  /home/snh48-fan-hub/flip_chat.html
+  /home/snh48-fan-hub/flip_data/audio
+  /home/snh48-fan-hub/flip_data/video
 )
 
 fingerprint() {

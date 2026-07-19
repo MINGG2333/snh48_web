@@ -75,6 +75,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             "https://cjy.plus/timeline",
             "https://cjy.plus/gift-replies",
             "https://cjy.plus/room-voice-replays",
+            "https://cjy.plus/flip-cards",
             "https://cjy.plus/score-gifts",
             "https://cjy.plus/static/js/main.js",
             "https://cjy.plus/static/js/timeline.js",
@@ -136,6 +137,23 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "delete": True,
                 "optional": True,
             },
+            {
+                "type": "file",
+                "path": "/home/snh48-fan-hub/flip_chat.html",
+                "optional": True,
+            },
+            {
+                "type": "dir",
+                "path": "/home/snh48-fan-hub/flip_data/audio",
+                "delete": True,
+                "optional": True,
+            },
+            {
+                "type": "dir",
+                "path": "/home/snh48-fan-hub/flip_data/video",
+                "delete": True,
+                "optional": True,
+            },
         ],
         "deploy_by_default": True,
     },
@@ -155,6 +173,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             "https://cjy.xn--6qq986b3xl/timeline",
             "https://cjy.xn--6qq986b3xl/gift-replies",
             "https://cjy.xn--6qq986b3xl/room-voice-replays",
+            "https://cjy.xn--6qq986b3xl/flip-cards",
             "https://cjy.xn--6qq986b3xl/score-gifts",
             "https://cjy.xn--6qq986b3xl/static/js/main.js",
             "https://cjy.xn--6qq986b3xl/static/js/timeline.js",
@@ -697,6 +716,8 @@ mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays
+mkdir -p /home/snh48-fan-hub/flip_data/audio
+mkdir -p /home/snh48-fan-hub/flip_data/video
 if [ ! -f .env ] && [ -f .env.example ]; then
   cp .env.example .env
   chmod 600 .env
