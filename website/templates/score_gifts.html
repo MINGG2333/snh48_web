@@ -666,6 +666,26 @@
       text-align: center;
     }
 
+    .update-pill {
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      display: none;
+      transform: translateX(-50%);
+      border: 1px solid var(--teal);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--teal);
+      padding: 8px 14px;
+      font-size: 13px;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+      white-space: nowrap;
+    }
+
+    .update-pill.show { display: block; }
+    .update-pill:disabled { cursor: wait; opacity: 0.72; }
+
     #loadMoreSentinel {
       height: 1px;
     }
@@ -804,11 +824,13 @@
           <p>房间与直播弹幕的计分送礼统计</p>
         </div>
         <div class="refresh">
-          <div>数据每 <strong id="refreshSeconds">30</strong> 秒刷新</div>
+          <div>每 <strong id="refreshSeconds">30</strong> 秒检查更新</div>
           <div id="generatedAt">生成时间：-</div>
         </div>
       </div>
     </header>
+
+    <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新条目，点击查看最新</button>
 
     <main id="dashboard">
       <section class="kpi-grid" aria-label="计分礼物统计">
@@ -1007,6 +1029,8 @@
     var sourceFilter = "all";
     var refreshTimer = null;
     var refreshSeconds = 30;
+    var lastDatasetSnapshot = null;
+    var checkingUpdates = false;
     var lastCatalogHash = "";
     var senderDistributionItems = [];
     var editingBusinessItem = null;
@@ -1072,6 +1096,8 @@
     var emptyState = document.getElementById("emptyState");
     var loadMoreState = document.getElementById("loadMoreState");
     var loadMoreSentinel = document.getElementById("loadMoreSentinel");
+    var updatePill = document.getElementById("updatePill");
+    var detailPanel = document.getElementById("detailPanel");
 
     function trackAdminEvent(eventType, data) {
       if (!window._trackEvent) return;
@@ -1158,6 +1184,11 @@
         }
         render(data);
         setupInfiniteScroll();
+        if (options.scrollToLatest) {
+          window.requestAnimationFrame(function() {
+            detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        }
         if (options.resetTimer) resetRefreshTimer();
       } catch (err) {
         loginError.textContent = "加载失败：" + err.message;
@@ -1232,6 +1263,8 @@
       refreshSeconds = Number(data.refresh_interval_seconds || 30);
       refreshSecondsEl.textContent = String(refreshSeconds);
       generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
+      lastDatasetSnapshot = datasetSnapshot(data);
+      updatePill.classList.remove("show");
 
       totalScore.textContent = formatScore(summary.total_score);
       roomScore.textContent = formatScore(summary.room_score);
@@ -1950,11 +1983,61 @@
       }
     }
 
+    function datasetSnapshot(data) {
+      var summary = data && data.summary ? data.summary : {};
+      return {
+        totalRecords: Number(summary.total_records || 0),
+        latestEventTime: String(summary.latest_event_time || "")
+      };
+    }
+
+    function hasNewItems(current) {
+      if (!lastDatasetSnapshot) return false;
+      return current.totalRecords > lastDatasetSnapshot.totalRecords ||
+        current.latestEventTime > lastDatasetSnapshot.latestEventTime;
+    }
+
+    async function checkUpdates() {
+      if (!password || checkingUpdates || !pageEl.classList.contains("ready")) return;
+      checkingUpdates = true;
+      try {
+        var resp = await fetch("/api/score-gifts/summary", {
+          headers: { "X-Score-Gifts-Password": password },
+          cache: "no-store"
+        });
+        if (await handleAuthFailure(resp)) return;
+        if (!resp.ok) return;
+
+        var data = await resp.json();
+        refreshSeconds = Number(data.refresh_interval_seconds || refreshSeconds || 30);
+        refreshSecondsEl.textContent = String(refreshSeconds);
+        var currentSnapshot = datasetSnapshot(data);
+        if (hasNewItems(currentSnapshot)) {
+          updatePill.classList.add("show");
+        }
+      } catch (err) {
+        return;
+      } finally {
+        checkingUpdates = false;
+      }
+    }
+
+    async function loadLatestData() {
+      if (updatePill.disabled) return;
+      updatePill.disabled = true;
+      updatePill.textContent = "正在加载最新条目...";
+      trackAdminEvent("admin_filter", scoreFilterPayload("load_newer"));
+      try {
+        await fetchData({ resetTimer: true, scrollToLatest: true });
+      } finally {
+        updatePill.disabled = false;
+        updatePill.textContent = "有新条目，点击查看最新";
+      }
+    }
+
     function resetRefreshTimer() {
       stopRefresh();
-      refreshTimer = window.setInterval(function() {
-        fetchData({ resetTimer: false });
-      }, Math.max(refreshSeconds, 15) * 1000);
+      refreshTimer = window.setInterval(checkUpdates, Math.max(refreshSeconds, 15) * 1000);
     }
 
     function formatNumber(value) {
@@ -2051,6 +2134,7 @@
     });
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
+    updatePill.addEventListener("click", loadLatestData);
     exportDetailsBtn.addEventListener("click", exportDetails);
     openSenderModalBtn.addEventListener("click", openSenderModal);
     senderMoreBar.addEventListener("click", openSenderModal);
