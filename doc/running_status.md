@@ -8,6 +8,8 @@
 
 腾讯云成员房间上麦回放发布专项复核：2026-07-17 16:13 CST +0800
 
+腾讯云成员房间上麦双版本播放专项复核：2026-07-20 12:35 CST +0800
+
 阿里云成员房间上麦回放发布与同步专项复核：2026-07-19 04:51 CST +0800
 
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
@@ -16,7 +18,7 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 计分礼物功能提交 `4369db9` 已部署；采样 screen `229664.snh48`、Python PID `229668`；`/score-gifts` 公网 200，页面已包含轻量 summary 轮询、新条目提示和 `setInterval(checkUpdates)`；`/flip-cards` 公网 200、未登录 `/api/flip-cards/status` 为 401；生产 `.env` 中 `OB_PASSWORD` 已设置，`FLIP_CARDS_PASSWORD` 未单独设置，按回退规则复用 `OB_PASSWORD` |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 双版本上麦播放提交 `5d89c9e` 已部署；采样 screen `452859.snh48`、Python PID `452864`，继续使用已验证的 `QA_WARMUP_ON_STARTUP=false` 临时运行覆盖；`/room-voice-replays` 公网 200，未登录 sessions API 为 401；鉴权后的会话详情为 schema v2、默认 `compatible`，兼容版/原始版各自 Range 请求均返回 206；此前计分礼物和翻牌功能仍包含在当前提交中 |
 | 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 计分礼物功能提交 `4369db9` 已部署；2026-07-20 12:03:46 CST 启动，PID `3001088`，enabled、active/running、`NRestarts=0`；`/score-gifts` 公网 200，页面已包含轻量 summary 轮询、新条目提示和 `setInterval(checkUpdates)`；`/flip-cards` 公网 200、未登录 `/api/flip-cards/status` 为 401；部署工具完整烟测通过；远端未跟踪的 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
@@ -67,6 +69,8 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
+> 2026-07-20 12:35 腾讯云已部署提交 `5d89c9e`，现有上麦会话已在腾讯云补齐 AAC-LC 单声道兼容版与 HE-AACv2 原始音质版。腾讯云页面/API/双 Range 音频烟测通过；按分阶段发布规则，阿里云网站代码和这批新增原始音质版 M4A 尚未同步，等待用户验收腾讯云后再继续。
+
 > 2026-07-20 12:03 用户确认腾讯云计分礼物页面后，阿里云从 `643ad46` 快进到 `4369db9`，同时补齐此前尚未部署的翻牌记录页代码和 dynamic 同步清单；12:03:46 重启 `snh48-aliyun`。既有阿里云 cron 自动检测到变化并拉取必要数据，12:06:05 记录 `flip_data/audio done`、`flip_data/video done`、`All sync completed` 和 `state updated`。腾讯云与阿里云 `flip_chat.html` SHA-256 同为 `aae4347c71111e44c0443faf6cfb35a97587f50c951b0dbfae6aff90a867ab9c`；音频清单摘要同为 `ccbde5d7a00598467e22357beea47e72852201bce1c8b5b56e3b22be6b67ea89`、共 185 个文件，视频清单摘要同为 `3129f251859e67224872c14d5d7e3a6a75bf0c744e2633b9947faa6020b1abe8`、共 4 个文件。
 
 > 2026-07-19 用户确认腾讯云页面后，阿里云已快进到 `3a7b05b` 并加载把 `room_voice_replays/` 纳入 `dynamic` 组的新脚本。04:50 手动同步成功，04:51 cron 又自动检测到 dynamic 变化并记录 `room_voice_replays done`、`state updated`。腾讯云与阿里云 `manifest.json` SHA-256 同为 `7679687352fc2cc210d3ecbbb55dcaa53a466556098d7680954aa8ff8bda2f82`，当时 `session_count=0`；原始 FLV 未同步。
@@ -103,7 +107,7 @@ systemctl status nginx
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 同路径 | 房间消息分片小数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 语音转录文本数据 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；原始 FLV 不同步 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；包含兼容版/原始音质版派生 M4A、元数据和同期消息，原始 FLV 不同步 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物派生小数据 |
 
 同步分组：
