@@ -24,8 +24,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前提交 `7d5c3b1`；2026-07-20 21:48:39 CST 启动，采样 screen `869247.snh48`、Python PID `869263`；当前配置 `QA_WARMUP_ON_STARTUP=True`；本机 `/flip-cards` 返回 200，受保护 `/api/flip-cards/data` 用配置密码返回 schema 1、216 条记录、198 条已翻牌且包含原提问时间；共享状态开关为 `tencent True True True` |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前提交 `7d5c3b1`；2026-07-20 21:52:14 CST 重启，PID `3169474`，enabled、active/running、`NRestarts=0`；公网 `/flip-cards` 返回新应用页模板，受保护 `/api/flip-cards/data` 用配置密码返回 schema 1、216 条记录、198 条已翻牌且包含原提问时间；共享状态开关为 `aliyun False True True` |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 运行代码与 `7d5c3b1` 相同；后续运行状态文档提交不改变服务代码。2026-07-20 21:48:39 CST 启动，采样 screen `869247.snh48`、Python PID `869263`；当前配置 `QA_WARMUP_ON_STARTUP=True`；本机 `/flip-cards` 返回 200，受保护 `/api/flip-cards/data` 用配置密码返回 schema 1、216 条记录、198 条已翻牌且包含原提问时间；共享状态开关为 `tencent True True True` |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 运行代码由 2026-07-20 21:52:14 CST 重启加载 `7d5c3b1`；后续运行状态文档提交以 `--no-restart` 快进，不改变服务代码。PID `3169474`，enabled、active/running、`NRestarts=0`；公网 `/flip-cards` 返回新应用页模板，受保护 `/api/flip-cards/data` 用配置密码返回 schema 1、216 条记录、198 条已翻牌且包含原提问时间；共享状态开关为 `aliyun False True True` |
 
 ## 常用状态命令
 
@@ -75,7 +75,7 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
-> 2026-07-20 21:54 翻牌应用页发布后，阿里云从 `b8da683` 快进到 `7d5c3b1` 并重启 `snh48-aliyun`。同轮累计补齐 `344f3a1` 至 `92a896c` 的共享运行状态、上麦回放原子同步和文档提交；阿里云配置已变为 `aliyun False True True`。随后在阿里云手动运行 `bash deploy/sync-from-tencent.sh dynamic`，日志确认 `flip_data/web/flip_cards.json done`、`flip_chat.html done`、`flip_data/audio done`、`flip_data/video done` 和 `All sync completed`。腾讯云与阿里云的 `flip_data/web/flip_cards.json` mtime 均为 2026-07-20 21:38 CST，阿里云受保护数据 API 验证通过。
+> 2026-07-20 21:54 翻牌应用页发布后，阿里云从 `b8da683` 快进到 `7d5c3b1` 并重启 `snh48-aliyun`。同轮累计补齐 `344f3a1` 至 `92a896c` 的共享运行状态、上麦回放原子同步和文档提交；阿里云配置已变为 `aliyun False True True`。随后在阿里云手动运行 `bash deploy/sync-from-tencent.sh dynamic`，日志确认 `flip_data/web/flip_cards.json done`、`flip_chat.html done`、`flip_data/audio done`、`flip_data/video done` 和 `All sync completed`。腾讯云与阿里云的 `flip_data/web/flip_cards.json` mtime 均为 2026-07-20 21:38 CST，阿里云受保护数据 API 验证通过。后续纯文档提交以 `--no-restart` 快进，公开烟测继续通过。
 
 > 2026-07-20 18:06 上麦回放原子同步提交 `402551a` 已完成 Shell 语法、通用部署命令顺序和现有共享状态排除回归测试并推送。腾讯云网站 checkout 已包含该提交，手动推送兜底入口已更新但未执行；阿里云仍停留在 `2264e89`，其每分钟主动拉取暂未加载新脚本。原因是 `402551a` 的祖先包含尚待用户确认的共享运行状态提交 `344f3a1`，不能为本任务越过分阶段发布规则把无关功能一并上线。当前最新上麦会话已由腾讯云健康检查确认在阿里云完整可播；录音服务和网站服务均未因本次同步脚本改动重启。
 
