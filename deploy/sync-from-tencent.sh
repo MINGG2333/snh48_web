@@ -55,6 +55,7 @@ mkdir -p \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays \
+  /home/snh48-fan-hub/flip_data/web \
   /home/snh48-fan-hub/flip_data/audio \
   /home/snh48-fan-hub/flip_data/video \
   /home/snh48_web/website/data \
@@ -84,33 +85,33 @@ if [ "$sync_core" -eq 1 ]; then
   rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48_web/website/data/manual_events.csv" /home/snh48_web/website/data/manual_events.csv
   echo "$LOG_TAG manual_events.csv done"
 
-  # 5. live_push_replays（仅同步陈嘉仪的数据）
+  # 4. live_push_replays（仅同步陈嘉仪的数据）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
   echo "$LOG_TAG live_push_replays done"
 
-  # 6. live_covers（直播封面原图）
+  # 5. live_covers（直播封面原图）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
   echo "$LOG_TAG live_covers done"
 fi
 
 if [ "$sync_dynamic" -eq 1 ]; then
-  # 7. gift_replies（礼物回复页小数据）
+  # 6. gift_replies（礼物回复页小数据）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/
   echo "$LOG_TAG gift_replies done"
 
-  # 8. messages_shards（房间消息页分片小数据；旧分片稳定，新消息只更新最后一个小文件和 manifest）
+  # 7. messages_shards（房间消息页分片小数据；旧分片稳定，新消息只更新最后一个小文件和 manifest）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/
   echo "$LOG_TAG messages_shards done"
 
-  # 9. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
+  # 8. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/
   echo "$LOG_TAG audio_transcripts done"
 
-  # 10. score_gifts（只读派生小数据；可写业务状态走版本化复制）
+  # 9. score_gifts（只读派生小数据；可写业务状态走版本化复制）
   rsync -az --delete --partial --exclude='.*.lock' --exclude='live_business_fulfillments.json' -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/
   echo "$LOG_TAG score_gifts done"
 
-  # 11. room_voice_replays（内容先到，manifest 最后原子提交，避免网站读到半个发布包）
+  # 10. room_voice_replays（内容先到，manifest 最后原子提交，避免网站读到半个发布包）
   ROOM_VOICE_SOURCE="$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/"
   ROOM_VOICE_DEST="/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays"
   ROOM_VOICE_MANIFEST_TMP="$ROOM_VOICE_DEST/.manifest.json.sync.$$"
@@ -123,7 +124,16 @@ if [ "$sync_dynamic" -eq 1 ]; then
   echo "$LOG_TAG room_voice_replays obsolete payload cleaned"
   echo "$LOG_TAG room_voice_replays done"
 
-  # 12. flip_chat.html（密码保护的翻牌聊天页 HTML；不含 Token/配置）
+  # 11. flip_data/web/flip_cards.json（网站应用页最小数据；不同步完整 metadata）
+  mkdir -p /home/snh48-fan-hub/flip_data/web
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -e /home/snh48-fan-hub/flip_data/web/flip_cards.json'; then
+    rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/web/flip_cards.json" /home/snh48-fan-hub/flip_data/web/flip_cards.json
+    echo "$LOG_TAG flip_data/web/flip_cards.json done"
+  else
+    echo "$LOG_TAG flip_data/web/flip_cards.json skipped (source missing)"
+  fi
+
+  # 12. flip_chat.html（下载版翻牌聊天页 HTML；不含 Token/配置）
   if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -e /home/snh48-fan-hub/flip_chat.html'; then
     rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_chat.html" /home/snh48-fan-hub/flip_chat.html
     echo "$LOG_TAG flip_chat.html done"

@@ -141,6 +141,11 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "type": "file",
+                "path": "/home/snh48-fan-hub/flip_data/web/flip_cards.json",
+                "optional": True,
+            },
+            {
+                "type": "file",
                 "path": "/home/snh48-fan-hub/flip_chat.html",
                 "optional": True,
             },
@@ -718,6 +723,7 @@ mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays
+mkdir -p /home/snh48-fan-hub/flip_data/web
 mkdir -p /home/snh48-fan-hub/flip_data/audio
 mkdir -p /home/snh48-fan-hub/flip_data/video
 if [ ! -f .env ] && [ -f .env.example ]; then

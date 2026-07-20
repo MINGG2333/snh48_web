@@ -7,147 +7,489 @@
   <title>翻牌记录 · {{ site_title }}</title>
   <style>
     :root {
-      --bg: #101217;
-      --surface: #181c24;
-      --surface-2: #202633;
-      --border: #323a49;
-      --text: #edf1f6;
-      --muted: #99a4b3;
-      --accent: #63c7af;
-      --accent-dark: #46a891;
-      --bad: #e47777;
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #1b2330;
+      --panel-3: #222c3a;
+      --line: #2d3848;
+      --text: #e6edf3;
+      --muted: #98a6b7;
+      --faint: #667384;
+      --teal: #40b8a8;
+      --green: #88d66c;
+      --gold: #f0b84b;
+      --red: #e36f6f;
+      --blue: #62a8ff;
+      --ink: #0a0f15;
     }
-    * { box-sizing: border-box; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
       background: var(--bg);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
+      line-height: 1.45;
     }
-    button, input { font: inherit; }
+
+    button, input, select { font: inherit; }
     button { cursor: pointer; }
-    .shell {
-      width: min(980px, 100%);
-      min-height: 100vh;
-      margin: 0 auto;
-      padding: 24px;
-      display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 24px;
-    }
-    .topbar {
+    [hidden] { display: none !important; }
+
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 18px;
+      justify-content: center;
+      background: var(--bg);
+      padding: 24px;
     }
-    h1 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 680;
-      letter-spacing: 0;
-    }
-    .status {
-      color: var(--muted);
-      font-size: 13px;
-      text-align: right;
-    }
-    .center {
-      display: grid;
-      place-items: center;
-      padding: 24px 0;
-    }
+
+    #loginOverlay.hidden { display: none; }
+
     .login-box {
-      width: min(380px, 100%);
-      border: 1px solid var(--border);
+      width: min(360px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
       border-radius: 8px;
-      background: var(--surface);
       padding: 28px;
     }
-    .login-box h2 {
-      margin: 0 0 8px;
-      font-size: 20px;
-      font-weight: 660;
-      letter-spacing: 0;
-    }
-    .login-box p {
-      margin: 0 0 18px;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.65;
-    }
-    input {
+
+    .login-box h1 { font-size: 20px; margin-bottom: 8px; }
+    .login-box p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+
+    .login-box input {
       width: 100%;
       min-height: 44px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0d1015;
+      background: var(--ink);
       color: var(--text);
       padding: 0 12px;
       outline: none;
     }
-    input:focus { border-color: var(--accent); }
-    .primary {
+
+    .login-box input:focus { border-color: var(--teal); }
+
+    .login-btn {
       width: 100%;
       min-height: 44px;
       margin-top: 12px;
       border: 0;
       border-radius: 8px;
-      background: var(--accent);
-      color: #08110e;
-      font-weight: 700;
+      background: var(--teal);
+      color: var(--ink);
+      font-weight: 750;
     }
-    .primary:hover { background: var(--accent-dark); }
-    .error {
-      min-height: 20px;
+
+    .login-error {
+      display: none;
       margin-top: 10px;
-      color: var(--bad);
+      color: var(--red);
       font-size: 13px;
     }
-    .loading {
+
+    .login-error.show { display: block; }
+
+    .page {
+      display: none;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    .page.ready { display: flex; }
+
+    .topbar {
+      flex: 0 0 auto;
+      border-bottom: 1px solid var(--line);
+      background: rgba(13, 17, 23, 0.96);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .topline {
+      padding: 14px 20px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .title h1 {
+      font-size: 19px;
+      font-weight: 720;
+    }
+
+    .title p {
       color: var(--muted);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .action-btn {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .action-btn:hover { border-color: var(--teal); }
+
+    .stats {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 0 20px 12px;
+      scrollbar-width: none;
+    }
+
+    .stats::-webkit-scrollbar { display: none; }
+
+    .stats span {
+      flex: 0 0 auto;
+      color: var(--muted);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .filters {
+      padding: 0 20px 14px;
+      display: grid;
+      grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) auto 1fr;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .field select {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .field select:focus { border-color: var(--teal); }
+
+    .filter-summary {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      align-self: center;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chat-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #111820;
+    }
+
+    .chat-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 16px max(14px, calc((100vw - 760px) / 2)) 26px;
+      scroll-behavior: smooth;
+    }
+
+    .date-divider {
+      width: fit-content;
+      max-width: 100%;
+      margin: 18px auto 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--panel-3);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .message {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 7px;
+    }
+
+    .message.self { justify-content: flex-end; }
+    .message.other { justify-content: flex-start; }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6aa8ff, #a88af5);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 720;
+      font-size: 14px;
+      flex: 0 0 auto;
+      margin-right: 8px;
+    }
+
+    .bubble {
+      max-width: min(78%, 560px);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      word-break: break-word;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
+    }
+
+    .self .bubble {
+      background: var(--green);
+      color: #10200c;
+      border-bottom-right-radius: 4px;
+    }
+
+    .other .bubble {
+      background: var(--panel);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .status-pending .bubble {
+      background: #302716;
+      color: #f3c96f;
+    }
+
+    .status-refunded .bubble {
+      background: #31191d;
+      color: #f3a0a0;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 5px;
+      padding: 2px 6px;
+      font-size: 11px;
+      line-height: 1.35;
+      background: var(--panel-3);
+      color: var(--muted);
+    }
+
+    .tag.cost { background: #332812; color: var(--gold); }
+    .tag.privacy { background: #142838; color: #8dc8ff; }
+    .tag.kind { background: #123128; color: #76dec9; }
+    .time { color: var(--faint); font-size: 11px; }
+    .text { white-space: pre-wrap; }
+
+    .quote {
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 7px 9px;
+      border: 0;
+      border-left: 3px solid var(--faint);
+      border-radius: 6px;
+      background: var(--panel-2);
+      color: var(--muted);
+      text-align: left;
+    }
+
+    .quote:hover { border-left-color: var(--teal); }
+    .quote-title { display: block; font-size: 11px; color: var(--muted); }
+    .quote-time { display: block; margin-top: 2px; font-size: 11px; color: var(--faint); }
+    .quote-text {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text);
+    }
+
+    .media {
+      margin-top: 5px;
+    }
+
+    .media audio {
+      width: 270px;
+      max-width: 100%;
+    }
+
+    .media video {
+      width: min(320px, 100%);
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 8px;
+    }
+
+    .download-link {
+      display: inline-block;
+      margin-top: 6px;
+      color: var(--blue);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .download-link:hover { text-decoration: underline; }
+
+    .empty, .load-error {
+      margin: 48px auto;
+      width: min(420px, calc(100% - 24px));
+      color: var(--muted);
+      text-align: center;
       font-size: 14px;
     }
-    [hidden] { display: none !important; }
-    @media (max-width: 600px) {
-      .shell { padding: 18px; }
-      .topbar { align-items: flex-start; flex-direction: column; }
-      .status { text-align: left; }
-      .login-box { padding: 22px; }
+
+    .highlight .bubble {
+      outline: 2px solid var(--teal);
+      box-shadow: 0 0 0 5px rgba(64, 184, 168, .18), 0 1px 4px rgba(0,0,0,.2);
+    }
+
+    @media (max-width: 720px) {
+      .topline {
+        padding: 11px 12px 9px;
+        align-items: flex-start;
+      }
+
+      .title h1 { font-size: 17px; }
+      .title p { font-size: 12px; }
+      .actions { flex-wrap: wrap; justify-content: flex-end; }
+      .action-btn { min-height: 32px; padding: 0 10px; }
+      .stats { padding: 0 12px 9px; }
+      .stats span { font-size: 11px; padding: 3px 7px; }
+      .filters {
+        padding: 0 12px 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .filter-summary {
+        grid-column: 1 / -1;
+        text-align: left;
+      }
+      .chat-scroll { padding: 12px 10px 22px; }
+      .avatar { width: 32px; height: 32px; font-size: 13px; margin-right: 7px; }
+      .bubble { max-width: 84%; padding: 9px 11px; }
+      .media audio { width: 230px; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
+  <section id="loginOverlay">
+    <form id="loginForm" class="login-box">
       <h1>翻牌记录</h1>
-      <div id="pageStatus" class="status">正在检查登录状态</div>
-    </header>
+      <p>翻牌内容和本地音视频都需要密码验证。</p>
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="请输入访问密码" required>
+      <button class="login-btn" type="submit" data-track="flip_cards_login_submit">验证并进入</button>
+      <div id="loginError" class="login-error" role="alert"></div>
+    </form>
+  </section>
 
-    <section class="center">
-      <div id="loading" class="loading">正在载入</div>
-      <form id="loginForm" class="login-box" hidden>
-        <h2>访问验证</h2>
-        <p>翻牌记录和本地音视频都需要密码验证。</p>
-        <input id="passwordInput" type="password" autocomplete="current-password" placeholder="请输入访问密码" required>
-        <button class="primary" type="submit" data-track="flip_cards_login_submit">验证并进入</button>
-        <div id="loginError" class="error" role="alert"></div>
-      </form>
+  <main id="page" class="page">
+    <header class="topbar">
+      <div class="topline">
+        <div class="title">
+          <h1>翻牌记录</h1>
+          <p id="subtitle">正在载入</p>
+        </div>
+        <div class="actions">
+          <button id="latestBtn" class="action-btn" type="button">最新</button>
+          <a class="action-btn" href="/api/flip-cards/html" target="_blank" rel="noopener">下载版</a>
+          <button id="logoutBtn" class="action-btn" type="button">退出</button>
+        </div>
+      </div>
+      <div id="stats" class="stats"></div>
+      <div class="filters" role="group" aria-label="翻牌筛选">
+        <div class="field">
+          <label for="statusFilter">翻牌状态</label>
+          <select id="statusFilter">
+            <option value="all">全部状态</option>
+            <option value="answered">已翻牌</option>
+            <option value="pending">未翻牌/翻牌中</option>
+            <option value="refunded">已退款</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="typeFilter">回复类型</label>
+          <select id="typeFilter">
+            <option value="all">全部类型</option>
+            <option value="audio">语音</option>
+            <option value="text">文字</option>
+            <option value="video">视频</option>
+            <option value="none">无回复</option>
+          </select>
+        </div>
+        <button id="resetBtn" class="action-btn" type="button">重置</button>
+        <div id="filterSummary" class="filter-summary"></div>
+      </div>
+    </header>
+    <section class="chat-shell">
+      <div id="chatScroll" class="chat-scroll">
+        <div id="messageList" class="message-list"></div>
+      </div>
     </section>
   </main>
 
   <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
   <script>
     "use strict";
+
     const API = "/api/flip-cards";
-    const pageStatus = document.getElementById("pageStatus");
-    const loading = document.getElementById("loading");
+    const loginOverlay = document.getElementById("loginOverlay");
     const loginForm = document.getElementById("loginForm");
     const passwordInput = document.getElementById("passwordInput");
     const loginError = document.getElementById("loginError");
+    const page = document.getElementById("page");
+    const subtitle = document.getElementById("subtitle");
+    const stats = document.getElementById("stats");
+    const chatScroll = document.getElementById("chatScroll");
+    const messageList = document.getElementById("messageList");
+    const statusFilter = document.getElementById("statusFilter");
+    const typeFilter = document.getElementById("typeFilter");
+    const filterSummary = document.getElementById("filterSummary");
+    const latestBtn = document.getElementById("latestBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    let dataset = null;
+    let records = [];
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -155,22 +497,23 @@
     }
 
     function showLogin(message) {
-      loading.hidden = true;
-      loginForm.hidden = false;
-      pageStatus.textContent = "需要密码";
+      loginOverlay.classList.remove("hidden");
+      page.classList.remove("ready");
       loginError.textContent = message || "";
+      loginError.classList.toggle("show", Boolean(message));
       passwordInput.focus();
     }
 
-    function showLoading(message) {
-      loading.hidden = false;
-      loginForm.hidden = true;
-      pageStatus.textContent = message || "正在载入";
-      loading.textContent = message || "正在载入";
+    function showPage() {
+      loginOverlay.classList.add("hidden");
+      page.classList.add("ready");
     }
 
-    async function api(path, options) {
-      const response = await fetch(API + path, Object.assign({ credentials: "same-origin" }, options || {}));
+    async function apiJson(path, options) {
+      const response = await fetch(API + path, Object.assign({
+        credentials: "same-origin",
+        cache: "no-store"
+      }, options || {}));
       let body = {};
       try { body = await response.json(); } catch (_) {}
       if (!response.ok) {
@@ -181,15 +524,281 @@
       return body;
     }
 
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("zh-CN");
+    }
+
+    function dateKey(ts) {
+      if (!ts) return "";
+      const date = new Date(Number(ts));
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return y + "-" + m + "-" + d;
+    }
+
+    function dateLabel(ts) {
+      const key = dateKey(ts);
+      return key ? key.replace("-", "年").replace("-", "月") + "日" : "";
+    }
+
+    function compactText(text, limit) {
+      const value = String(text || "").replace(/\s+/g, " ").trim();
+      if (value.length <= limit) return value;
+      return value.slice(0, limit - 1) + "...";
+    }
+
+    function mediaDuration(record) {
+      if (!record.duration_text) return record.answer_type_label || "";
+      return (record.answer_type_label || "") + " · " + record.duration_text;
+    }
+
+    function recordMatches(record) {
+      return (statusFilter.value === "all" || record.status === statusFilter.value)
+        && (typeFilter.value === "all" || record.answer_type === typeFilter.value);
+    }
+
+    function renderStats() {
+      const summary = dataset.summary || {};
+      const totalCost = Number(summary.answered_cost || 0) + Number(summary.pending_cost || 0);
+      const items = [
+        "共 " + formatNumber(summary.total) + " 条翻牌",
+        "已翻牌 " + formatNumber(summary.answered) + " 条（" + formatNumber(summary.answered_cost) + " 鸡腿）",
+        "未翻牌 " + formatNumber(summary.pending) + " 条（" + formatNumber(summary.pending_cost) + " 鸡腿）",
+        "已退款 " + formatNumber(summary.refunded) + " 条（" + formatNumber(summary.refunded_cost) + " 鸡腿）",
+        "总计 " + formatNumber(totalCost) + " 鸡腿"
+      ];
+      stats.textContent = "";
+      items.forEach(function (item) {
+        const span = document.createElement("span");
+        span.textContent = item;
+        stats.appendChild(span);
+      });
+      subtitle.textContent = "与 " + (dataset.member || "偶像") + " 的对话";
+    }
+
+    function buildEvents() {
+      const events = [];
+      records.forEach(function (record, index) {
+        events.push({ type: "question", time: Number(record.qtime || 0), order: 0, index, record });
+        if (record.status === "answered") {
+          events.push({
+            type: "answer",
+            time: Number(record.answer_time || record.qtime || 0),
+            order: 1,
+            index,
+            record
+          });
+        } else {
+          events.push({ type: "status", time: Number(record.qtime || 0), order: 1, index, record });
+        }
+      });
+      events.sort(function (a, b) {
+        if (a.time !== b.time) return a.time - b.time;
+        if (a.order !== b.order) return a.order - b.order;
+        return a.index - b.index;
+      });
+      return events;
+    }
+
+    function appendText(parent, className, text) {
+      const node = document.createElement("div");
+      node.className = className;
+      node.textContent = text || "";
+      parent.appendChild(node);
+      return node;
+    }
+
+    function addTag(parent, className, text) {
+      const span = document.createElement("span");
+      span.className = "tag " + (className || "");
+      span.textContent = text || "";
+      parent.appendChild(span);
+      return span;
+    }
+
+    function createQuestion(event) {
+      const record = event.record;
+      const wrap = document.createElement("article");
+      wrap.id = "question-" + safeId(record.question_id);
+      wrap.className = "message self";
+      wrap.dataset.qid = record.question_id || "";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      addTag(meta, "cost", formatNumber(record.cost) + " 鸡腿");
+      if (record.privacy_label) addTag(meta, "privacy", record.privacy_label);
+      const time = document.createElement("span");
+      time.className = "time";
+      time.textContent = record.qtime_text || "";
+      meta.appendChild(time);
+      bubble.appendChild(meta);
+      appendText(bubble, "text", record.content || "");
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function createAnswer(event) {
+      const record = event.record;
+      const wrap = document.createElement("article");
+      wrap.id = "answer-" + safeId(record.question_id);
+      wrap.className = "message other";
+      wrap.dataset.qid = record.question_id || "";
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = String(dataset.member || "偶").slice(0, 1) || "偶";
+      wrap.appendChild(avatar);
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+
+      const quote = document.createElement("button");
+      quote.className = "quote";
+      quote.type = "button";
+      quote.dataset.target = "question-" + safeId(record.question_id);
+      appendText(quote, "quote-title", "回复我的提问");
+      appendText(quote, "quote-time", "我发于 " + (record.qtime_text || ""));
+      appendText(quote, "quote-text", compactText(record.content || "", 96));
+      bubble.appendChild(quote);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      addTag(meta, "kind", mediaDuration(record));
+      const time = document.createElement("span");
+      time.className = "time";
+      time.textContent = record.answer_time_text || "";
+      meta.appendChild(time);
+      bubble.appendChild(meta);
+
+      if (record.answer_type === "text") {
+        appendText(bubble, "text", record.answer_text || "");
+      } else if (record.answer_type === "audio" || record.answer_type === "video") {
+        bubble.appendChild(createMedia(record));
+      } else {
+        appendText(bubble, "text", "[媒体不可用]");
+      }
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function createStatus(event) {
+      const record = event.record;
+      const wrap = document.createElement("article");
+      wrap.className = "message other " + (record.status === "refunded" ? "status-refunded" : "status-pending");
+      wrap.dataset.qid = record.question_id || "";
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = String(dataset.member || "偶").slice(0, 1) || "偶";
+      wrap.appendChild(avatar);
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      addTag(meta, "kind", record.status_label || "未翻牌");
+      bubble.appendChild(meta);
+      appendText(bubble, "text", record.status === "refunded" ? "该翻牌已退款，未收到回复" : "等待回复中");
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function createMedia(record) {
+      const box = document.createElement("div");
+      box.className = "media";
+      const media = record.media || {};
+      if (media.url) {
+        if (record.answer_type === "audio") {
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.preload = "metadata";
+          audio.src = media.url;
+          box.appendChild(audio);
+        } else {
+          const video = document.createElement("video");
+          video.controls = true;
+          video.preload = "metadata";
+          video.src = media.url;
+          box.appendChild(video);
+        }
+      } else {
+        appendText(box, "text", "[媒体不可用]");
+      }
+      if (media.official_url) {
+        const link = document.createElement("a");
+        link.className = "download-link";
+        link.href = media.official_url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = "官方下载";
+        box.appendChild(link);
+      }
+      return box;
+    }
+
+    function safeId(value) {
+      return String(value || "unknown").replace(/[^0-9A-Za-z_-]+/g, "-") || "unknown";
+    }
+
+    function renderTimeline(scrollBottom) {
+      const visibleRecords = records.filter(recordMatches);
+      const visibleIds = new Set(visibleRecords.map(function (record) { return record.question_id; }));
+      const events = buildEvents().filter(function (event) {
+        return visibleIds.has(event.record.question_id);
+      });
+
+      messageList.textContent = "";
+      if (!events.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "没有符合筛选条件的翻牌";
+        messageList.appendChild(empty);
+      } else {
+        const frag = document.createDocumentFragment();
+        let lastDate = "";
+        events.forEach(function (event) {
+          const currentDate = dateKey(event.time);
+          if (currentDate && currentDate !== lastDate) {
+            const divider = document.createElement("div");
+            divider.className = "date-divider";
+            divider.textContent = dateLabel(event.time);
+            frag.appendChild(divider);
+            lastDate = currentDate;
+          }
+          if (event.type === "question") frag.appendChild(createQuestion(event));
+          if (event.type === "answer") frag.appendChild(createAnswer(event));
+          if (event.type === "status") frag.appendChild(createStatus(event));
+        });
+        messageList.appendChild(frag);
+      }
+      filterSummary.textContent = "显示 " + formatNumber(visibleRecords.length) + " / " + formatNumber(records.length) + " 条翻牌，" + formatNumber(events.length) + " 条消息";
+      if (scrollBottom) {
+        requestAnimationFrame(function () {
+          chatScroll.scrollTop = chatScroll.scrollHeight;
+        });
+      }
+    }
+
+    async function loadApp() {
+      const status = await apiJson("/status");
+      if (!status.dataset_exists) {
+        throw new Error("翻牌应用数据尚未生成，请先在数据服务器运行翻牌 HTML 生成脚本。");
+      }
+      dataset = await apiJson("/data");
+      records = Array.isArray(dataset.records) ? dataset.records : [];
+      renderStats();
+      showPage();
+      renderTimeline(true);
+      track("admin_modal", { action: "view_flip_cards_app" });
+    }
+
     async function openIfReady() {
       try {
-        const status = await api("/status");
-        if (!status.html_exists) {
-          showLogin("翻牌 HTML 尚未生成，请先在数据服务器运行生成脚本。");
-          return;
-        }
+        await loadApp();
         track("login_attempt", { action: "reuse_cookie", result: "success" });
-        window.location.replace(API + "/html");
       } catch (error) {
         if (error.status === 401) {
           showLogin("");
@@ -203,27 +812,60 @@
       event.preventDefault();
       const password = passwordInput.value;
       if (!password) return;
+      loginError.classList.remove("show");
       loginError.textContent = "";
-      showLoading("正在验证");
       track("login_attempt", { action: "submit", result: "submitted" });
       try {
-        await api("/login", {
+        await apiJson("/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password })
         });
         track("login_attempt", { action: "submit", result: "success" });
-        await openIfReady();
+        await loadApp();
       } catch (error) {
-        track("login_attempt", {
-          action: "submit",
-          result: "failure",
-          status: error.status || 0
-        });
+        track("login_attempt", { action: "submit", result: "failure", status: error.status || 0 });
         showLogin(error.message || "密码错误");
       } finally {
         passwordInput.value = "";
       }
+    });
+
+    [statusFilter, typeFilter].forEach(function (control) {
+      control.addEventListener("change", function () {
+        renderTimeline(true);
+      });
+    });
+
+    resetBtn.addEventListener("click", function () {
+      statusFilter.value = "all";
+      typeFilter.value = "all";
+      renderTimeline(true);
+    });
+
+    latestBtn.addEventListener("click", function () {
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+    });
+
+    logoutBtn.addEventListener("click", async function () {
+      track("login_attempt", { action: "logout", result: "submitted" });
+      try {
+        await apiJson("/logout", { method: "POST" });
+      } finally {
+        showLogin("");
+      }
+    });
+
+    messageList.addEventListener("click", function (event) {
+      const quote = event.target.closest(".quote");
+      if (!quote) return;
+      const target = document.getElementById(quote.dataset.target || "");
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("highlight");
+      window.setTimeout(function () {
+        target.classList.remove("highlight");
+      }, 1800);
     });
 
     openIfReady();

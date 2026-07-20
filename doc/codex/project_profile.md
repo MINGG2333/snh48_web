@@ -62,7 +62,8 @@
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
-- `flip_chat.html`（密码保护的翻牌记录 HTML，由 fan-hub 脚本生成）
+- `flip_data/web/flip_cards.json`（密码保护的翻牌记录应用数据，由 fan-hub 脚本生成）
+- `flip_chat.html`（下载版翻牌记录 HTML，由 fan-hub 脚本生成）
 - `flip_data/audio/`、`flip_data/video/`（仅翻牌页本地播放依赖；不含 `flip_data/metadata/`）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
@@ -86,9 +87,9 @@ bash deploy/sync-to-aliyun-if-changed.sh
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、`flip_chat.html` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、`flip_data/web/flip_cards.json`、`flip_chat.html` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
-排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_chat.html` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
+排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/flip_cards.json`、`flip_chat.html` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 
 修改同步方向、频率、源路径、目标路径或服务器 IP 时，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`；并验证阿里云 cron 已启用、腾讯云旧推送 cron/进程已停用、稳定小文件两端 hash 一致。
 
@@ -178,17 +179,17 @@ node script/obfuscate_js.cjs
 入口和文档：
 
 - 页面入口：`/flip-cards`，短入口：`/flip`
-- API：`/api/flip-cards/login`、`/status`、`/html`、`/flip_data/audio/{filename}`、`/flip_data/video/{filename}`
-- 数据源：`FLIP_CARDS_HTML_PATH`，默认 `/home/snh48-fan-hub/flip_chat.html`；`FLIP_CARDS_DATA_DIR`，默认 `/home/snh48-fan-hub/flip_data/`
+- API：`/api/flip-cards/login`、`/status`、`/data`、`/html`、`/flip_data/audio/{filename}`、`/flip_data/video/{filename}`
+- 数据源：`FLIP_CARDS_DATASET_PATH`，默认 `/home/snh48-fan-hub/flip_data/web/flip_cards.json`；`FLIP_CARDS_HTML_PATH`，默认 `/home/snh48-fan-hub/flip_chat.html`；`FLIP_CARDS_DATA_DIR`，默认 `/home/snh48-fan-hub/flip_data/`
 - 鉴权：`FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Flip-Cards-Password`
 - 产物说明：`/home/snh48-fan-hub/doc/flip_artifacts.md`
 
 维护边界：
 
-- 页面不进入公开导航并设置 `noindex,nofollow`；登录页、生成后的 HTML 和本地 MP3/MP4 都必须先鉴权。
-- 后端只读取 fan-hub 已生成的 `flip_chat.html`，并按文件名从 `flip_data/audio/`、`flip_data/video/` 流式读取本地媒体；不得把 `flip_data/` 挂到 `/static`。
-- 阿里云只同步在线查看必要的 `flip_chat.html`、`flip_data/audio/` 和 `flip_data/video/`；不常规同步 `flip_data/metadata/`、账号 Token、Cookie、脚本运行日志或下载缓存。
-- 翻牌 HTML 仍由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；网站只负责鉴权发布，不负责拉取口袋48数据。
+- 页面不进入公开导航并设置 `noindex,nofollow`；登录页、应用数据、下载版 HTML 和本地 MP3/MP4 都必须先鉴权。
+- 后端只读取 fan-hub 已生成的 `flip_data/web/flip_cards.json` 和 `flip_chat.html`，并按文件名从 `flip_data/audio/`、`flip_data/video/` 流式读取本地媒体；不得把 `flip_data/` 挂到 `/static`。
+- 阿里云只同步在线查看必要的 `flip_data/web/flip_cards.json`、`flip_chat.html`、`flip_data/audio/` 和 `flip_data/video/`；不常规同步 `flip_data/metadata/`、账号 Token、Cookie、脚本运行日志或下载缓存。
+- 翻牌应用数据和下载版 HTML 都由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；网站只负责鉴权发布和前端渲染，不负责拉取口袋48数据。
 
 ### 计分礼物管理页
 
@@ -333,6 +334,7 @@ SHARED_STATE_HISTORY_ROOT=/home/snh48_web/website/data/shared_state_history
 SHARED_STATE_OUTBOX_ROOT=/home/snh48_web/website/data/shared_state_outbox
 ACTION_INBOX_ROOT=/home/snh48_web/website/data/action_inbox
 FLIP_CARDS_PASSWORD=独立翻牌页密码；留空复用 OB_PASSWORD
+FLIP_CARDS_DATASET_PATH=/home/snh48-fan-hub/flip_data/web/flip_cards.json
 FLIP_CARDS_HTML_PATH=/home/snh48-fan-hub/flip_chat.html
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 GIFT_REPLIES_PASSWORD=独立礼物回复页密码

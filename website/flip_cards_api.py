@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import re
 from pathlib import Path
 from typing import AsyncIterator
+from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -55,6 +57,10 @@ def _html_path() -> Path:
 
 def _data_dir() -> Path:
     return Path(cfg.FLIP_CARDS_DATA_DIR)
+
+
+def _dataset_path() -> Path:
+    return Path(cfg.FLIP_CARDS_DATASET_PATH)
 
 
 async def verify_flip_cards_auth(
@@ -112,12 +118,43 @@ async def logout(response: Response):
 @router.get("/status")
 async def auth_status(response: Response, _=Depends(verify_flip_cards_auth)):
     html_path = _html_path()
+    dataset_path = _dataset_path()
     response.headers["Cache-Control"] = "no-store"
     return {
         "success": True,
         "html_exists": html_path.is_file(),
         "html_mtime": int(html_path.stat().st_mtime) if html_path.is_file() else 0,
+        "dataset_exists": dataset_path.is_file(),
+        "dataset_mtime": int(dataset_path.stat().st_mtime) if dataset_path.is_file() else 0,
     }
+
+
+@router.get("/data")
+async def flip_cards_data(response: Response, _=Depends(verify_flip_cards_auth)):
+    dataset_path = _dataset_path()
+    if not dataset_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="翻牌应用数据尚未生成")
+    try:
+        payload = json.loads(dataset_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="翻牌应用数据读取失败")
+
+    records = payload.get("records")
+    if not isinstance(records, list):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="翻牌应用数据格式错误")
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        media = record.get("media")
+        if not isinstance(media, dict):
+            continue
+        kind = str(media.get("kind") or "")
+        filename = str(media.get("filename") or "")
+        if kind in MEDIA_TYPES and filename:
+            media["url"] = f"/api/flip-cards/flip_data/{kind}/{quote(filename)}"
+
+    response.headers["Cache-Control"] = "private, no-store"
+    return payload
 
 
 @router.get("/html", response_class=HTMLResponse)

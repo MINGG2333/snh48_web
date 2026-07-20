@@ -24,7 +24,7 @@
 | 可写运行状态防覆盖 | 首页背景词、房间忽略、计分业务核实和记忆页只向腾讯云提交操作；使用 `flock`、原子替换、幂等 operation ID、revision、不可变 gzip 快照和持久 outbox | 防止两个节点互相覆盖整份 JSON、网络超时后重复执行或旧 outbox 回滚新版本 | 当前状态、历史和 outbox 都不进 Git；恢复只能在腾讯云执行；巡检见 `doc/shared_runtime_state.md` |
 | 可靠待处理箱与来源审计 | 投诉、QA 邮箱请求和处理状态采用一事件一文件，权限 `0600`；每条请求记录腾讯云/阿里云来源，`/ob` 需密码后展示 | 避免并发 JSONL 同步丢请求，同时让管理员区分请求入口 | 事件含邮箱和投诉正文，不得进 Git、静态目录、公开日志或诊断输出；旧 Markdown/JSONL 仅作兼容视图 |
 | 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；只接受 `segment_000001.m4a` / `segment_000001_original.m4a` 形式，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`，真实密码只放 `.env` |
-| 翻牌记录访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD`，未设置时复用 `OB_PASSWORD`；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；HTML、MP3 和 MP4 都鉴权，媒体只通过固定文件名和 HTTP Range API 提供 | 避免个人翻牌内容和本地音视频被公共静态目录、搜索引擎或直链获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；不得把 `flip_data/` 挂到 `/static`，真实密码只放 `.env` |
+| 翻牌记录访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD`，未设置时复用 `OB_PASSWORD`；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；应用 JSON、下载版 HTML、MP3 和 MP4 都鉴权，媒体只通过固定文件名和 HTTP Range API 提供 | 避免个人翻牌内容和本地音视频被公共静态目录、搜索引擎或直链获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；不得把 `flip_data/` 挂到 `/static`，真实密码只放 `.env` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
@@ -67,6 +67,7 @@ SHARED_STATE_IS_PRIMARY=仅腾讯云 true
 SHARED_STATE_PEER=root@另一台服务器IP
 ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码
 FLIP_CARDS_PASSWORD=独立翻牌页密码或留空复用 OB_PASSWORD
+FLIP_CARDS_DATASET_PATH=/home/snh48-fan-hub/flip_data/web/flip_cards.json
 FLIP_CARDS_HTML_PATH=/home/snh48-fan-hub/flip_chat.html
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 ```
@@ -108,7 +109,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - 公网访问 `http://124.222.72.203:8000` 和 `http://124.222.72.203:8899/health` 失败或超时；服务器本机访问 `127.0.0.1:8000` 正常。
 - `/replay/{live_id}` 的外部 HLS 回放在 Chrome/Firefox 中可播放。
 - `/room-voice-replays` 页面返回 200；未登录访问 `/api/room-voice-replays/sessions` 返回 401；使用真实密码后列表、详情和音频 Range 请求正常，响应不暴露服务器文件路径或流 URL。
-- `/flip-cards` 页面返回 200；未登录访问 `/api/flip-cards/status` 返回 401；使用真实密码后 HTML、MP3/MP4 Range 请求正常，响应不暴露服务器文件路径或口袋48 Token。
+- `/flip-cards` 页面返回 200；未登录访问 `/api/flip-cards/status` 返回 401；使用真实密码后应用 JSON、下载版 HTML、MP3/MP4 Range 请求正常，响应不暴露服务器文件路径或口袋48 Token。
 - 腾讯云和阿里云云安全组均已删除公网 `TCP:8000` 和 `TCP:8899` 入站规则；公网只保留 `80/443` 和必要 SSH `22`；这是云控制台操作，不能只靠代码库变更完成。
 
 涉及图片代理、URL 白名单、CSP 或弹幕抓取的安全加固时，还必须做用户体验验收：

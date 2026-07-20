@@ -44,7 +44,8 @@
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 房间语音转录文本 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 密码保护的成员房间上麦回放发布包；包含兼容版/原始音质版 M4A、元数据和同期消息，不含原始 FLV | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 计分礼物页派生小数据；其中 `live_business_fulfillments.json` 是版本化共享状态 | 其他文件由 `sync-from-tencent.sh dynamic` 拉取；可写业务状态和锁文件明确排除 |
-| `/home/snh48-fan-hub/flip_chat.html` | 密码保护的翻牌记录 HTML | `sync-from-tencent.sh dynamic` |
+| `/home/snh48-fan-hub/flip_data/web/flip_cards.json` | 密码保护的翻牌记录应用数据 | `sync-from-tencent.sh dynamic` |
+| `/home/snh48-fan-hub/flip_chat.html` | 翻牌记录下载版 HTML | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |
 
 如果新服务器要接替腾讯云成为数据生成源，还必须迁移 fan-hub 的代码、虚拟环境、采集配置、Cookie/Token、systemd/cron/screen 任务和历史原始数据；这些不属于网站仓库，不要从 `/home/snh48_web` 覆盖。

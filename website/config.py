@@ -241,6 +241,9 @@ FLIP_CARDS_HTML_PATH = os.getenv("FLIP_CARDS_HTML_PATH") or str(
 FLIP_CARDS_DATA_DIR = os.getenv("FLIP_CARDS_DATA_DIR") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data"
 )
+FLIP_CARDS_DATASET_PATH = os.getenv("FLIP_CARDS_DATASET_PATH") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data" / "web" / "flip_cards.json"
+)
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。
