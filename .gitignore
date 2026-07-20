@@ -24,6 +24,9 @@ website/data/scroller_texts.json
 website/data/shared_state_history/
 website/data/shared_state_outbox/
 website/data/action_inbox/
+# Shared-state advisory locks live beside their JSON files.
+website/data/.*.lock
+website/data/**/.*.lock
 website/data/balance_log.csv
 website/data/ip_clients.json
 website/data/ip_daily_quota.json
