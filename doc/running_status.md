@@ -2,6 +2,8 @@
 
 更新日期：2026-07-20 CST +0800
 
+双服务器版本化运行状态腾讯云阶段发布专项复核：2026-07-20 17:59 CST +0800
+
 计分礼物刷新体验与阿里云补发专项复核：2026-07-20 12:06 CST +0800
 
 腾讯云翻牌记录页发布专项复核：2026-07-20 04:18 CST +0800
@@ -20,8 +22,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 房间电台双版本与跳转体验提交 `2264e89` 已部署；采样 screen `452859.snh48`、Python PID `452864`，继续使用已验证的 `QA_WARMUP_ON_STARTUP=false` 临时运行覆盖；`/radio` 公网 200，页面已包含原始音质切换、加载/跳转状态和整行消息跳转，未登录 sessions API 为 401；鉴权后的会话详情为 schema v2、默认 `compatible`，兼容版/原始版各自 Range 请求均返回 206；此前计分礼物和翻牌功能仍包含在当前提交中 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 房间电台双版本与跳转体验提交 `2264e89` 已部署；2026-07-20 16:18:04 CST 启动，PID `3021633`，enabled、active/running、`NRestarts=0`；`/radio` 公网 200，页面已包含原始音质切换、加载/跳转状态和整行消息跳转，未登录 sessions API 为 401；鉴权后的会话详情包含 315 条消息和 `compatible/original`，两种音频经公网 Nginx 的 Range 请求均为 206；此前计分礼物和翻牌功能仍包含在当前提交中；远端未跟踪的 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 版本化共享状态提交 `344f3a1` 已部署；2026-07-20 17:58:38 CST 启动，采样 screen `692217.snh48`、Python PID `692235`，继续使用已验证的 `QA_WARMUP_ON_STARTUP=false` 临时运行覆盖；启动日志确认 replication worker 以 `tencent` 启动，公网首页及 `/scroller-admin`、`/room`、`/sg`、`/memories`、`/ob` 均 200，相关未登录 API 均 401 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前仍是用户此前验收的 `2264e89`，2026-07-20 16:18:04 CST 启动，PID `3021633`，enabled、active/running、`NRestarts=0`；版本化共享状态提交 `344f3a1` 尚未按分阶段发布规则部署，必须等待用户确认腾讯云后再更新 |
 
 ## 常用状态命令
 
@@ -71,6 +73,8 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
+> 2026-07-20 17:59 腾讯云先行部署 `344f3a1`：首页背景词、房间忽略、计分业务和记忆页各建立 1 个基线 revision；既有投诉/邮箱请求导入 9 条，来源均记录为“腾讯云 cjy.plus”，事件权限为 `0600`。阿里云尚未部署新接收脚本，因此腾讯云 outbox 暂有状态 4 项、待处理箱 9 项，属于分阶段发布的预期积压。当前阿里云 cron 仍按旧提交拉取 `memories.json` 和整个计分目录；用户验收后部署阿里云时，才会切换为四个可写状态只走 revision/outbox，并从普通 rsync 排除 `memories.json`、`live_business_fulfillments.json` 和锁文件。
+
 > 2026-07-20 用户确认腾讯云双音质、加载/跳转状态和整行消息跳转体验后，阿里云从 `32bc7f1` 快进到 `2264e89`。由于累计提交包含双版本 Python API，16:18:04 只重启 `snh48-aliyun` 以加载新模块；16:21 采样 PID `3021633`、enabled、active/running、`NRestarts=0`。`/radio` 公网页面包含新交互，未登录 sessions API 为 401；鉴权详情返回 315 条消息和 `compatible/original`，兼容版与原始音质版经公网 Nginx 的 Range 请求均为 206。上麦 schema v2 manifest 和两个 M4A 此前已由阿里云每分钟 `dynamic` 拉取 cron 自动同步，本轮没有手动扩大数据同步范围。
 
 > 2026-07-20 12:03 用户确认腾讯云计分礼物页面后，阿里云从 `643ad46` 快进到 `4369db9`，同时补齐此前尚未部署的翻牌记录页代码和 dynamic 同步清单；12:03:46 重启 `snh48-aliyun`。既有阿里云 cron 自动检测到变化并拉取必要数据，12:06:05 记录 `flip_data/audio done`、`flip_data/video done`、`All sync completed` 和 `state updated`。腾讯云与阿里云 `flip_chat.html` SHA-256 同为 `aae4347c71111e44c0443faf6cfb35a97587f50c951b0dbfae6aff90a867ab9c`；音频清单摘要同为 `ccbde5d7a00598467e22357beea47e72852201bce1c8b5b56e3b22be6b67ea89`、共 185 个文件，视频清单摘要同为 `3129f251859e67224872c14d5d7e3a6a75bf0c744e2633b9947faa6020b1abe8`、共 4 个文件。
@@ -103,14 +107,14 @@ systemctl status nginx
 | `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 事件/行程主文件，网站优先读取 |
 | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 兼容副本 |
 | `/home/snh48_web/website/data/manual_events.csv` | 同路径 | 网站手动事件运行数据 |
-| `/home/snh48_web/website/data/memories/memories.json` | 同路径 | 记忆页运行数据，腾讯云为写入源 |
+| `/home/snh48_web/website/data/memories/memories.json` | 同路径 | 过渡期阿里云旧 cron 仍拉取；完成 `344f3a1` 阿里云发布后从普通 rsync 移除 |
 | `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 同路径 | 房间消息分片小数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 语音转录文本数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；包含兼容版/原始音质版派生 M4A、元数据和同期消息，原始 FLV 不同步 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物派生小数据 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 过渡期阿里云旧 cron 仍拉取整个目录；完成发布后只拉只读派生文件，排除 `live_business_fulfillments.json` 和 `.*.lock` |
 
 同步分组：
 
@@ -123,8 +127,7 @@ systemctl status nginx
 
 - `schedule_record/images/`：图片通过网站 `/image-proxy/` 访问。
 - 完整原始房间消息、普通语音原文件、上麦原始 FLV、Cookie、Token、`.env`、`config/`、日志和缓存。
-- 房间消息忽略状态 `website/data/room_messages_ignored_batches.json`：这是网站运行数据，不由 Git 跟踪，也不进入 `core` / `dynamic` 单向拉取；两台网站服务器通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。
-- 记忆页 `memories.json` 进入 `core` 单向拉取。生产上建议腾讯云开放写入、阿里云只作为副本展示；如果阿里云也开放提交，需要先设计双向合并或统一写入 API。
+- 首页背景词、房间忽略、计分业务和记忆页是非 Git 版本化共享状态；腾讯云已启用统一提交、历史和 outbox，阿里云接收端等待用户验收后部署。完成两端发布后不得用普通 rsync 或 Git 覆盖这四个当前文件。
 - 阿里云不是 `snh48-fan-hub` 的 Git checkout，不在阿里云生成 fan-hub 数据。
 
 ## 旧推送方案状态
@@ -154,7 +157,7 @@ systemctl status nginx
 
 - `source changed groups=dynamic, pulling...` 每分钟出现不一定异常。礼物回复、计分礼物、房间消息分片、语音转录等运行数据持续写入时，动态组源数据指纹会持续变化。
 - `source changed groups=core,dynamic, pulling...` 如果长期每分钟出现，需要确认 `core` 组是否真的持续变化；否则检查状态文件是否被删除或无法写入。
-- 稳定小文件如 `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv`、`memories.json` 应可以用 `sha256sum` 严格比对。
+- 稳定单向文件如 `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv` 应可以用 `sha256sum` 严格比对；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
 - 动态目录只能按同步日志、mtime 和 1 到 2 分钟延迟判断，不要要求瞬时 hash 完全一致。
 - 修改同步目录、同步方向或云服务器 IP 时，必须同步更新 `doc/codex/project_profile.md`、`doc/daily_website_check.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`。
 - 如果新增同步目标或更换阿里云 IP，需要提醒用户更新腾讯云登录风险白名单。
