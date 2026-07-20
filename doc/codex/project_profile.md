@@ -76,7 +76,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。手动事件 CSV 不由 Git 跟踪，仍按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。`room_voice_replays/` 在三个入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话。手动事件 CSV 不由 Git 跟踪，仍按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。
 
 自动同步运行状态口径：
 
@@ -171,6 +171,7 @@ node script/obfuscate_js.cjs
 - 有录音覆盖且能关联到音频分段的消息整行都可点击，并支持键盘回车或空格跳转到消息对应的墙钟时间；选择消息文字时不会误触跳转，录音缺口内的消息保持不可跳转。
 - API 只接受 `segment_000001.m4a` 和 `segment_000001_original.m4a` 两类固定文件名；两种文件都沿用同一密码鉴权和 Range 边界。
 - 数据同步只包含 `room_voice_replays/` 发布包中的两种派生 M4A、元数据和同期消息；腾讯云 `live_record/room_voice/` 的原始 FLV、日志和短时流 URL不得同步。
+- `manifest.json` 是跨云可见性提交点：同步日志必须先出现 `room_voice_replays payload done`，再出现 `manifest committed` 和 `obsolete payload cleaned`；不得改回对整个目录一次普通 `rsync --delete`。
 
 ### 翻牌记录页
 

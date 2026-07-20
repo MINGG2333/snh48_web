@@ -74,8 +74,17 @@ echo "$LOG_TAG audio_transcripts done"
 rsync -az --delete --partial --exclude='.*.lock' --exclude='live_business_fulfillments.json' -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"
 
-# 11. room_voice_replays（已结束上麦的网页音频分段、session 元数据和同期消息）
-rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/"
+# 11. room_voice_replays（内容先到，manifest 最后原子提交，避免网站读到半个发布包）
+ROOM_VOICE_SOURCE="/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays"
+ROOM_VOICE_DEST="/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays"
+ROOM_VOICE_MANIFEST_TMP="$ROOM_VOICE_DEST/.manifest.json.sync.$$"
+rsync -az --partial --delay-updates --exclude='/manifest.json' -e "$RSYNC_RSH" "$ROOM_VOICE_SOURCE/" "$ALIYUN:$ROOM_VOICE_DEST/"
+echo "$LOG_TAG room_voice_replays payload done"
+rsync -az --partial -e "$RSYNC_RSH" "$ROOM_VOICE_SOURCE/manifest.json" "$ALIYUN:$ROOM_VOICE_MANIFEST_TMP"
+"${SSH_MUX[@]}" "$ALIYUN" "mv -f '$ROOM_VOICE_MANIFEST_TMP' '$ROOM_VOICE_DEST/manifest.json'"
+echo "$LOG_TAG room_voice_replays manifest committed"
+rsync -az --delete-delay --ignore-existing --exclude='/manifest.json' --exclude='/.manifest.json.sync.*' -e "$RSYNC_RSH" "$ROOM_VOICE_SOURCE/" "$ALIYUN:$ROOM_VOICE_DEST/"
+echo "$LOG_TAG room_voice_replays obsolete payload cleaned"
 echo "$LOG_TAG room_voice_replays done"
 
 # 12. flip_chat.html（密码保护的翻牌聊天页 HTML；不含 Token/配置）

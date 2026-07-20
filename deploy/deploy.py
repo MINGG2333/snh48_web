@@ -137,6 +137,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays",
                 "delete": True,
                 "optional": True,
+                "manifest_last": True,
             },
             {
                 "type": "file",
@@ -760,7 +761,25 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
             opts += f" --exclude={quote(str(pattern))}"
         src = src_path.rstrip("/") + "/" if is_dir else src_path
         dst = f"{dest['ssh']}:{dest_path.rstrip('/') + '/' if is_dir else dest_path}"
-        sync_command = f"rsync {opts} {quote(src)} {quote(dst)}"
+        if item.get("manifest_last"):
+            if not is_dir:
+                raise SystemExit("manifest_last is only supported for directory data paths")
+            manifest_tmp = dest_path.rstrip("/") + "/.manifest.json.sync"
+            payload_opts = "-az --partial --delay-updates --exclude=/manifest.json"
+            cleanup_opts = (
+                "-az --delete-delay --ignore-existing --exclude=/manifest.json "
+                "--exclude=/.manifest.json.sync"
+            )
+            sync_command = (
+                f"rsync {payload_opts} {quote(src)} {quote(dst)} && "
+                f"rsync -az --partial {quote(src + 'manifest.json')} "
+                f"{quote(dest['ssh'] + ':' + manifest_tmp)} && "
+                f"ssh -F /dev/null {quote(dest['ssh'])} "
+                f"{quote('mv -f ' + quote(manifest_tmp) + ' ' + quote(dest_path.rstrip('/') + '/manifest.json'))} && "
+                f"rsync {cleanup_opts} {quote(src)} {quote(dst)}"
+            )
+        else:
+            sync_command = f"rsync {opts} {quote(src)} {quote(dst)}"
         if item.get("optional"):
             sync_command = (
                 f"if [ -e {quote(src_path)} ]; then "

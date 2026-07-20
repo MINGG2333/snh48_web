@@ -28,7 +28,7 @@
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
-| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留只读派生数据 1 分钟内同步延迟 | 不要恢复腾讯云侧 15 秒常驻同步循环；普通同步必须排除四个可写状态，计分目录明确排除 `live_business_fulfillments.json` 和 `.*.lock`；不得把 history、outbox、action inbox 用 `--delete` 整目录覆盖；其他媒体和敏感范围保持原最小同步边界 |
+| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive；上麦回放以 payload 先到、manifest 原子提交、旧 payload 后清理保证读侧完整性 | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留只读派生数据 1 分钟内同步延迟；避免大音频传输中网站读到半个发布包 | 不要恢复腾讯云侧 15 秒常驻同步循环；普通同步必须排除四个可写状态，计分目录明确排除 `live_business_fulfillments.json` 和 `.*.lock`；不得把 history、outbox、action inbox 用 `--delete` 整目录覆盖；不得把上麦回放改回单次整目录 `rsync --delete`；其他媒体和敏感范围保持原最小同步边界 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |
