@@ -10,6 +10,8 @@
 
 腾讯云成员房间上麦双版本播放专项复核：2026-07-20 12:35 CST +0800
 
+阿里云成员房间上麦双版本与跳转体验专项复核：2026-07-20 16:21 CST +0800
+
 阿里云成员房间上麦回放发布与同步专项复核：2026-07-19 04:51 CST +0800
 
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
@@ -18,8 +20,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 双版本上麦播放提交 `5d89c9e` 已部署；采样 screen `452859.snh48`、Python PID `452864`，继续使用已验证的 `QA_WARMUP_ON_STARTUP=false` 临时运行覆盖；`/room-voice-replays` 公网 200，未登录 sessions API 为 401；鉴权后的会话详情为 schema v2、默认 `compatible`，兼容版/原始版各自 Range 请求均返回 206；此前计分礼物和翻牌功能仍包含在当前提交中 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 计分礼物功能提交 `4369db9` 已部署；2026-07-20 12:03:46 CST 启动，PID `3001088`，enabled、active/running、`NRestarts=0`；`/score-gifts` 公网 200，页面已包含轻量 summary 轮询、新条目提示和 `setInterval(checkUpdates)`；`/flip-cards` 公网 200、未登录 `/api/flip-cards/status` 为 401；部署工具完整烟测通过；远端未跟踪的 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 房间电台双版本与跳转体验提交 `2264e89` 已部署；采样 screen `452859.snh48`、Python PID `452864`，继续使用已验证的 `QA_WARMUP_ON_STARTUP=false` 临时运行覆盖；`/radio` 公网 200，页面已包含原始音质切换、加载/跳转状态和整行消息跳转，未登录 sessions API 为 401；鉴权后的会话详情为 schema v2、默认 `compatible`，兼容版/原始版各自 Range 请求均返回 206；此前计分礼物和翻牌功能仍包含在当前提交中 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 房间电台双版本与跳转体验提交 `2264e89` 已部署；2026-07-20 16:18:04 CST 启动，PID `3021633`，enabled、active/running、`NRestarts=0`；`/radio` 公网 200，页面已包含原始音质切换、加载/跳转状态和整行消息跳转，未登录 sessions API 为 401；鉴权后的会话详情包含 315 条消息和 `compatible/original`，两种音频经公网 Nginx 的 Range 请求均为 206；此前计分礼物和翻牌功能仍包含在当前提交中；远端未跟踪的 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
@@ -69,7 +71,7 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
-> 2026-07-20 12:35 腾讯云已部署提交 `5d89c9e`，现有上麦会话已在腾讯云补齐 AAC-LC 单声道兼容版与 HE-AACv2 原始音质版。腾讯云页面/API/双 Range 音频烟测通过。12:39 只读复核发现，阿里云既有每分钟 `dynamic` 拉取 cron 已自动同步 schema v2 manifest 和两个 M4A；本轮没有手动触发同步。阿里云网站代码仍停在 `32bc7f1`、服务 PID `3001088` 未重启，因此当前只会按旧 API 播放顶层 `filename` 指向的兼容版，原始音质切换要等用户验收腾讯云并部署新网站代码后才开放。
+> 2026-07-20 用户确认腾讯云双音质、加载/跳转状态和整行消息跳转体验后，阿里云从 `32bc7f1` 快进到 `2264e89`。由于累计提交包含双版本 Python API，16:18:04 只重启 `snh48-aliyun` 以加载新模块；16:21 采样 PID `3021633`、enabled、active/running、`NRestarts=0`。`/radio` 公网页面包含新交互，未登录 sessions API 为 401；鉴权详情返回 315 条消息和 `compatible/original`，兼容版与原始音质版经公网 Nginx 的 Range 请求均为 206。上麦 schema v2 manifest 和两个 M4A 此前已由阿里云每分钟 `dynamic` 拉取 cron 自动同步，本轮没有手动扩大数据同步范围。
 
 > 2026-07-20 12:03 用户确认腾讯云计分礼物页面后，阿里云从 `643ad46` 快进到 `4369db9`，同时补齐此前尚未部署的翻牌记录页代码和 dynamic 同步清单；12:03:46 重启 `snh48-aliyun`。既有阿里云 cron 自动检测到变化并拉取必要数据，12:06:05 记录 `flip_data/audio done`、`flip_data/video done`、`All sync completed` 和 `state updated`。腾讯云与阿里云 `flip_chat.html` SHA-256 同为 `aae4347c71111e44c0443faf6cfb35a97587f50c951b0dbfae6aff90a867ab9c`；音频清单摘要同为 `ccbde5d7a00598467e22357beea47e72852201bce1c8b5b56e3b22be6b67ea89`、共 185 个文件，视频清单摘要同为 `3129f251859e67224872c14d5d7e3a6a75bf0c744e2633b9947faa6020b1abe8`、共 4 个文件。
 
