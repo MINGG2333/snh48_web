@@ -78,6 +78,31 @@
     header .stats { color: var(--text-dim); font-size: 13px; }
     header .stats span { color: var(--accent); font-weight: 600; }
 
+    .inbox-panel {
+      display: none;
+      margin: 20px 32px 0;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .inbox-panel.visible { display: block; }
+    .inbox-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .inbox-header h2 { font-size: 16px; }
+    .inbox-count { color: var(--gold); font-size: 13px; }
+    .inbox-list { display: grid; gap: 10px; }
+    .inbox-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--bg); }
+    .inbox-item-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .origin-chip { border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
+    .origin-chip.tencent { color: #60a5fa; background: rgba(96,165,250,.14); border: 1px solid rgba(96,165,250,.35); }
+    .origin-chip.aliyun { color: #f59e0b; background: rgba(245,158,11,.14); border: 1px solid rgba(245,158,11,.35); }
+    .inbox-status { color: var(--text-dim); font-size: 11px; }
+    .inbox-time { margin-left: auto; color: var(--text-dim); font-size: 11px; }
+    .inbox-detail { margin-top: 8px; color: var(--text-dim); font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+    .inbox-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .inbox-action { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; }
+    .inbox-action:hover { border-color: var(--accent); }
+
     /* ── IP Group Flex Grid ── */
     .groups-container {
       display: flex;
@@ -381,6 +406,7 @@
       .groups-container {
         padding: 16px 20px;
       }
+      .inbox-panel { margin: 16px 20px 0; }
       .modal-content { width: 95%; max-height: 90vh; }
       .modal-body { padding: 12px 16px; }
     }
@@ -404,9 +430,19 @@
   <h1>🔍 观察 · 用户动态</h1>
   <div class="stats">
     <span id="groupCount">0</span> 个活跃IP组 ·
-    <span id="totalNotifs">0</span> 条通知
+    <span id="totalNotifs">0</span> 条通知 ·
+    <span id="inboxPendingCount">0</span> 条待处理请求
   </div>
 </header>
+
+<!-- ── Cross-server durable action inbox ── -->
+<section class="inbox-panel" id="inboxPanel">
+  <div class="inbox-header">
+    <h2>📥 双服务器可靠待处理箱</h2>
+    <span class="inbox-count" id="inboxCount"></span>
+  </div>
+  <div class="inbox-list" id="inboxList"></div>
+</section>
 
 <!-- ── Groups Grid ── -->
 <div class="groups-container" id="groupsContainer"></div>
@@ -434,6 +470,7 @@
   // ── State ──
   let obPassword = '';
   let groupsData = [];
+  let inboxData = [];
   let currentGroupId = -1;
   let currentNotifIdx = -1;
 
@@ -446,6 +483,10 @@
   const groupsContainer = document.getElementById('groupsContainer');
   const groupCount = document.getElementById('groupCount');
   const totalNotifs = document.getElementById('totalNotifs');
+  const inboxPendingCount = document.getElementById('inboxPendingCount');
+  const inboxPanel = document.getElementById('inboxPanel');
+  const inboxCount = document.getElementById('inboxCount');
+  const inboxList = document.getElementById('inboxList');
   const eventModal = document.getElementById('eventModal');
   const modalTitle = document.getElementById('modalTitle');
   const modalUsers = document.getElementById('modalUsers');
@@ -493,15 +534,95 @@
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const data = await resp.json();
       groupsData = data.groups || [];
+      inboxData = data.inbox || [];
       loginOverlay.classList.add('hidden');
       mainHeader.style.display = 'flex';
       if (attemptedLogin) {
         trackAdminEvent('login_attempt', { action: 'ob_login', result: 'success' });
       }
       renderGroups();
+      renderInbox();
     } catch (err) {
       loginError.textContent = '加载失败: ' + err.message;
       loginError.classList.add('show');
+    }
+  }
+
+  function renderInbox() {
+    inboxList.innerHTML = '';
+    inboxPanel.classList.toggle('visible', inboxData.length > 0);
+    const pending = inboxData.filter(item => item.status === 'pending' || item.status === 'processing').length;
+    inboxPendingCount.textContent = pending;
+    inboxCount.textContent = inboxData.length + ' 条记录，其中 ' + pending + ' 条待处理';
+    inboxData.forEach((event) => {
+      const payload = event.payload || {};
+      const item = document.createElement('article');
+      item.className = 'inbox-item';
+      const head = document.createElement('div');
+      head.className = 'inbox-item-head';
+      const type = document.createElement('strong');
+      type.textContent = event.event_type === 'complaint' ? '📋 投诉举报' : '📧 邮箱请求';
+      head.appendChild(type);
+      const origin = document.createElement('span');
+      origin.className = 'origin-chip ' + (event.origin_node || '');
+      origin.textContent = '来源：' + (event.origin_label || event.origin_node || '未知服务器');
+      head.appendChild(origin);
+      const status = document.createElement('span');
+      status.className = 'inbox-status';
+      const statusLabels = { pending: '待处理', processing: '处理中', resolved: '已完成', rejected: '已驳回' };
+      status.textContent = '状态：' + (statusLabels[event.status] || event.status || '待处理');
+      head.appendChild(status);
+      const time = document.createElement('span');
+      time.className = 'inbox-time';
+      time.textContent = event.created_at || '';
+      head.appendChild(time);
+      item.appendChild(head);
+
+      const detail = document.createElement('div');
+      detail.className = 'inbox-detail';
+      if (event.event_type === 'complaint') {
+        detail.textContent = [
+          '编号：' + (payload.ticket_id || event.event_id),
+          '类型：' + (payload.type_label || payload.type || ''),
+          payload.content || '',
+          payload.email ? '联系邮箱：' + payload.email : ''
+        ].filter(Boolean).join('\n');
+      } else {
+        detail.textContent = [
+          '任务：' + (payload.task_id || ''),
+          payload.question ? '问题：' + payload.question : '',
+          payload.email ? '联系邮箱：' + payload.email : ''
+        ].filter(Boolean).join('\n');
+      }
+      item.appendChild(detail);
+
+      const actions = document.createElement('div');
+      actions.className = 'inbox-actions';
+      [['processing', '开始处理'], ['resolved', '标记完成'], ['rejected', '驳回']].forEach(([value, label]) => {
+        const button = document.createElement('button');
+        button.className = 'inbox-action';
+        button.textContent = label;
+        button.disabled = event.status === value;
+        button.addEventListener('click', () => updateInboxStatus(event.event_id, value));
+        actions.appendChild(button);
+      });
+      item.appendChild(actions);
+      inboxList.appendChild(item);
+    });
+  }
+
+  async function updateInboxStatus(eventId, nextStatus) {
+    try {
+      const resp = await fetch('/api/ob/inbox/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
+        body: JSON.stringify({ event_id: eventId, status: nextStatus, note: '' }),
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      trackAdminEvent('admin_update', { action: 'inbox_status', result: 'success', event_id: eventId, status: nextStatus });
+      await fetchData();
+    } catch (err) {
+      trackAdminEvent('admin_update', { action: 'inbox_status', result: 'failure', event_id: eventId, status: nextStatus });
     }
   }
 

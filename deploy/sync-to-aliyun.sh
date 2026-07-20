@@ -50,14 +50,6 @@ echo "$LOG_TAG schedule.csv done"
 rsync -az --partial -e "$RSYNC_RSH" /home/snh48_web/website/data/manual_events.csv "$ALIYUN:/home/snh48_web/website/data/manual_events.csv"
 echo "$LOG_TAG manual_events.csv done"
 
-# 4. memories.json（记忆页运行数据；腾讯云为写入源，阿里云为副本）
-if [ -e /home/snh48_web/website/data/memories/memories.json ]; then
-  rsync -az --partial -e "$RSYNC_RSH" /home/snh48_web/website/data/memories/memories.json "$ALIYUN:/home/snh48_web/website/data/memories/memories.json"
-  echo "$LOG_TAG memories.json done"
-else
-  echo "$LOG_TAG memories.json skipped (source missing)"
-fi
-
 # 5. live_push_replays（仅同步陈嘉仪的数据）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/"
 echo "$LOG_TAG live_push_replays done"
@@ -78,8 +70,8 @@ echo "$LOG_TAG messages_shards done"
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/"
 echo "$LOG_TAG audio_transcripts done"
 
-# 10. score_gifts（计分礼物页小数据）
-rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
+# 10. score_gifts（只读派生小数据；可写业务状态走版本化复制）
+rsync -az --delete --partial --exclude='.*.lock' --exclude='live_business_fulfillments.json' -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"
 
 # 11. room_voice_replays（已结束上麦的网页音频分段、session 元数据和同期消息）

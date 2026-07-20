@@ -53,6 +53,7 @@
 - `schedule_record/chenjiayi_events.csv`（事件/行程主文件，网站优先读取）
 - `schedule_record/schedule.csv`（事件/行程兼容副本，旧配置和回退读取）
 - `/home/snh48_web/website/data/manual_events.csv`（网站运行数据手动事件 CSV，接口按请求读取；格式示例见 `website/data/manual_events.example.csv`）
+- `/home/snh48_web/website/data/scroller_texts.json`（首页背景词非 Git 运行状态）
 - `/home/snh48_web/website/data/memories/memories.json`（记忆页运行数据；格式示例见 `website/data/memories/memories.example.json`）
 - `live_push_replays/陈嘉仪_161808449/`
 - `room_record/陈嘉仪_161808449/live_covers/`
@@ -75,7 +76,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。它们都是把必要数据从腾讯云同步到阿里云；由于阿里云不是 fan-hub 的 Git checkout，`chenjiayi_events.csv`、`schedule.csv`、`flip_chat.html` 和翻牌音视频目录都保留脚本同步。手动事件 CSV 和记忆页 `memories.json` 不再由 Git 跟踪，纳入运行数据同步，避免两台网站读取的运营数据漂移；仓库只保留 `website/data/manual_events.example.csv` 和 `website/data/memories/memories.example.json` 作为格式示例。房间消息忽略状态 `website/data/room_messages_ignored_batches.json` 也不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`，多服务器间通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步。只改 Codex 文档、网站代码或部署说明时，不需要执行数据同步。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。手动事件 CSV 不由 Git 跟踪，仍按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。
 
 自动同步运行状态口径：
 
@@ -85,7 +86,7 @@ bash deploy/sync-to-aliyun-if-changed.sh
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、记忆页运行数据、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物、`flip_chat.html` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、`flip_chat.html` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
 排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_chat.html` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 
@@ -148,7 +149,7 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航，仅 URL 访问并要求密码。
 - 交互是聊天记录式加载：首次读取最新一批，向上滚动加载更早消息，不使用页码切换。
 - 语音转录参考是按 `message_id` 关联的派生小文本数据；缺失时页面隐藏转录块，不影响音频消息展示。
-- 为支持阿里云房间消息页，数据同步清单同步派生的 `messages_shards/` 分片目录，不再每轮传完整 `messages.csv`。忽略状态文件位于 `website/data/room_messages_ignored_batches.json`，但它是运行数据，不由 Git 跟踪；点击标记或撤销时优先通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 配置的 SSH 直连同步到另一台网站服务器，不走腾讯云到阿里云的单向数据同步，也不要恢复 GitHub 同步作为生产路径。
+- 为支持阿里云房间消息页，数据同步清单同步派生的 `messages_shards/` 分片目录，不再每轮传完整 `messages.csv`。忽略状态文件位于 `website/data/room_messages_ignored_batches.json`，不由 Git 跟踪；两端按钮都发送操作到腾讯云权威节点串行提交并保存历史，再复制 revision 到阿里云。不要恢复 GitHub 同步或整文件双向覆盖。
 
 ### 成员房间上麦回放页
 
@@ -202,7 +203,7 @@ node script/obfuscate_js.cjs
 
 - 页面不进入公开导航，仅 URL 访问并要求密码。
 - 后端只读取 `score_gifts.json` 派生小数据，不读取或同步完整 `messages.csv`、语音原文件、图片归档或敏感配置。
-- `/api/score-gifts/business-review` 只写入 `score_gifts/` 下的 `live_business_fulfillments.json`，用于人工确认或修正直播计分礼物的业务兑换结果。
+- `/api/score-gifts/business-review` 把核实操作交给腾讯云权威节点，在同一文件锁下更新 `score_gifts/` 下的 `live_business_fulfillments.json`，用于人工确认或修正直播计分礼物的业务兑换结果；与 fan-hub 分析器写入共用锁和版本历史。
 - 页面按数据文件里的 `refresh_interval_seconds` 轮询轻量 summary；检测到新条目时只显示更新提示，不重建当前已加载详情，用户点击提示后才加载最新数据。该值由 fan-hub 的 `config/room_monitor.json` 中 `gift_reply_export_interval_seconds` 热更新，和礼物回复页保持一致。
 - 阿里云只同步 `room_record/陈嘉仪_161808449/score_gifts/` 小目录，不同步整个 `room_record/陈嘉仪_161808449/`。
 
@@ -222,7 +223,14 @@ node script/obfuscate_js.cjs
 - 普通 API 不返回平台 ID；后台数据保留平台 ID 用于去重和核对。
 - `memories.json` 是运行数据，不由 Git 跟踪；仓库只保留 `website/data/memories/memories.example.json`。
 - 初始数据可由 `python3 script/build_memories_seed.py` 从 fan-hub 的礼物回复、直播计分礼物和时光轴行程生成。
-- 多服务器生产建议腾讯云作为写入源；阿里云通过 `core` 组拉取副本。如需阿里云也开放提交，必须先设计双向合并或统一写入 API。
+- 两个域名都开放提交和审核。阿里云把操作转发给腾讯云统一串行提交，随后接收相同 revision；普通 `core` 拉取明确不包含此文件。种子脚本也通过同一锁内合并入口写入，不能直接覆盖文件。
+
+### 双服务器版本化状态与可靠待处理箱
+
+- 详细契约、环境变量、迁移、历史恢复和巡检命令见 `doc/shared_runtime_state.md`。
+- 腾讯云为唯一权威提交节点；阿里云是可接受操作的副本节点。首页背景词、房间忽略状态、计分礼物业务核实和记忆页都采用操作转发，不做对等整文件合并。
+- 每次提交产生 gzip 不可变历史快照；复制失败进入 `website/data/shared_state_outbox/`，网站进程内线程自动重试，不新增常驻服务。
+- 投诉和 QA 邮箱请求写入 `website/data/action_inbox/events/` 的不可变事件。`/ob` 显示来源服务器并用状态事件处理待办。
 
 ### 时光轴地图打开
 
@@ -316,6 +324,13 @@ SECURE_COOKIES=true
 USE_OBFUSCATED_JS=true
 TRUSTED_PROXY_PEERS=127.0.0.1,::1
 OB_PASSWORD=观察页密码；翻牌页未单独设置时复用
+SHARED_STATE_SYNC_ENABLED=true
+SHARED_STATE_NODE_ID=tencent 或 aliyun
+SHARED_STATE_IS_PRIMARY=腾讯云 true、阿里云 false
+SHARED_STATE_PEER=另一台服务器 SSH 目标
+SHARED_STATE_HISTORY_ROOT=/home/snh48_web/website/data/shared_state_history
+SHARED_STATE_OUTBOX_ROOT=/home/snh48_web/website/data/shared_state_outbox
+ACTION_INBOX_ROOT=/home/snh48_web/website/data/action_inbox
 FLIP_CARDS_PASSWORD=独立翻牌页密码；留空复用 OB_PASSWORD
 FLIP_CARDS_HTML_PATH=/home/snh48-fan-hub/flip_chat.html
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
@@ -392,6 +407,11 @@ curl -I --connect-timeout 5 http://8.210.188.184:8000
 
 - `nohup.out`
 - `website/data/room_messages_ignored_batches.json`
+- `website/data/scroller_texts.json`
+- `website/data/memories/memories.json`
+- `website/data/shared_state_history/`
+- `website/data/shared_state_outbox/`
+- `website/data/action_inbox/`
 - `website/data/balance_log.csv`
 - `website/data/ip_clients.json`
 - `website/data/ip_daily_quota.json`

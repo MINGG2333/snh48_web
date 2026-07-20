@@ -130,6 +130,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "type": "dir",
                 "path": "/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts",
                 "delete": True,
+                "excludes": ["live_business_fulfillments.json", ".*.lock"],
             },
             {
                 "type": "dir",
@@ -755,6 +756,8 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
         opts = "-az --partial"
         if item.get("delete"):
             opts += " --delete"
+        for pattern in item.get("excludes") or []:
+            opts += f" --exclude={quote(str(pattern))}"
         src = src_path.rstrip("/") + "/" if is_dir else src_path
         dst = f"{dest['ssh']}:{dest_path.rstrip('/') + '/' if is_dir else dest_path}"
         sync_command = f"rsync {opts} {quote(src)} {quote(dst)}"

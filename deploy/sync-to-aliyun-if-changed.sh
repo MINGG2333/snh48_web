@@ -11,7 +11,6 @@ sources=(
   /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
   /home/snh48-fan-hub/schedule_record/schedule.csv
   /home/snh48_web/website/data/manual_events.csv
-  /home/snh48_web/website/data/memories/memories.json
   /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
@@ -27,7 +26,7 @@ sources=(
 fingerprint() {
   for src in "${sources[@]}"; do
     if [ -e "$src" ]; then
-      find "$src" -type f -printf '%p\t%s\t%T@\n' 2>/dev/null
+      find "$src" -type f ! -name '.*.lock' ! -name 'live_business_fulfillments.json' -printf '%p\t%s\t%T@\n' 2>/dev/null
     else
       printf '%s\tmissing\t0\n' "$src"
     fi

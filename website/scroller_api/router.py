@@ -17,16 +17,21 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import os
-from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Request, Response, status
 from pydantic import BaseModel
 
 from website import config as cfg
 from website.rate_limiter import check_scroller_login_limit, get_client_ip
+from website.shared_runtime_state import (
+    SharedStateError,
+    SharedStatePeerError,
+    execute_mutation,
+    load_document,
+    register_mutator,
+)
 
 # ── Cookie name for scroller auth ────────────────────────────────────────
 SCROLLER_COOKIE = "scroller_auth"
@@ -46,30 +51,30 @@ def _verify_cookie_token(token: str, password: str) -> bool:
     """Constant-time compare cookie token against expected password hash."""
     return hmac.compare_digest(_make_cookie_token(password), token)
 
-# ── Data file path ───────────────────────────────────────────────────────────
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-TEXTS_FILE = DATA_DIR / "scroller_texts.json"
-
-
 def _load_texts() -> List[str]:
     """Load texts from the JSON data file."""
-    if not TEXTS_FILE.exists():
-        return []
     try:
-        with open(TEXTS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list) and all(isinstance(t, str) for t in data):
-            return data
+        data = load_document("scroller")
+        texts = data.get("texts")
+        if isinstance(texts, list):
+            return [str(item) for item in texts if str(item).strip()]
         return []
-    except (json.JSONDecodeError, OSError):
+    except SharedStateError:
         return []
 
 
-def _save_texts(texts: List[str]) -> None:
-    """Save texts to the JSON data file."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(TEXTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(texts, f, ensure_ascii=False, indent=2)
+def _set_texts_mutator(
+    document: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    texts = [str(item).strip() for item in payload.get("texts", []) if str(item).strip()]
+    if not texts:
+        raise ValueError("列表不能为空，至少需要一条背景词")
+    document["version"] = 2
+    document["texts"] = texts
+    return document, {"texts": texts, "count": len(texts)}
+
+
+register_mutator("scroller", "set_texts", _set_texts_mutator)
 
 
 router = APIRouter(prefix="/api/scroller", tags=["背景词管理"])
@@ -215,5 +220,15 @@ def update_texts(req: TextsUpdateRequest, _=Depends(verify_scroller_auth)):
             detail="列表不能为空，至少需要一条背景词",
         )
 
-    _save_texts(cleaned)
-    return TextsResponse(texts=cleaned, count=len(cleaned))
+    try:
+        response = execute_mutation("scroller", "set_texts", {"texts": cleaned})
+    except SharedStatePeerError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except SharedStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"背景词跨服务器保存失败：{exc}",
+        ) from exc
+    result = response.get("result") if isinstance(response.get("result"), dict) else {}
+    saved = [str(item) for item in result.get("texts", cleaned)]
+    return TextsResponse(texts=saved, count=len(saved))

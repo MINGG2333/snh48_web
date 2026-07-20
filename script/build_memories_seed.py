@@ -11,12 +11,15 @@ import argparse
 import csv
 import hashlib
 import json
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DEFAULT_FAN_HUB = ROOT.parent / "snh48-fan-hub"
 DEFAULT_OUTPUT = ROOT / "website" / "data" / "memories" / "memories.json"
 MEMBER_DIR = "陈嘉仪_161808449"
@@ -70,8 +73,20 @@ def main() -> int:
     generated.extend(build_live_gift_memories(fan_hub, args.start_date, args.live_gifts_limit))
     generated.extend(build_event_memories(fan_hub, args.start_date, args.events_limit))
 
-    store = merge_with_existing(args.output, generated)
-    write_store(args.output, store)
+    from website import config as cfg
+
+    if args.output.resolve() == Path(cfg.MEMORIES_DATA_PATH).resolve():
+        # The default runtime file is shared state. Merge while holding the
+        # same cross-process lock as website submissions/reviews so a seed
+        # refresh cannot overwrite a request that arrived concurrently.
+        import website.memories_api  # noqa: F401
+        from website.shared_runtime_state import execute_mutation
+
+        mutation = execute_mutation("memories", "seed_merge", {"items": generated})
+        store = mutation["state"]
+    else:
+        store = merge_with_existing(args.output, generated)
+        write_store(args.output, store)
     print(
         f"Wrote {len(store.get('items', []))} memories to {args.output} "
         f"({len(generated)} generated/updated)"

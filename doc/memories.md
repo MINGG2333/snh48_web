@@ -79,7 +79,7 @@ website/data/memories/memories.json
 website/data/memories/memories.example.json
 ```
 
-`memories.json` 是运行数据，不进入 Git。腾讯云作为写入源时，阿里云通过现有“阿里云主动从腾讯云拉取”的同步链路获取副本。若未来希望两台服务器都开放提交，需要先设计双向合并或统一写入 API，不能让两台服务器各自写本地文件。
+`memories.json` 是运行数据，不进入 Git，也不再进入普通 `core` rsync。两个域名都可提交和审核，但阿里云把操作转发给腾讯云权威节点，由腾讯云在文件锁内合并、生成 revision 后通过持久 outbox 复制到阿里云。历史、补发和恢复方式见 `doc/shared_runtime_state.md`。
 
 ## 第一版导入命令
 
@@ -95,4 +95,4 @@ python3 script/build_memories_seed.py
 python3 script/build_memories_seed.py --start-date 2025-09-01 --gift-replies-limit 160 --live-gifts-limit 160 --events-limit 120
 ```
 
-导入脚本会尽量使用稳定来源 ID 生成记忆 ID，并保留已有人工确认状态。
+导入脚本会尽量使用稳定来源 ID 生成记忆 ID，并保留已有人工确认状态。默认生产路径通过同一版本化写入锁合并，避免与网站提交或审核并发时覆盖新记录；指定其他 `--output` 时才直接写测试文件。

@@ -62,6 +62,10 @@ SITE_PASSWORD = os.getenv("SITE_PASSWORD", "")
 # 背景词管理密码（独立于 AI 问答密码，环境变量 SCROLLER_PASSWORD）
 # 留空则背景词管理功能将被禁用
 SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
+SCROLLER_TEXTS_PATH = os.getenv(
+    "SCROLLER_TEXTS_PATH",
+    str(PROJECT_ROOT / "website" / "data" / "scroller_texts.json"),
+)
 
 # 观察页管理密码（独立密码，环境变量 OB_PASSWORD）
 # 观察页用于管理员查看用户使用情况（按 IP 分组）
@@ -204,22 +208,15 @@ ROOM_MESSAGES_IGNORE_PATH = os.getenv(
     "ROOM_MESSAGES_IGNORE_PATH",
     str(PROJECT_ROOT / "website" / "data" / "room_messages_ignored_batches.json"),
 )
-ROOM_MESSAGES_IGNORE_GIT_SYNC = os.getenv("ROOM_MESSAGES_IGNORE_GIT_SYNC", "false").lower() not in (
-    "0",
-    "false",
-    "no",
-)
-ROOM_MESSAGES_IGNORE_GIT_REMOTE = os.getenv("ROOM_MESSAGES_IGNORE_GIT_REMOTE", "origin")
-ROOM_MESSAGES_IGNORE_GIT_BRANCH = os.getenv("ROOM_MESSAGES_IGNORE_GIT_BRANCH", "main")
-ROOM_MESSAGES_IGNORE_GIT_RETRIES = int(os.getenv("ROOM_MESSAGES_IGNORE_GIT_RETRIES", "2"))
-ROOM_MESSAGES_IGNORE_GIT_TIMEOUT_SECONDS = int(os.getenv("ROOM_MESSAGES_IGNORE_GIT_TIMEOUT_SECONDS", "30"))
+# Legacy direct-sync values are read only as rollout defaults for the shared
+# runtime-state transport. The room endpoint no longer contains Git sync or
+# whole-file peer overwrite code.
 ROOM_MESSAGES_IGNORE_DIRECT_SYNC = os.getenv("ROOM_MESSAGES_IGNORE_DIRECT_SYNC", "false").lower() not in (
     "0",
     "false",
     "no",
 )
 ROOM_MESSAGES_IGNORE_DIRECT_PEER = os.getenv("ROOM_MESSAGES_IGNORE_DIRECT_PEER", "")
-ROOM_MESSAGES_IGNORE_DIRECT_PATH = os.getenv("ROOM_MESSAGES_IGNORE_DIRECT_PATH", ROOM_MESSAGES_IGNORE_PATH)
 ROOM_MESSAGES_IGNORE_DIRECT_CONNECT_TIMEOUT_SECONDS = int(
     os.getenv("ROOM_MESSAGES_IGNORE_DIRECT_CONNECT_TIMEOUT_SECONDS", "3")
 )
@@ -279,6 +276,51 @@ MEMORIES_SUBMIT_ENABLED = os.getenv("MEMORIES_SUBMIT_ENABLED", "true").lower() n
 )
 MEMORIES_SUBMIT_MAX_PER_WINDOW = int(os.getenv("MEMORIES_SUBMIT_MAX_PER_WINDOW", "5"))
 MEMORIES_SUBMIT_WINDOW_SECONDS = int(os.getenv("MEMORIES_SUBMIT_WINDOW_SECONDS", "600"))
+
+# ── Versioned runtime state shared by Tencent and Aliyun ───────────────
+# Existing ROOM_MESSAGES_IGNORE_DIRECT_* values are accepted as migration
+# defaults so rollout does not require exposing or replacing SSH credentials.
+_shared_state_domain = os.getenv("SITE_DOMAIN", "")
+_shared_state_default_node = (
+    "aliyun" if ("xn--" in _shared_state_domain or "我爱你" in _shared_state_domain) else "tencent"
+)
+SHARED_STATE_NODE_ID = os.getenv("SHARED_STATE_NODE_ID", _shared_state_default_node).strip().lower()
+SHARED_STATE_IS_PRIMARY = os.getenv(
+    "SHARED_STATE_IS_PRIMARY",
+    "true" if SHARED_STATE_NODE_ID == "tencent" else "false",
+).lower() not in ("0", "false", "no")
+SHARED_STATE_SYNC_ENABLED = os.getenv(
+    "SHARED_STATE_SYNC_ENABLED",
+    "true" if ROOM_MESSAGES_IGNORE_DIRECT_SYNC else "false",
+).lower() not in ("0", "false", "no")
+SHARED_STATE_PEER = os.getenv("SHARED_STATE_PEER", ROOM_MESSAGES_IGNORE_DIRECT_PEER).strip()
+SHARED_STATE_CONNECT_TIMEOUT_SECONDS = int(
+    os.getenv("SHARED_STATE_CONNECT_TIMEOUT_SECONDS", str(ROOM_MESSAGES_IGNORE_DIRECT_CONNECT_TIMEOUT_SECONDS))
+)
+SHARED_STATE_TIMEOUT_SECONDS = int(
+    os.getenv("SHARED_STATE_TIMEOUT_SECONDS", str(max(ROOM_MESSAGES_IGNORE_DIRECT_TIMEOUT_SECONDS, 20)))
+)
+SHARED_STATE_RETRY_INTERVAL_SECONDS = int(os.getenv("SHARED_STATE_RETRY_INTERVAL_SECONDS", "60"))
+SHARED_STATE_REMOTE_ROOT = os.getenv("SHARED_STATE_REMOTE_ROOT", "/home/snh48_web")
+SHARED_STATE_REMOTE_PYTHON = os.getenv(
+    "SHARED_STATE_REMOTE_PYTHON", "/home/snh48_web/venv/bin/python"
+)
+SHARED_STATE_HISTORY_ROOT = os.getenv(
+    "SHARED_STATE_HISTORY_ROOT",
+    str(PROJECT_ROOT / "website" / "data" / "shared_state_history"),
+)
+SHARED_STATE_OUTBOX_ROOT = os.getenv(
+    "SHARED_STATE_OUTBOX_ROOT",
+    str(PROJECT_ROOT / "website" / "data" / "shared_state_outbox"),
+)
+ACTION_INBOX_ROOT = os.getenv(
+    "ACTION_INBOX_ROOT",
+    str(PROJECT_ROOT / "website" / "data" / "action_inbox"),
+)
+SHARED_STATE_NODE_LABELS = {
+    "tencent": "腾讯云 cjy.plus",
+    "aliyun": "阿里云 cjy.我爱你",
+}
 
 # 远程弹幕兜底读取。默认只硬拦截危险地址，域名白名单先用于灰度观察；
 # 确认历史弹幕源都覆盖后再开启 DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=true。

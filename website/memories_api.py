@@ -10,8 +10,6 @@ from __future__ import annotations
 import hmac
 import json
 import re
-import tempfile
-import threading
 import uuid
 from datetime import datetime
 from math import ceil
@@ -28,6 +26,7 @@ from website.rate_limiter import (
     check_memories_submit_limit,
     get_client_ip,
 )
+from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, register_mutator
 
 router = APIRouter(prefix="/api/memories", tags=["记忆页"])
 
@@ -87,9 +86,6 @@ SUSPICIOUS_TERMS = (
     "加qq",
     "代刷",
 )
-
-_store_lock = threading.Lock()
-
 
 class MemorySubmitRequest(BaseModel):
     memory_type: str
@@ -294,15 +290,21 @@ def submit_memory(
 
     check_memories_submit_limit(get_client_ip(request))
     record = _record_from_submission(req)
-    with _store_lock:
-        store = _load_store()
-        items = store.setdefault("items", [])
-        items.append(record)
-        _save_store(store)
+    try:
+        response = execute_mutation("memories", "submit", {"record": record})
+    except SharedStatePeerError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except SharedStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"记忆跨服务器保存失败：{exc}",
+        ) from exc
+    result = response.get("result") if isinstance(response.get("result"), dict) else {}
+    saved_record = result.get("record") if isinstance(result.get("record"), dict) else record
 
     return {
         "success": True,
-        "item": _public_record(record, include_private_id=False),
+        "item": _public_record(saved_record, include_private_id=False),
         "message": "记忆已记录。通过基础审核的内容会先展示为待确认；需要人工审核的内容会先隐藏。",
     }
 
@@ -317,15 +319,98 @@ def review_memory(req: MemoryReviewRequest, request: Request):
         actor = "fanclub"
         _verify_fanclub_request(request)
 
-    with _store_lock:
-        store = _load_store()
-        item = _find_item(store.get("items", []), req.id)
-        if item is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记忆不存在")
-        _apply_review_action(item, req.action, req.reason, actor)
-        _save_store(store)
-        updated = _public_record(item, include_private_id=(actor == "fanclub"))
+    try:
+        response = execute_mutation(
+            "memories",
+            "review",
+            {"id": req.id, "action": req.action, "reason": req.reason, "actor": actor},
+        )
+    except SharedStatePeerError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except SharedStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"记忆审核状态跨服务器保存失败：{exc}",
+        ) from exc
+    result = response.get("result") if isinstance(response.get("result"), dict) else {}
+    item = result.get("record") if isinstance(result.get("record"), dict) else None
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="记忆审核结果缺失")
+    updated = _public_record(item, include_private_id=(actor == "fanclub"))
     return {"success": True, "item": updated}
+
+
+def _submit_memory_mutator(
+    store: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    record = payload.get("record")
+    if not isinstance(record, dict) or not str(record.get("id") or ""):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="记忆记录格式无效")
+    items = store.setdefault("items", [])
+    if not isinstance(items, list):
+        items = []
+        store["items"] = items
+    existing = _find_item(items, str(record["id"]))
+    if existing is None:
+        items.append(record)
+        existing = record
+    return store, {"record": existing}
+
+
+def _review_memory_mutator(
+    store: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    item_id = str(payload.get("id") or "")
+    action = str(payload.get("action") or "")
+    actor = str(payload.get("actor") or "")
+    reason = str(payload.get("reason") or "")
+    if action not in VALID_REVIEW_ACTIONS or actor not in {"fanclub", "idol"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="记忆审核操作无效")
+    item = _find_item(store.get("items", []), item_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记忆不存在")
+    _apply_review_action(item, action, reason, actor)
+    return store, {"record": item}
+
+
+def _seed_merge_mutator(
+    store: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    generated = payload.get("items")
+    if not isinstance(generated, list):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="记忆种子格式无效")
+    items = store.get("items") if isinstance(store.get("items"), list) else []
+    by_id = {
+        str(item.get("id") or ""): item
+        for item in items
+        if isinstance(item, dict) and str(item.get("id") or "")
+    }
+    preserve_fields = {
+        "audit_status", "audit_reason", "visibility", "confirmation_status",
+        "confirmed_by", "confirmed_at", "created_at", "last_reviewed_by", "last_reviewed_at",
+    }
+    merged_count = 0
+    for candidate in generated:
+        if not isinstance(candidate, dict) or not str(candidate.get("id") or ""):
+            continue
+        item = dict(candidate)
+        previous = by_id.get(str(item["id"]))
+        if isinstance(previous, dict):
+            for field in preserve_fields:
+                if field in previous:
+                    item[field] = previous[field]
+        by_id[str(item["id"])] = item
+        merged_count += 1
+    merged = list(by_id.values())
+    merged.sort(key=_sort_key, reverse=True)
+    store["version"] = 1
+    store["items"] = merged
+    return store, {"merged": merged_count, "total": len(merged)}
+
+
+register_mutator("memories", "submit", _submit_memory_mutator)
+register_mutator("memories", "review", _review_memory_mutator)
+register_mutator("memories", "seed_merge", _seed_merge_mutator)
 
 
 def _verify_password_value(
@@ -387,22 +472,6 @@ def _load_store() -> dict[str, Any]:
     if not isinstance(items, list):
         doc["items"] = []
     return doc
-
-
-def _save_store(store: dict[str, Any]) -> None:
-    path = _data_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    store["version"] = 1
-    store["updated_at"] = _now()
-    content = json.dumps(store, ensure_ascii=False, indent=2)
-    try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=str(path.parent), delete=False) as f:
-            f.write(content)
-            f.write("\n")
-            tmp_name = f.name
-        Path(tmp_name).replace(path)
-    except OSError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="记忆数据保存失败") from exc
 
 
 def _load_items() -> list[dict[str, Any]]:

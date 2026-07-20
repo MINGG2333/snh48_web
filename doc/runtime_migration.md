@@ -16,14 +16,17 @@
 | `/home/snh48_web/.env` | 必须 | 生产密码、API key、监听、安全和数据路径配置 | 手动安全迁移，按 `.env.example` 补齐；不要输出明文 |
 | `/home/snh48_web/deploy/targets.local.json` | 需要时迁移 | 部署目标本地覆盖配置 | 手动迁移；不存在时按部署目标重新生成 |
 | `/home/snh48_web/website/data/manual_events.csv` | 必须 | 时光轴手动事件运行数据 | 腾讯云为源；阿里云由 `sync-from-tencent.sh core` 拉取；新服务器迁移时直接复制 |
-| `/home/snh48_web/website/data/memories/memories.json` | 必须 | 记忆页运行数据 | 腾讯云为源；阿里云由 `sync-from-tencent.sh core` 拉取；新服务器迁移时直接复制 |
-| `/home/snh48_web/website/data/room_messages_ignored_batches.json` | 必须 | 房间消息页“忽略未回礼物批次”状态 | 不由 Git 跟踪；两台线上服务器通过 `ROOM_MESSAGES_IGNORE_DIRECT_*` 直连同步；迁移前分别备份两端并以 `updated_at` 较新的文件为准 |
-| `/home/snh48_web/website/data/scroller_texts.json` | 必须 | 首页背景词内容 | 当前由 Git 跟踪；迁移时仍建议核对线上文件是否有未提交修改 |
+| `/home/snh48_web/website/data/memories/memories.json` | 必须 | 记忆页运行数据 | 非 Git 版本化共享状态；迁移时以腾讯云权威 revision 为当前值，普通 `core` 拉取不覆盖 |
+| `/home/snh48_web/website/data/room_messages_ignored_batches.json` | 必须 | 房间消息页“忽略未回礼物批次”状态 | 非 Git 版本化共享状态；迁移时保留腾讯云权威 revision，不按 `updated_at` 猜测并互相覆盖 |
+| `/home/snh48_web/website/data/scroller_texts.json` | 必须 | 首页背景词内容 | 非 Git 版本化共享状态；从腾讯云权威节点迁移 |
+| `/home/snh48_web/website/data/shared_state_history/` | 必须 | 四类共享状态的不可变 gzip 历史和幂等回执 | 安全复制整个目录；不得只迁当前 JSON 后丢弃版本链 |
+| `/home/snh48_web/website/data/shared_state_outbox/` | 必须 | 尚未复制到对端的持久待发送项 | 停服务后复制；恢复后让网站线程继续重试，不要删除积压 |
+| `/home/snh48_web/website/data/action_inbox/` | 必须 | 投诉、邮箱请求和处理状态的双服务器可靠待处理箱 | 两端事件取并集；同 event ID 内容必须一致，不能整目录 `--delete` 覆盖 |
 | `/home/snh48_web/website/data/balance_log.csv` | 可选 | DeepSeek 余额查询历史 | 需要保留审计历史时复制；丢失不影响网站运行 |
 | `/home/snh48_web/website/data/ip_clients.json` | 可选 | IP 到匿名客户端 ID 的后台观察映射 | 需要保留观察页连续性时复制；丢失后会重新生成 |
 | `/home/snh48_web/website/data/ip_daily_quota.json` | 可选 | AI 问答每日 IP 配额计数 | 需要保持当天限额状态时复制；丢失后当天计数重置 |
 | `/home/snh48_web/website/data/interaction_logs/` | 可选 | 用户行为日志和通知中心归档 | 需要保留运营记录时复制 |
-| `/home/snh48_web/website/data/complaints/` | 可选 | 用户反馈/投诉记录 | 建议迁移，除非明确放弃历史记录 |
+| `/home/snh48_web/website/data/complaints/` | 可选 | 本节点投诉兼容日志 | 权威待办已在 `action_inbox/`；需保留旧人类可读历史时迁移 |
 | `/home/snh48_web/nohup.out` | 不迁移 | 旧启动残留日志 | 可忽略 |
 
 ## fan-hub 数据依赖
@@ -40,7 +43,7 @@
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 房间消息页分片数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 房间语音转录文本 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 密码保护的成员房间上麦回放发布包；包含兼容版/原始音质版 M4A、元数据和同期消息，不含原始 FLV | `sync-from-tencent.sh dynamic` |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 计分礼物页派生小数据 | `sync-from-tencent.sh dynamic` |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 计分礼物页派生小数据；其中 `live_business_fulfillments.json` 是版本化共享状态 | 其他文件由 `sync-from-tencent.sh dynamic` 拉取；可写业务状态和锁文件明确排除 |
 | `/home/snh48-fan-hub/flip_chat.html` | 密码保护的翻牌记录 HTML | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |
 
@@ -61,5 +64,6 @@
 1. `python3 deploy/deploy.py check-env <target>` 确认必要环境变量存在。
 2. `python3 -m compileall -q website` 确认代码可导入。
 3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/gift-replies`、`/room-messages`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、`/memories`。
-4. 核对 `manual_events.csv`、`memories.json` 和 `room_messages_ignored_batches.json` 在新服务器存在且不是空文件覆盖。
-5. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。
+4. 核对 `manual_events.csv`、四类当前共享状态、`shared_state_history/`、`shared_state_outbox/` 和 `action_inbox/` 存在且不是空目录覆盖。
+5. 在新的腾讯云权威节点运行 `script/shared_state_history.py list <resource>`，确认当前 revision 可在历史中找到；在 `/ob` 核对待处理箱来源标签。
+6. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。

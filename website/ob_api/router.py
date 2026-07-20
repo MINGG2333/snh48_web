@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from website import config as cfg
 from website.logging_setup import LOG_ROOT
 from website.rate_limiter import check_ob_login_limit, get_client_ip
+from website.action_inbox import InboxError, list_requests, record_status
 
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
 
@@ -48,6 +49,12 @@ def _save_read_notifs(event_ids: list[str]):
 
 class MarkReadRequest(BaseModel):
     event_id: str
+
+
+class InboxStatusRequest(BaseModel):
+    event_id: str
+    status: str
+    note: str = ""
 
 
 async def verify_ob_password(
@@ -109,13 +116,14 @@ def get_ob_data(_=Depends(verify_ob_password)):
         ]
       }
     """
+    inbox = list_requests()
     if not IP_CLIENTS_FILE.exists():
-        return {"groups": []}
+        return {"groups": [], "inbox": inbox}
 
     try:
         ip_clients = json.loads(IP_CLIENTS_FILE.read_text())
     except Exception:
-        return {"groups": []}
+        return {"groups": [], "inbox": inbox}
 
     groups = []
     group_id = 0
@@ -185,7 +193,7 @@ def get_ob_data(_=Depends(verify_ob_password)):
     # Sort groups by newest event first
     groups.sort(key=lambda g: g["events"][0]["time_str"] if g["events"] else "", reverse=True)
 
-    return {"groups": groups}
+    return {"groups": groups, "inbox": inbox}
 
 
 @router.post("/mark-read")
@@ -196,6 +204,20 @@ def mark_notification_read(req: MarkReadRequest, _=Depends(verify_ob_password)):
         read_ids.append(req.event_id)
         _save_read_notifs(read_ids)
     return {"success": True}
+
+
+@router.post("/inbox/status")
+def update_inbox_status(req: InboxStatusRequest, _=Depends(verify_ob_password)):
+    """Append an immutable processing-status event for one shared request."""
+    try:
+        result = record_status(req.event_id.strip(), req.status.strip(), note=req.note.strip())
+    except InboxError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "event": result["event"],
+        "replication_pending": not result["replicated"],
+    }
 
 
 def _sort_events(events: list[dict]):

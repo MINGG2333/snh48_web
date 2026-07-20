@@ -447,6 +447,10 @@ async def startup():
     session_dir = get_session_dir()
     print(f"✓ Interaction log session started: {session_dir}")
 
+    from website.shared_runtime_state import start_replication_worker
+    start_replication_worker()
+    print(f"✓ Shared runtime-state replication worker started as {cfg.SHARED_STATE_NODE_ID}.")
+
     if cfg.QA_WARMUP_ON_STARTUP:
         try:
             from website.qa_api.router import warmup_qa_engine_async

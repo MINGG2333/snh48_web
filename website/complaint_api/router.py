@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
 
 from website.rate_limiter import check_complaint_limit, get_client_ip
+from website.action_inbox import InboxError, record_request
 
 router = APIRouter(prefix="/api/complaint", tags=["投诉举报"])
 
@@ -109,17 +110,31 @@ def submit_complaint(req: ComplaintRequest, request: Request):
         "status": "pending",  # pending | processing | resolved | rejected
     }
 
+    # Canonical cross-server record. One immutable file per ticket avoids the
+    # concurrent append/overwrite problems of synchronising monthly JSONL.
+    try:
+        inbox_result = record_request(
+            "complaint",
+            record,
+            event_id=ticket_id,
+            created_at=now,
+        )
+    except (InboxError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="投诉提交保存失败",
+        ) from exc
+
     # Write to daily complaint log (JSONL — machine readable)
     month_str = datetime.now().strftime('%Y%m')
     log_file = COMPLAINT_DIR / f"complaints_{month_str}.jsonl"
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except OSError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"投诉提交失败: {e}",
-        )
+    except OSError:
+        # The immutable action-inbox event above is authoritative. Keep the
+        # monthly JSONL only as a compatibility view.
+        pass
 
     # Write to human-readable Markdown file (MD — human readable)
     md_file = COMPLAINT_DIR / f"complaints_{month_str}.md"
@@ -156,4 +171,7 @@ def submit_complaint(req: ComplaintRequest, request: Request):
         "success": True,
         "ticket_id": ticket_id,
         "message": "投诉已提交成功，我们将尽快处理。",
+        "origin_node": inbox_result["event"]["origin_node"],
+        "origin_label": inbox_result["event"]["origin_label"],
+        "replication_pending": not inbox_result["replicated"],
     }

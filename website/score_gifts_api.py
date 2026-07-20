@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import os
 import re
 import threading
 from io import BytesIO
@@ -24,6 +23,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 
 from website import config as cfg
 from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, register_mutator
 
 router = APIRouter(prefix="/api/score-gifts", tags=["计分礼物页"])
 
@@ -211,6 +211,34 @@ async def update_score_gift_business_review(
     if not item_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少记录 ID")
 
+    try:
+        response = execute_mutation("score_business", "business_review", payload)
+    except SharedStatePeerError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except SharedStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"业务核实状态跨服务器保存失败：{exc}",
+        ) from exc
+    result = response.get("result") if isinstance(response.get("result"), dict) else {}
+    return {
+        "ok": True,
+        "item_id": str(result.get("item_id") or item_id),
+        "record": result.get("record") or {},
+        "fields": result.get("fields") or {},
+    }
+
+
+def _business_review_mutator(
+    state: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    action = _clean_text(payload.get("action"))
+    item_id = _clean_text(payload.get("item_id"))
+    if action not in {"verify", "override"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
+    if not item_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少记录 ID")
+
     doc = _load_dataset()
     item = next((row for row in _normalise_items(doc.get("items", [])) if row["id"] == item_id), None)
     if not item:
@@ -218,8 +246,6 @@ async def update_score_gift_business_review(
     if item["source"] != "live":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="只有直播计分礼物支持业务核实")
 
-    state_path = _business_state_path()
-    state = _load_business_state(state_path)
     records = state.setdefault("records", {})
     if not isinstance(records, dict):
         records = {}
@@ -269,8 +295,15 @@ async def update_score_gift_business_review(
     record["item_id"] = item_id
     record["input_signature"] = signature
     records[item_id] = record
-    _save_business_state(state_path, state)
-    return {"ok": True, "item_id": item_id, "record": record, "fields": _business_fields_from_record(record)}
+    result = {
+        "item_id": item_id,
+        "record": record,
+        "fields": _business_fields_from_record(record),
+    }
+    return state, result
+
+
+register_mutator("score_business", "business_review", _business_review_mutator)
 
 
 def _data_path() -> Path:
@@ -867,19 +900,6 @@ def _load_business_state(path: Path) -> dict[str, Any]:
     if not isinstance(data.get("records"), dict):
         data["records"] = {}
     return data
-
-
-def _save_business_state(path: Path, state_doc: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    state_doc["version"] = _to_int(state_doc.get("version"), 1)
-    state_doc["updated_at"] = _bj_now()
-    state_doc.setdefault("records", {})
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        tmp.write_text(json.dumps(state_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        os.replace(tmp, path)
-    except OSError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="业务核实状态写入失败") from exc
 
 
 def _record_from_item(item: dict[str, Any]) -> dict[str, Any]:

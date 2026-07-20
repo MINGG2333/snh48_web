@@ -20,13 +20,15 @@
 | 弹幕远程兜底保护 | `danmu_local_path` 优先；远程 `danmu_url` 成功后写本地 URL 缓存；硬拦截内网/localhost/非 http(s)/非标准端口，并限制响应大小 | 降低 SSRF 和大响应拖垮风险，同时保留历史弹幕可用性 | 域名白名单默认只告警不强制，需盘点历史源后再收紧 |
 | 可信代理 IP | 后端只在请求来源命中 `TRUSTED_PROXY_PEERS` 时采信 `X-Real-IP` / `X-Forwarded-For`，默认仅信任本机 | 降低客户端或同内网机器伪造 IP 绕过限速的风险 | Nginx 统一设置 `X-Forwarded-For $remote_addr`；多层反代需显式配置真实代理 IP |
 | QA 访问控制 | 提问、异步提问、异步结果轮询均要求 `SITE_PASSWORD`；轮询还绑定 `X-Client-Id` 和一次性 `poll_token` | 防止知道 task_id 的人直接读取异步结果 | 前端自动保存并发送 `poll_token`，用户不需要记忆 |
-| 记忆页访问控制 | `/api/memories/*` 普通访问/提交要求 `MEMORIES_VIEW_PASSWORD`；应援会模式和本人模式使用独立密码；普通数据接口不返回平台 ID | 降低小房间、半私密互动和后台身份标识误公开风险 | 真实密码只放服务器 `.env`；阿里云作为副本展示时可设置 `MEMORIES_SUBMIT_ENABLED=false` |
+| 记忆页访问控制 | `/api/memories/*` 普通访问/提交要求 `MEMORIES_VIEW_PASSWORD`；应援会模式和本人模式使用独立密码；普通数据接口不返回平台 ID | 降低小房间、半私密互动和后台身份标识误公开风险 | 真实密码只放服务器 `.env`；两端提交都由腾讯云权威节点串行提交版本 |
+| 可写运行状态防覆盖 | 首页背景词、房间忽略、计分业务核实和记忆页只向腾讯云提交操作；使用 `flock`、原子替换、幂等 operation ID、revision、不可变 gzip 快照和持久 outbox | 防止两个节点互相覆盖整份 JSON、网络超时后重复执行或旧 outbox 回滚新版本 | 当前状态、历史和 outbox 都不进 Git；恢复只能在腾讯云执行；巡检见 `doc/shared_runtime_state.md` |
+| 可靠待处理箱与来源审计 | 投诉、QA 邮箱请求和处理状态采用一事件一文件，权限 `0600`；每条请求记录腾讯云/阿里云来源，`/ob` 需密码后展示 | 避免并发 JSONL 同步丢请求，同时让管理员区分请求入口 | 事件含邮箱和投诉正文，不得进 Git、静态目录、公开日志或诊断输出；旧 Markdown/JSONL 仅作兼容视图 |
 | 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；只接受 `segment_000001.m4a` / `segment_000001_original.m4a` 形式，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`，真实密码只放 `.env` |
 | 翻牌记录访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD`，未设置时复用 `OB_PASSWORD`；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；HTML、MP3 和 MP4 都鉴权，媒体只通过固定文件名和 HTTP Range API 提供 | 避免个人翻牌内容和本地音视频被公共静态目录、搜索引擎或直链获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；不得把 `flip_data/` 挂到 `/static`，真实密码只放 `.env` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
-| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留 1 分钟内同步延迟；动态数据变化时不再反复同步低频目录 | 不要恢复腾讯云侧 15 秒常驻同步循环；`room_voice_replays/` 只同步派生的兼容版/原始音质版 M4A、元数据和同期消息，绝不扩大到原始 FLV、流 URL或整个 `room_record/`；翻牌页只同步 `flip_chat.html`、`flip_data/audio/` 和 `flip_data/video/`，不得扩大到 `flip_data/metadata/`、Token 或配置；新增同步目录必须更新拉取脚本和检查文档 |
+| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才从腾讯云拉取对应分组，且一次同步内复用同一条 SSH 连接，SSH 设置非交互、连接超时和 keepalive | 降低腾讯云主动对外 SSH/rsync 行为被云厂商风控误判或放大的风险，同时保留只读派生数据 1 分钟内同步延迟 | 不要恢复腾讯云侧 15 秒常驻同步循环；普通同步必须排除四个可写状态，计分目录明确排除 `live_business_fulfillments.json` 和 `.*.lock`；不得把 history、outbox、action inbox 用 `--delete` 整目录覆盖；其他媒体和敏感范围保持原最小同步边界 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |
@@ -59,6 +61,10 @@ DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=false
 MEMORIES_VIEW_PASSWORD=独立记忆页访问密码
 MEMORIES_FANCLUB_PASSWORD=独立应援会模式密码
 MEMORIES_IDOL_PASSWORD=独立本人模式密码
+SHARED_STATE_SYNC_ENABLED=true
+SHARED_STATE_NODE_ID=本机 tencent 或 aliyun
+SHARED_STATE_IS_PRIMARY=仅腾讯云 true
+SHARED_STATE_PEER=root@另一台服务器IP
 ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码
 FLIP_CARDS_PASSWORD=独立翻牌页密码或留空复用 OB_PASSWORD
 FLIP_CARDS_HTML_PATH=/home/snh48-fan-hub/flip_chat.html
@@ -155,5 +161,7 @@ git add website/static/js-dist/ website/static/css-dist/
 - Nginx 安全头目前在 server 块和多个 location 中重复声明，以规避 `add_header` 继承问题；修改 CSP/安全头时必须同步所有重复位置，长期可改为 Nginx include 片段降低维护风险。
 - 如果未来接入 CDN、CLB 或 Docker 反向代理，必须重新确认真实连接后端的代理 IP，并只把这些 IP/CIDR 加到 `TRUSTED_PROXY_PEERS`。
 - 多数滑动窗口限速为进程内存状态，服务重启会重置；IP 日配额为持久化 JSON。
+- 双服务器复制复用现有 root SSH 信任和 IP 白名单；应用层入口只允许受限的 state/inbox 子命令，但 SSH key 本身仍有较高权限。后续若调整服务器权限，应迁移到专用低权限账号和 forced-command，而不是扩大 root key 分发。
+- 状态历史使用完整 gzip 快照而不是增量 diff，恢复更直接但会持续占用磁盘；日常检查需要观察目录大小，归档或保留策略必须先确认不能破坏当前 revision 和审计需求。
 - 前端混淆不是访问控制，真正的保护仍依赖后端鉴权、限速和不泄露敏感数据。
 - 本文件不能证明线上已部署，线上状态必须按验证清单复核。

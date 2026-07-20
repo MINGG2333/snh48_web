@@ -33,7 +33,9 @@
 - 网站运行依赖 `/home/snh48-fan-hub` 的行程、回放、成员房间上麦发布包、翻牌页产物、直播封面和图片代理数据；修改 `/timeline`、直播/上麦回放、翻牌页、图片代理或相关环境变量前，先读本项目 profile 的数据工程段落、`snh48-fan-hub/schedule_record/网站开发对接说明.md` 和对应数据契约。
 - `snh48-fan-hub` 的腾讯云实例是全量代码和数据生成源；阿里云只接收网站需要的最小数据集。不要把阿里云当作数据生成环境，也不要从网站仓库覆盖 fan-hub 运行数据。
 - 腾讯云到阿里云的网站必要运行数据自动同步方式，以 `doc/codex/project_profile.md` 的“数据生成工程依赖/数据同步脚本”为准；当前应由阿里云 cron 主动从腾讯云拉取，不要恢复腾讯云侧 15 秒常驻同步循环或自动推送任务。改同步方向、频率、路径或目标服务器前，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md` 和 `doc/security/security_baseline.md`，并验证新旧 cron、日志和进程状态。
-- 记忆页运行数据 `website/data/memories/memories.json` 不由 Git 跟踪；当前按 `core` 组从腾讯云同步到阿里云。生产上腾讯云作为写入源，阿里云作为副本展示；如果要让阿里云也开放提交，必须先设计双向合并或统一写入 API。
+- 首页背景词、房间消息忽略状态、计分礼物业务核实状态和记忆页数据都是非 Git 运行状态。两个域名都可接受操作，但由腾讯云统一串行提交版本，随后复制到阿里云；不得恢复 Git 提交或两个节点互相覆盖整份文件。实现、配置、恢复和巡检见 `doc/shared_runtime_state.md`。
+- 投诉和 QA 邮箱请求进入 `website/data/action_inbox/events/` 的不可变事件待处理箱，并记录 `origin_node` / `origin_label`；观察页必须明确展示请求来自腾讯云还是阿里云。旧 JSONL/Markdown 仅作兼容视图，不是跨服务器权威数据源。
+- `interaction_logs/`、`ip_clients.json`、`read_notifications.json`、`ip_daily_quota.json`、`balance_log.csv` 等日志、观测、已读和限额状态保持服务器本地，不纳入业务状态复制；不能用双向整目录同步合并这些文件。
 - 停用阿里云、替换服务器或新增运行数据同步目标时，先读 `doc/codex/project_profile.md` 的云安全与登录白名单记录，并提醒用户删除腾讯云主机安全旧白名单 IP 或新增新服务器 IP。
 - 服务器上的运行数据文件不要删除或覆盖，除非用户明确要求并确认影响。
 

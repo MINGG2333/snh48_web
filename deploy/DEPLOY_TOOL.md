@@ -156,7 +156,7 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 python3 deploy/deploy.py --config deploy/targets.local.json sync-data tencent huawei
 ```
 
-这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。线上腾讯云到阿里云的自动数据同步不使用该推送入口，而是在阿里云 cron 中运行 `deploy/sync-from-tencent-if-changed.sh`，由阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹，有变化时调用 `deploy/sync-from-tencent.sh` 主动拉取对应分组。`deploy/sync-to-aliyun.sh` 只作为腾讯云临时手动推送兜底。`website/data/manual_events.csv` 不由 Git 跟踪，作为运行数据同步；仓库里的 `website/data/manual_events.example.csv` 只用于说明字段格式。`website/data/room_messages_ignored_batches.json` 也是运行状态文件，不由 Git 跟踪，格式示例见 `website/data/room_messages_ignored_batches.example.json`；完整非 Git 迁移清单见 `doc/runtime_migration.md`。
+这个命令会让源服务器执行 `rsync` 到目标服务器，因此要求源服务器能 SSH 登录目标服务器。线上腾讯云到阿里云的自动数据同步不使用该推送入口，而是在阿里云 cron 中运行 `deploy/sync-from-tencent-if-changed.sh`，由阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹，有变化时调用 `deploy/sync-from-tencent.sh` 主动拉取对应分组。`deploy/sync-to-aliyun.sh` 只作为腾讯云临时手动推送兜底。`website/data/manual_events.csv` 不由 Git 跟踪，仍作为普通运行数据同步。首页背景词、房间忽略、计分业务核实和记忆页采用 `doc/shared_runtime_state.md` 的版本化权威提交；四个当前状态文件不由普通 rsync 覆盖。计分目录同步和 `deploy.py sync-data` 都排除 `live_business_fulfillments.json`、`.*.lock`。history、outbox 和 action inbox 也不得用 `--delete` 整目录同步；完整非 Git 迁移清单见 `doc/runtime_migration.md`。
 
 只预热目标站点图片代理缓存：
 

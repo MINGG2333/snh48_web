@@ -34,6 +34,7 @@ from website.rate_limiter import (
     reset_password_rate_limit,
     unregister_task,
 )
+from website.action_inbox import InboxError, deterministic_request_id, record_request
 
 # ── Import transcript_analyze (add parent to path) ──
 _KB_QA_DIR = Path(__file__).resolve().parent.parent.parent / "transcript_analyze"
@@ -625,9 +626,26 @@ def archive_email(req: ArchiveEmailRequest, request: Request):
     if req.question:
         record["question"] = req.question
 
+    inbox_event_id = deterministic_request_id("EMAIL", record)
+    try:
+        inbox_result = record_request(
+            "email_request",
+            record,
+            event_id=inbox_event_id,
+            created_at=timestamp,
+        )
+    except (InboxError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="邮箱请求保存失败",
+        ) from exc
+
     # 1. 写入 JSONL（机器可读）
-    with open(email_log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        with open(email_log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
     # 2. 写入 Markdown（人类可读）
     task_type_map = {
@@ -662,14 +680,16 @@ def archive_email(req: ArchiveEmailRequest, request: Request):
     md_entry += "\n"
 
     existing = ""
-    if email_md_path.exists():
-        existing = email_md_path.read_text(encoding="utf-8")
-
-    with open(email_md_path, "w", encoding="utf-8") as f:
-        f.write("# 📬 用户邮箱请求记录\n\n")
-        f.write("> 按时间倒序排列，最新的请求在最前面。\n\n")
-        f.write(md_entry)
-        f.write(existing)
+    try:
+        if email_md_path.exists():
+            existing = email_md_path.read_text(encoding="utf-8")
+        with open(email_md_path, "w", encoding="utf-8") as f:
+            f.write("# 📬 用户邮箱请求记录\n\n")
+            f.write("> 按时间倒序排列，最新的请求在最前面。\n\n")
+            f.write(md_entry)
+            f.write(existing)
+    except OSError:
+        pass
 
     # 3. 写入统一通知中心
     # 通知中心汇总所有需要管理员关注的事件，包含处理状态跟踪
@@ -694,29 +714,41 @@ def archive_email(req: ArchiveEmailRequest, request: Request):
     )
 
     existing_notification = ""
-    if notification_path.exists():
-        existing_notification = notification_path.read_text(encoding="utf-8")
-
-    with open(notification_path, "w", encoding="utf-8") as f:
-        f.write("# 🔔 通知中心\n\n")
-        f.write("> 所有需要管理员关注的事件汇总。按时间倒序排列，请及时处理。\n\n")
-        f.write("## 待处理事件\n\n")
-        f.write(notification_entry)
-        f.write(existing_notification)
+    try:
+        if notification_path.exists():
+            existing_notification = notification_path.read_text(encoding="utf-8")
+        with open(notification_path, "w", encoding="utf-8") as f:
+            f.write("# 🔔 通知中心\n\n")
+            f.write("> 所有需要管理员关注的事件汇总。按时间倒序排列，请及时处理。\n\n")
+            f.write("## 待处理事件\n\n")
+            f.write(notification_entry)
+            f.write(existing_notification)
+    except OSError:
+        pass
 
     # Also log via standard interaction log
-    log_interaction(
-        client_id="email_collection",
-        question=f"email_for_task_{req.task_id}",
-        answer="",
-        citations=[],
-        video_results=[],
-        stats={},
-        archive_path=archive_path,
-        extra={"type": "email_collection", "task_id": req.task_id, "email": req.email, "question": req.question or ""},
-    )
+    try:
+        log_interaction(
+            client_id="email_collection",
+            question=f"email_for_task_{req.task_id}",
+            answer="",
+            citations=[],
+            video_results=[],
+            stats={},
+            archive_path=archive_path,
+            extra={"type": "email_collection", "task_id": req.task_id, "email": req.email, "question": req.question or ""},
+        )
+    except OSError:
+        pass
 
-    return {"success": True, "message": "邮箱已记录"}
+    return {
+        "success": True,
+        "message": "邮箱已记录",
+        "inbox_event_id": inbox_event_id,
+        "origin_node": inbox_result["event"]["origin_node"],
+        "origin_label": inbox_result["event"]["origin_label"],
+        "replication_pending": not inbox_result["replicated"],
+    }
 
 
 # ── Build KB Endpoint ──────────────────────────────────────────────────────
