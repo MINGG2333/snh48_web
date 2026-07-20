@@ -93,6 +93,14 @@
     .player-box { padding: 14px; background: linear-gradient(120deg, #382d3a, #5d4057); border-radius: 14px; color: white; }
     audio { width: 100%; margin-top: 10px; }
     .player-info { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 13px; opacity: .9; }
+    .playback-mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 11px; }
+    .playback-mode-row label { font-size: 13px; font-weight: 700; }
+    .playback-mode-row select {
+      min-width: 150px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.3);
+      border-radius: 9px; background: rgba(255,255,255,.13); color: white;
+    }
+    .playback-mode-row option { color: var(--ink); background: white; }
+    .playback-mode-note { flex: 1 1 260px; color: rgba(255,255,255,.76); font-size: 12px; line-height: 1.5; }
     .participants { color: var(--muted); font-size: 13px; margin-top: 12px; }
     .messages-head {
       position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between;
@@ -168,6 +176,14 @@
                 <span id="segmentLabel">音频分段</span>
                 <span id="timelineLabel">00:00 / 00:00</span>
               </div>
+              <div class="playback-mode-row">
+                <label for="playbackMode">播放模式</label>
+                <select id="playbackMode">
+                  <option value="compatible">兼容播放（推荐）</option>
+                  <option value="original">原始音质</option>
+                </select>
+                <span id="playbackModeNote" class="playback-mode-note"></span>
+              </div>
               <audio id="audioPlayer" controls preload="metadata"></audio>
             </div>
             <div id="participants" class="participants"></div>
@@ -197,6 +213,8 @@
     const detailEmpty = document.getElementById("detailEmpty");
     const detailContent = document.getElementById("detailContent");
     const audioPlayer = document.getElementById("audioPlayer");
+    const playbackModeSelect = document.getElementById("playbackMode");
+    const playbackModeNote = document.getElementById("playbackModeNote");
     const messagesBox = document.getElementById("messages");
 
     let sessions = [];
@@ -205,6 +223,8 @@
     let currentMessages = [];
     let currentSegmentIndex = -1;
     let currentMessageIndex = -1;
+    let playbackMode = "compatible";
+    let segmentLoadToken = 0;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -340,6 +360,37 @@
       return addText(document.getElementById("stats"), "span", "stat" + (warning ? " warning" : ""), text);
     }
 
+    function segmentVariant(segment, mode) {
+      const variants = segment && segment.variants && typeof segment.variants === "object"
+        ? segment.variants : {};
+      const selected = variants[mode];
+      if (selected && selected.media_url) return selected;
+      if (mode === "compatible" && segment && segment.media_url) {
+        return { media_url: segment.media_url, label: "兼容播放" };
+      }
+      return null;
+    }
+
+    function sessionSupportsMode(mode) {
+      const segments = currentSession && Array.isArray(currentSession.segments)
+        ? currentSession.segments : [];
+      return segments.length > 0 && segments.every(segment => Boolean(segmentVariant(segment, mode)));
+    }
+
+    function updatePlaybackModeControl() {
+      const originalOption = playbackModeSelect.querySelector('option[value="original"]');
+      const originalAvailable = sessionSupportsMode("original");
+      originalOption.disabled = !originalAvailable;
+      if (playbackMode === "original" && !originalAvailable) playbackMode = "compatible";
+      playbackModeSelect.value = playbackMode;
+      playbackModeNote.textContent = playbackMode === "original"
+        ? "保留口袋48原始编码，不做二次有损转码；部分设备可能仍然只有左耳有声。"
+        : "AAC-LC 单声道兼容版，耳机会从左右两边播放。";
+      playbackModeSelect.title = originalAvailable
+        ? "可在兼容播放与原始音质之间切换"
+        : "这场旧回放暂时只有兼容播放版本";
+    }
+
     function renderDetail() {
       detailEmpty.hidden = true;
       detailContent.hidden = false;
@@ -361,6 +412,7 @@
         ? "麦上参与者记录：" + names.join("、")
         : "接口未返回可识别的麦上参与者；已保留房间混音流。";
       renderMessages();
+      updatePlaybackModeControl();
       if ((currentSession.segments || []).length) loadSegment(0, false, 0);
       else {
         audioPlayer.removeAttribute("src");
@@ -377,6 +429,7 @@
         currentMessages = Array.isArray(body.messages) ? body.messages : [];
         currentSegmentIndex = -1;
         currentMessageIndex = -1;
+        playbackMode = currentSession.default_playback_mode === "original" ? "original" : "compatible";
         renderDetail();
         track("admin_filter", { action: "load_room_voice_session", session_id: sessionId, message_count: currentMessages.length });
       } catch (error) {
@@ -394,10 +447,15 @@
       if (index < 0 || index >= segments.length) return;
       currentSegmentIndex = index;
       const segment = segments[index];
-      audioPlayer.src = segment.media_url;
-      document.getElementById("segmentLabel").textContent = "音频分段 " + (index + 1) + " / " + segments.length;
+      const variant = segmentVariant(segment, playbackMode) || segmentVariant(segment, "compatible");
+      if (!variant) return;
+      const loadToken = ++segmentLoadToken;
+      audioPlayer.src = variant.media_url;
+      document.getElementById("segmentLabel").textContent = "音频分段 " + (index + 1) + " / "
+        + segments.length + " · " + (variant.label || (playbackMode === "original" ? "原始音质" : "兼容播放"));
       const ready = () => {
         audioPlayer.removeEventListener("loadedmetadata", ready);
+        if (loadToken !== segmentLoadToken) return;
         if (Number.isFinite(seekSeconds) && seekSeconds > 0) {
           audioPlayer.currentTime = Math.min(seekSeconds, Math.max(0, audioPlayer.duration || seekSeconds));
         }
@@ -475,6 +533,20 @@
     roomFilter.addEventListener("change", () => {
       renderSessions();
       track("admin_filter", { action: "room_type", room_type: roomFilter.value });
+    });
+    playbackModeSelect.addEventListener("change", () => {
+      const requestedMode = playbackModeSelect.value === "original" ? "original" : "compatible";
+      if (requestedMode === playbackMode || !sessionSupportsMode(requestedMode)) {
+        updatePlaybackModeControl();
+        return;
+      }
+      const segmentIndex = currentSegmentIndex;
+      const seekSeconds = Number(audioPlayer.currentTime || 0);
+      const autoplay = !audioPlayer.paused && !audioPlayer.ended;
+      playbackMode = requestedMode;
+      updatePlaybackModeControl();
+      if (segmentIndex >= 0) loadSegment(segmentIndex, autoplay, seekSeconds);
+      track("admin_filter", { action: "room_voice_playback_mode", playback_mode: playbackMode });
     });
     audioPlayer.addEventListener("timeupdate", updateTimeline);
     audioPlayer.addEventListener("ended", () => {

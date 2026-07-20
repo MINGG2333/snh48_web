@@ -39,7 +39,7 @@
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 礼物回复页派生小数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 房间消息页分片数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 房间语音转录文本 | `sync-from-tencent.sh dynamic` |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 密码保护的成员房间上麦回放发布包 | `sync-from-tencent.sh dynamic` |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 密码保护的成员房间上麦回放发布包；包含兼容版/原始音质版 M4A、元数据和同期消息，不含原始 FLV | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 计分礼物页派生小数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_chat.html` | 密码保护的翻牌记录 HTML | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |

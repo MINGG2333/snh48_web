@@ -24,7 +24,7 @@ AUTH_COOKIE = "room_voice_replays_auth"
 AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
 _COOKIE_SECRET = os.urandom(32)
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
-SEGMENT_NAME_RE = re.compile(r"^segment_[0-9]{6}\.m4a$")
+SEGMENT_NAME_RE = re.compile(r"^segment_[0-9]{6}(?:_original)?\.m4a$")
 RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
@@ -168,10 +168,42 @@ async def session_detail(
         filename = Path(str(item.get("filename") or "")).name
         if not SEGMENT_NAME_RE.fullmatch(filename):
             continue
+        variants = {}
+        source_variants = item.get("variants") if isinstance(item.get("variants"), dict) else {}
+        for mode in ("compatible", "original"):
+            variant = source_variants.get(mode)
+            if not isinstance(variant, dict):
+                continue
+            variant_filename = Path(str(variant.get("filename") or "")).name
+            if not SEGMENT_NAME_RE.fullmatch(variant_filename):
+                continue
+            variants[mode] = {
+                **variant,
+                "media_url": (
+                    f"/api/room-voice-replays/sessions/{safe_id}/segments/"
+                    f"{variant_filename}"
+                ),
+            }
+        if "compatible" not in variants:
+            variants["compatible"] = {
+                "label": "兼容播放",
+                "filename": item.get("filename", ""),
+                "duration_seconds": item.get("duration_seconds", 0),
+                "audio_codec": item.get("audio_codec", ""),
+                "audio_profile": item.get("audio_profile", ""),
+                "channels": item.get("channels", 0),
+                "channel_layout": item.get("channel_layout", ""),
+                "size_bytes": item.get("size_bytes", 0),
+                "source_preserving": False,
+                "media_url": (
+                    f"/api/room-voice-replays/sessions/{safe_id}/segments/{filename}"
+                ),
+            }
         segments.append(
             {
                 **item,
                 "media_url": f"/api/room-voice-replays/sessions/{safe_id}/segments/{filename}",
+                "variants": variants,
             }
         )
     messages = _read_jsonl(session_dir / "messages.jsonl")

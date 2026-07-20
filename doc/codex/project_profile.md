@@ -59,7 +59,7 @@
 - `room_record/陈嘉仪_161808449/gift_replies/`
 - `room_record/陈嘉仪_161808449/messages_shards/`（包含公开房间和小房间消息，按 `room_type` / `room_label` 标识来源）
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
-- `room_record/陈嘉仪_161808449/room_voice_replays/`（只同步派生 M4A、会话元数据和同期消息；不含原始 FLV）
+- `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - `flip_chat.html`（密码保护的翻牌记录 HTML，由 fan-hub 脚本生成）
 - `flip_data/audio/`、`flip_data/video/`（仅翻牌页本地播放依赖；不含 `flip_data/metadata/`）
@@ -165,7 +165,9 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航并设置 `noindex,nofollow`；会话元数据、同期消息和 M4A 都必须先鉴权。
 - 音频只通过校验后的固定文件名和支持 HTTP Range 的 API 提供，不把回放目录挂到 `/static`。
 - 页面按整场墙钟时间同步消息，并根据 `wall_start_offset_seconds` 切换多个音频段；断流缺口应如实显示。
-- 数据同步只包含 `room_voice_replays/` 发布包；腾讯云 `live_record/room_voice/` 的原始 FLV、日志和短时流 URL不得同步。
+- schema v2 默认播放 AAC-LC 单声道兼容版；用户可切换到源 AAC 无二次编码的原始音质版，切换时保持当前分段、秒数和播放状态。schema v1 单文件会话继续降级为兼容播放。
+- API 只接受 `segment_000001.m4a` 和 `segment_000001_original.m4a` 两类固定文件名；两种文件都沿用同一密码鉴权和 Range 边界。
+- 数据同步只包含 `room_voice_replays/` 发布包中的两种派生 M4A、元数据和同期消息；腾讯云 `live_record/room_voice/` 的原始 FLV、日志和短时流 URL不得同步。
 
 ### 翻牌记录页
 
