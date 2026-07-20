@@ -2,6 +2,8 @@
 
 更新日期：2026-07-20 CST +0800
 
+计分礼物刷新体验与阿里云补发专项复核：2026-07-20 12:06 CST +0800
+
 腾讯云翻牌记录页发布专项复核：2026-07-20 04:18 CST +0800
 
 腾讯云成员房间上麦回放发布专项复核：2026-07-17 16:13 CST +0800
@@ -14,8 +16,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 翻牌记录页发布后 checkout `23d493a`；采样 screen `229664.snh48`、Python PID `229668`；本机验证 `/flip-cards` 为 200、未登录 `/api/flip-cards/status` 为 401、错误密码登录为 403、`/timeline` 为 200；公网验证 `https://cjy.plus/flip-cards` 为 200、未登录 status API 为 401、首页为 200、`/api/qa/status` 为 200；生产 `.env` 中 `OB_PASSWORD` 已设置，`FLIP_CARDS_PASSWORD` 未单独设置，本轮按回退规则复用 `OB_PASSWORD` |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `3a7b05b`；PID `2899269`，enabled、active/running、`NRestarts=0`；`/room-voice-replays` 公网 200、未登录 sessions API 401、时光轴 200；尚未部署本次翻牌记录页和翻牌数据同步脚本变更，需用户确认腾讯云页面后再推进 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 计分礼物功能提交 `4369db9` 已部署；采样 screen `229664.snh48`、Python PID `229668`；`/score-gifts` 公网 200，页面已包含轻量 summary 轮询、新条目提示和 `setInterval(checkUpdates)`；`/flip-cards` 公网 200、未登录 `/api/flip-cards/status` 为 401；生产 `.env` 中 `OB_PASSWORD` 已设置，`FLIP_CARDS_PASSWORD` 未单独设置，按回退规则复用 `OB_PASSWORD` |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 计分礼物功能提交 `4369db9` 已部署；2026-07-20 12:03:46 CST 启动，PID `3001088`，enabled、active/running、`NRestarts=0`；`/score-gifts` 公网 200，页面已包含轻量 summary 轮询、新条目提示和 `setInterval(checkUpdates)`；`/flip-cards` 公网 200、未登录 `/api/flip-cards/status` 为 401；部署工具完整烟测通过；远端未跟踪的 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
@@ -65,7 +67,7 @@ systemctl status nginx
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
-> 2026-07-20 腾讯云已部署翻牌记录页代码 `23d493a`，但阿里云仍停在 `3a7b05b`，尚未加载 `flip_chat.html`、`flip_data/audio/`、`flip_data/video/` 的 dynamic 同步脚本变更，也未执行本次数据同步。等待用户确认腾讯云页面可用后，再部署阿里云并让阿里云主动拉取或手动拉取必要数据。
+> 2026-07-20 12:03 用户确认腾讯云计分礼物页面后，阿里云从 `643ad46` 快进到 `4369db9`，同时补齐此前尚未部署的翻牌记录页代码和 dynamic 同步清单；12:03:46 重启 `snh48-aliyun`。既有阿里云 cron 自动检测到变化并拉取必要数据，12:06:05 记录 `flip_data/audio done`、`flip_data/video done`、`All sync completed` 和 `state updated`。腾讯云与阿里云 `flip_chat.html` SHA-256 同为 `aae4347c71111e44c0443faf6cfb35a97587f50c951b0dbfae6aff90a867ab9c`；音频清单摘要同为 `ccbde5d7a00598467e22357beea47e72852201bce1c8b5b56e3b22be6b67ea89`、共 185 个文件，视频清单摘要同为 `3129f251859e67224872c14d5d7e3a6a75bf0c744e2633b9947faa6020b1abe8`、共 4 个文件。
 
 > 2026-07-19 用户确认腾讯云页面后，阿里云已快进到 `3a7b05b` 并加载把 `room_voice_replays/` 纳入 `dynamic` 组的新脚本。04:50 手动同步成功，04:51 cron 又自动检测到 dynamic 变化并记录 `room_voice_replays done`、`state updated`。腾讯云与阿里云 `manifest.json` SHA-256 同为 `7679687352fc2cc210d3ecbbb55dcaa53a466556098d7680954aa8ff8bda2f82`，当时 `session_count=0`；原始 FLV 未同步。
 
