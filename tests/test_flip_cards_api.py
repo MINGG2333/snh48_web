@@ -98,6 +98,20 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('apiJson("/data")', template)
         self.assertIn("我发于 ", template)
         self.assertNotIn('window.location.replace(API + "/html")', template)
+        for action in (
+            "filter_status",
+            "filter_answer_type",
+            "reset_filters",
+            "jump_latest",
+            "open_download_html",
+            "open_official_media",
+            "jump_to_flip_question",
+            "flip_media_play",
+            "flip_media_pause",
+            "flip_media_seek",
+            "flip_media_complete",
+        ):
+            self.assertIn(action, template)
 
 
 if __name__ == "__main__":

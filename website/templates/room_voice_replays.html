@@ -252,10 +252,29 @@
     let playbackStatusToken = 0;
     let playbackStatusTimer = null;
     let pendingSeekWallSeconds = null;
+    let pendingSeekSource = "";
+    let pendingPlaySource = "";
+    let suppressPauseTrackingUntil = 0;
+    let seekFromWallSeconds = null;
+    let lastPlaybackWallSeconds = 0;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
       window._trackEvent(eventType, Object.assign({ area: "room_voice_replays" }, data || {}));
+    }
+
+    function playbackTrackPayload(action, extra) {
+      const segments = currentSession && Array.isArray(currentSession.segments)
+        ? currentSession.segments : [];
+      const segment = currentSegmentIndex >= 0 ? (segments[currentSegmentIndex] || {}) : {};
+      return Object.assign({
+        action: action,
+        session_id: currentSessionId || "",
+        segment_no: Number(segment.segment_no || 0),
+        playback_mode: playbackMode,
+        position_seconds: Math.floor(wallSeconds()),
+        duration_seconds: Math.floor(Number(currentSession && currentSession.wall_duration_seconds) || 0)
+      }, extra || {});
     }
 
     async function api(path, options) {
@@ -275,6 +294,7 @@
       app.hidden = true;
       logoutBtn.hidden = true;
       loginError.textContent = message || "";
+      if (!audioPlayer.paused && !audioPlayer.ended) suppressPauseTrackingUntil = Date.now() + 1000;
       audioPlayer.pause();
       audioPlayer.removeAttribute("src");
       hidePlaybackStatus();
@@ -363,7 +383,7 @@
           "录音 " + timeLabel(item.audio_duration_seconds) + " · "
           + (item.message_count || 0) + " 条消息 · " + (item.segment_count || 0) + " 段"
         );
-        button.addEventListener("click", () => loadSession(item.session_id));
+        button.addEventListener("click", () => loadSession(item.session_id, "user_select"));
         sessionList.appendChild(button);
       });
     }
@@ -374,7 +394,7 @@
         sessions = Array.isArray(body.sessions) ? body.sessions : [];
         showApp();
         renderSessions();
-        if (sessions.length && !currentSessionId) await loadSession(sessions[0].session_id);
+        if (sessions.length && !currentSessionId) await loadSession(sessions[0].session_id, "auto_first");
       } catch (error) {
         if (error.status === 401 || error.status === 403) showLogin("");
         else showLogin(error.message);
@@ -500,7 +520,7 @@
       }
     }
 
-    async function loadSession(sessionId) {
+    async function loadSession(sessionId, source) {
       currentSessionId = sessionId;
       renderSessions();
       try {
@@ -509,9 +529,20 @@
         currentMessages = Array.isArray(body.messages) ? body.messages : [];
         currentSegmentIndex = -1;
         currentMessageIndex = -1;
+        pendingSeekSource = "";
+        pendingPlaySource = "";
+        seekFromWallSeconds = null;
+        lastPlaybackWallSeconds = 0;
         playbackMode = currentSession.default_playback_mode === "original" ? "original" : "compatible";
         renderDetail();
-        track("admin_filter", { action: "load_room_voice_session", session_id: sessionId, message_count: currentMessages.length });
+        track("admin_filter", {
+          action: "load_room_voice_session",
+          source: source || "unknown",
+          session_id: sessionId,
+          room_type: currentSession.room_type || "",
+          segment_count: Number(currentSession.segment_count || 0),
+          message_count: currentMessages.length
+        });
       } catch (error) {
         if (error.status === 401 || error.status === 403) showLogin("登录已失效，请重新验证。");
         else {
@@ -522,7 +553,7 @@
       }
     }
 
-    function loadSegment(index, autoplay, seekSeconds, statusMessage) {
+    function loadSegment(index, autoplay, seekSeconds, statusMessage, autoplaySource) {
       const segments = currentSession && Array.isArray(currentSession.segments) ? currentSession.segments : [];
       if (index < 0 || index >= segments.length) return;
       currentSegmentIndex = index;
@@ -540,6 +571,7 @@
         "loading",
         pendingSeekWallSeconds == null ? "加载时间较长，请继续等待…" : "跳转加载时间较长，请继续等待…"
       );
+      if (!audioPlayer.paused && !audioPlayer.ended) suppressPauseTrackingUntil = Date.now() + 1000;
       audioPlayer.src = variant.media_url;
       document.getElementById("segmentLabel").textContent = "音频分段 " + (index + 1) + " / "
         + segments.length + " · " + (variant.label || (playbackMode === "original" ? "原始音质" : "兼容播放"));
@@ -547,10 +579,14 @@
         audioPlayer.removeEventListener("loadedmetadata", ready);
         if (loadToken !== segmentLoadToken) return;
         if (Number.isFinite(seekSeconds) && seekSeconds > 0) {
+          if (!pendingSeekSource) pendingSeekSource = autoplaySource || "programmatic";
           audioPlayer.currentTime = Math.min(seekSeconds, Math.max(0, audioPlayer.duration || seekSeconds));
         }
         if (autoplay) {
+          const playSource = autoplaySource || "programmatic";
+          pendingPlaySource = playSource;
           audioPlayer.play().catch(() => {
+            if (pendingPlaySource === playSource) pendingPlaySource = "";
             if (loadToken === segmentLoadToken) hidePlaybackStatus();
           });
         } else if (!(Number.isFinite(seekSeconds) && seekSeconds > 0)) {
@@ -605,15 +641,24 @@
         const targetTime = Math.min(seek, Math.max(0, audioPlayer.duration || seek));
         const alreadyAtTarget = Math.abs(Number(audioPlayer.currentTime || 0) - targetTime) < 0.05;
         showSeekStatus(targetWallSeconds);
-        audioPlayer.currentTime = targetTime;
+        if (!alreadyAtTarget) {
+          pendingSeekSource = "message_seek";
+          audioPlayer.currentTime = targetTime;
+        }
+        pendingPlaySource = "message_seek";
         audioPlayer.play().then(() => {
           if (alreadyAtTarget) hidePlaybackStatus();
-        }).catch(hidePlaybackStatus);
+        }).catch(() => {
+          if (pendingPlaySource === "message_seek") pendingPlaySource = "";
+          hidePlaybackStatus();
+        });
       } else {
-        loadSegment(index, true, seek, "正在跳转到 " + timeLabel(targetWallSeconds) + "…");
+        pendingSeekSource = "message_seek";
+        loadSegment(index, true, seek, "正在跳转到 " + timeLabel(targetWallSeconds) + "…", "message_seek");
       }
       track("admin_filter", {
         action: "room_voice_message_seek",
+        session_id: currentSessionId,
         segment_no: Number(item.segment_no),
         offset_seconds: Math.floor(targetWallSeconds)
       });
@@ -639,6 +684,7 @@
     });
 
     logoutBtn.addEventListener("click", async () => {
+      track("login_attempt", { action: "logout", result: "submitted" });
       try { await api("/logout", { method: "POST" }); } catch (_) {}
       currentSessionId = "";
       currentSession = null;
@@ -646,7 +692,12 @@
     });
     roomFilter.addEventListener("change", () => {
       renderSessions();
-      track("admin_filter", { action: "room_type", room_type: roomFilter.value });
+      const visibleCount = sessions.filter(item => roomFilter.value === "all" || item.room_type === roomFilter.value).length;
+      track("admin_filter", {
+        action: "room_type",
+        room_type: roomFilter.value,
+        visible_session_count: visibleCount
+      });
     });
     playbackModeSelect.addEventListener("change", () => {
       const requestedMode = playbackModeSelect.value === "original" ? "original" : "compatible";
@@ -659,15 +710,32 @@
       const autoplay = !audioPlayer.paused && !audioPlayer.ended;
       playbackMode = requestedMode;
       updatePlaybackModeControl();
-      if (segmentIndex >= 0) loadSegment(segmentIndex, autoplay, seekSeconds, "正在切换播放模式…");
-      track("admin_filter", { action: "room_voice_playback_mode", playback_mode: playbackMode });
+      if (seekSeconds > 0) pendingSeekSource = "playback_mode";
+      if (segmentIndex >= 0) loadSegment(
+        segmentIndex, autoplay, seekSeconds, "正在切换播放模式…", "playback_mode"
+      );
+      track("admin_filter", playbackTrackPayload("room_voice_playback_mode"));
     });
-    audioPlayer.addEventListener("timeupdate", updateTimeline);
+    audioPlayer.addEventListener("timeupdate", () => {
+      updateTimeline();
+      if (!audioPlayer.seeking) lastPlaybackWallSeconds = wallSeconds();
+    });
     audioPlayer.addEventListener("seeking", () => {
+      if (seekFromWallSeconds == null) seekFromWallSeconds = lastPlaybackWallSeconds;
+      if (!pendingSeekSource) pendingSeekSource = "player_control";
       showSeekStatus(wallSeconds());
       updateTimeline();
     });
     audioPlayer.addEventListener("seeked", () => {
+      const targetWallSeconds = wallSeconds();
+      track("click", playbackTrackPayload("room_voice_seek", {
+        source: pendingSeekSource || "player_control",
+        from_position_seconds: Math.floor(Number(seekFromWallSeconds) || 0),
+        to_position_seconds: Math.floor(targetWallSeconds)
+      }));
+      pendingSeekSource = "";
+      seekFromWallSeconds = null;
+      lastPlaybackWallSeconds = targetWallSeconds;
       pendingSeekWallSeconds = null;
       hidePlaybackStatus();
       updateTimeline();
@@ -680,15 +748,34 @@
       }
     });
     audioPlayer.addEventListener("canplay", hidePlaybackStatus);
+    audioPlayer.addEventListener("play", () => {
+      const source = pendingPlaySource || "player_control";
+      pendingPlaySource = "";
+      suppressPauseTrackingUntil = 0;
+      if (source !== "auto_next_segment" && source !== "programmatic") {
+        track("click", playbackTrackPayload("room_voice_play", { source: source }));
+      }
+    });
+    audioPlayer.addEventListener("pause", () => {
+      if (currentSession && !audioPlayer.ended && Date.now() > suppressPauseTrackingUntil) {
+        track("click", playbackTrackPayload("room_voice_pause", { source: "player_control" }));
+      }
+    });
     audioPlayer.addEventListener("playing", hidePlaybackStatus);
     audioPlayer.addEventListener("error", () => {
       pendingSeekWallSeconds = null;
+      pendingSeekSource = "";
+      pendingPlaySource = "";
+      seekFromWallSeconds = null;
       showPlaybackStatus("音频加载失败，请重试或切换播放模式。", "error");
     });
     audioPlayer.addEventListener("ended", () => {
       const count = currentSession && currentSession.segments ? currentSession.segments.length : 0;
+      track("click", playbackTrackPayload("room_voice_segment_complete", {
+        is_session_complete: currentSegmentIndex + 1 >= count
+      }));
       if (currentSegmentIndex + 1 < count) {
-        loadSegment(currentSegmentIndex + 1, true, 0, "正在加载下一段音频…");
+        loadSegment(currentSegmentIndex + 1, true, 0, "正在加载下一段音频…", "auto_next_segment");
       }
     });
     loadSessions();

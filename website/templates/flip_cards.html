@@ -431,7 +431,7 @@
         </div>
         <div class="actions">
           <button id="latestBtn" class="action-btn" type="button">最新</button>
-          <a class="action-btn" href="/api/flip-cards/html" target="_blank" rel="noopener">下载版</a>
+          <a id="downloadHtmlLink" class="action-btn" href="/api/flip-cards/html" target="_blank" rel="noopener">下载版</a>
           <button id="logoutBtn" class="action-btn" type="button">退出</button>
         </div>
       </div>
@@ -486,6 +486,7 @@
     const filterSummary = document.getElementById("filterSummary");
     const latestBtn = document.getElementById("latestBtn");
     const resetBtn = document.getElementById("resetBtn");
+    const downloadHtmlLink = document.getElementById("downloadHtmlLink");
     const logoutBtn = document.getElementById("logoutBtn");
 
     let dataset = null;
@@ -556,6 +557,42 @@
     function recordMatches(record) {
       return (statusFilter.value === "all" || record.status === statusFilter.value)
         && (typeFilter.value === "all" || record.answer_type === typeFilter.value);
+    }
+
+    function filterTrackPayload(action) {
+      const visibleRecords = records.filter(recordMatches);
+      const visibleIds = new Set(visibleRecords.map(function (record) { return record.question_id; }));
+      const visibleEventCount = buildEvents().filter(function (event) {
+        return visibleIds.has(event.record.question_id);
+      }).length;
+      return {
+        action: action,
+        status: statusFilter.value,
+        answer_type: typeFilter.value,
+        visible_record_count: visibleRecords.length,
+        visible_event_count: visibleEventCount
+      };
+    }
+
+    function recordForNode(node) {
+      const message = node && node.closest ? node.closest(".message") : null;
+      const questionId = message ? String(message.dataset.qid || "") : "";
+      return records.find(function (record) {
+        return String(record.question_id || "") === questionId;
+      }) || null;
+    }
+
+    function mediaTrackPayload(action, mediaNode) {
+      const record = recordForNode(mediaNode);
+      const position = Number(mediaNode && mediaNode.currentTime);
+      const duration = Number(mediaNode && mediaNode.duration);
+      return {
+        action: action,
+        question_id: record ? record.question_id : "",
+        media_type: mediaNode && mediaNode.tagName ? mediaNode.tagName.toLowerCase() : "",
+        position_seconds: Number.isFinite(position) ? Math.floor(position) : 0,
+        duration_seconds: Number.isFinite(duration) ? Math.floor(duration) : 0
+      };
     }
 
     function renderStats() {
@@ -792,7 +829,7 @@
       renderStats();
       showPage();
       renderTimeline(true);
-      track("admin_modal", { action: "view_flip_cards_app" });
+      track("admin_modal", { action: "view_flip_cards_app", record_count: records.length });
     }
 
     async function openIfReady() {
@@ -834,6 +871,9 @@
     [statusFilter, typeFilter].forEach(function (control) {
       control.addEventListener("change", function () {
         renderTimeline(true);
+        track("admin_filter", filterTrackPayload(
+          control === statusFilter ? "filter_status" : "filter_answer_type"
+        ));
       });
     });
 
@@ -841,10 +881,20 @@
       statusFilter.value = "all";
       typeFilter.value = "all";
       renderTimeline(true);
+      track("admin_filter", filterTrackPayload("reset_filters"));
     });
 
     latestBtn.addEventListener("click", function () {
       chatScroll.scrollTop = chatScroll.scrollHeight;
+      track("admin_filter", filterTrackPayload("jump_latest"));
+    });
+
+    downloadHtmlLink.addEventListener("click", function () {
+      track("admin_export", {
+        action: "open_download_html",
+        result: "submitted",
+        record_count: records.length
+      });
     });
 
     logoutBtn.addEventListener("click", async function () {
@@ -857,15 +907,45 @@
     });
 
     messageList.addEventListener("click", function (event) {
+      const download = event.target.closest(".download-link");
+      if (download) {
+        const record = recordForNode(download);
+        track("admin_export", {
+          action: "open_official_media",
+          result: "submitted",
+          question_id: record ? record.question_id : "",
+          media_type: record ? record.answer_type : ""
+        });
+        return;
+      }
       const quote = event.target.closest(".quote");
       if (!quote) return;
       const target = document.getElementById(quote.dataset.target || "");
       if (!target) return;
+      track("admin_filter", {
+        action: "jump_to_flip_question",
+        question_id: target.dataset.qid || ""
+      });
       target.scrollIntoView({ behavior: "smooth", block: "center" });
       target.classList.add("highlight");
       window.setTimeout(function () {
         target.classList.remove("highlight");
       }, 1800);
+    });
+
+    ["play", "pause", "seeked", "ended"].forEach(function (eventName) {
+      messageList.addEventListener(eventName, function (event) {
+        const media = event.target;
+        if (!(media instanceof HTMLMediaElement)) return;
+        if (eventName === "pause" && media.ended) return;
+        const action = {
+          play: "flip_media_play",
+          pause: "flip_media_pause",
+          seeked: "flip_media_seek",
+          ended: "flip_media_complete"
+        }[eventName];
+        track("click", mediaTrackPayload(action, media));
+      }, true);
     });
 
     openIfReady();

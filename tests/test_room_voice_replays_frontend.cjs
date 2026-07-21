@@ -119,10 +119,12 @@ elements.roomFilter.value = "all";
 const timers = new Map();
 let nextTimerId = 1;
 let selection = { isCollapsed: true, toString: () => "", anchorNode: null, focusNode: null };
+const trackedEvents = [];
 
 const context = {
   console,
   HTMLMediaElement: { HAVE_METADATA: 1 },
+  _trackEvent: (eventType, data) => trackedEvents.push({ eventType, data }),
   document: {
     getElementById: id => elements[id],
     createElement: tagName => new FakeElement(tagName)
@@ -149,6 +151,7 @@ vm.runInContext(`
       variants: { compatible: { media_url: "/audio/segment_000001.m4a" } }
     }]
   };
+  currentSessionId = "session-test";
   currentSegmentIndex = 0;
   currentMessages = [
     { audio_covered: true, segment_no: 1, offset_ms: 30000, sender_name: "成员", text_content: "可跳转消息" },
@@ -217,6 +220,30 @@ assert.equal(elements.playbackStatus.hidden, true);
 audio.dispatch("error");
 assert.match(elements.playbackStatus.className, /\berror\b/);
 assert.equal(elements.playbackStatusText.textContent, "音频加载失败，请重试或切换播放模式。");
+
+audio.ended = false;
+audio.paused = false;
+audio.dispatch("play");
+audio.paused = true;
+audio.dispatch("pause");
+audio.ended = true;
+audio.dispatch("ended");
+
+const trackedActions = trackedEvents.map(event => event.data.action);
+for (const action of [
+  "room_voice_message_seek",
+  "room_voice_seek",
+  "room_voice_play",
+  "room_voice_pause",
+  "room_voice_segment_complete"
+]) {
+  assert.ok(trackedActions.includes(action), `expected tracked action: ${action}`);
+}
+assert.equal(
+  trackedEvents.some(event => event.data._push_to_notification),
+  false,
+  "room voice interaction events must not request notifications"
+);
 
 vm.runInContext("hidePlaybackStatus()", context);
 console.log("room voice frontend interaction checks passed");
