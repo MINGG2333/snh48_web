@@ -4,6 +4,8 @@
 
 电台/翻牌交互统计阿里云同步专项复核：2026-07-21 15:12 CST +0800
 
+双服务器版本化运行状态阿里云完成发布专项复核：2026-07-21 15:15 CST +0800
+
 翻牌应用页与阿里云同步专项复核：2026-07-20 21:54 CST +0800
 
 双服务器版本化运行状态腾讯云阶段发布专项复核：2026-07-20 17:59 CST +0800
@@ -78,6 +80,8 @@ systemctl status nginx
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
 
 > 2026-07-21 15:12 用户确认腾讯云后复核阿里云发布。另一条协作流程已先把阿里云快进到 `5ea0077` 并于 15:06:33 重启 `snh48-aliyun`，因此本轮没有重复拉取或重启。阿里云每分钟 cron 仍启用；15:07、15:08 两轮日志均按 `room_voice_replays payload done` → `manifest committed` → `obsolete payload cleaned` 顺序完成并更新状态。公网 `/radio`、`/flip-cards` 为 200，页面含最新电台/翻牌交互统计代码，未登录电台 API 为 401。跨云健康检查确认最新会话 `rv_20260720_212821_main_36376935_cff7b6` 的消息与腾讯云一致，兼容版、原始音质版共 2 个媒体对象均可通过阿里云鉴权 Range 播放。共享状态角色为 `tencent True True True` / `aliyun False True True`，腾讯云持久 outbox 无积压；阿里云没有 outbox 文件积压。
+
+> 2026-07-21 15:15 共享运行状态第二阶段专项复核：部署前把四个当前状态以 `0600` 权限备份到阿里云 `website/data/runtime_backups/shared-state-rollout-20260721T070349Z/`，并补齐显式 `SHARED_STATE_*` / `ACTION_INBOX_ROOT` 配置。首页背景词、房间忽略、计分业务和记忆页的 revision 与状态 SHA-256 在两端逐项一致；腾讯云向阿里云手动幂等重放四项均成功，阿里云向腾讯云幂等回送既有待办也成功，两端 outbox 均为 0。可靠待处理箱现有 9 条腾讯云来源事件，文件均为 `0600`；模板按 `origin_node` / `origin_label` 区分今后的腾讯云与阿里云请求。阿里云未发现可迁移的旧投诉或邮箱记录，因此没有制造测试待办。公网 `/`、`/scroller-admin`、`/room`、`/sg`、`/memories`、`/ob` 均为 200，首页词 API 返回 22 条，未认证的房间、计分、记忆、观察页及首页词写接口均为 401。
 
 > 2026-07-20 21:54 翻牌应用页发布后，阿里云从 `b8da683` 快进到 `7d5c3b1` 并重启 `snh48-aliyun`。同轮累计补齐 `344f3a1` 至 `92a896c` 的共享运行状态、上麦回放原子同步和文档提交；阿里云配置已变为 `aliyun False True True`。随后在阿里云手动运行 `bash deploy/sync-from-tencent.sh dynamic`，日志确认 `flip_data/web/flip_cards.json done`、`flip_chat.html done`、`flip_data/audio done`、`flip_data/video done` 和 `All sync completed`。腾讯云与阿里云的 `flip_data/web/flip_cards.json` mtime 均为 2026-07-20 21:38 CST，阿里云受保护数据 API 验证通过。后续纯文档提交以 `--no-restart` 快进，公开烟测继续通过。
 
