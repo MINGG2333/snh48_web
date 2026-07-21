@@ -147,7 +147,6 @@ DEEPSEEK_API_KEY=xxx           # DeepSeek API Key
 OB_PASSWORD=xxx                # 观察页密码（可选）
 FLIP_CARDS_PASSWORD=xxx        # 翻牌页密码（可选，默认复用观察页密码）
 FLIP_CARDS_DATASET_PATH=/home/snh48-fan-hub/flip_data/web/flip_cards.json
-FLIP_CARDS_HTML_PATH=/home/snh48-fan-hub/flip_chat.html
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 GIFT_REPLIES_PASSWORD=xxx      # 礼物回复页密码（可选，独立于观察页）
 
@@ -217,7 +216,7 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/room-messages/summary` | 房间消息统计和类型列表 | `ROOM_MESSAGES_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/room-voice-replays/sessions` | 上麦会话列表和详情 | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用房间消息密码（失败尝试 IP 限速） |
 | `/api/room-voice-replays/sessions/{session_id}/segments/{filename}` | 上麦音频 Range 读取 | 同上；不经公共静态目录 |
-| `/api/flip-cards/status`、`/api/flip-cards/data`、`/api/flip-cards/html` | 翻牌记录应用数据、下载版 HTML 状态和受保护内容 | `FLIP_CARDS_PASSWORD` 或 `OB_PASSWORD`（失败尝试 IP 限速） |
+| `/api/flip-cards/status`、`/api/flip-cards/data` | 翻牌记录应用数据状态和受保护内容 | `FLIP_CARDS_PASSWORD` 或 `OB_PASSWORD`（失败尝试 IP 限速） |
 | `/api/flip-cards/flip_data/audio/{filename}`、`/api/flip-cards/flip_data/video/{filename}` | 翻牌本地音视频 Range 读取 | 同上；不经公共静态目录 |
 | `/api/score-gifts/data` | 计分礼物统计和明细 | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/score-gifts/summary` | 计分礼物汇总 | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |

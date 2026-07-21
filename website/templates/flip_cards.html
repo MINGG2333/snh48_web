@@ -431,7 +431,6 @@
         </div>
         <div class="actions">
           <button id="latestBtn" class="action-btn" type="button">最新</button>
-          <a id="downloadHtmlLink" class="action-btn" href="/api/flip-cards/html" target="_blank" rel="noopener">下载版</a>
           <button id="logoutBtn" class="action-btn" type="button">退出</button>
         </div>
       </div>
@@ -486,7 +485,6 @@
     const filterSummary = document.getElementById("filterSummary");
     const latestBtn = document.getElementById("latestBtn");
     const resetBtn = document.getElementById("resetBtn");
-    const downloadHtmlLink = document.getElementById("downloadHtmlLink");
     const logoutBtn = document.getElementById("logoutBtn");
 
     let dataset = null;
@@ -887,14 +885,6 @@
     latestBtn.addEventListener("click", function () {
       chatScroll.scrollTop = chatScroll.scrollHeight;
       track("admin_filter", filterTrackPayload("jump_latest"));
-    });
-
-    downloadHtmlLink.addEventListener("click", function () {
-      track("admin_export", {
-        action: "open_download_html",
-        result: "submitted",
-        record_count: records.length
-      });
     });
 
     logoutBtn.addEventListener("click", async function () {

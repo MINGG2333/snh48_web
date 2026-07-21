@@ -234,10 +234,7 @@ ROOM_VOICE_REPLAYS_DIR = os.getenv("ROOM_VOICE_REPLAYS_DIR") or str(
     / "room_voice_replays"
 )
 
-# ── Flip Cards (口袋48翻牌记录 HTML 与本地媒体) ───────────────────────
-FLIP_CARDS_HTML_PATH = os.getenv("FLIP_CARDS_HTML_PATH") or str(
-    PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_chat.html"
-)
+# ── Flip Cards (口袋48翻牌记录应用数据与本地媒体) ───────────────────────
 FLIP_CARDS_DATA_DIR = os.getenv("FLIP_CARDS_DATA_DIR") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data"
 )

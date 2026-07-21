@@ -52,7 +52,6 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             mock.patch("website.flip_cards_api.cfg.SECURE_COOKIES", False),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_DATASET_PATH", str(self.dataset_path)),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_DATA_DIR", str(self.data_dir)),
-            mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_HTML_PATH", str(self.root / "flip_chat.html")),
         ]
         for patcher in self.patches:
             patcher.start()
@@ -90,6 +89,9 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(media.content, b"2345")
         self.assertEqual(media.headers["content-range"], "bytes 2-5/10")
 
+        html = await self.client.get("/api/flip-cards/html")
+        self.assertEqual(html.status_code, 404)
+
 
 class FlipCardsTemplateTests(unittest.TestCase):
     def test_template_renders_application_instead_of_redirecting_to_html(self) -> None:
@@ -98,12 +100,13 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('apiJson("/data")', template)
         self.assertIn("我发于 ", template)
         self.assertNotIn('window.location.replace(API + "/html")', template)
+        self.assertNotIn("/api/flip-cards/html", template)
+        self.assertNotIn("downloadHtmlLink", template)
         for action in (
             "filter_status",
             "filter_answer_type",
             "reset_filters",
             "jump_latest",
-            "open_download_html",
             "open_official_media",
             "jump_to_flip_question",
             "flip_media_play",

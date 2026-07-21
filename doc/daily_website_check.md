@@ -108,7 +108,6 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays obsolete payload cleaned
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/web/flip_cards.json done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_chat.html done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/audio done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/video done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] All sync completed
@@ -118,7 +117,7 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 - 腾讯云生产 cron 没有启用 `sync-to-aliyun-loop.sh`、`sync-to-aliyun-if-changed.sh` 或 `sync-to-aliyun.sh`；旧任务注释行可以保留。
 - 腾讯云 `/var/log/snh48/sync-to-aliyun.log` 不再持续产生新记录。
 - `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv` 两端 hash 一致；四个可写状态按下一节核对 revision，不用普通 rsync 日志作为一致性依据。
-- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/flip_cards.json`、`flip_chat.html`、`flip_data/audio/`、`flip_data/video/` 如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟。
+- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/flip_cards.json`、`flip_data/audio/`、`flip_data/video/` 如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟。
 - `room_voice_replays manifest committed` 只能出现在 `payload done` 之后；如果同步在提交 manifest 前失败，网站继续读取旧回放是预期的安全降级，下一分钟应重试。
 - 只有动态小数据变化时，日志应优先显示 `groups=dynamic`；不应每次都同步 `live_covers` 和 `live_push_replays`。
 

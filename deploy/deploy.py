@@ -145,11 +145,6 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "optional": True,
             },
             {
-                "type": "file",
-                "path": "/home/snh48-fan-hub/flip_chat.html",
-                "optional": True,
-            },
-            {
                 "type": "dir",
                 "path": "/home/snh48-fan-hub/flip_data/audio",
                 "delete": True,

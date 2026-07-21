@@ -133,15 +133,7 @@ if [ "$sync_dynamic" -eq 1 ]; then
     echo "$LOG_TAG flip_data/web/flip_cards.json skipped (source missing)"
   fi
 
-  # 12. flip_chat.html（下载版翻牌聊天页 HTML；不含 Token/配置）
-  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -e /home/snh48-fan-hub/flip_chat.html'; then
-    rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_chat.html" /home/snh48-fan-hub/flip_chat.html
-    echo "$LOG_TAG flip_chat.html done"
-  else
-    echo "$LOG_TAG flip_chat.html skipped (source missing)"
-  fi
-
-  # 13. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）
+  # 12. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）
   if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/flip_data/audio'; then
     rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/audio/" /home/snh48-fan-hub/flip_data/audio/
     echo "$LOG_TAG flip_data/audio done"
@@ -149,7 +141,7 @@ if [ "$sync_dynamic" -eq 1 ]; then
     echo "$LOG_TAG flip_data/audio skipped (source missing)"
   fi
 
-  # 14. flip_data/video（翻牌页本地视频依赖；不同步 metadata、Token 或配置）
+  # 13. flip_data/video（翻牌页本地视频依赖；不同步 metadata、Token 或配置）
   if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/flip_data/video'; then
     rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/video/" /home/snh48-fan-hub/flip_data/video/
     echo "$LOG_TAG flip_data/video done"

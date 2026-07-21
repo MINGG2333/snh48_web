@@ -129,7 +129,6 @@ systemctl status nginx
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；包含兼容版/原始音质版派生 M4A、元数据和同期消息，原始 FLV 不同步 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物只读派生文件；排除 `live_business_fulfillments.json` 和 `.*.lock`，可写业务状态走版本化共享状态 |
 | `/home/snh48-fan-hub/flip_data/web/flip_cards.json` | 同路径 | 翻牌记录应用页最小 JSON；不含完整 metadata、Token 或配置 |
-| `/home/snh48-fan-hub/flip_chat.html` | 同路径 | 翻牌记录下载版 HTML |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 同路径 | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` |
 
 同步分组：
@@ -137,7 +136,7 @@ systemctl status nginx
 | 分组 | 内容 | 典型频率 |
 |------|------|----------|
 | `core` | 事件/行程 CSV、手动事件 CSV、直播回放汇总、直播封面 | 低频或人工更新 |
-| `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、翻牌应用 JSON、翻牌下载版 HTML、翻牌音视频 | 后台导出、上麦会话结束或翻牌批处理更新时变化 |
+| `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、翻牌应用 JSON、翻牌音视频 | 后台导出、上麦会话结束或翻牌批处理更新时变化 |
 
 不作为常规同步项：
 

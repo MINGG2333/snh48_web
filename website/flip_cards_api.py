@@ -1,4 +1,4 @@
-"""Password-protected Pocket48 flip-card HTML and media API."""
+"""Password-protected Pocket48 flip-card app data and media API."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import AsyncIterator
 from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from website import config as cfg
@@ -49,10 +49,6 @@ def _cookie_token(password: str) -> str:
 
 def _expected_password() -> str:
     return cfg.FLIP_CARDS_PASSWORD
-
-
-def _html_path() -> Path:
-    return Path(cfg.FLIP_CARDS_HTML_PATH)
 
 
 def _data_dir() -> Path:
@@ -117,13 +113,10 @@ async def logout(response: Response):
 
 @router.get("/status")
 async def auth_status(response: Response, _=Depends(verify_flip_cards_auth)):
-    html_path = _html_path()
     dataset_path = _dataset_path()
     response.headers["Cache-Control"] = "no-store"
     return {
         "success": True,
-        "html_exists": html_path.is_file(),
-        "html_mtime": int(html_path.stat().st_mtime) if html_path.is_file() else 0,
         "dataset_exists": dataset_path.is_file(),
         "dataset_mtime": int(dataset_path.stat().st_mtime) if dataset_path.is_file() else 0,
     }
@@ -155,71 +148,6 @@ async def flip_cards_data(response: Response, _=Depends(verify_flip_cards_auth))
 
     response.headers["Cache-Control"] = "private, no-store"
     return payload
-
-
-@router.get("/html", response_class=HTMLResponse)
-async def flip_cards_html(response: Response, _=Depends(verify_flip_cards_auth)):
-    html_path = _html_path()
-    if not html_path.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="翻牌 HTML 尚未生成")
-    try:
-        html = html_path.read_text(encoding="utf-8")
-    except OSError:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="翻牌 HTML 读取失败")
-    response.headers["Cache-Control"] = "private, no-store"
-    return HTMLResponse(_prepare_html(html), headers={"Cache-Control": "private, no-store"})
-
-
-def _prepare_html(html: str) -> str:
-    lower = html.lower()
-    head_insert = (
-        '<base href="/api/flip-cards/">\n'
-        '<meta name="robots" content="noindex,nofollow">\n'
-    )
-    if "<base " not in lower and "<meta name=\"robots\"" not in lower:
-        html = html.replace("<head>", f"<head>\n{head_insert}", 1)
-    elif "<base " not in lower:
-        html = html.replace("<head>", '<head>\n<base href="/api/flip-cards/">', 1)
-    elif "<meta name=\"robots\"" not in lower:
-        html = html.replace("<head>", '<head>\n<meta name="robots" content="noindex,nofollow">', 1)
-
-    toolbar = """
-<div id="flipCardsOnlineBar">
-  <button id="flipCardsLogout" type="button">退出</button>
-</div>
-<style>
-#flipCardsOnlineBar {
-  position: fixed; right: 14px; bottom: 14px; z-index: 10000;
-  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-}
-#flipCardsOnlineBar button {
-  min-width: 64px; min-height: 36px; border: 1px solid rgba(0,0,0,.12);
-  border-radius: 8px; background: rgba(255,255,255,.96); color: #333;
-  box-shadow: 0 8px 24px rgba(0,0,0,.14); cursor: pointer;
-}
-</style>
-<script src="/static/js/tracker.js"></script>
-<script>
-(function () {
-  function track(eventType, data) {
-    if (!window._trackEvent) return;
-    window._trackEvent(eventType, Object.assign({ area: "flip_cards" }, data || {}));
-  }
-  track("admin_modal", { action: "view_flip_cards_html" });
-  var logout = document.getElementById("flipCardsLogout");
-  if (logout) {
-    logout.addEventListener("click", function () {
-      track("login_attempt", { action: "logout", result: "submitted" });
-      fetch("/api/flip-cards/logout", { method: "POST", credentials: "same-origin" })
-        .finally(function () { window.location.href = "/flip-cards"; });
-    });
-  }
-}());
-</script>
-"""
-    if "</body>" in lower:
-        return html.replace("</body>", toolbar + "\n</body>", 1)
-    return html + toolbar
 
 
 def _safe_media_filename(filename: str, kind: str) -> str:
