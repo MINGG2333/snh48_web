@@ -2,6 +2,8 @@
 
 更新日期：2026-07-21 CST +0800
 
+翻牌网站 HTML 移除专项复核：2026-07-21 15:31 CST +0800
+
 电台/翻牌交互统计阿里云同步专项复核：2026-07-21 15:12 CST +0800
 
 双服务器版本化运行状态阿里云完成发布专项复核：2026-07-21 15:15 CST +0800
@@ -28,8 +30,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `5ea0077`；本次只更新 Jinja 模板，不需重启，继续使用 2026-07-20 21:48:39 CST 启动的 screen `869247.snh48`、Python PID `869263`；公网 `/radio`、`/flip-cards` 均为 200 且包含最新播放、跳转、筛选和媒体交互统计代码；共享状态开关为 `tencent True True True` |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `5ea0077`；协作发布流程已于 2026-07-21 15:06:33 CST 重启服务，PID `3253137`，active/running、`NRestarts=0`；公网和本机 `/radio`、`/flip-cards` 均为 200，页面包含最新交互统计代码，未登录电台 sessions API 为 401；共享状态开关为 `aliyun False True True`；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `35a4134`；2026-07-21 15:28:30 CST 重启为 screen `1407658.snh48`、Python PID `1407675`，本轮运行命令临时覆盖 `QA_WARMUP_ON_STARTUP=false`；本机 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；共享状态开关为 `tencent True True True` |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `35a4134`；部署流程已于 2026-07-21 15:29:22 CST 重启服务，PID `3257540`，active/running；公网 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除且同步脚本不再引用；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
@@ -78,6 +80,8 @@ systemctl status nginx
 ## 腾讯云到阿里云的数据同步任务
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
+
+> 2026-07-21 15:31 翻牌网站 HTML 移除专项复核：网站仓库提交 `35a4134` 已推送并部署。腾讯云网站 screen 重启为 `1407658.snh48`、PID `1407675`；阿里云 `snh48-aliyun` 重启为 PID `3257540`。两端 `/flip-cards` 均为 200，旧 `/api/flip-cards/html` 均为 404，未登录 `/api/flip-cards/status` 均为 401，页面源码不再包含 `downloadHtmlLink`、`/api/flip-cards/html` 或“下载版”。阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除；已部署的动态同步脚本和 `deploy.py` 不再引用 `flip_chat.html`，后续 cron 不会重新拉取该 HTML。腾讯云 fan-hub 的 `flip_chat.html` 仍保留为本地下载查看产物，不作为网站同步项。
 
 > 2026-07-21 15:12 用户确认腾讯云后复核阿里云发布。另一条协作流程已先把阿里云快进到 `5ea0077` 并于 15:06:33 重启 `snh48-aliyun`，因此本轮没有重复拉取或重启。阿里云每分钟 cron 仍启用；15:07、15:08 两轮日志均按 `room_voice_replays payload done` → `manifest committed` → `obsolete payload cleaned` 顺序完成并更新状态。公网 `/radio`、`/flip-cards` 为 200，页面含最新电台/翻牌交互统计代码，未登录电台 API 为 401。跨云健康检查确认最新会话 `rv_20260720_212821_main_36376935_cff7b6` 的消息与腾讯云一致，兼容版、原始音质版共 2 个媒体对象均可通过阿里云鉴权 Range 播放。共享状态角色为 `tencent True True True` / `aliyun False True True`，腾讯云持久 outbox 无积压；阿里云没有 outbox 文件积压。
 
