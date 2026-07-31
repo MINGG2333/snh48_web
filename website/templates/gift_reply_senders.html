@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ site_title }} · 综合回礼</title>
+  <title>{{ site_title }} · 房间内回礼情况</title>
   <meta name="robots" content="noindex, nofollow">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -192,6 +192,17 @@
     }
     .sender-card summary::-webkit-details-marker { display: none; }
     .sender-card summary:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+    .sender-card.return-highlight summary { animation: return-highlight 3s ease-out; }
+    @keyframes return-highlight {
+      0%, 70% {
+        background: rgba(64, 184, 168, 0.24);
+        box-shadow: inset 0 0 0 2px rgba(64, 184, 168, 0.72);
+      }
+      100% {
+        background: var(--panel-2);
+        box-shadow: inset 0 0 0 2px rgba(64, 184, 168, 0);
+      }
+    }
     .sender-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
     .sender-name { font-size: 17px; font-weight: 760; word-break: break-word; }
     .sender-id { color: var(--faint); font-size: 12px; margin-top: 3px; word-break: break-all; }
@@ -260,12 +271,19 @@
       .result-head { align-items: flex-start; flex-direction: column; }
       .result-actions { width: 100%; justify-content: space-between; }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .sender-card.return-highlight summary {
+        animation: none;
+        background: rgba(64, 184, 168, 0.24);
+        box-shadow: inset 0 0 0 2px rgba(64, 184, 168, 0.72);
+      }
+    }
   </style>
 </head>
 <body>
   <div id="loginOverlay">
     <div class="login-box">
-      <h1>综合回礼</h1>
+      <h1>房间内回礼情况</h1>
       <p>请输入礼物回复页密码</p>
       <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
       <button class="login-btn" id="loginBtn" type="button">进入</button>
@@ -277,7 +295,7 @@
     <header class="topbar">
       <div class="topbar-inner">
         <div class="title">
-          <h1>综合回礼</h1>
+          <h1>房间内回礼情况</h1>
           <p>按送礼人整理历史礼物，最新送礼人和最新礼物优先</p>
         </div>
         <nav class="top-actions" aria-label="页面导航">
@@ -288,7 +306,7 @@
     </header>
 
     <main id="mainContent">
-      <section class="stats-grid" aria-label="综合回礼统计">
+      <section class="stats-grid" aria-label="房间内回礼情况统计">
         <div class="stat"><div class="label">待综合回礼人数</div><div class="value" id="pendingSenders">0</div><div class="sub">至少有一条未回复礼物</div></div>
         <div class="stat"><div class="label">未回复礼物消息</div><div class="value" id="pendingMessages">0</div><div class="sub">仍按逐条真实回复判定</div></div>
         <div class="stat"><div class="label">全部送礼人数</div><div class="value" id="totalSenders">0</div><div class="sub">按用户 ID 聚合</div></div>
@@ -331,6 +349,7 @@
     var loading = false;
     var expandedSenderKeys = new Set();
     var historyCache = new Map();
+    var highlightTimers = new WeakMap();
 
     var loginOverlay = document.getElementById("loginOverlay");
     var loginError = document.getElementById("loginError");
@@ -565,11 +584,30 @@
       collapseButton.type = "button";
       collapseButton.textContent = "收起该送礼人";
       collapseButton.addEventListener("click", function() {
-        details.open = false;
-        details.querySelector("summary").scrollIntoView({ behavior: "smooth", block: "center" });
+        collapseAndHighlightSender(details);
       });
       actions.appendChild(collapseButton);
       container.appendChild(actions);
+    }
+
+    function collapseAndHighlightSender(details) {
+      var summary = details.querySelector("summary");
+      var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      details.open = false;
+      window.requestAnimationFrame(function() {
+        summary.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+        window.setTimeout(function() {
+          var previousTimer = highlightTimers.get(details);
+          if (previousTimer) window.clearTimeout(previousTimer);
+          details.classList.remove("return-highlight");
+          void details.offsetWidth;
+          details.classList.add("return-highlight");
+          highlightTimers.set(details, window.setTimeout(function() {
+            details.classList.remove("return-highlight");
+            highlightTimers.delete(details);
+          }, 3000));
+        }, reduceMotion ? 0 : 450);
+      });
     }
 
     function createBadge(text, extraClass) {
