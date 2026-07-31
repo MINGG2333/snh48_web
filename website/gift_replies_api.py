@@ -132,6 +132,55 @@ def get_gift_replies_summary(
     }
 
 
+@router.get("/senders")
+def get_gift_reply_senders(
+    response: Response,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status_filter: str = Query("unreplied", alias="status"),
+    sender: str = Query(""),
+    _=Depends(verify_gift_replies_password),
+):
+    """Return gift history grouped by sender for periodic combined replies."""
+    response.headers["Cache-Control"] = "no-store"
+
+    status_filter = status_filter.strip().lower()
+    if status_filter not in VALID_STATUSES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的回复状态")
+
+    summary_doc = _load_summary_doc()
+    groups = _group_rows_by_sender(_load_gift_rows())
+    sender_query = sender.strip().casefold()
+    filtered = [
+        group
+        for group in groups
+        if _sender_group_matches(group, status_filter=status_filter, sender_query=sender_query)
+    ]
+
+    total = len(filtered)
+    total_pages = max(1, ceil(total / page_size))
+    start = (page - 1) * page_size
+    end = start + page_size
+    return {
+        "generated_at": summary_doc.get("generated_at", ""),
+        "timezone": summary_doc.get("timezone", "Asia/Shanghai"),
+        "refresh_interval_seconds": _to_int(summary_doc.get("refresh_interval_seconds"), 30),
+        "summary": summary_doc.get("summary", {}),
+        "sender_summary": {
+            "total_senders": len(groups),
+            "senders_with_unreplied": sum(1 for group in groups if group["unreplied_messages"] > 0),
+            "all_replied_senders": sum(1 for group in groups if group["unreplied_messages"] == 0),
+            "filtered_senders": total,
+            "filtered_unreplied_messages": sum(group["unreplied_messages"] for group in filtered),
+        },
+        "items": filtered[start:end],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    }
+
+
 def _data_dir() -> Path:
     return Path(cfg.GIFT_REPLIES_DIR)
 
@@ -216,6 +265,81 @@ def _normalise_catalog(items: Any) -> list[dict[str, Any]]:
             "latest_gift_bj_time": str(item.get("latest_gift_bj_time", "")),
         })
     return catalog
+
+
+def _group_rows_by_sender(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group full gift history by stable sender ID, newest sender and gift first."""
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: (str(row.get("gift_bj_time", "")), str(row.get("gift_message_id", ""))),
+        reverse=True,
+    )
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in sorted_rows:
+        sender_id = str(row.get("sender_id", "")).strip()
+        sender_name = str(row.get("sender_name", "")).strip()
+        if sender_id:
+            sender_key = f"id:{sender_id}"
+        elif sender_name:
+            sender_key = f"name:{sender_name.casefold()}"
+        else:
+            sender_key = f"gift:{row.get('gift_message_id', '')}"
+
+        group = grouped.setdefault(
+            sender_key,
+            {
+                "sender_id": sender_id,
+                "sender_name": sender_name or "未知用户",
+                "latest_gift_bj_time": str(row.get("gift_bj_time", "")),
+                "latest_unreplied_gift_bj_time": "",
+                "first_gift_bj_time": str(row.get("gift_bj_time", "")),
+                "total_messages": 0,
+                "total_gift_count": 0,
+                "replied_messages": 0,
+                "unreplied_messages": 0,
+                "items": [],
+            },
+        )
+        if group["sender_name"] == "未知用户" and sender_name:
+            group["sender_name"] = sender_name
+        group["items"].append(row)
+        group["total_messages"] += 1
+        group["total_gift_count"] += _to_int(row.get("gift_count"), 0)
+        group["first_gift_bj_time"] = str(row.get("gift_bj_time", ""))
+        if row.get("has_reply"):
+            group["replied_messages"] += 1
+        else:
+            group["unreplied_messages"] += 1
+            if not group["latest_unreplied_gift_bj_time"]:
+                group["latest_unreplied_gift_bj_time"] = str(row.get("gift_bj_time", ""))
+
+    return sorted(
+        grouped.values(),
+        key=lambda group: (
+            str(group.get("latest_gift_bj_time", "")),
+            str(group.get("sender_id", "")),
+            str(group.get("sender_name", "")),
+        ),
+        reverse=True,
+    )
+
+
+def _sender_group_matches(
+    group: dict[str, Any],
+    *,
+    status_filter: str,
+    sender_query: str,
+) -> bool:
+    if status_filter == "unreplied" and group["unreplied_messages"] <= 0:
+        return False
+    if status_filter == "replied" and group["replied_messages"] <= 0:
+        return False
+    if sender_query:
+        sender_values = [group.get("sender_id", ""), group.get("sender_name", "")]
+        sender_values.extend(item.get("sender_name", "") for item in group.get("items", []))
+        if sender_query not in " ".join(str(value) for value in sender_values).casefold():
+            return False
+    return True
 
 
 def _filter_rows(

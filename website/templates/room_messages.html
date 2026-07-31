@@ -145,6 +145,29 @@
 
     .stats strong { color: var(--teal); font-weight: 720; }
 
+    .combined-reply-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      border: 1px solid rgba(240, 184, 75, 0.58);
+      border-radius: 8px;
+      background: rgba(240, 184, 75, 0.12);
+      color: #f4d492;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .combined-reply-link:hover,
+    .combined-reply-link:focus-visible {
+      border-color: var(--gold);
+      color: var(--gold);
+      outline: none;
+    }
+
     .mobile-filter-toggle {
       display: none;
       min-height: 34px;
@@ -779,6 +802,7 @@
         </div>
         <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
         <div class="stats">
+          <a class="combined-reply-link" id="combinedReplyLink" href="/gift-replies/senders">综合回礼</a>
           <span>总数 <strong id="totalMessages">0</strong></span>
           <span id="latestTime">最新：-</span>
           <span>刷新 <strong id="refreshSeconds">60</strong> 秒</span>
@@ -940,6 +964,7 @@
     var unrepliedNav = document.getElementById("unrepliedNav");
     var ignoreBatchBtn = document.getElementById("ignoreBatchBtn");
     var undoIgnoreBtn = document.getElementById("undoIgnoreBtn");
+    var combinedReplyLink = document.getElementById("combinedReplyLink");
 
     function trackAdminEvent(eventType, data) {
       if (!window._trackEvent) return;
@@ -963,6 +988,10 @@
         loaded_count: loadedCount
       };
     }
+
+    combinedReplyLink.addEventListener("click", function() {
+      trackAdminEvent("click", { action: "open_combined_gift_replies" });
+    });
 
     updateViewportInsets();
     window.addEventListener("resize", updateViewportInsets);

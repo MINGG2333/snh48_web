@@ -36,7 +36,7 @@
 |------|--------|--------|------|-----|-------------|----------|
 | 背景词管理 | `/scroller-admin` | 无 | `website/templates/scroller_admin.html` | `/api/scroller/*` | `SCROLLER_PASSWORD`；`X-Scroller-Password` 或登录 Cookie | `website/data/scroller_texts.json`；非 Git 版本化共享状态 |
 | 观察页 | `/ob` | 无 | `website/templates/ob.html` | `/api/ob/data`、`/api/ob/mark-read`、`/api/ob/inbox/status` | `OB_PASSWORD`；`X-Ob-Password` | 本节点访问日志、通知中心；双服务器可靠待处理箱明确标识腾讯云/阿里云来源 |
-| 礼物回复管理 | `/gift-replies` | `/gr` | `website/templates/gift_replies.html` | `/api/gift-replies/data`、`/api/gift-replies/summary` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/` |
+| 礼物回复管理 | `/gift-replies`；按送礼人综合回礼 `/gift-replies/senders` | `/gr` | `website/templates/gift_replies.html`、`website/templates/gift_reply_senders.html` | `/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/`；综合回礼页按 `sender_id` 聚合完整礼物历史，默认只列仍有未回复礼物的送礼人 |
 | 房间消息管理 | `/room-messages` | `/room` | `website/templates/room_messages.html` | `/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore` | `ROOM_MESSAGES_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Room-Messages-Password` | 消息读取路径不变；忽略状态是由腾讯云统一提交、带历史版本和 outbox 的非 Git 共享状态 |
 | 成员房间上麦回放 | `/room-voice-replays` | `/radio`；兼容 `/radio-replays` | `website/templates/room_voice_replays.html` | `/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/segments/{filename}` | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；HttpOnly Cookie 或 `X-Room-Voice-Replays-Password` | `ROOM_VOICE_REPLAYS_DIR`，默认 fan-hub `room_voice_replays/`；公开房间/小房间独立会话，默认播放 AAC-LC 单声道兼容版，可切换源 AAC 原始音质版并保持时间位置；进度跳转和缓冲有可见状态；有录音覆盖的消息整行可点击或用键盘跳转到对应时间；音频分段和同期消息用 `session_id` 归为整体；设置 `noindex,nofollow` |
 | 翻牌记录 | `/flip-cards` | `/flip` | `website/templates/flip_cards.html` | `/api/flip-cards/login`、`/status`、`/data`、`/flip_data/audio/{filename}`、`/flip_data/video/{filename}` | `FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；HttpOnly Cookie 或 `X-Flip-Cards-Password` | `FLIP_CARDS_DATASET_PATH` 默认 fan-hub `flip_data/web/flip_cards.json`；`FLIP_CARDS_DATA_DIR` 为本地媒体根目录；页面、数据和本地音视频都鉴权；设置 `noindex,nofollow` |
@@ -67,6 +67,7 @@ curl -sS -D - -o /dev/null https://cjy.plus/complaint
 curl -sS -D - -o /dev/null https://cjy.plus/scroller-admin
 curl -sS -D - -o /dev/null https://cjy.plus/ob
 curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
+curl -sS -D - -o /dev/null https://cjy.plus/gift-replies/senders
 curl -sS -D - -o /dev/null https://cjy.plus/gr
 curl -sS -D - -o /dev/null https://cjy.plus/room-messages
 curl -sS -D - -o /dev/null https://cjy.plus/room

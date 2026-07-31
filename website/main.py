@@ -331,6 +331,22 @@ async def gift_replies_page(request: Request):
     )
 
 
+@app.get("/gift-replies/senders", response_class=HTMLResponse)
+async def gift_reply_senders_page(request: Request):
+    """Admin page for periodic combined replies grouped by sender."""
+    return templates.TemplateResponse(
+        "gift_reply_senders.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/room", response_class=HTMLResponse)
 @app.get("/rm", response_class=HTMLResponse, include_in_schema=False)
 @app.get("/room-messages", response_class=HTMLResponse)
