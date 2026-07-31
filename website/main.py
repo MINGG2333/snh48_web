@@ -314,8 +314,7 @@ async def ob_page(request: Request):
     )
 
 
-@app.get("/gr", response_class=HTMLResponse)
-@app.get("/gift-replies", response_class=HTMLResponse)
+@app.get("/room/gifts", response_class=HTMLResponse)
 async def gift_replies_page(request: Request):
     """Admin page for gift reply status."""
     return templates.TemplateResponse(
@@ -331,7 +330,7 @@ async def gift_replies_page(request: Request):
     )
 
 
-@app.get("/gift-replies/senders", response_class=HTMLResponse)
+@app.get("/room/gift-senders", response_class=HTMLResponse)
 async def gift_reply_senders_page(request: Request):
     """Admin page for periodic combined replies grouped by sender."""
     return templates.TemplateResponse(

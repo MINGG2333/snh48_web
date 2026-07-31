@@ -212,7 +212,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/ob/mark-read` | 标记已读 | `OB_PASSWORD`（失败尝试 IP 限速） |
 | `/api/gift-replies/data` | 礼物回复分页列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/gift-replies/summary` | 礼物回复统计和礼物种类 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
-| `/api/gift-replies/senders` | 按送礼人聚合的综合回礼历史 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/gift-replies/senders` | 日期范围内按送礼人聚合的摘要列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/gift-replies/sender-history` | 按需读取一个送礼人的日期范围内礼物历史 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/room-messages/data` | 房间消息聊天式加载 | `ROOM_MESSAGES_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/room-messages/summary` | 房间消息统计和类型列表 | `ROOM_MESSAGES_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/room-voice-replays/sessions` | 上麦会话列表和详情 | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用房间消息密码（失败尝试 IP 限速） |
@@ -249,8 +250,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/terms` | 服务条款 | ✅ 页脚 |
 | `/scroller-admin` | 背景词管理 | ❌ 仅 URL 访问（需密码） |
 | `/ob` | 观察页 | ❌ 仅 URL 访问（需密码） |
-| `/gift-replies` / `/gr` | 礼物回复管理页 | ❌ 仅 URL 访问（需密码） |
-| `/gift-replies/senders` | 按送礼人整理的综合回礼页 | ❌ 从 Room 页进入（需密码、禁止索引） |
+| `/room/gifts` | 房间礼物逐条明细页 | ❌ 仅 URL 访问（需密码） |
+| `/room/gift-senders` | 按送礼人整理的综合回礼页 | ❌ 从 Room 页进入（需密码、禁止索引） |
 | `/room-messages` / `/room` | 房间消息管理页 | ❌ 仅 URL 访问（需密码） |
 | `/room-voice-replays` / `/radio` | 成员房间上麦回放页 | ❌ 仅 URL 访问（需密码、禁止索引） |
 | `/flip-cards` / `/flip` | 翻牌记录页 | ❌ 仅 URL 访问（需密码、禁止索引） |

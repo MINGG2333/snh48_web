@@ -121,8 +121,8 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：逐条明细 `/gift-replies`（短入口 `/gr`）；综合回礼 `/gift-replies/senders`，并从 `/room` 顶部进入
-- API：`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`
+- 页面入口：逐条明细 `/room/gifts`；综合回礼 `/room/gift-senders`，并从 `/room` 顶部进入；旧 `/gift-replies`、`/gift-replies/senders` 和 `/gr` 不保留兼容路由
+- API：`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`、`/api/gift-replies/sender-history`
 - 数据源：`GIFT_REPLIES_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/`
 - 鉴权：独立环境变量 `GIFT_REPLIES_PASSWORD`，请求头 `X-Gift-Replies-Password`
 - 数据契约：`/home/snh48-fan-hub/doc/gift_reply_data_contract.md`
@@ -130,8 +130,9 @@ node script/obfuscate_js.cjs
 维护边界：
 
 - 页面不进入公开导航，仅 URL 访问并要求密码。
-- 默认每页 `100` 条，页面按数据文件里的 `refresh_interval_seconds` 自动刷新，默认 `30` 秒；运行时可在 fan-hub 的 `config/room_monitor.json` 中热更新。
-- 综合回礼页以稳定 `sender_id`（缺失时回退昵称）聚合同一送礼人的全部历史，送礼人和组内礼物都按最新送礼时间倒序；默认只显示至少有一条未回复礼物的送礼人，但组内同时展示已回复与未回复历史。
+- 逐条明细默认每页 `100` 条；两个礼物页面都按数据文件里的 `refresh_interval_seconds` 自动刷新，默认 `30` 秒，运行时可在 fan-hub 的 `config/room_monitor.json` 中热更新。
+- 综合回礼页以稳定 `sender_id`（缺失时回退昵称）聚合同一送礼人的日期范围内历史，送礼人和组内礼物都按最新送礼时间倒序；默认起始日期为 `2026-05-30`，默认只显示至少有一条未回复礼物的送礼人。
+- 送礼人摘要一次返回全部匹配结果并默认折叠；展开时再按需请求该人的历史，避免首屏下载所有礼物明细。统计与个人计数默认隐藏，由页面上的低显眼度“统计”按钮切换。
 - 综合回礼页只整理和展示真实逐条回礼状态，不自行推断一次综合感谢覆盖了哪些旧礼物，也不写入额外回礼状态。
 - 后端只读取 `gifts.csv` 和 `summary.json` 派生小数据，不读取或同步完整 `messages.csv`、语音原文件、图片归档或敏感配置。
 
@@ -360,9 +361,8 @@ python3 deploy/deploy.py deploy all --check-env
 ```bash
 curl -sS -D - -o /dev/null https://cjy.plus/
 curl -sS -D - -o /dev/null https://cjy.plus/timeline
-curl -sS -D - -o /dev/null https://cjy.plus/gift-replies
-curl -sS -D - -o /dev/null https://cjy.plus/gift-replies/senders
-curl -sS -D - -o /dev/null https://cjy.plus/gr
+curl -sS -D - -o /dev/null https://cjy.plus/room/gifts
+curl -sS -D - -o /dev/null https://cjy.plus/room/gift-senders
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/sg
 curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
@@ -381,9 +381,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 ```bash
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/timeline
-curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies
-curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gift-replies/senders
-curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/gr
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room/gifts
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room/gift-senders
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score-gifts
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/sg
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room-voice-replays

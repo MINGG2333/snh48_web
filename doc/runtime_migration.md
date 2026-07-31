@@ -63,7 +63,7 @@
 
 1. `python3 deploy/deploy.py check-env <target>` 确认必要环境变量存在。
 2. `python3 -m compileall -q website` 确认代码可导入。
-3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/gift-replies`、`/room-messages`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、`/memories`。
+3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/room/gifts`、`/room/gift-senders`、`/room-messages`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、`/memories`。
 4. 核对 `manual_events.csv`、四类当前共享状态、`shared_state_history/`、`shared_state_outbox/` 和 `action_inbox/` 存在且不是空目录覆盖。
 5. 在新的腾讯云权威节点运行 `script/shared_state_history.py list <resource>`，确认当前 revision 可在历史中找到；在 `/ob` 核对待处理箱来源标签。
 6. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。

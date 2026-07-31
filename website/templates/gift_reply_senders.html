@@ -117,18 +117,19 @@
     }
     main { width: min(1180px, 100%); margin: 0 auto; padding: 20px 20px 40px; }
     .stats-grid {
-      display: grid;
+      display: none;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 14px;
     }
+    .page.show-stats .stats-grid { display: grid; }
     .stat { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px; }
     .stat .label { color: var(--muted); font-size: 12px; }
     .stat .value { font-size: 24px; font-weight: 760; margin-top: 5px; }
     .stat .sub { color: var(--faint); font-size: 12px; margin-top: 3px; }
     .toolbar {
       display: grid;
-      grid-template-columns: minmax(260px, 1fr) minmax(190px, 260px) minmax(120px, 150px) auto;
+      grid-template-columns: minmax(250px, 1.2fr) minmax(180px, 1fr) 150px 150px auto;
       gap: 10px;
       align-items: end;
       border: 1px solid var(--line);
@@ -162,15 +163,25 @@
     .segment button:last-child { border-right: 0; }
     .segment button.active { background: var(--teal); color: var(--ink); font-weight: 750; }
     .toolbar-actions { display: flex; gap: 8px; }
-    .result-head {
+    .result-head, .result-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
+    }
+    .result-head {
+      justify-content: space-between;
       color: var(--muted);
       font-size: 13px;
       margin: 2px 2px 10px;
     }
+    .stats-toggle {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      padding: 3px 2px;
+      font-size: 12px;
+    }
+    .stats-toggle:hover, .stats-toggle:focus-visible { color: var(--muted); }
     .sender-list { display: grid; gap: 12px; }
     .sender-card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
     .sender-card summary {
@@ -185,7 +196,8 @@
     .sender-name { font-size: 17px; font-weight: 760; word-break: break-word; }
     .sender-id { color: var(--faint); font-size: 12px; margin-top: 3px; word-break: break-all; }
     .sender-latest { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
-    .sender-badges { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .sender-badges { display: none; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .page.show-stats .sender-badges { display: flex; }
     .badge {
       min-height: 24px;
       display: inline-flex;
@@ -217,10 +229,17 @@
     .reply-status.unreplied { color: var(--gold); background: rgba(240, 184, 75, 0.1); }
     .reply-detail { color: var(--muted); word-break: break-word; }
     .reply-content { color: var(--text); margin-top: 3px; }
+    .history-message { color: var(--muted); padding: 24px 16px; text-align: center; }
+    .history-message.error { color: var(--red); }
+    .history-actions {
+      display: flex;
+      justify-content: center;
+      padding: 13px 16px 15px;
+      border-top: 1px solid var(--line);
+    }
+    .collapse-btn { min-width: 150px; }
     .empty { display: none; color: var(--muted); text-align: center; padding: 52px 12px; }
     .empty.show { display: block; }
-    .pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; color: var(--muted); font-size: 13px; }
-    .pager-actions { display: flex; gap: 8px; }
     .btn:disabled { cursor: not-allowed; opacity: 0.45; }
     .loading { opacity: 0.65; pointer-events: none; }
     @media (max-width: 820px) {
@@ -238,7 +257,8 @@
       .gift-main { grid-column: 1 / -1; grid-row: 2; }
       .gift-row > :nth-child(3) { grid-column: 2; grid-row: 1; }
       .reply-detail { grid-column: 1 / -1; grid-row: 3; }
-      .result-head, .pagination { align-items: flex-start; flex-direction: column; }
+      .result-head { align-items: flex-start; flex-direction: column; }
+      .result-actions { width: 100%; justify-content: space-between; }
     }
   </style>
 </head>
@@ -262,7 +282,7 @@
         </div>
         <nav class="top-actions" aria-label="页面导航">
           <a class="nav-link primary" href="/room">返回 Room</a>
-          <a class="nav-link" href="/gift-replies">逐条明细</a>
+          <a class="nav-link" href="/room/gifts">逐条明细</a>
         </nav>
       </div>
     </header>
@@ -285,20 +305,17 @@
           </div>
         </div>
         <div class="field"><label for="senderInput">送礼人</label><input id="senderInput" type="search" placeholder="昵称或用户 ID"></div>
-        <div class="field">
-          <label for="pageSizeSelect">每页人数</label>
-          <select id="pageSizeSelect"><option value="10">10 人</option><option value="20" selected>20 人</option><option value="50">50 人</option></select>
-        </div>
+        <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date" value="2026-05-30"></div>
+        <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
         <div class="toolbar-actions"><button class="btn primary" id="applyBtn" type="button">筛选</button><button class="btn" id="resetBtn" type="button">重置</button></div>
       </section>
 
-      <div class="result-head"><span id="resultSummary">共 0 人</span><span id="refreshLabel">数据每 30 秒刷新</span></div>
+      <div class="result-head">
+        <span id="resultSummary">共 0 人，当前显示 0 人</span>
+        <div class="result-actions"><span id="refreshLabel">数据每 30 秒刷新</span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
+      </div>
       <section class="sender-list" id="senderList" aria-label="按送礼人整理的礼物历史"></section>
       <div class="empty" id="emptyState">当前筛选条件下没有送礼人</div>
-      <div class="pagination">
-        <div id="pageInfo">第 1 / 1 页</div>
-        <div class="pager-actions"><button class="btn" id="prevBtn" type="button">上一页</button><button class="btn" id="nextBtn" type="button">下一页</button></div>
-      </div>
     </main>
   </div>
 
@@ -306,13 +323,14 @@
   <script>
   (function() {
     "use strict";
+    var DEFAULT_DATE_FROM = "2026-05-30";
     var password = "";
-    var currentPage = 1;
-    var totalPages = 1;
     var activeStatus = "unreplied";
     var refreshSeconds = 30;
     var refreshTimer = null;
     var loading = false;
+    var expandedSenderKeys = new Set();
+    var historyCache = new Map();
 
     var loginOverlay = document.getElementById("loginOverlay");
     var loginError = document.getElementById("loginError");
@@ -322,11 +340,11 @@
     var mainContent = document.getElementById("mainContent");
     var statusSegment = document.getElementById("statusSegment");
     var senderInput = document.getElementById("senderInput");
-    var pageSizeSelect = document.getElementById("pageSizeSelect");
+    var dateFromInput = document.getElementById("dateFromInput");
+    var dateToInput = document.getElementById("dateToInput");
     var senderList = document.getElementById("senderList");
     var emptyState = document.getElementById("emptyState");
-    var prevBtn = document.getElementById("prevBtn");
-    var nextBtn = document.getElementById("nextBtn");
+    var statsToggle = document.getElementById("statsToggle");
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -348,11 +366,23 @@
 
     function queryString() {
       var params = new URLSearchParams();
-      params.set("page", String(currentPage));
-      params.set("page_size", pageSizeSelect.value || "20");
       params.set("status", activeStatus);
       params.set("sender", senderInput.value.trim());
+      params.set("date_from", dateFromInput.value);
+      params.set("date_to", dateToInput.value);
       return params.toString();
+    }
+
+    function historyQueryString(senderKey) {
+      var params = new URLSearchParams();
+      params.set("sender_key", senderKey);
+      params.set("date_from", dateFromInput.value);
+      params.set("date_to", dateToInput.value);
+      return params.toString();
+    }
+
+    function currentHistoryCacheKey(senderKey) {
+      return [senderKey, dateFromInput.value, dateToInput.value].join("|");
     }
 
     async function loadData(loginAttempt) {
@@ -369,6 +399,9 @@
             loginOverlay.classList.remove("hidden");
             page.classList.remove("ready");
             if (loginAttempt) track("login_attempt", { action: "gift_reply_senders_login", result: "failure" });
+          } else {
+            var errorData = await response.json().catch(function() { return {}; });
+            showPageError(errorData.detail || "筛选条件无效，请检查后重试");
           }
           return;
         }
@@ -389,8 +422,6 @@
     function render(data) {
       var senderSummary = data.sender_summary || {};
       var summary = data.summary || {};
-      currentPage = Number(data.page || 1);
-      totalPages = Number(data.total_pages || 1);
       refreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || 30));
       document.getElementById("pendingSenders").textContent = String(senderSummary.senders_with_unreplied || 0);
       document.getElementById("pendingMessages").textContent = String(summary.unreplied_gift_messages || 0);
@@ -399,25 +430,32 @@
       document.getElementById("generatedAt").textContent = "生成时间：" + (data.generated_at || "-");
       document.getElementById("resultSummary").textContent = "共 " + Number(data.total || 0) + " 人，当前显示 " + (data.items || []).length + " 人";
       document.getElementById("refreshLabel").textContent = "数据每 " + refreshSeconds + " 秒刷新";
-      document.getElementById("pageInfo").textContent = "第 " + currentPage + " / " + totalPages + " 页";
-      prevBtn.disabled = currentPage <= 1;
-      nextBtn.disabled = currentPage >= totalPages;
       renderSenders(data.items || []);
       resetRefreshTimer();
+    }
+
+    function showPageError(message) {
+      senderList.replaceChildren();
+      emptyState.textContent = message;
+      emptyState.classList.add("show");
+      document.getElementById("resultSummary").textContent = "未能加载送礼人";
     }
 
     function renderSenders(groups) {
       senderList.replaceChildren();
       emptyState.classList.toggle("show", groups.length === 0);
+      if (groups.length === 0) emptyState.textContent = "当前筛选条件下没有送礼人";
       groups.forEach(function(group) {
-        senderList.appendChild(createSenderCard(group));
+        var card = createSenderCard(group);
+        senderList.appendChild(card);
+        if (card.open) loadSenderHistory(group, card, card.querySelector(".history-content"));
       });
     }
 
     function createSenderCard(group) {
       var details = document.createElement("details");
       details.className = "sender-card";
-      details.open = true;
+      details.open = expandedSenderKeys.has(group.sender_key);
       var summary = document.createElement("summary");
       var head = document.createElement("div");
       head.className = "sender-head";
@@ -447,6 +485,66 @@
       summary.appendChild(badges);
       details.appendChild(summary);
 
+      var historyContent = document.createElement("div");
+      historyContent.className = "history-content";
+      details.appendChild(historyContent);
+      details.addEventListener("toggle", function() {
+        if (details.open) {
+          expandedSenderKeys.add(group.sender_key);
+          loadSenderHistory(group, details, historyContent);
+        } else {
+          expandedSenderKeys.delete(group.sender_key);
+        }
+        track("click", {
+          action: details.open ? "expand_sender_history" : "collapse_sender_history",
+          gift_count: Number(group.total_messages || 0)
+        });
+      });
+      return details;
+    }
+
+    async function loadSenderHistory(group, details, historyContent) {
+      if (!details.open || historyContent.dataset.loading === "true" || historyContent.dataset.loaded === "true") return;
+      var cacheKey = currentHistoryCacheKey(group.sender_key);
+      if (historyCache.has(cacheKey)) {
+        renderSenderHistory(historyContent, historyCache.get(cacheKey), details);
+        return;
+      }
+
+      historyContent.dataset.loading = "true";
+      showHistoryMessage(historyContent, "正在加载礼物记录……", false);
+      try {
+        var response = await fetch("/api/gift-replies/sender-history?" + historyQueryString(group.sender_key), {
+          headers: { "X-Gift-Replies-Password": password },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          var errorData = await response.json().catch(function() { return {}; });
+          throw new Error(errorData.detail || "礼物记录加载失败");
+        }
+        var data = await response.json();
+        var historyGroup = data.item || {};
+        historyCache.set(cacheKey, historyGroup);
+        renderSenderHistory(historyContent, historyGroup, details);
+      } catch (error) {
+        showHistoryMessage(historyContent, error.message || "礼物记录加载失败，请稍后重试", true);
+      } finally {
+        historyContent.dataset.loading = "false";
+      }
+    }
+
+    function showHistoryMessage(container, message, isError) {
+      container.replaceChildren();
+      container.dataset.loaded = "false";
+      var notice = document.createElement("div");
+      notice.className = "history-message" + (isError ? " error" : "");
+      notice.textContent = message;
+      container.appendChild(notice);
+    }
+
+    function renderSenderHistory(container, group, details) {
+      container.replaceChildren();
+      container.dataset.loaded = "true";
       var historyHead = document.createElement("div");
       historyHead.className = "history-head";
       ["送礼时间", "礼物", "回复状态", "回复记录"].forEach(function(label) {
@@ -454,14 +552,24 @@
         cell.textContent = label;
         historyHead.appendChild(cell);
       });
-      details.appendChild(historyHead);
+      container.appendChild(historyHead);
       (group.items || []).forEach(function(item) {
-        details.appendChild(createGiftRow(item));
+        container.appendChild(createGiftRow(item));
       });
-      details.addEventListener("toggle", function() {
-        track("click", { action: details.open ? "expand_sender_history" : "collapse_sender_history", gift_count: Number(group.total_messages || 0) });
+      if (!(group.items || []).length) showHistoryMessage(container, "当前日期范围内没有礼物记录", false);
+
+      var actions = document.createElement("div");
+      actions.className = "history-actions";
+      var collapseButton = document.createElement("button");
+      collapseButton.className = "btn collapse-btn";
+      collapseButton.type = "button";
+      collapseButton.textContent = "收起该送礼人";
+      collapseButton.addEventListener("click", function() {
+        details.open = false;
+        details.querySelector("summary").scrollIntoView({ behavior: "smooth", block: "center" });
       });
-      return details;
+      actions.appendChild(collapseButton);
+      container.appendChild(actions);
     }
 
     function createBadge(text, extraClass) {
@@ -527,12 +635,18 @@
     }
 
     function applyFilters(action) {
-      currentPage = 1;
+      if (dateFromInput.value && dateToInput.value && dateFromInput.value > dateToInput.value) {
+        showPageError("开始日期不能晚于结束日期");
+        return;
+      }
+      expandedSenderKeys.clear();
+      historyCache.clear();
       track("admin_filter", {
         action: action,
         status: activeStatus,
         has_sender_query: Boolean(senderInput.value.trim()),
-        page_size: Number(pageSizeSelect.value || 20)
+        has_date_from: Boolean(dateFromInput.value),
+        has_date_to: Boolean(dateToInput.value)
       });
       loadData(false);
     }
@@ -565,26 +679,19 @@
     document.getElementById("resetBtn").addEventListener("click", function() {
       activeStatus = "unreplied";
       senderInput.value = "";
-      pageSizeSelect.value = "20";
+      dateFromInput.value = DEFAULT_DATE_FROM;
+      dateToInput.value = "";
       syncStatusButtons();
       applyFilters("reset_sender_filters");
     });
     senderInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") applyFilters("search_sender");
     });
-    prevBtn.addEventListener("click", function() {
-      if (currentPage <= 1) return;
-      currentPage -= 1;
-      track("click", { action: "sender_page_previous", page: currentPage });
-      loadData(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-    nextBtn.addEventListener("click", function() {
-      if (currentPage >= totalPages) return;
-      currentPage += 1;
-      track("click", { action: "sender_page_next", page: currentPage });
-      loadData(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    statsToggle.addEventListener("click", function() {
+      var visible = page.classList.toggle("show-stats");
+      statsToggle.textContent = visible ? "隐藏统计" : "统计";
+      statsToggle.setAttribute("aria-expanded", visible ? "true" : "false");
+      track("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
     Array.prototype.forEach.call(document.querySelectorAll(".top-actions a"), function(link) {
       link.addEventListener("click", function() {
