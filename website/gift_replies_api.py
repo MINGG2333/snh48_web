@@ -179,6 +179,7 @@ def get_gift_reply_senders(
         "date_from": date_from,
         "date_to": date_to,
         "summary": _summarise_rows(rows),
+        "dataset_summary": summary_doc.get("summary", {}),
         "sender_summary": {
             "total_senders": len(groups),
             "senders_with_unreplied": sum(1 for group in groups if group["unreplied_messages"] > 0),

@@ -243,6 +243,25 @@
       font-size: 12px;
     }
     .badge.unreplied { border-color: rgba(240, 184, 75, 0.42); color: var(--gold); background: rgba(240, 184, 75, 0.09); }
+    .update-pill {
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      display: none;
+      transform: translateX(-50%);
+      border: 1px solid var(--teal);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--teal);
+      padding: 9px 15px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+      white-space: nowrap;
+    }
+    .update-pill.show { display: block; }
+    .update-pill:disabled { cursor: wait; opacity: 0.72; }
     .history-head, .gift-row {
       display: grid;
       grid-template-columns: 150px minmax(220px, 1fr) 100px minmax(220px, 1.2fr);
@@ -353,8 +372,9 @@
 
       <div class="result-head">
         <span id="resultSummary">共 0 人，当前显示 0 人</span>
-        <div class="result-actions"><span id="refreshLabel">数据每 30 秒刷新</span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
+        <div class="result-actions"><span id="refreshLabel">每 30 秒检查更新</span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
       </div>
+      <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新的送礼数据，点击刷新</button>
       <section class="sender-list" id="senderList" aria-label="按送礼人整理的礼物历史"></section>
       <div class="empty" id="emptyState">当前筛选条件下没有送礼人</div>
     </main>
@@ -370,6 +390,8 @@
     var refreshSeconds = 30;
     var refreshTimer = null;
     var loading = false;
+    var checkingUpdates = false;
+    var lastDatasetSnapshot = null;
     var loginBusy = false;
     var loginVerified = false;
     var expandedSenderKeys = new Set();
@@ -389,6 +411,7 @@
     var senderList = document.getElementById("senderList");
     var emptyState = document.getElementById("emptyState");
     var statsToggle = document.getElementById("statsToggle");
+    var updatePill = document.getElementById("updatePill");
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -512,13 +535,15 @@
       var senderSummary = data.sender_summary || {};
       var summary = data.summary || {};
       refreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || 30));
+      lastDatasetSnapshot = datasetSnapshot(data);
+      updatePill.classList.remove("show");
       document.getElementById("pendingSenders").textContent = String(senderSummary.senders_with_unreplied || 0);
       document.getElementById("pendingMessages").textContent = String(summary.unreplied_gift_messages || 0);
       document.getElementById("totalSenders").textContent = String(senderSummary.total_senders || 0);
       document.getElementById("filteredSenders").textContent = String(senderSummary.filtered_senders || 0);
       document.getElementById("generatedAt").textContent = "生成时间：" + (data.generated_at || "-");
       document.getElementById("resultSummary").textContent = "共 " + Number(data.total || 0) + " 人，当前显示 " + (data.items || []).length + " 人";
-      document.getElementById("refreshLabel").textContent = "数据每 " + refreshSeconds + " 秒刷新";
+      document.getElementById("refreshLabel").textContent = "每 " + refreshSeconds + " 秒检查更新";
       renderSenders(data.items || []);
       resetRefreshTimer();
     }
@@ -768,9 +793,73 @@
       loadData(false);
     }
 
+    function datasetSnapshot(data) {
+      var summary = data && (data.dataset_summary || data.summary) ? (data.dataset_summary || data.summary) : {};
+      return {
+        totalGiftMessages: Number(summary.total_gift_messages || 0),
+        totalGiftCount: Number(summary.total_gift_count || 0),
+        repliedGiftMessages: Number(summary.replied_gift_messages || 0),
+        unrepliedGiftMessages: Number(summary.unreplied_gift_messages || 0),
+        matchedReplyMessages: Number(summary.matched_reply_messages || 0),
+        unmatchedReplyMessages: Number(summary.unmatched_reply_messages || 0),
+        latestGiftTime: String(summary.latest_gift_bj_time || "")
+      };
+    }
+
+    function hasDataUpdate(current) {
+      if (!lastDatasetSnapshot) return false;
+      return JSON.stringify(current) !== JSON.stringify(lastDatasetSnapshot);
+    }
+
+    async function checkUpdates() {
+      if (!password || loading || checkingUpdates || !page.classList.contains("ready")) return;
+      checkingUpdates = true;
+      try {
+        var response = await fetch("/api/gift-replies/summary", {
+          headers: { "X-Gift-Replies-Password": password },
+          cache: "no-store"
+        });
+        if (!response.ok) return;
+        var data = await response.json();
+        var nextRefreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || refreshSeconds || 30));
+        if (nextRefreshSeconds !== refreshSeconds) {
+          refreshSeconds = nextRefreshSeconds;
+          resetRefreshTimer();
+        }
+        document.getElementById("refreshLabel").textContent = "每 " + refreshSeconds + " 秒检查更新";
+        if (hasDataUpdate(datasetSnapshot(data))) {
+          updatePill.classList.add("show");
+        }
+      } catch (error) {
+        return;
+      } finally {
+        checkingUpdates = false;
+      }
+    }
+
+    async function loadLatestData() {
+      if (updatePill.disabled) return;
+      updatePill.disabled = true;
+      updatePill.textContent = "正在加载最新送礼数据…";
+      historyCache.clear();
+      track("admin_filter", {
+        action: "load_newer_gift_sender_data",
+        status: activeStatus,
+        has_sender_query: Boolean(senderInput.value.trim()),
+        has_date_from: Boolean(dateFromInput.value),
+        has_date_to: Boolean(dateToInput.value)
+      });
+      try {
+        await loadData(false);
+      } finally {
+        updatePill.disabled = false;
+        updatePill.textContent = "有新的送礼数据，点击刷新";
+      }
+    }
+
     function resetRefreshTimer() {
       if (refreshTimer) window.clearInterval(refreshTimer);
-      refreshTimer = window.setInterval(function() { loadData(false); }, refreshSeconds * 1000);
+      refreshTimer = window.setInterval(checkUpdates, refreshSeconds * 1000);
     }
 
     loginBtn.addEventListener("click", async function() {
@@ -824,6 +913,7 @@
       statsToggle.setAttribute("aria-expanded", visible ? "true" : "false");
       track("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
+    updatePill.addEventListener("click", loadLatestData);
     Array.prototype.forEach.call(document.querySelectorAll(".top-actions a"), function(link) {
       link.addEventListener("click", function() {
         track("click", { action: link.getAttribute("href") === "/room" ? "back_to_room" : "open_gift_details" });

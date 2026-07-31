@@ -144,6 +144,7 @@ class GiftReplySendersApiTests(unittest.TestCase):
         self.assertNotIn("items", payload["items"][0])
         self.assertEqual(payload["items"][0]["total_messages"], 2)
         self.assertEqual(payload["summary"]["unreplied_gift_messages"], 1)
+        self.assertEqual(payload["dataset_summary"]["unreplied_gift_messages"], 1)
 
     def test_sender_status_filters_unreplied_and_all_replied(self) -> None:
         unreplied = self.call_endpoint(status="unreplied")
@@ -200,6 +201,12 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
         self.assertNotIn('data-status="replied">有已回复</button>', template)
         self.assertIn('senderState.textContent = hasUnreplied ? "有未回复" : "已全部回复"', template)
         self.assertNotIn('position: sticky', template)
+        self.assertIn('id="updatePill"', template)
+        self.assertIn('/api/gift-replies/summary', template)
+        self.assertIn('window.setInterval(checkUpdates', template)
+        self.assertIn('updatePill.addEventListener("click", loadLatestData)', template)
+        self.assertIn('有新的送礼数据，点击刷新', template)
+        self.assertNotIn('window.setInterval(function() { loadData(false); }', template)
         self.assertIn('收起该送礼人', template)
         self.assertIn('房间内回礼情况', template)
         self.assertNotIn('<h1>综合回礼</h1>', template)
