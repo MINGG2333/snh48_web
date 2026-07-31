@@ -184,6 +184,8 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
         self.assertIn('/api/gift-replies/sender-history?', template)
         self.assertIn('details.open = expandedSenderKeys.has(group.sender_key)', template)
         self.assertIn('value="2026-05-30"', template)
+        self.assertIn('input[type="date"]::-webkit-calendar-picker-indicator', template)
+        self.assertIn('invert(79%) sepia(23%)', template)
         self.assertIn('id="statsToggle"', template)
         self.assertIn('收起该送礼人', template)
         self.assertIn('房间内回礼情况', template)
