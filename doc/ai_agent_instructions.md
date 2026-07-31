@@ -210,6 +210,7 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/balance` | 余额查询 | 无（IP 限速 + 成功结果缓存） |
 | `/api/ob/data` | 观察页数据 | `OB_PASSWORD`（失败尝试 IP 限速） |
 | `/api/ob/mark-read` | 标记已读 | `OB_PASSWORD`（失败尝试 IP 限速） |
+| `/api/ob/verify`、`/api/gift-replies/verify`、`/api/room-messages/verify`、`/api/score-gifts/verify`、`/api/memories/verify` | 只验证对应管理页密码，不读取完整业务数据 | 各页原有密码与请求头（失败尝试 IP 限速） |
 | `/api/gift-replies/data` | 礼物回复分页列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/gift-replies/summary` | 礼物回复统计和礼物种类 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/gift-replies/senders` | 日期范围内按送礼人聚合的摘要列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |

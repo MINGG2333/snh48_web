@@ -110,6 +110,16 @@ def check_room_messages_login_limit(request: Request) -> None:
     check_admin_login_limit(get_client_ip(request), "房间消息页密码尝试过于频繁，请稍后再试")
 
 
+@router.get("/verify")
+def verify_room_messages_login(
+    response: Response,
+    _=Depends(verify_room_messages_password),
+):
+    """Verify the password without loading room-message data."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
+
+
 @router.get("/data")
 def get_room_messages_data(
     response: Response,

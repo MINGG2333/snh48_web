@@ -112,6 +112,9 @@
     .login-error.show {
       display: block;
     }
+    .login-error.status { color: var(--accent); }
+    .login-error.success { color: var(--good); }
+    .login-btn:disabled { cursor: wait; opacity: 0.72; }
 
     .page {
       display: none;
@@ -652,6 +655,8 @@
     var refreshTimer = null;
     var refreshSeconds = 30;
     var lastCatalogHash = "";
+    var loginBusy = false;
+    var loginVerified = false;
 
     var loginOverlay = document.getElementById("loginOverlay");
     var loginBtn = document.getElementById("loginBtn");
@@ -736,13 +741,68 @@
       };
     }
 
-    function doLogin() {
-      var value = passwordInput.value.trim();
-      if (!value) return;
+    function setLoginFeedback(kind, message) {
+      loginError.textContent = message;
+      loginError.classList.add("show");
+      loginError.classList.toggle("status", kind === "verifying");
+      loginError.classList.toggle("success", kind === "loading" || kind === "retry");
+      loginBtn.disabled = kind === "verifying" || kind === "loading";
+      passwordInput.disabled = kind !== "idle";
+      loginBtn.textContent = kind === "verifying" ? "正在验证…" : (kind === "loading" ? "正在加载…" : (kind === "retry" ? "重试加载" : "进入"));
+    }
+
+    function resetLoginForPassword(message) {
+      loginBusy = false;
+      loginVerified = false;
+      password = "";
+      passwordInput.disabled = false;
+      passwordInput.value = "";
+      loginBtn.disabled = false;
+      loginBtn.textContent = "进入";
+      loginError.textContent = message || "密码错误";
+      loginError.classList.remove("status", "success");
+      loginError.classList.add("show");
+      passwordInput.focus();
+    }
+
+    function showLoginLoadRetry(message) {
+      loginBusy = false;
+      loginVerified = true;
+      setLoginFeedback("retry", message || "密码正确，但数据加载失败，请点击重试加载");
+    }
+
+    async function verifyLoginPassword() {
+      var resp = await fetch("/api/gift-replies/verify", {
+        headers: { "X-Gift-Replies-Password": password },
+        cache: "no-store"
+      });
+      if (!resp.ok) {
+        throw new Error(await readError(resp) || "密码验证失败");
+      }
+    }
+
+    async function doLogin() {
+      if (loginBusy) return;
+      if (!loginVerified) {
+        var value = passwordInput.value.trim();
+        if (!value) return;
+        password = value;
+      }
+      loginBusy = true;
       trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "submitted" });
-      password = value;
-      loginError.classList.remove("show");
-      fetchData({ resetTimer: true });
+      if (!loginVerified) {
+        setLoginFeedback("verifying", "正在验证密码…");
+        try {
+          await verifyLoginPassword();
+          loginVerified = true;
+        } catch (error) {
+          resetLoginForPassword(error.message || "密码验证失败，请重试");
+          trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "failure" });
+          return;
+        }
+      }
+      setLoginFeedback("loading", "密码正确，正在加载页面内容…");
+      await fetchData({ resetTimer: true, loginAttempt: true });
     }
 
     function buildQuery() {
@@ -762,6 +822,7 @@
       options = options || {};
       mainContent.classList.add("loading");
       var wasLoginVisible = !loginOverlay.classList.contains("hidden");
+      var loginAttempt = Boolean(options.loginAttempt && wasLoginVisible);
       try {
         var resp = await fetch("/api/gift-replies/data?" + buildQuery(), {
           headers: { "X-Gift-Replies-Password": password },
@@ -770,12 +831,9 @@
 
         if (resp.status === 401 || resp.status === 403) {
           var detail = await readError(resp);
-          loginError.textContent = detail || "密码错误";
-          loginError.classList.add("show");
+          resetLoginForPassword(detail || "密码错误");
           loginOverlay.classList.remove("hidden");
           pageEl.classList.remove("ready");
-          passwordInput.value = "";
-          passwordInput.focus();
           stopRefresh();
           if (wasLoginVisible) {
             trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "failure" });
@@ -799,13 +857,17 @@
         if (wasLoginVisible) {
           trackAdminEvent("login_attempt", { action: "gift_replies_login", result: "success" });
         }
+        loginBusy = false;
         render(data);
         if (options.resetTimer) {
           resetRefreshTimer();
         }
       } catch (err) {
-        loginError.textContent = "加载失败：" + err.message;
-        loginError.classList.add("show");
+        if (loginAttempt) showLoginLoadRetry("密码正确，但数据加载失败：" + err.message);
+        else {
+          loginError.textContent = "加载失败：" + err.message;
+          loginError.classList.add("show");
+        }
       } finally {
         mainContent.classList.remove("loading");
       }

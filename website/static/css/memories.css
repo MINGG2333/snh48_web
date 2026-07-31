@@ -122,12 +122,25 @@
   font-weight: 760;
 }
 
+.memories-login-box button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .login-error,
 .submit-result {
   min-height: 20px;
   margin-top: 10px;
   font-size: 13px;
   color: #ff897f;
+}
+
+.login-error.status {
+  color: #63c8b1;
+}
+
+.login-error.success {
+  color: #74d99f;
 }
 
 .submit-result.ok {

@@ -117,12 +117,14 @@ node script/obfuscate_js.cjs
 
 ## 功能维护备注
 
+密码保护页的登录反馈分为“正在验证密码”和“密码正确，正在加载数据”两阶段。礼物、房间消息、计分礼物、观察页和记忆页通过轻量 `/verify` 接口先确认密码；翻牌和上麦回放页使用现有 `/login` 写入 Cookie。密码已确认后若完整数据读取失败，前端保留登录状态并提供免重输密码的重试按钮。
+
 ### 礼物回复管理页
 
 入口和文档：
 
 - 页面入口：逐条明细 `/room/gifts`；综合回礼 `/room/gift-senders`，并从 `/room` 顶部进入；旧 `/gift-replies`、`/gift-replies/senders` 和 `/gr` 不保留兼容路由
-- API：`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`、`/api/gift-replies/sender-history`
+- API：`/api/gift-replies/verify`、`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`、`/api/gift-replies/sender-history`
 - 数据源：`GIFT_REPLIES_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/`
 - 鉴权：独立环境变量 `GIFT_REPLIES_PASSWORD`，请求头 `X-Gift-Replies-Password`
 - 数据契约：`/home/snh48-fan-hub/doc/gift_reply_data_contract.md`
@@ -141,7 +143,7 @@ node script/obfuscate_js.cjs
 入口和文档：
 
 - 页面入口：`/room-messages`，短入口：`/room`；旧短入口 `/rm` 保留兼容。
-- API：`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore`
+- API：`/api/room-messages/verify`、`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore`
 - 数据源：优先读取 `ROOM_MESSAGES_SHARDS_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/`；没有分片时回退到 `ROOM_MESSAGES_CSV_PATH`；消息字段中的 `room_type=main/small` 和 `room_label=公开房间/小房间` 用于页面标识公开房间或小房间
 - 语音转录参考：`ROOM_AUDIO_TRANSCRIPTS_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/room_audio_transcripts.jsonl`
 - 忽略状态：`ROOM_MESSAGES_IGNORE_PATH`，默认 `/home/snh48_web/website/data/room_messages_ignored_batches.json`
@@ -198,7 +200,7 @@ node script/obfuscate_js.cjs
 入口和文档：
 
 - 页面入口：`/score-gifts`，短入口：`/sg`
-- API：`/api/score-gifts/data`、`/api/score-gifts/summary`、`/api/score-gifts/business-review`
+- API：`/api/score-gifts/verify`、`/api/score-gifts/data`、`/api/score-gifts/summary`、`/api/score-gifts/business-review`
 - 数据源：`SCORE_GIFTS_DATA_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/score_gifts.json`
 - 鉴权：默认复用 `GIFT_REPLIES_PASSWORD`；如需单独密码可设置 `SCORE_GIFTS_PASSWORD`；请求头 `X-Score-Gifts-Password`
 - 数据契约：`/home/snh48-fan-hub/doc/score_gift_data_contract.md`
@@ -216,7 +218,7 @@ node script/obfuscate_js.cjs
 入口和文档：
 
 - 页面入口：`/memories`，短入口：`/memory`
-- API：`/api/memories/data`、`/api/memories/submit`、`/api/memories/manage`、`/api/memories/review`
+- API：`/api/memories/verify`、`/api/memories/data`、`/api/memories/submit`、`/api/memories/manage`、`/api/memories/review`
 - 数据源：`MEMORIES_DATA_PATH`，默认 `/home/snh48_web/website/data/memories/memories.json`
 - 鉴权：普通访问/提交使用 `MEMORIES_VIEW_PASSWORD` 和请求头 `X-Memories-Password`；应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` 和 `X-Memories-Fanclub-Password`；本人模式使用 `MEMORIES_IDOL_PASSWORD` 和 `X-Memories-Idol-Password`
 - 产品说明：`doc/memories.md`

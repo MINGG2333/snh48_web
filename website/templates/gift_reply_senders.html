@@ -74,6 +74,9 @@
     }
     .login-error { display: none; color: var(--red); font-size: 13px; margin-top: 10px; }
     .login-error.show { display: block; }
+    .login-error.status { color: var(--teal); }
+    .login-error.success { color: var(--green); }
+    .login-btn:disabled { cursor: wait; opacity: 0.72; }
     .page { display: none; }
     .page.ready { display: block; }
     .topbar {
@@ -356,6 +359,8 @@
     var refreshSeconds = 30;
     var refreshTimer = null;
     var loading = false;
+    var loginBusy = false;
+    var loginVerified = false;
     var expandedSenderKeys = new Set();
     var historyCache = new Map();
     var highlightTimers = new WeakMap();
@@ -382,6 +387,47 @@
     function setLoading(value) {
       loading = value;
       mainContent.classList.toggle("loading", value);
+    }
+
+    function setLoginFeedback(kind, message) {
+      loginError.textContent = message;
+      loginError.classList.add("show");
+      loginError.classList.toggle("status", kind === "verifying");
+      loginError.classList.toggle("success", kind === "loading" || kind === "retry");
+      loginBtn.disabled = kind === "verifying" || kind === "loading";
+      passwordInput.disabled = kind === "verifying" || kind === "loading" || kind === "retry";
+      loginBtn.textContent = kind === "verifying" ? "正在验证…" : (kind === "loading" ? "正在加载…" : (kind === "retry" ? "重试加载" : "进入"));
+    }
+
+    function resetLoginForPassword(message) {
+      loginBusy = false;
+      loginVerified = false;
+      password = "";
+      passwordInput.disabled = false;
+      passwordInput.value = "";
+      loginBtn.disabled = false;
+      loginBtn.textContent = "进入";
+      loginError.textContent = message || "密码错误";
+      loginError.classList.remove("status", "success");
+      loginError.classList.add("show");
+      passwordInput.focus();
+    }
+
+    function showLoginLoadRetry(message) {
+      loginBusy = false;
+      loginVerified = true;
+      setLoginFeedback("retry", message || "密码正确，但数据加载失败，请点击重试加载");
+    }
+
+    async function verifyLoginPassword() {
+      var response = await fetch("/api/gift-replies/verify", {
+        headers: { "X-Gift-Replies-Password": password },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        var errorData = await response.json().catch(function() { return {}; });
+        throw { auth: response.status === 401 || response.status === 403, message: errorData.detail || "密码验证失败" };
+      }
     }
 
     function syncStatusButtons() {
@@ -423,15 +469,16 @@
         });
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            loginError.classList.add("show");
+            resetLoginForPassword("密码已失效，请重新输入");
             loginOverlay.classList.remove("hidden");
             page.classList.remove("ready");
             if (loginAttempt) track("login_attempt", { action: "gift_reply_senders_login", result: "failure" });
           } else {
             var errorData = await response.json().catch(function() { return {}; });
-            showPageError(errorData.detail || "筛选条件无效，请检查后重试");
+            if (loginAttempt) showLoginLoadRetry("密码正确，但数据加载失败：" + (errorData.detail || "请稍后重试"));
+            else showPageError(errorData.detail || "筛选条件无效，请检查后重试");
           }
-          return;
+          return false;
         }
         var data = await response.json();
         loginError.classList.remove("show");
@@ -439,9 +486,12 @@
         page.classList.add("ready");
         if (loginAttempt) track("login_attempt", { action: "gift_reply_senders_login", result: "success" });
         render(data);
+        loginBusy = false;
+        return true;
       } catch (error) {
-        loginError.textContent = "数据加载失败，请稍后重试";
-        loginError.classList.add("show");
+        if (loginAttempt) showLoginLoadRetry("密码正确，但数据加载失败，请点击重试加载");
+        else showPageError("数据加载失败，请稍后重试");
+        return false;
       } finally {
         setLoading(false);
       }
@@ -703,14 +753,28 @@
       refreshTimer = window.setInterval(function() { loadData(false); }, refreshSeconds * 1000);
     }
 
-    loginBtn.addEventListener("click", function() {
-      var value = passwordInput.value.trim();
-      if (!value) return;
-      password = value;
-      loginError.textContent = "密码错误";
-      loginError.classList.remove("show");
+    loginBtn.addEventListener("click", async function() {
+      if (loginBusy) return;
+      if (!loginVerified) {
+        var value = passwordInput.value.trim();
+        if (!value) return;
+        password = value;
+      }
+      loginBusy = true;
       track("login_attempt", { action: "gift_reply_senders_login", result: "submitted" });
-      loadData(true);
+      if (!loginVerified) {
+        setLoginFeedback("verifying", "正在验证密码…");
+        try {
+          await verifyLoginPassword();
+          loginVerified = true;
+        } catch (error) {
+          resetLoginForPassword(error.message || "密码验证失败，请重试");
+          track("login_attempt", { action: "gift_reply_senders_login", result: "failure" });
+          return;
+        }
+      }
+      setLoginFeedback("loading", "密码正确，正在加载页面内容…");
+      await loadData(true);
     });
     passwordInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") loginBtn.click();

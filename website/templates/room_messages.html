@@ -97,6 +97,9 @@
     }
 
     .login-error.show { display: block; }
+    .login-error.status { color: var(--teal); }
+    .login-error.success { color: var(--green); }
+    .login-btn:disabled { cursor: wait; opacity: 0.72; }
 
     .page {
       display: none;
@@ -918,6 +921,8 @@
     var hasMoreOlder = false;
     var hasMoreNewer = false;
     var loading = false;
+    var loginBusy = false;
+    var loginVerified = false;
     var loadedCount = 0;
     var refreshSeconds = 60;
     var refreshTimer = null;
@@ -1011,13 +1016,66 @@
       document.documentElement.style.setProperty("--visual-bottom-gap", Math.round(gap) + "px");
     }
 
-    function doLogin() {
-      var value = passwordInput.value.trim();
-      if (!value) return;
+    function setLoginFeedback(kind, message) {
+      loginError.textContent = message;
+      loginError.classList.add("show");
+      loginError.classList.toggle("status", kind === "verifying");
+      loginError.classList.toggle("success", kind === "loading" || kind === "retry");
+      loginBtn.disabled = kind === "verifying" || kind === "loading";
+      passwordInput.disabled = kind !== "idle";
+      loginBtn.textContent = kind === "verifying" ? "正在验证…" : (kind === "loading" ? "正在加载…" : (kind === "retry" ? "重试加载" : "进入"));
+    }
+
+    function resetLoginForPassword(message) {
+      loginBusy = false;
+      loginVerified = false;
+      password = "";
+      passwordInput.disabled = false;
+      passwordInput.value = "";
+      loginBtn.disabled = false;
+      loginBtn.textContent = "进入";
+      loginError.textContent = message || "密码错误";
+      loginError.classList.remove("status", "success");
+      loginError.classList.add("show");
+      passwordInput.focus();
+    }
+
+    function showLoginLoadRetry(message) {
+      loginBusy = false;
+      loginVerified = true;
+      setLoginFeedback("retry", message || "密码正确，但数据加载失败，请点击重试加载");
+    }
+
+    async function verifyLoginPassword() {
+      var resp = await fetch("/api/room-messages/verify", {
+        headers: { "X-Room-Messages-Password": password },
+        cache: "no-store"
+      });
+      if (!resp.ok) throw new Error(await readError(resp) || "密码验证失败");
+    }
+
+    async function doLogin() {
+      if (loginBusy) return;
+      if (!loginVerified) {
+        var value = passwordInput.value.trim();
+        if (!value) return;
+        password = value;
+      }
+      loginBusy = true;
       trackAdminEvent("login_attempt", { action: "room_messages_login", result: "submitted" });
-      password = value;
-      loginError.classList.remove("show");
-      reloadLatest();
+      if (!loginVerified) {
+        setLoginFeedback("verifying", "正在验证密码…");
+        try {
+          await verifyLoginPassword();
+          loginVerified = true;
+        } catch (error) {
+          resetLoginForPassword(error.message || "密码验证失败，请重试");
+          trackAdminEvent("login_attempt", { action: "room_messages_login", result: "failure" });
+          return;
+        }
+      }
+      setLoginFeedback("loading", "密码正确，正在加载房间消息…");
+      await reloadLatest("", { loginAttempt: true });
     }
 
     function queryBase(limitOverride) {
@@ -1043,6 +1101,7 @@
       if (options.newer) bottomLoader.classList.remove("hidden");
       if (options.targetId) showJumpStatus(options.statusText || "正在加载目标消息...");
       var wasLoginVisible = !loginOverlay.classList.contains("hidden");
+      var loginAttempt = Boolean(options.loginAttempt && wasLoginVisible);
 
       try {
         var params = queryBase(options.limitOverride);
@@ -1064,8 +1123,7 @@
 
         if (resp.status === 401 || resp.status === 403) {
           var detail = await readError(resp);
-          loginError.textContent = detail || "密码错误";
-          loginError.classList.add("show");
+          resetLoginForPassword(detail || "密码错误");
           loginOverlay.classList.remove("hidden");
           pageEl.classList.remove("ready");
           stopRefresh();
@@ -1085,6 +1143,7 @@
         if (wasLoginVisible) {
           trackAdminEvent("login_attempt", { action: "room_messages_login", result: "success" });
         }
+        loginBusy = false;
         renderSummary(data);
         syncTypeOptions(data.type_counts || []);
 
@@ -1136,6 +1195,8 @@
       } catch (err) {
         if (options.targetId || options.targetDate) {
           showJumpStatus(err.message || "没有在当前筛选结果中找到目标消息");
+        } else if (loginAttempt) {
+          showLoginLoadRetry("密码正确，但房间消息加载失败，请点击重试加载");
         } else {
           loginError.textContent = "加载失败：" + err.message;
           loginError.classList.add("show");
@@ -1605,7 +1666,7 @@
       parent.appendChild(span);
     }
 
-    function reloadLatest(action) {
+    function reloadLatest(action, options) {
       beforeIndex = null;
       afterIndex = null;
       hasMoreOlder = false;
@@ -1614,7 +1675,7 @@
       if (action) {
         trackAdminEvent("admin_filter", roomFilterPayload(action));
       }
-      fetchChunk({ older: false });
+      return fetchChunk(Object.assign({ older: false }, options || {}));
     }
 
     function loadOlderIfNeeded() {

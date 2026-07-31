@@ -198,6 +198,21 @@ class MemoryReviewRequest(BaseModel):
         return _clean_text(value, max_length=300)
 
 
+@router.get("/verify")
+def verify_memories_login(request: Request, response: Response):
+    """Verify the view password without loading memory records."""
+    _verify_password_value(
+        request=request,
+        expected=cfg.MEMORIES_VIEW_PASSWORD,
+        provided=request.headers.get("X-Memories-Password"),
+        disabled_detail="记忆页未启用",
+        missing_detail="需要记忆页密码",
+        wrong_detail="记忆页密码错误",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
+
+
 @router.get("/data")
 def get_memories_data(
     request: Request,

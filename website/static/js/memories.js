@@ -11,6 +11,8 @@
     page: 1,
     totalPages: 1,
     optionsLoaded: false,
+    loginBusy: false,
+    loginVerified: false,
   };
 
   const els = {};
@@ -23,16 +25,13 @@
     state.password = localStorage.getItem(storageKey) || '';
     if (state.password) {
       els.password.value = state.password;
-      loadMemories().then(showApp).catch(() => {
-        localStorage.removeItem(storageKey);
-        state.password = '';
-      });
+      attemptLogin(true);
     }
   }
 
   function bindElements() {
     [
-      'memoriesLogin', 'memoriesLoginForm', 'memoriesPassword', 'memoriesLoginError',
+      'memoriesLogin', 'memoriesLoginForm', 'memoriesPassword', 'memoriesLoginSubmit', 'memoriesLoginError',
       'memoriesApp', 'memoryTotal', 'memoryPending', 'memoryTypeKinds',
       'memoryPlatformKinds', 'memoryTypeFilter', 'memoryPlatformFilter',
       'memoryConfirmFilter', 'memorySearch', 'memoryApplyFilters',
@@ -74,33 +73,90 @@
 
   async function handleLogin(event) {
     event.preventDefault();
-    const password = els.password.value.trim();
-    if (!password) {
-      setLoginError('请输入访问密码');
-      return;
+    await attemptLogin(false);
+  }
+
+  async function attemptLogin(savedPassword) {
+    if (state.loginBusy) return;
+    if (!state.loginVerified) {
+      const password = els.password.value.trim();
+      if (!password) {
+        setLoginFeedback('error', '请输入访问密码');
+        return;
+      }
+      state.password = password;
     }
-    state.password = password;
+    state.loginBusy = true;
+    if (!savedPassword) {
+      track('login_attempt', { area: 'memories', result: 'submitted', mode: 'view' });
+    }
+    if (!state.loginVerified) {
+      setLoginFeedback('verifying', savedPassword ? '正在验证已保存的密码…' : '正在验证密码…');
+      try {
+        await verifyLoginPassword();
+        state.loginVerified = true;
+      } catch (error) {
+        resetLoginForPassword(error.message || '密码验证失败，请重试');
+        track('login_attempt', { area: 'memories', result: 'failure', mode: 'view' });
+        return;
+      }
+    }
+    setLoginFeedback('loading', '密码正确，正在加载记忆…');
     try {
       await loadMemories();
-      localStorage.setItem(storageKey, password);
-      setLoginError('');
+      localStorage.setItem(storageKey, state.password);
       showApp();
       track('login_attempt', { area: 'memories', result: 'success', mode: 'view' });
     } catch (error) {
-      state.password = '';
-      localStorage.removeItem(storageKey);
-      setLoginError(error.message || '进入失败');
-      track('login_attempt', { area: 'memories', result: 'failure', mode: 'view' });
+      if (error.status === 401 || error.status === 403) {
+        resetLoginForPassword(error.message || '密码已失效，请重新输入');
+      } else {
+        showLoginLoadRetry('密码正确，但记忆加载失败：' + (error.message || '请稍后重试'));
+      }
     }
   }
 
   function showApp() {
+    state.loginBusy = false;
     els.memoriesLogin.classList.add('hidden');
     els.memoriesApp.hidden = false;
+    setLoginFeedback('idle', '');
   }
 
-  function setLoginError(message) {
+  function setLoginFeedback(kind, message) {
     els.memoriesLoginError.textContent = message || '';
+    els.memoriesLoginError.classList.toggle('status', kind === 'verifying');
+    els.memoriesLoginError.classList.toggle('success', kind === 'loading' || kind === 'retry');
+    els.memoriesLoginSubmit.disabled = kind === 'verifying' || kind === 'loading';
+    els.password.disabled = kind === 'verifying' || kind === 'loading' || kind === 'retry';
+    els.memoriesLoginSubmit.textContent = kind === 'verifying'
+      ? '正在验证…'
+      : (kind === 'loading' ? '正在加载…' : (kind === 'retry' ? '重试加载' : '进入'));
+  }
+
+  function resetLoginForPassword(message) {
+    state.loginBusy = false;
+    state.loginVerified = false;
+    state.password = '';
+    localStorage.removeItem(storageKey);
+    els.password.disabled = false;
+    els.password.value = '';
+    setLoginFeedback('error', message || '密码错误');
+    els.password.focus();
+  }
+
+  function showLoginLoadRetry(message) {
+    state.loginBusy = false;
+    state.loginVerified = true;
+    setLoginFeedback('retry', message || '密码正确，但数据加载失败，请点击重试加载');
+  }
+
+  async function verifyLoginPassword() {
+    await fetchJson('/api/memories/verify', {
+      method: 'GET',
+      cache: 'no-store',
+      headers: authHeaders(),
+    });
   }
 
   async function loadMemories() {
@@ -518,7 +574,9 @@
       data = {};
     }
     if (!response.ok) {
-      throw new Error(data.detail || `请求失败：${response.status}`);
+      const error = new Error(data.detail || `请求失败：${response.status}`);
+      error.status = response.status;
+      throw error;
     }
     return data;
   }

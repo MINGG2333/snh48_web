@@ -89,6 +89,16 @@ def check_score_gifts_login_limit(request: Request) -> None:
     check_admin_login_limit(get_client_ip(request), "计分礼物页密码尝试过于频繁，请稍后再试")
 
 
+@router.get("/verify")
+def verify_score_gifts_login(
+    response: Response,
+    _=Depends(verify_score_gifts_password),
+):
+    """Verify the password without loading score-gift data."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
+
+
 @router.get("/data")
 def get_score_gifts_data(
     response: Response,

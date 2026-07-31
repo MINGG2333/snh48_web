@@ -60,6 +60,8 @@
     .login-box input::placeholder { color: var(--text-dim); }
     .login-box .error { color: var(--notif); font-size: 13px; margin-top: 12px; display: none; }
     .login-box .error.show { display: block; }
+    .login-box .error.status { color: var(--accent); }
+    .login-box .error.success { color: var(--green); }
     .login-btn {
       width: 100%; margin-top: 16px; padding: 12px;
       background: var(--accent); border: none; border-radius: 10px;
@@ -67,6 +69,7 @@
       transition: opacity .2s;
     }
     .login-btn:hover { opacity: .85; }
+    .login-btn:disabled { cursor: wait; opacity: .68; }
 
     /* ── Header ── */
     header {
@@ -473,6 +476,8 @@
   let inboxData = [];
   let currentGroupId = -1;
   let currentNotifIdx = -1;
+  let loginBusy = false;
+  let loginVerified = false;
 
   // ── DOM refs ──
   const loginOverlay = document.getElementById('loginOverlay');
@@ -502,20 +507,78 @@
   }
 
   // ── Login ──
-  function doLogin() {
-    const pw = passwordInput.value.trim();
-    if (!pw) return;
+  function setLoginFeedback(kind, message) {
+    loginError.textContent = message;
+    loginError.classList.add('show');
+    loginError.classList.toggle('status', kind === 'verifying');
+    loginError.classList.toggle('success', kind === 'loading' || kind === 'retry');
+    loginBtn.disabled = kind === 'verifying' || kind === 'loading';
+    passwordInput.disabled = kind !== 'idle';
+    loginBtn.textContent = kind === 'verifying' ? '正在验证…' : (kind === 'loading' ? '正在加载…' : (kind === 'retry' ? '重试加载' : '进入'));
+  }
+
+  function resetLoginForPassword(message) {
+    loginBusy = false;
+    loginVerified = false;
+    obPassword = '';
+    passwordInput.disabled = false;
+    passwordInput.value = '';
+    loginBtn.disabled = false;
+    loginBtn.textContent = '进入';
+    loginError.textContent = message || '密码错误';
+    loginError.classList.remove('status', 'success');
+    loginError.classList.add('show');
+    loginOverlay.classList.remove('hidden');
+    passwordInput.focus();
+  }
+
+  function showLoginLoadRetry(message) {
+    loginBusy = false;
+    loginVerified = true;
+    setLoginFeedback('retry', message || '密码正确，但数据加载失败，请点击重试加载');
+  }
+
+  async function verifyLoginPassword() {
+    const resp = await fetch('/api/ob/verify', {
+      headers: { 'X-Ob-Password': obPassword },
+      cache: 'no-store'
+    });
+    if (!resp.ok) {
+      const error = await resp.json().catch(() => ({}));
+      throw new Error(error.detail || '密码验证失败');
+    }
+  }
+
+  async function doLogin() {
+    if (loginBusy) return;
+    if (!loginVerified) {
+      const pw = passwordInput.value.trim();
+      if (!pw) return;
+      obPassword = pw;
+    }
+    loginBusy = true;
     trackAdminEvent('login_attempt', { action: 'ob_login', result: 'submitted' });
-    obPassword = pw;
-    loginError.classList.remove('show');
-    fetchData();
+    if (!loginVerified) {
+      setLoginFeedback('verifying', '正在验证密码…');
+      try {
+        await verifyLoginPassword();
+        loginVerified = true;
+      } catch (error) {
+        resetLoginForPassword(error.message || '密码验证失败，请重试');
+        trackAdminEvent('login_attempt', { action: 'ob_login', result: 'failure' });
+        return;
+      }
+    }
+    setLoginFeedback('loading', '密码正确，正在加载观察数据…');
+    await fetchData({ loginAttempt: true });
   }
 
   passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
   loginBtn.addEventListener('click', doLogin);
 
   // ── Fetch Data ──
-  async function fetchData() {
+  async function fetchData(options) {
+    options = options || {};
     const wasLoginVisible = !loginOverlay.classList.contains('hidden');
     const attemptedLogin = wasLoginVisible && Boolean(obPassword);
     try {
@@ -523,9 +586,8 @@
         headers: { 'X-Ob-Password': obPassword }
       });
       if (resp.status === 401 || resp.status === 403) {
-        loginError.classList.add('show');
-        passwordInput.value = '';
-        passwordInput.focus();
+        const error = await resp.json().catch(() => ({}));
+        resetLoginForPassword(error.detail || '密码错误');
         if (attemptedLogin) {
           trackAdminEvent('login_attempt', { action: 'ob_login', result: 'failure' });
         }
@@ -537,14 +599,19 @@
       inboxData = data.inbox || [];
       loginOverlay.classList.add('hidden');
       mainHeader.style.display = 'flex';
+      loginBusy = false;
       if (attemptedLogin) {
         trackAdminEvent('login_attempt', { action: 'ob_login', result: 'success' });
       }
       renderGroups();
       renderInbox();
     } catch (err) {
-      loginError.textContent = '加载失败: ' + err.message;
-      loginError.classList.add('show');
+      if (options.loginAttempt && wasLoginVisible) {
+        showLoginLoadRetry('密码正确，但观察数据加载失败，请点击重试加载');
+      } else {
+        loginError.textContent = '加载失败: ' + err.message;
+        loginError.classList.add('show');
+      }
     }
   }
 

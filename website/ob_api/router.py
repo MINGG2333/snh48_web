@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from website import config as cfg
@@ -82,6 +82,13 @@ async def verify_ob_password(
             detail="密码错误",
         )
     return True
+
+
+@router.get("/verify")
+def verify_ob_login(response: Response, _=Depends(verify_ob_password)):
+    """Verify the password without loading observation records."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
 
 
 @router.get("/data")

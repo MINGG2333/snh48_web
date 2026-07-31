@@ -86,6 +86,8 @@
       font-weight: 750;
     }
 
+    .login-btn:disabled { cursor: wait; opacity: .72; }
+
     .login-error {
       display: none;
       margin-top: 10px;
@@ -94,6 +96,8 @@
     }
 
     .login-error.show { display: block; }
+    .login-error.status { color: var(--teal); }
+    .login-error.success { color: var(--green); }
 
     .page {
       display: none;
@@ -475,6 +479,7 @@
     const loginForm = document.getElementById("loginForm");
     const passwordInput = document.getElementById("passwordInput");
     const loginError = document.getElementById("loginError");
+    const loginSubmit = loginForm.querySelector('button[type="submit"]');
     const page = document.getElementById("page");
     const subtitle = document.getElementById("subtitle");
     const stats = document.getElementById("stats");
@@ -489,6 +494,8 @@
 
     let dataset = null;
     let records = [];
+    let loginBusy = false;
+    let loginVerified = false;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -496,14 +503,40 @@
     }
 
     function showLogin(message) {
+      loginBusy = false;
+      loginVerified = false;
       loginOverlay.classList.remove("hidden");
       page.classList.remove("ready");
+      passwordInput.disabled = false;
+      passwordInput.value = "";
+      loginSubmit.disabled = false;
+      loginSubmit.textContent = "验证并进入";
       loginError.textContent = message || "";
+      loginError.classList.remove("status", "success");
       loginError.classList.toggle("show", Boolean(message));
       passwordInput.focus();
     }
 
+    function setLoginFeedback(kind, message) {
+      loginError.textContent = message;
+      loginError.classList.add("show");
+      loginError.classList.toggle("status", kind === "verifying");
+      loginError.classList.toggle("success", kind === "loading" || kind === "retry");
+      loginSubmit.disabled = kind === "verifying" || kind === "loading";
+      passwordInput.disabled = kind === "verifying" || kind === "loading" || kind === "retry";
+      loginSubmit.textContent = kind === "verifying"
+        ? "正在验证…"
+        : (kind === "loading" ? "正在加载…" : (kind === "retry" ? "重试加载" : "验证并进入"));
+    }
+
+    function showLoginLoadRetry(message) {
+      loginBusy = false;
+      loginVerified = true;
+      setLoginFeedback("retry", message || "密码正确，但翻牌记录加载失败，请点击重试加载");
+    }
+
     function showPage() {
+      loginBusy = false;
       loginOverlay.classList.add("hidden");
       page.classList.add("ready");
     }
@@ -845,24 +878,37 @@
 
     loginForm.addEventListener("submit", async function (event) {
       event.preventDefault();
-      const password = passwordInput.value;
-      if (!password) return;
-      loginError.classList.remove("show");
-      loginError.textContent = "";
-      track("login_attempt", { action: "submit", result: "submitted" });
+      if (loginBusy) return;
+      let password = "";
+      if (!loginVerified) {
+        password = passwordInput.value;
+        if (!password) return;
+        track("login_attempt", { action: "submit", result: "submitted" });
+      }
+      loginBusy = true;
+      if (!loginVerified) {
+        setLoginFeedback("verifying", "正在验证密码…");
+        try {
+          await apiJson("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password })
+          });
+          loginVerified = true;
+          track("login_attempt", { action: "submit", result: "success" });
+        } catch (error) {
+          track("login_attempt", { action: "submit", result: "failure", status: error.status || 0 });
+          showLogin(error.message || "密码错误");
+          return;
+        }
+        passwordInput.value = "";
+      }
+      setLoginFeedback("loading", "密码正确，正在加载翻牌记录…");
       try {
-        await apiJson("/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password })
-        });
-        track("login_attempt", { action: "submit", result: "success" });
         await loadApp();
       } catch (error) {
-        track("login_attempt", { action: "submit", result: "failure", status: error.status || 0 });
-        showLogin(error.message || "密码错误");
-      } finally {
-        passwordInput.value = "";
+        if (error.status === 401 || error.status === 403) showLogin("登录已失效，请重新输入密码");
+        else showLoginLoadRetry("密码正确，但翻牌记录加载失败：" + (error.message || "请稍后重试"));
       }
     });
 

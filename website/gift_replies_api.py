@@ -56,6 +56,16 @@ def check_gift_replies_login_limit(request: Request) -> None:
     check_admin_login_limit(get_client_ip(request), "礼物回复页密码尝试过于频繁，请稍后再试")
 
 
+@router.get("/verify")
+def verify_gift_replies_login(
+    response: Response,
+    _=Depends(verify_gift_replies_password),
+):
+    """Verify the password without loading the gift dataset."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
+
+
 @router.get("/data")
 def get_gift_replies_data(
     response: Response,

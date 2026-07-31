@@ -44,6 +44,7 @@
     }
     .primary { background: var(--rose); border-color: var(--rose); color: white; }
     .primary:hover { background: var(--rose-dark); }
+    .primary:disabled { cursor: wait; opacity: .7; }
     .login-wrap { min-height: 68vh; display: grid; place-items: center; }
     .login-card {
       width: min(420px, 100%); padding: 30px; background: var(--paper);
@@ -59,6 +60,8 @@
     .login-card input:focus { border-color: var(--rose); box-shadow: 0 0 0 3px var(--rose-soft); }
     .login-card button { width: 100%; margin-top: 12px; padding: 12px; }
     .error { min-height: 22px; margin-top: 10px; color: #b33a4d; font-size: 13px; }
+    .error.status { color: #827094; }
+    .error.success { color: #438665; }
     .app { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; }
     .panel {
       background: var(--paper); border: 1px solid var(--line); border-radius: 18px;
@@ -230,6 +233,7 @@
     const loginForm = document.getElementById("loginForm");
     const passwordInput = document.getElementById("passwordInput");
     const loginError = document.getElementById("loginError");
+    const loginSubmit = loginForm.querySelector('button[type="submit"]');
     const roomFilter = document.getElementById("roomFilter");
     const sessionList = document.getElementById("sessionList");
     const detailEmpty = document.getElementById("detailEmpty");
@@ -257,6 +261,8 @@
     let suppressPauseTrackingUntil = 0;
     let seekFromWallSeconds = null;
     let lastPlaybackWallSeconds = 0;
+    let loginBusy = false;
+    let loginVerified = false;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -290,17 +296,45 @@
     }
 
     function showLogin(message) {
+      loginBusy = false;
+      loginVerified = false;
       loginWrap.hidden = false;
       app.hidden = true;
       logoutBtn.hidden = true;
+      passwordInput.disabled = false;
+      passwordInput.value = "";
+      loginSubmit.disabled = false;
+      loginSubmit.textContent = "验证并进入";
       loginError.textContent = message || "";
+      loginError.classList.remove("status", "success");
       if (!audioPlayer.paused && !audioPlayer.ended) suppressPauseTrackingUntil = Date.now() + 1000;
       audioPlayer.pause();
       audioPlayer.removeAttribute("src");
       hidePlaybackStatus();
     }
 
+    function setLoginFeedback(kind, message) {
+      loginError.textContent = message;
+      loginError.classList.toggle("status", kind === "verifying");
+      loginError.classList.toggle("success", kind === "loading" || kind === "retry");
+      loginSubmit.disabled = kind === "verifying" || kind === "loading";
+      passwordInput.disabled = kind === "verifying" || kind === "loading" || kind === "retry";
+      loginSubmit.textContent = kind === "verifying"
+        ? "正在验证…"
+        : (kind === "loading" ? "正在加载…" : (kind === "retry" ? "重试加载" : "验证并进入"));
+    }
+
+    function showLoginLoadRetry(message) {
+      loginBusy = false;
+      loginVerified = true;
+      loginWrap.hidden = false;
+      app.hidden = true;
+      logoutBtn.hidden = true;
+      setLoginFeedback("retry", message || "密码正确，但录音列表加载失败，请点击重试加载");
+    }
+
     function showApp() {
+      loginBusy = false;
       loginWrap.hidden = true;
       app.hidden = false;
       logoutBtn.hidden = false;
@@ -388,16 +422,22 @@
       });
     }
 
-    async function loadSessions() {
+    async function loadSessions(options) {
+      options = options || {};
       try {
         const body = await api("/sessions");
         sessions = Array.isArray(body.sessions) ? body.sessions : [];
-        showApp();
         renderSessions();
-        if (sessions.length && !currentSessionId) await loadSession(sessions[0].session_id, "auto_first");
+        if (sessions.length && (!currentSessionId || !currentSession)) {
+          await loadSession(sessions[0].session_id, "auto_first", { throwOnError: options.loginAttempt });
+        }
+        showApp();
+        return true;
       } catch (error) {
+        if (options.loginAttempt) throw error;
         if (error.status === 401 || error.status === 403) showLogin("");
         else showLogin(error.message);
+        return false;
       }
     }
 
@@ -520,7 +560,8 @@
       }
     }
 
-    async function loadSession(sessionId, source) {
+    async function loadSession(sessionId, source, options) {
+      options = options || {};
       currentSessionId = sessionId;
       renderSessions();
       try {
@@ -544,6 +585,7 @@
           message_count: currentMessages.length
         });
       } catch (error) {
+        if (options.throwOnError) throw error;
         if (error.status === 401 || error.status === 403) showLogin("登录已失效，请重新验证。");
         else {
           detailEmpty.hidden = false;
@@ -666,20 +708,37 @@
 
     loginForm.addEventListener("submit", async event => {
       event.preventDefault();
-      loginError.textContent = "正在验证…";
-      track("login_attempt", { action: "submit", result: "pending" });
-      try {
-        await api("/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password: passwordInput.value })
-        });
+      if (loginBusy) return;
+      let password = "";
+      if (!loginVerified) {
+        password = passwordInput.value;
+        if (!password) return;
+        track("login_attempt", { action: "submit", result: "pending" });
+      }
+      loginBusy = true;
+      if (!loginVerified) {
+        setLoginFeedback("verifying", "正在验证密码…");
+        try {
+          await api("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password })
+          });
+          loginVerified = true;
+          track("login_attempt", { action: "submit", result: "success" });
+        } catch (error) {
+          track("login_attempt", { action: "submit", result: "failure" });
+          showLogin(error.message || "密码错误");
+          return;
+        }
         passwordInput.value = "";
-        track("login_attempt", { action: "submit", result: "success" });
-        await loadSessions();
+      }
+      setLoginFeedback("loading", "密码正确，正在加载录音列表…");
+      try {
+        await loadSessions({ loginAttempt: true });
       } catch (error) {
-        loginError.textContent = error.message;
-        track("login_attempt", { action: "submit", result: "failure" });
+        if (error.status === 401 || error.status === 403) showLogin("登录已失效，请重新输入密码");
+        else showLoginLoadRetry("密码正确，但录音列表加载失败：" + (error.message || "请稍后重试"));
       }
     });
 
