@@ -120,7 +120,7 @@ class GiftReplySendersApiTests(unittest.TestCase):
     def call_endpoint(
         self,
         *,
-        status: str = "unreplied",
+        status: str = "all",
         sender: str = "",
         date_from: str = "2026-05-30",
         date_to: str = "",
@@ -134,15 +134,23 @@ class GiftReplySendersApiTests(unittest.TestCase):
             _=True,
         )
 
-    def test_defaults_to_date_filtered_unreplied_sender_summaries_without_history(self) -> None:
+    def test_defaults_to_all_date_filtered_sender_summaries_without_history(self) -> None:
         payload = self.call_endpoint()
-        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual([item["sender_id"] for item in payload["items"]], ["100", "200"])
         self.assertEqual(payload["sender_summary"]["total_senders"], 2)
         self.assertEqual(payload["sender_summary"]["senders_with_unreplied"], 1)
         self.assertEqual(payload["date_from"], "2026-05-30")
         self.assertNotIn("items", payload["items"][0])
         self.assertEqual(payload["items"][0]["total_messages"], 2)
         self.assertEqual(payload["summary"]["unreplied_gift_messages"], 1)
+
+    def test_sender_status_filters_unreplied_and_all_replied(self) -> None:
+        unreplied = self.call_endpoint(status="unreplied")
+        self.assertEqual([item["sender_id"] for item in unreplied["items"]], ["100"])
+
+        all_replied = self.call_endpoint(status="all_replied")
+        self.assertEqual([item["sender_id"] for item in all_replied["items"]], ["200"])
 
     def test_can_search_an_old_nickname_and_rejects_invalid_status(self) -> None:
         payload = self.call_endpoint(status="all", sender="旧昵称")
@@ -187,6 +195,11 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
         self.assertIn('input[type="date"]::-webkit-calendar-picker-indicator', template)
         self.assertIn('invert(79%) sepia(23%)', template)
         self.assertIn('id="statsToggle"', template)
+        self.assertIn('data-status="all" class="active">全部</button>', template)
+        self.assertIn('data-status="all_replied">已全部回复</button>', template)
+        self.assertNotIn('data-status="replied">有已回复</button>', template)
+        self.assertIn('senderState.textContent = hasUnreplied ? "有未回复" : "已全部回复"', template)
+        self.assertNotIn('position: sticky', template)
         self.assertIn('收起该送礼人', template)
         self.assertIn('房间内回礼情况', template)
         self.assertNotIn('<h1>综合回礼</h1>', template)

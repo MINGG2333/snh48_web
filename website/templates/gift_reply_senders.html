@@ -80,9 +80,6 @@
     .page { display: none; }
     .page.ready { display: block; }
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 5;
       border-bottom: 1px solid var(--line);
       background: rgba(13, 17, 23, 0.96);
       backdrop-filter: blur(10px);
@@ -216,7 +213,21 @@
       }
     }
     .sender-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+    .sender-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
     .sender-name { font-size: 17px; font-weight: 760; word-break: break-word; }
+    .sender-state {
+      min-height: 23px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .sender-state.unreplied { border-color: rgba(240, 184, 75, 0.42); color: var(--gold); background: rgba(240, 184, 75, 0.09); }
+    .sender-state.all-replied { border-color: rgba(76, 194, 122, 0.42); color: var(--green); background: rgba(76, 194, 122, 0.1); }
     .sender-id { color: var(--faint); font-size: 12px; margin-top: 3px; word-break: break-all; }
     .sender-latest { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
     .sender-badges { display: none; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
@@ -329,9 +340,9 @@
         <div class="field">
           <label>送礼人状态</label>
           <div class="segment" id="statusSegment">
-            <button type="button" data-status="unreplied" class="active">有未回复</button>
-            <button type="button" data-status="all">全部</button>
-            <button type="button" data-status="replied">有已回复</button>
+            <button type="button" data-status="all" class="active">全部</button>
+            <button type="button" data-status="unreplied">有未回复</button>
+            <button type="button" data-status="all_replied">已全部回复</button>
           </div>
         </div>
         <div class="field"><label for="senderInput">送礼人</label><input id="senderInput" type="search" placeholder="昵称或用户 ID"></div>
@@ -355,7 +366,7 @@
     "use strict";
     var DEFAULT_DATE_FROM = "2026-05-30";
     var password = "";
-    var activeStatus = "unreplied";
+    var activeStatus = "all";
     var refreshSeconds = 30;
     var refreshTimer = null;
     var loading = false;
@@ -538,10 +549,19 @@
       var head = document.createElement("div");
       head.className = "sender-head";
       var identity = document.createElement("div");
+      identity.className = "sender-identity";
+      var nameRow = document.createElement("div");
+      nameRow.className = "sender-name-row";
       var name = document.createElement("div");
       name.className = "sender-name";
       name.textContent = group.sender_name || "未知用户";
-      identity.appendChild(name);
+      nameRow.appendChild(name);
+      var senderState = document.createElement("span");
+      var hasUnreplied = Number(group.unreplied_messages || 0) > 0;
+      senderState.className = "sender-state " + (hasUnreplied ? "unreplied" : "all-replied");
+      senderState.textContent = hasUnreplied ? "有未回复" : "已全部回复";
+      nameRow.appendChild(senderState);
+      identity.appendChild(nameRow);
       if (group.sender_id) {
         var id = document.createElement("div");
         id.className = "sender-id";
@@ -788,7 +808,7 @@
     });
     document.getElementById("applyBtn").addEventListener("click", function() { applyFilters("apply_sender_filters"); });
     document.getElementById("resetBtn").addEventListener("click", function() {
-      activeStatus = "unreplied";
+      activeStatus = "all";
       senderInput.value = "";
       dateFromInput.value = DEFAULT_DATE_FROM;
       dateToInput.value = "";

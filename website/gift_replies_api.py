@@ -22,6 +22,7 @@ from website.rate_limiter import check_admin_login_limit, get_client_ip
 router = APIRouter(prefix="/api/gift-replies", tags=["礼物回复页"])
 
 VALID_STATUSES = {"all", "replied", "unreplied"}
+VALID_SENDER_STATUSES = {"all", "unreplied", "all_replied"}
 VALID_REPLY_TYPES = {"all", "text", "audio"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DEFAULT_SENDER_DATE_FROM = "2026-05-30"
@@ -146,7 +147,7 @@ def get_gift_replies_summary(
 @router.get("/senders")
 def get_gift_reply_senders(
     response: Response,
-    status_filter: str = Query("unreplied", alias="status"),
+    status_filter: str = Query("all", alias="status"),
     sender: str = Query(""),
     date_from: str = Query(DEFAULT_SENDER_DATE_FROM),
     date_to: str = Query(""),
@@ -156,7 +157,7 @@ def get_gift_reply_senders(
     response.headers["Cache-Control"] = "no-store"
 
     status_filter = status_filter.strip().lower()
-    if status_filter not in VALID_STATUSES:
+    if status_filter not in VALID_SENDER_STATUSES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的回复状态")
     date_from, date_to = _normalise_date_range(date_from, date_to)
 
@@ -371,7 +372,7 @@ def _sender_group_matches(
 ) -> bool:
     if status_filter == "unreplied" and group["unreplied_messages"] <= 0:
         return False
-    if status_filter == "replied" and group["replied_messages"] <= 0:
+    if status_filter == "all_replied" and group["unreplied_messages"] > 0:
         return False
     if sender_query:
         sender_values = [group.get("sender_id", ""), group.get("sender_name", "")]
