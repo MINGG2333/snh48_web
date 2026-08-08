@@ -24,13 +24,15 @@
 
 阿里云成员房间上麦回放发布与同步专项复核：2026-07-19 04:51 CST +0800
 
+陈嘉仪/曾雪婷房间计分 PK 腾讯云发布专项复核：2026-08-08 18:07 CST +0800
+
 本文件记录 `/home/snh48_web` 的长期运行方式和腾讯云到阿里云的数据同步口径。进程 PID 会随重启变化，排查时以文中的命令实时查询为准。
 
 ## 当前运行方式
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `9b0bce4`；运行进程加载的功能代码来自 `35a4134`，后续 `9b0bce4` 仅更新文档且未重启。2026-07-21 15:28:30 CST 重启为 screen `1407658.snh48`、Python PID `1407675`，本轮运行命令临时覆盖 `QA_WARMUP_ON_STARTUP=false`；本机 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；共享状态开关为 `tencent True True True` |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 和运行代码为 `8f09eb9`。2026-08-08 18:05:23 CST 重启为 screen `469219.snh48`、Python PID `469223`，本轮继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，避免既有 QA 启动预热阻塞全站；公网 `/pk` 为 200，未授权 `/api/pk-score/data` 为 401，服务器内鉴权数据请求为 200；共享状态开关保持既有配置 |
 | 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `9b0bce4`；运行进程加载的功能代码来自 `35a4134`，后续 `9b0bce4` 仅更新文档且未重启。部署流程已于 2026-07-21 15:29:22 CST 重启服务，PID `3257540`，active/running；公网 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除且同步脚本不再引用；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
@@ -80,6 +82,8 @@ systemctl status nginx
 ## 腾讯云到阿里云的数据同步任务
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
+
+> 2026-08-08 18:07 房间计分 PK 腾讯云阶段发布：网站功能提交 `d369a16` 和响应性修复 `8f09eb9` 已推送并由腾讯云 screen 加载。公网 `/pk` 返回 200，未授权数据 API 返回 401，服务器内鉴权请求返回 200；采样数据为陈嘉仪新增 `3847.9`、累计 `14544.0`，曾雪婷新增 `5595.6`、累计 `19214.4`。首次按默认命令重启时，既有 QA 启动预热再次使普通页面超时，随后按本文既有处置临时覆盖 `QA_WARMUP_ON_STARTUP=false` 恢复，PK 文件直接读取耗时约 0.001 秒。阿里云尚未部署网页，也未同步 `room_record/pk_scores/`；等待用户验收腾讯云页面后再单独确认，现有阿里云同步脚本未改动。
 
 > 2026-07-21 15:31 翻牌网站 HTML 移除专项复核：网站仓库功能提交 `35a4134` 已推送并部署，随后文档提交 `9b0bce4` 以 `--no-restart` 快进到两端。腾讯云网站 screen 重启为 `1407658.snh48`、PID `1407675`；阿里云 `snh48-aliyun` 重启为 PID `3257540`。两端 `/flip-cards` 均为 200，旧 `/api/flip-cards/html` 均为 404，未登录 `/api/flip-cards/status` 均为 401，页面源码不再包含 `downloadHtmlLink`、`/api/flip-cards/html` 或“下载版”。阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除；已部署的动态同步脚本和 `deploy.py` 不再引用 `flip_chat.html`，后续 cron 不会重新拉取该 HTML。腾讯云 fan-hub 的 `flip_chat.html` 仍保留为本地下载查看产物，不作为网站同步项。
 
