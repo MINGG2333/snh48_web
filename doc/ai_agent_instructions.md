@@ -223,6 +223,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/flip-cards/flip_data/audio/{filename}`、`/api/flip-cards/flip_data/video/{filename}` | 翻牌本地音视频 Range 读取 | 同上；不经公共静态目录 |
 | `/api/score-gifts/data` | 计分礼物统计和明细 | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/score-gifts/summary` | 计分礼物汇总 | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/score-gifts/export.xlsx` | 按当前筛选条件导出计分礼物逐笔明细 Excel | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/score-gifts/sender-export.xlsx` | 按当前筛选条件导出送礼用户汇总与逐笔投分明细 Excel | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 
 ### 安全维护规则
 

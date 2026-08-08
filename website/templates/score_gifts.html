@@ -934,7 +934,9 @@
             <h2>送礼用户分布</h2>
             <div class="panel-actions">
               <span id="senderDistributionCount">0 人</span>
+              <button class="mini-btn" id="exportSendersBtn" type="button">导出 Excel</button>
               <button class="mini-btn" id="openSenderModalBtn" type="button">全部</button>
+              <span class="export-status" id="senderExportStatus" aria-live="polite"></span>
             </div>
           </div>
           <div class="bar-list" id="senderBars"></div>
@@ -1076,6 +1078,8 @@
     var senderMoreText = document.getElementById("senderMoreText");
     var senderModal = document.getElementById("senderModal");
     var senderModalBars = document.getElementById("senderModalBars");
+    var exportSendersBtn = document.getElementById("exportSendersBtn");
+    var senderExportStatus = document.getElementById("senderExportStatus");
     var openSenderModalBtn = document.getElementById("openSenderModalBtn");
     var closeSenderModalBtn = document.getElementById("closeSenderModalBtn");
     var senderModalBackdrop = document.getElementById("senderModalBackdrop");
@@ -1857,12 +1861,13 @@
       activeFilters.textContent = parts.join(" · ");
     }
 
-    async function exportDetails() {
-      if (!password || exportDetailsBtn.disabled) return;
+    async function exportWorkbook(options) {
+      if (!password || exportDetailsBtn.disabled || exportSendersBtn.disabled) return;
       exportDetailsBtn.disabled = true;
-      exportStatus.textContent = "正在导出...";
+      exportSendersBtn.disabled = true;
+      options.status.textContent = "正在导出...";
       try {
-        var resp = await fetch("/api/score-gifts/export.xlsx?" + buildExportQuery(), {
+        var resp = await fetch(options.endpoint + "?" + buildExportQuery(), {
           headers: { "X-Score-Gifts-Password": password },
           cache: "no-store"
         });
@@ -1872,26 +1877,45 @@
         var url = window.URL.createObjectURL(blob);
         var link = document.createElement("a");
         link.href = url;
-        link.download = "score_gifts_" + compactTimestamp() + ".xlsx";
+        link.download = options.filenamePrefix + compactTimestamp() + ".xlsx";
         document.body.appendChild(link);
         link.click();
         link.remove();
         window.setTimeout(function() {
           window.URL.revokeObjectURL(url);
         }, 1000);
-        exportStatus.textContent = "已导出 " + formatNumber(totalItems) + " 条";
-        trackAdminEvent("admin_export", Object.assign(scoreFilterPayload("export_details"), {
+        options.status.textContent = "已导出 " + formatNumber(totalItems) + " 条";
+        trackAdminEvent("admin_export", Object.assign(scoreFilterPayload(options.action), {
           result: "success",
           exported_rows: totalItems
         }));
       } catch (err) {
-        exportStatus.textContent = "导出失败：" + err.message;
-        trackAdminEvent("admin_export", Object.assign(scoreFilterPayload("export_details"), {
+        options.status.textContent = "导出失败：" + err.message;
+        trackAdminEvent("admin_export", Object.assign(scoreFilterPayload(options.action), {
           result: "failure"
         }));
       } finally {
         exportDetailsBtn.disabled = false;
+        exportSendersBtn.disabled = false;
       }
+    }
+
+    function exportDetails() {
+      return exportWorkbook({
+        endpoint: "/api/score-gifts/export.xlsx",
+        filenamePrefix: "score_gifts_",
+        action: "export_details",
+        status: exportStatus
+      });
+    }
+
+    function exportSenderDistribution() {
+      return exportWorkbook({
+        endpoint: "/api/score-gifts/sender-export.xlsx",
+        filenamePrefix: "score_gift_senders_",
+        action: "export_sender_distribution",
+        status: senderExportStatus
+      });
     }
 
     function applyFilters(action) {
@@ -2196,6 +2220,7 @@
     resetBtn.addEventListener("click", resetFilters);
     updatePill.addEventListener("click", loadLatestData);
     exportDetailsBtn.addEventListener("click", exportDetails);
+    exportSendersBtn.addEventListener("click", exportSenderDistribution);
     openSenderModalBtn.addEventListener("click", openSenderModal);
     senderMoreBar.addEventListener("click", openSenderModal);
     closeSenderModalBtn.addEventListener("click", closeSenderModal);

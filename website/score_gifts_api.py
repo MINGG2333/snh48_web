@@ -180,6 +180,37 @@ def export_score_gifts_xlsx(
     )
 
 
+@router.get("/sender-export.xlsx")
+def export_score_gift_senders_xlsx(
+    source: str = Query("all"),
+    gift_name: str = Query(""),
+    sender: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    sort: str = Query("time_desc"),
+    _=Depends(verify_score_gifts_password),
+):
+    """Export filtered sender totals and every matching score-gift detail row."""
+    doc, rows = _filtered_detail_rows(
+        source=source,
+        gift_name=gift_name,
+        sender=sender,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+    )
+    stamp = datetime.now(BJ_TZ).strftime("%Y%m%d_%H%M%S")
+    filename = f"score_gift_senders_{stamp}.xlsx"
+    return Response(
+        content=_build_sender_distribution_xlsx(rows, str(doc.get("generated_at", ""))),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 @router.get("/summary")
 def get_score_gifts_summary(
     response: Response,
@@ -683,18 +714,149 @@ EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
     ("id", "记录ID"),
 )
 
+SENDER_SUMMARY_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("sender_name", "送礼用户"),
+    ("sender_ids", "送礼用户ID"),
+    ("sender_names", "关联昵称"),
+    ("total_score", "总分"),
+    ("room_score", "房间分"),
+    ("live_score", "直播分"),
+    ("total_count", "计分礼物数量"),
+    ("records", "投分明细数"),
+    ("room_records", "房间明细数"),
+    ("live_records", "直播明细数"),
+    ("gift_kinds", "礼物种类"),
+    ("first_event_time", "首次投分时间"),
+    ("latest_event_time", "最近投分时间"),
+)
+
+SENDER_DETAIL_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("sender_name", "送礼用户"),
+    ("sender_id", "送礼用户ID"),
+    ("event_time", "送礼时间"),
+    ("source_label", "投分来源"),
+    ("gift_name", "计分礼物"),
+    ("gift_count", "数量"),
+    ("unit_score", "单个分值"),
+    ("total_score", "对应分数"),
+    ("date", "日期"),
+    ("sender_id_match_status", "用户ID匹配状态"),
+    ("receiver_name", "收礼成员"),
+    ("gift_id", "礼物ID"),
+    ("score_source", "分值来源"),
+    ("fulfillment_label", "回复/业务状态"),
+    ("fulfillment_detail", "回复/业务详情"),
+    ("fulfillment_time", "回复/业务时间"),
+    ("room_reply_count", "房间回复数"),
+    ("room_first_reply_time", "房间首条回复时间"),
+    ("room_first_reply_content", "房间首条回复内容"),
+    ("business_status", "直播业务状态"),
+    ("business_type", "直播业务类型"),
+    ("business_content", "直播业务内容"),
+    ("business_offset", "业务弹幕偏移"),
+    ("business_review_status", "业务核实状态"),
+    ("business_reviewed_at", "业务核实时间"),
+    ("business_evidence", "业务证据"),
+    ("business_analysis_reasoning", "业务分析说明"),
+    ("live_title", "直播标题"),
+    ("live_bj_time", "直播时间"),
+    ("live_id", "直播ID"),
+    ("danmu_offset", "礼物弹幕偏移"),
+    ("danmu_line_number", "礼物弹幕行号"),
+    ("message_id", "房间消息ID"),
+    ("server_id", "房间服务端ID"),
+    ("raw_content", "原始内容"),
+    ("id", "记录ID"),
+)
+
+DETAIL_COLUMN_WIDTHS: tuple[int, ...] = (
+    10, 20, 12, 18, 16, 16, 14, 14, 16, 9, 11, 11,
+    24, 16, 30, 20, 12, 20, 34, 16, 16, 34, 16, 14,
+    20, 34, 38, 26, 20, 20, 16, 14, 22, 18, 34, 34,
+)
+
+SENDER_SUMMARY_COLUMN_WIDTHS: tuple[int, ...] = (
+    20, 22, 28, 12, 12, 12, 16, 14, 14, 14, 12, 22, 22,
+)
+
+SENDER_DETAIL_COLUMN_WIDTHS: tuple[int, ...] = (
+    20, 18, 22, 12, 18, 10, 12, 12, 12, 18, 14, 14,
+    24, 16, 30, 20, 12, 20, 34, 16, 16, 34, 16, 14,
+    20, 34, 38, 26, 20, 20, 16, 14, 22, 18, 34, 34,
+)
+
 
 def _build_score_gifts_xlsx(rows: list[dict[str, Any]], generated_at: str) -> bytes:
+    detail_values = [
+        [_export_cell_value(row, key) for key, _ in EXPORT_COLUMNS]
+        for row in rows
+    ]
+    return _build_xlsx_workbook(
+        [
+            (
+                "计分礼物明细",
+                _xlsx_table_sheet(
+                    title="计分礼物明细导出",
+                    headers=[label for _, label in EXPORT_COLUMNS],
+                    values=detail_values,
+                    generated_at=generated_at,
+                    widths=DETAIL_COLUMN_WIDTHS,
+                ),
+            )
+        ],
+        title="计分礼物明细导出",
+    )
+
+
+def _build_sender_distribution_xlsx(rows: list[dict[str, Any]], generated_at: str) -> bytes:
+    sender_rows = _sender_distribution(rows)
+    summary_values = [
+        [_sender_summary_export_value(row, key) for key, _ in SENDER_SUMMARY_COLUMNS]
+        for row in sender_rows
+    ]
+    detail_values = [
+        [_export_cell_value(row, key) for key, _ in SENDER_DETAIL_COLUMNS]
+        for row in _sender_grouped_detail_rows(rows, sender_rows)
+    ]
+    return _build_xlsx_workbook(
+        [
+            (
+                "送礼用户汇总",
+                _xlsx_table_sheet(
+                    title="送礼用户投分汇总",
+                    headers=[label for _, label in SENDER_SUMMARY_COLUMNS],
+                    values=summary_values,
+                    generated_at=generated_at,
+                    widths=SENDER_SUMMARY_COLUMN_WIDTHS,
+                ),
+            ),
+            (
+                "投分明细",
+                _xlsx_table_sheet(
+                    title="送礼用户逐笔投分明细",
+                    headers=[label for _, label in SENDER_DETAIL_COLUMNS],
+                    values=detail_values,
+                    generated_at=generated_at,
+                    widths=SENDER_DETAIL_COLUMN_WIDTHS,
+                ),
+            ),
+        ],
+        title="送礼用户投分汇总与明细",
+    )
+
+
+def _build_xlsx_workbook(sheets: list[tuple[str, str]], *, title: str) -> bytes:
     workbook_files = {
-        "[Content_Types].xml": _xlsx_content_types(),
+        "[Content_Types].xml": _xlsx_content_types(len(sheets)),
         "_rels/.rels": _xlsx_root_rels(),
-        "xl/workbook.xml": _xlsx_workbook(),
-        "xl/_rels/workbook.xml.rels": _xlsx_workbook_rels(),
+        "xl/workbook.xml": _xlsx_workbook([name for name, _ in sheets]),
+        "xl/_rels/workbook.xml.rels": _xlsx_workbook_rels(len(sheets)),
         "xl/styles.xml": _xlsx_styles(),
-        "xl/worksheets/sheet1.xml": _xlsx_sheet(rows, generated_at),
-        "docProps/core.xml": _xlsx_core_props(),
+        "docProps/core.xml": _xlsx_core_props(title),
         "docProps/app.xml": _xlsx_app_props(),
     }
+    for index, (_, sheet_xml) in enumerate(sheets, start=1):
+        workbook_files[f"xl/worksheets/sheet{index}.xml"] = sheet_xml
     output = BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         for name, content in workbook_files.items():
@@ -702,16 +864,22 @@ def _build_score_gifts_xlsx(rows: list[dict[str, Any]], generated_at: str) -> by
     return output.getvalue()
 
 
-def _xlsx_sheet(rows: list[dict[str, Any]], generated_at: str) -> str:
+def _xlsx_table_sheet(
+    *,
+    title: str,
+    headers: list[str],
+    values: list[list[Any]],
+    generated_at: str,
+    widths: tuple[int, ...],
+) -> str:
     all_rows: list[list[Any]] = [
-        ["计分礼物明细导出"],
+        [title],
         ["数据生成时间", generated_at],
         ["导出时间", _bj_now()],
         [],
-        [label for _, label in EXPORT_COLUMNS],
+        headers,
     ]
-    for row in rows:
-        all_rows.append([_export_cell_value(row, key) for key, _ in EXPORT_COLUMNS])
+    all_rows.extend(values)
 
     xml_rows = []
     for row_index, values in enumerate(all_rows, start=1):
@@ -722,7 +890,7 @@ def _xlsx_sheet(rows: list[dict[str, Any]], generated_at: str) -> str:
         xml_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
 
     last_row = max(1, len(all_rows))
-    last_col = _xlsx_col_name(len(EXPORT_COLUMNS))
+    last_col = _xlsx_col_name(len(headers))
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -731,12 +899,33 @@ def _xlsx_sheet(rows: list[dict[str, Any]], generated_at: str) -> str:
         '<sheetViews><sheetView workbookViewId="0"><pane ySplit="5" topLeftCell="A6" activePane="bottomLeft" state="frozen"/>'
         '<selection pane="bottomLeft"/></sheetView></sheetViews>'
         '<sheetFormatPr defaultRowHeight="16"/>'
-        f'<cols>{_xlsx_columns()}</cols>'
+        f'<cols>{_xlsx_columns(widths)}</cols>'
         f'<sheetData>{"".join(xml_rows)}</sheetData>'
         f'<autoFilter ref="A5:{last_col}5"/>'
         '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
         '</worksheet>'
     )
+
+
+def _sender_summary_export_value(row: dict[str, Any], key: str) -> Any:
+    value = row.get(key)
+    if key in {"sender_ids", "sender_names"}:
+        return "、".join(str(item) for item in value) if isinstance(value, list) else value
+    return value
+
+
+def _sender_grouped_detail_rows(
+    rows: list[dict[str, Any]], sender_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        groups.setdefault(_sender_key(row), []).append(row)
+
+    output: list[dict[str, Any]] = []
+    for sender_row in sender_rows:
+        group = groups.get(str(sender_row.get("sender_key", "")), [])
+        output.extend(sorted(group, key=lambda row: (row["event_time"], row["id"]), reverse=True))
+    return output
 
 
 def _export_cell_value(row: dict[str, Any], key: str) -> Any:
@@ -790,26 +979,26 @@ def _xlsx_col_name(index: int) -> str:
     return name
 
 
-def _xlsx_columns() -> str:
-    widths = [
-        10, 20, 12, 18, 16, 16, 14, 14, 16, 9, 11, 11,
-        24, 16, 30, 20, 12, 20, 34, 16, 16, 34, 16, 14,
-        20, 34, 38, 26, 20, 20, 16, 14, 22, 18, 34, 34,
-    ]
+def _xlsx_columns(widths: tuple[int, ...]) -> str:
     return "".join(
         f'<col min="{index}" max="{index}" width="{width}" customWidth="1"/>'
         for index, width in enumerate(widths, start=1)
     )
 
 
-def _xlsx_content_types() -> str:
+def _xlsx_content_types(sheet_count: int = 1) -> str:
+    sheet_overrides = "".join(
+        f'<Override PartName="/xl/worksheets/sheet{index}.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        for index in range(1, sheet_count + 1)
+    )
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
         '<Default Extension="xml" ContentType="application/xml"/>'
         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        f'{sheet_overrides}'
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
         '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
         '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
@@ -828,22 +1017,32 @@ def _xlsx_root_rels() -> str:
     )
 
 
-def _xlsx_workbook() -> str:
+def _xlsx_workbook(sheet_names: list[str]) -> str:
+    sheets = "".join(
+        f'<sheet name="{escape(name)}" sheetId="{index}" r:id="rId{index}"/>'
+        for index, name in enumerate(sheet_names, start=1)
+    )
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        '<sheets><sheet name="计分礼物明细" sheetId="1" r:id="rId1"/></sheets>'
+        f'<sheets>{sheets}</sheets>'
         '</workbook>'
     )
 
 
-def _xlsx_workbook_rels() -> str:
+def _xlsx_workbook_rels(sheet_count: int) -> str:
+    sheet_relationships = "".join(
+        f'<Relationship Id="rId{index}" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        f'Target="worksheets/sheet{index}.xml"/>'
+        for index in range(1, sheet_count + 1)
+    )
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        f'{sheet_relationships}'
+        f'<Relationship Id="rId{sheet_count + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
         '</Relationships>'
     )
 
@@ -867,7 +1066,7 @@ def _xlsx_styles() -> str:
     )
 
 
-def _xlsx_core_props() -> str:
+def _xlsx_core_props(title: str = "计分礼物明细导出") -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -876,7 +1075,7 @@ def _xlsx_core_props() -> str:
         'xmlns:dcterms="http://purl.org/dc/terms/" '
         'xmlns:dcmitype="http://purl.org/dc/dcmitype/" '
         'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-        '<dc:title>计分礼物明细导出</dc:title>'
+        f'<dc:title>{escape(title)}</dc:title>'
         '<dc:creator>snh48_web</dc:creator>'
         f'<dcterms:created xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:created>'
         f'<dcterms:modified xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:modified>'
