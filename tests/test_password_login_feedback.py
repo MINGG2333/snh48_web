@@ -17,6 +17,7 @@ class PasswordLoginFeedbackTests(unittest.TestCase):
             ("website/templates/gift_replies.html", "/api/gift-replies/verify"),
             ("website/templates/room_messages.html", "/api/room-messages/verify"),
             ("website/templates/score_gifts.html", "/api/score-gifts/verify"),
+            ("website/templates/pk_score.html", "/api/pk-score/verify"),
             ("website/templates/ob.html", "/api/ob/verify"),
         )
         for template, verify_path in cases:

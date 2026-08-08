@@ -41,6 +41,7 @@
 | 成员房间上麦回放 | `/room-voice-replays` | `/radio`；兼容 `/radio-replays` | `website/templates/room_voice_replays.html` | `/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/segments/{filename}` | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；HttpOnly Cookie 或 `X-Room-Voice-Replays-Password` | `ROOM_VOICE_REPLAYS_DIR`，默认 fan-hub `room_voice_replays/`；公开房间/小房间独立会话，默认播放 AAC-LC 单声道兼容版，可切换源 AAC 原始音质版并保持时间位置；进度跳转和缓冲有可见状态；有录音覆盖的消息整行可点击或用键盘跳转到对应时间；音频分段和同期消息用 `session_id` 归为整体；设置 `noindex,nofollow` |
 | 翻牌记录 | `/flip-cards` | `/flip` | `website/templates/flip_cards.html` | `/api/flip-cards/login`、`/status`、`/data`、`/flip_data/audio/{filename}`、`/flip_data/video/{filename}` | `FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；HttpOnly Cookie 或 `X-Flip-Cards-Password` | `FLIP_CARDS_DATASET_PATH` 默认 fan-hub `flip_data/web/flip_cards.json`；`FLIP_CARDS_DATA_DIR` 为本地媒体根目录；页面、数据和本地音视频都鉴权；设置 `noindex,nofollow` |
 | 计分礼物管理 | `/score-gifts` | `/sg` | `website/templates/score_gifts.html` | `/api/score-gifts/verify`、`/api/score-gifts/data`、`/api/score-gifts/summary`、`/api/score-gifts/business-review` | `SCORE_GIFTS_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Score-Gifts-Password` | `score_gifts.json` 为派生展示数据；`live_business_fulfillments.json` 为版本化共享业务状态 |
+| 房间计分 PK | `/score-pk` | `/pk` | `website/templates/pk_score.html` | `/api/pk-score/verify`、`/api/pk-score/data` | 复用 `SCORE_GIFTS_PASSWORD`；`X-PK-Score-Password` | fan-hub `room_record/pk_scores/current.json`；展示双方 17:15 后新增分、基础分、累计分、差值和明细；首轮只发布腾讯云，阿里云数据同步待腾讯云页面验收 |
 | 记忆页 | `/memories` | `/memory` | `website/templates/memories.html` | `/api/memories/verify`、`/api/memories/data`、`/api/memories/submit`、`/api/memories/manage`、`/api/memories/review` | `MEMORIES_VIEW_PASSWORD`；`X-Memories-Password`。应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` / `X-Memories-Fanclub-Password`；本人模式使用 `MEMORIES_IDOL_PASSWORD` / `X-Memories-Idol-Password` | `MEMORIES_DATA_PATH`，默认 `website/data/memories/memories.json`；格式示例见 `website/data/memories/memories.example.json`；初始数据可由 `script/build_memories_seed.py` 从 fan-hub 派生 |
 
 直接使用请求头密码的管理页先调用轻量 `/verify` 接口，再读取完整数据；使用登录 Cookie 的翻牌与上麦回放页在 `/login` 成功后再读取数据。前端必须分别显示“正在验证”和“密码正确，正在加载”；若只是数据加载失败，应允许直接重试，不得误报为密码错误或要求重输密码。
@@ -78,6 +79,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/flip-cards
 curl -sS -D - -o /dev/null https://cjy.plus/flip
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/sg
+curl -sS -D - -o /dev/null https://cjy.plus/pk
+curl -sS -D - -o /dev/null https://cjy.plus/score-pk
 curl -sS -D - -o /dev/null https://cjy.plus/memories
 curl -sS -D - -o /dev/null https://cjy.plus/memory
 ```

@@ -22,6 +22,7 @@ from website.score_gifts_api import (
     router as score_router,
     verify_score_gifts_login,
 )
+from website.pk_score_api import router as pk_score_router, verify_pk_score_login
 
 
 def request_with_header(name: str, value: str) -> Request:
@@ -47,6 +48,7 @@ class PasswordVerifyEndpointTests(unittest.TestCase):
             (gift_router, "/api/gift-replies/verify", verify_gift_replies_login),
             (room_router, "/api/room-messages/verify", verify_room_messages_login),
             (score_router, "/api/score-gifts/verify", verify_score_gifts_login),
+            (pk_score_router, "/api/pk-score/verify", verify_pk_score_login),
             (ob_router, "/api/ob/verify", verify_ob_login),
         )
         for router, path, endpoint in cases:

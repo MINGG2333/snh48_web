@@ -62,6 +62,7 @@
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
+- `room_record/pk_scores/current.json`（房间计分 PK 派生小数据；首轮只供腾讯云 `/pk`，阿里云同步待用户验收后另行确认）
 - `flip_data/web/flip_cards.json`（密码保护的翻牌记录应用数据，由 fan-hub 脚本生成）
 - `flip_data/audio/`、`flip_data/video/`（仅翻牌页本地播放依赖；不含 `flip_data/metadata/`）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
@@ -212,6 +213,23 @@ node script/obfuscate_js.cjs
 - `/api/score-gifts/business-review` 把核实操作交给腾讯云权威节点，在同一文件锁下更新 `score_gifts/` 下的 `live_business_fulfillments.json`，用于人工确认或修正直播计分礼物的业务兑换结果；与 fan-hub 分析器写入共用锁和版本历史。
 - 页面按数据文件里的 `refresh_interval_seconds` 轮询轻量 summary；检测到新条目时只显示更新提示，不重建当前已加载详情，用户点击提示后才加载最新数据。该值由 fan-hub 的 `config/room_monitor.json` 中 `gift_reply_export_interval_seconds` 热更新，和礼物回复页保持一致。
 - 阿里云只同步 `room_record/陈嘉仪_161808449/score_gifts/` 小目录，不同步整个 `room_record/陈嘉仪_161808449/`。
+
+### 房间计分 PK 页
+
+入口和文档：
+
+- 页面入口：`/score-pk`，短入口：`/pk`
+- API：`/api/pk-score/verify`、`/api/pk-score/data`
+- 数据源：`/home/snh48-fan-hub/room_record/pk_scores/current.json`
+- 鉴权：复用 `SCORE_GIFTS_PASSWORD`，请求头 `X-PK-Score-Password`
+- 数据契约：`/home/snh48-fan-hub/doc/pk_score_data_contract.md`
+
+维护边界：
+
+- 页面不进入公开导航并设置 `noindex,nofollow`；显示双方基础分、统计起点后新增分、累计分、当前差值和计分礼物明细。
+- 后端只读取 fan-hub 派生的小 JSON，不读取两位成员完整 `messages.csv`，明细不含 sender ID、完整房间正文或本地媒体路径。
+- 前端按数据中的 `refresh_interval_seconds` 自动刷新，密码验证复用计分礼物页的限速和凭据。
+- 首轮只在腾讯云 `cjy.plus` 验证。阿里云自动同步和页面发布必须等用户确认腾讯云效果后另行实施；届时也只允许同步 `room_record/pk_scores/`，不得同步曾雪婷完整房间数据。
 
 ### 记忆页
 

@@ -417,6 +417,23 @@ async def score_gifts_page(request: Request):
     )
 
 
+@app.get("/pk", response_class=HTMLResponse)
+@app.get("/score-pk", response_class=HTMLResponse)
+async def pk_score_page(request: Request):
+    """Password-protected live room score-PK page."""
+    return templates.TemplateResponse(
+        "pk_score.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/memory", response_class=HTMLResponse)
 @app.get("/memories", response_class=HTMLResponse)
 async def memories_page(request: Request):
@@ -549,6 +566,9 @@ app.include_router(flip_cards_router)
 
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)
+
+from website.pk_score_api import router as pk_score_router
+app.include_router(pk_score_router)
 
 from website.memories_api import router as memories_router
 app.include_router(memories_router)

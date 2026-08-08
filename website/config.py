@@ -257,6 +257,13 @@ SCORE_GIFTS_DATA_PATH = os.getenv(
     ),
 )
 
+# ── Room Score PK (房间计分 PK) ──────────────────────────────────────
+# 复用计分礼物页密码，只读取 fan-hub 生成的派生小 JSON。
+PK_SCORE_PASSWORD = SCORE_GIFTS_PASSWORD
+PK_SCORE_DATA_PATH = str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "room_record" / "pk_scores" / "current.json"
+)
+
 # ── Memories (粉丝与陈嘉仪的互动记忆) ─────────────────────────────────
 # 页面访问/提交密码；留空则记忆页 API 禁用，避免未设置密码时误公开。
 MEMORIES_VIEW_PASSWORD = os.getenv("MEMORIES_VIEW_PASSWORD", "")
