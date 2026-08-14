@@ -263,7 +263,7 @@
       align-items: center;
       justify-content: center;
       font-weight: 720;
-      font-size: 14px;
+      font-size: 12px;
       flex: 0 0 auto;
       margin-right: 8px;
     }
@@ -365,6 +365,30 @@
       border-radius: 8px;
     }
 
+    .transcript {
+      width: min(520px, 100%);
+      margin-top: 8px;
+      border: 1px solid rgba(98, 168, 255, 0.28);
+      border-radius: 8px;
+      background: rgba(98, 168, 255, 0.08);
+      padding: 8px 10px;
+    }
+
+    .transcript-label {
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 720;
+      margin-bottom: 4px;
+    }
+
+    .transcript-text {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .download-link {
       display: inline-block;
       margin-top: 6px;
@@ -409,7 +433,7 @@
         text-align: left;
       }
       .chat-scroll { padding: 12px 10px 22px; }
-      .avatar { width: 32px; height: 32px; font-size: 13px; margin-right: 7px; }
+      .avatar { width: 32px; height: 32px; font-size: 11px; margin-right: 7px; }
       .bubble { max-width: 84%; padding: 9px 11px; }
       .media audio { width: 230px; }
     }
@@ -585,6 +609,15 @@
       return (record.answer_type_label || "") + " · " + record.duration_text;
     }
 
+    function memberAvatarText() {
+      const configured = String((dataset && dataset.member_avatar_text) || "").trim();
+      if (configured) return configured;
+      const member = String((dataset && dataset.member) || "偶像").trim();
+      if (member.includes("嘉仪")) return "嘉仪";
+      const short = member.split("-").pop().trim();
+      return short.slice(-2) || "偶像";
+    }
+
     function recordMatches(record) {
       return (statusFilter.value === "all" || record.status === statusFilter.value)
         && (typeFilter.value === "all" || record.answer_type === typeFilter.value);
@@ -717,7 +750,7 @@
 
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.textContent = String(dataset.member || "偶").slice(0, 1) || "偶";
+      avatar.textContent = memberAvatarText();
       wrap.appendChild(avatar);
 
       const bubble = document.createElement("div");
@@ -760,7 +793,7 @@
 
       const avatar = document.createElement("div");
       avatar.className = "avatar";
-      avatar.textContent = String(dataset.member || "偶").slice(0, 1) || "偶";
+      avatar.textContent = memberAvatarText();
       wrap.appendChild(avatar);
 
       const bubble = document.createElement("div");
@@ -785,6 +818,8 @@
           audio.preload = "metadata";
           audio.src = media.url;
           box.appendChild(audio);
+          const transcript = createAudioTranscriptNode(record.audio_transcript);
+          if (transcript) box.appendChild(transcript);
         } else {
           const video = document.createElement("video");
           video.controls = true;
@@ -804,6 +839,16 @@
         link.textContent = "官方下载";
         box.appendChild(link);
       }
+      return box;
+    }
+
+    function createAudioTranscriptNode(transcript) {
+      const value = String((transcript && transcript.text) || "").trim();
+      if (!value) return null;
+      const box = document.createElement("div");
+      box.className = "transcript";
+      appendText(box, "transcript-label", "转录参考");
+      appendText(box, "transcript-text", value);
       return box;
     }
 

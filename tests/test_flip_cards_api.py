@@ -24,8 +24,9 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         self.dataset_path.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "member": "测试成员",
+                    "member_avatar_text": "嘉仪",
                     "summary": {"total": 1, "answered": 1},
                     "records": [
                         {
@@ -34,6 +35,7 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
                             "answer_type": "audio",
                             "qtime_text": "2026-07-20 20:00",
                             "content": "问题",
+                            "audio_transcript": {"text": "这是语音转录"},
                             "media": {
                                 "kind": "audio",
                                 "filename": "voice.mp3",
@@ -79,6 +81,7 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data.status_code, 200)
         record = data.json()["records"][0]
         self.assertEqual(record["qtime_text"], "2026-07-20 20:00")
+        self.assertEqual(record["audio_transcript"]["text"], "这是语音转录")
         self.assertEqual(record["media"]["url"], "/api/flip-cards/flip_data/audio/voice.mp3")
 
         media = await self.client.get(
@@ -99,6 +102,9 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('const API = "/api/flip-cards"', template)
         self.assertIn('apiJson("/data")', template)
         self.assertIn("我发于 ", template)
+        self.assertIn('avatar.textContent = memberAvatarText()', template)
+        self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
+        self.assertIn('appendText(box, "transcript-label", "转录参考")', template)
         self.assertNotIn('window.location.replace(API + "/html")', template)
         self.assertNotIn("/api/flip-cards/html", template)
         self.assertNotIn("downloadHtmlLink", template)

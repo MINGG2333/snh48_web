@@ -63,7 +63,7 @@
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - `room_record/pk_scores/current.json`（房间计分 PK 派生小数据；首轮只供腾讯云 `/pk`，阿里云同步待用户验收后另行确认）
-- `flip_data/web/flip_cards.json`（密码保护的翻牌记录应用数据，由 fan-hub 脚本生成）
+- `flip_data/web/flip_cards.json`（密码保护的翻牌记录应用数据，由 fan-hub 脚本生成；schema v2 可嵌入语音转录参考和头像文字）
 - `flip_data/audio/`、`flip_data/video/`（仅翻牌页本地播放依赖；不含 `flip_data/metadata/`）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
@@ -192,9 +192,9 @@ node script/obfuscate_js.cjs
 维护边界：
 
 - 页面不进入公开导航并设置 `noindex,nofollow`；登录页、应用数据和本地 MP3/MP4 都必须先鉴权。
-- 后端只读取 fan-hub 已生成的 `flip_data/web/flip_cards.json`，并按文件名从 `flip_data/audio/`、`flip_data/video/` 流式读取本地媒体；不得把 `flip_data/` 挂到 `/static`。
+- 后端只读取 fan-hub 已生成的 `flip_data/web/flip_cards.json`，并按文件名从 `flip_data/audio/`、`flip_data/video/` 流式读取本地媒体；不得把 `flip_data/` 挂到 `/static`。schema v2 的语音记录可带 `audio_transcript.text/updated_at`，页面在播放条下方显示“转录参考”，缺失时不显示该区块。
 - 阿里云只同步在线查看必要的 `flip_data/web/flip_cards.json`、`flip_data/audio/` 和 `flip_data/video/`；不常规同步 `flip_chat.html`、`flip_data/metadata/`、账号 Token、Cookie、脚本运行日志或下载缓存。
-- 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；网站只负责鉴权发布和前端渲染，不负责拉取口袋48数据。
+- 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录在 fan-hub 数据生成阶段完成，网站只负责鉴权发布和前端渲染，不负责拉取口袋48数据或现场转录。对方头像优先使用 `member_avatar_text`，陈嘉仪数据显示“嘉仪”。
 
 ### 计分礼物管理页
 
