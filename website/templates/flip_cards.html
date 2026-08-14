@@ -289,16 +289,6 @@
       border-bottom-left-radius: 4px;
     }
 
-    .status-pending .bubble {
-      background: #302716;
-      color: #f3c96f;
-    }
-
-    .status-refunded .bubble {
-      background: #31191d;
-      color: #f3a0a0;
-    }
-
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -320,6 +310,17 @@
     .tag.cost { background: #332812; color: var(--gold); }
     .tag.privacy { background: #142838; color: #8dc8ff; }
     .tag.kind { background: #123128; color: #76dec9; }
+    .tag.status-answered { background: #17345d; color: #9ac7ff; }
+    .tag.status-pending { background: #3b2d10; color: #ffd36d; }
+    .tag.status-processing { background: #2d274b; color: #c9b6ff; }
+    .tag.status-refunded { background: #451d24; color: #ffadb5; }
+    .tag.status-other { background: var(--panel-3); color: var(--muted); }
+    .status-link {
+      border: 0;
+      font: inherit;
+      cursor: pointer;
+    }
+    .status-link:hover { filter: brightness(1.2); text-decoration: underline; }
     .time { color: var(--faint); font-size: 11px; }
     .text { white-space: pre-wrap; }
 
@@ -408,8 +409,18 @@
     }
 
     .highlight .bubble {
-      outline: 2px solid var(--teal);
-      box-shadow: 0 0 0 5px rgba(64, 184, 168, .18), 0 1px 4px rgba(0,0,0,.2);
+      outline: 3px solid #ffd666;
+      box-shadow: 0 0 0 7px rgba(255, 214, 102, .35), 0 0 26px rgba(255, 173, 51, .62);
+      animation: target-pulse .8s ease-out 2;
+    }
+
+    @keyframes target-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.018); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .highlight .bubble { animation: none; }
     }
 
     @media (max-width: 720px) {
@@ -690,8 +701,6 @@
             index,
             record
           });
-        } else {
-          events.push({ type: "status", time: Number(record.qtime || 0), order: 1, index, record });
         }
       });
       events.sort(function (a, b) {
@@ -718,6 +727,29 @@
       return span;
     }
 
+    function addQuestionStatus(parent, record) {
+      if (record.status === "answered") {
+        const statusButton = document.createElement("button");
+        statusButton.type = "button";
+        statusButton.className = "tag status-answered status-link";
+        statusButton.dataset.target = "answer-" + safeId(record.question_id);
+        statusButton.textContent = "已回复 · 查看回复";
+        statusButton.setAttribute("aria-label", "跳转到这条翻牌的回复");
+        parent.appendChild(statusButton);
+        return;
+      }
+      if (record.status === "pending") {
+        const processing = record.status_label === "翻牌中";
+        addTag(parent, processing ? "status-processing" : "status-pending", processing ? "翻牌处理中" : "等待回复中");
+        return;
+      }
+      if (record.status === "refunded") {
+        addTag(parent, "status-refunded", "已退款");
+        return;
+      }
+      addTag(parent, "status-other", record.status_label || "状态未知");
+    }
+
     function createQuestion(event) {
       const record = event.record;
       const wrap = document.createElement("article");
@@ -731,6 +763,7 @@
       meta.className = "meta";
       addTag(meta, "cost", formatNumber(record.cost) + " 鸡腿");
       if (record.privacy_label) addTag(meta, "privacy", record.privacy_label);
+      addQuestionStatus(meta, record);
       const time = document.createElement("span");
       time.className = "time";
       time.textContent = record.qtime_text || "";
@@ -781,28 +814,6 @@
       } else {
         appendText(bubble, "text", "[媒体不可用]");
       }
-      wrap.appendChild(bubble);
-      return wrap;
-    }
-
-    function createStatus(event) {
-      const record = event.record;
-      const wrap = document.createElement("article");
-      wrap.className = "message other " + (record.status === "refunded" ? "status-refunded" : "status-pending");
-      wrap.dataset.qid = record.question_id || "";
-
-      const avatar = document.createElement("div");
-      avatar.className = "avatar";
-      avatar.textContent = memberAvatarText();
-      wrap.appendChild(avatar);
-
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      addTag(meta, "kind", record.status_label || "未翻牌");
-      bubble.appendChild(meta);
-      appendText(bubble, "text", record.status === "refunded" ? "该翻牌已退款，未收到回复" : "等待回复中");
       wrap.appendChild(bubble);
       return wrap;
     }
@@ -883,7 +894,6 @@
           }
           if (event.type === "question") frag.appendChild(createQuestion(event));
           if (event.type === "answer") frag.appendChild(createAnswer(event));
-          if (event.type === "status") frag.appendChild(createStatus(event));
         });
         messageList.appendChild(frag);
       }
@@ -999,19 +1009,24 @@
         });
         return;
       }
-      const quote = event.target.closest(".quote");
-      if (!quote) return;
-      const target = document.getElementById(quote.dataset.target || "");
+      const jumpLink = event.target.closest(".quote, .status-link");
+      if (!jumpLink) return;
+      const target = document.getElementById(jumpLink.dataset.target || "");
       if (!target) return;
+      const jumpsToAnswer = jumpLink.classList.contains("status-link");
       track("admin_filter", {
-        action: "jump_to_flip_question",
+        action: jumpsToAnswer ? "jump_to_flip_answer" : "jump_to_flip_question",
         question_id: target.dataset.qid || ""
       });
       target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.remove("highlight");
+      void target.offsetWidth;
       target.classList.add("highlight");
-      window.setTimeout(function () {
+      if (target._flipHighlightTimer) window.clearTimeout(target._flipHighlightTimer);
+      target._flipHighlightTimer = window.setTimeout(function () {
+        target._flipHighlightTimer = null;
         target.classList.remove("highlight");
-      }, 1800);
+      }, 4000);
     });
 
     ["play", "pause", "seeked", "ended"].forEach(function (eventName) {

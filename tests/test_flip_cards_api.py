@@ -105,6 +105,15 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('avatar.textContent = memberAvatarText()', template)
         self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
         self.assertIn('appendText(box, "transcript-label", "转录参考")', template)
+        self.assertIn('addQuestionStatus(meta, record)', template)
+        self.assertIn('statusButton.dataset.target = "answer-" + safeId(record.question_id)', template)
+        self.assertIn('statusButton.textContent = "已回复 · 查看回复"', template)
+        self.assertIn('event.target.closest(".quote, .status-link")', template)
+        self.assertIn('jumpsToAnswer ? "jump_to_flip_answer" : "jump_to_flip_question"', template)
+        self.assertIn('}, 4000);', template)
+        self.assertIn('outline: 3px solid #ffd666', template)
+        self.assertNotIn('events.push({ type: "status"', template)
+        self.assertNotIn('function createStatus(event)', template)
         self.assertNotIn('window.location.replace(API + "/html")', template)
         self.assertNotIn("/api/flip-cards/html", template)
         self.assertNotIn("downloadHtmlLink", template)
@@ -115,6 +124,7 @@ class FlipCardsTemplateTests(unittest.TestCase):
             "jump_latest",
             "open_official_media",
             "jump_to_flip_question",
+            "jump_to_flip_answer",
             "flip_media_play",
             "flip_media_pause",
             "flip_media_seek",
