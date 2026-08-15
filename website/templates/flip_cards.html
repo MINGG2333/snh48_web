@@ -177,10 +177,45 @@
       line-height: 1.35;
     }
 
+    .filter-panel {
+      border-top: 1px solid var(--line);
+    }
+
+    .filter-panel summary {
+      min-height: 40px;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+
+    .filter-panel summary::-webkit-details-marker { display: none; }
+    .filter-panel summary:hover { background: rgba(255, 255, 255, .025); }
+    .filter-panel[open] summary { border-bottom: 1px solid var(--line); }
+
+    .filter-title {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 720;
+      flex: 0 0 auto;
+    }
+
+    .filter-toggle-label {
+      color: var(--teal);
+      font-size: 12px;
+      flex: 0 0 auto;
+    }
+
+    .filter-toggle-label::before { content: "展开"; }
+    .filter-panel[open] .filter-toggle-label::before { content: "收起"; }
+
     .filters {
-      padding: 0 20px 14px;
+      padding: 12px 20px 14px;
       display: grid;
-      grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) auto 1fr;
+      grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) auto;
       gap: 10px;
       align-items: end;
     }
@@ -214,6 +249,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      flex: 1 1 auto;
     }
 
     .chat-shell {
@@ -435,14 +471,13 @@
       .action-btn { min-height: 32px; padding: 0 10px; }
       .stats { padding: 0 12px 9px; }
       .stats span { font-size: 11px; padding: 3px 7px; }
+      .filter-panel summary { padding: 8px 12px; }
       .filters {
-        padding: 0 12px 10px;
+        padding: 10px 12px 12px;
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-      .filter-summary {
-        grid-column: 1 / -1;
-        text-align: left;
-      }
+      .filter-summary { text-align: left; }
+      .filter-toggle-label { font-size: 11px; }
       .chat-scroll { padding: 12px 10px 22px; }
       .avatar { width: 32px; height: 32px; font-size: 11px; margin-right: 7px; }
       .bubble { max-width: 84%; padding: 9px 11px; }
@@ -474,29 +509,35 @@
         </div>
       </div>
       <div id="stats" class="stats"></div>
-      <div class="filters" role="group" aria-label="翻牌筛选">
-        <div class="field">
-          <label for="statusFilter">翻牌状态</label>
-          <select id="statusFilter">
-            <option value="all">全部状态</option>
-            <option value="answered">已翻牌</option>
-            <option value="pending">未翻牌/翻牌中</option>
-            <option value="refunded">已退款</option>
-          </select>
+      <details id="filterPanel" class="filter-panel">
+        <summary>
+          <span class="filter-title">筛选</span>
+          <span id="filterSummary" class="filter-summary">全部翻牌</span>
+          <span class="filter-toggle-label" aria-hidden="true"></span>
+        </summary>
+        <div class="filters" role="group" aria-label="翻牌筛选">
+          <div class="field">
+            <label for="statusFilter">翻牌状态</label>
+            <select id="statusFilter">
+              <option value="all">全部状态</option>
+              <option value="answered">已翻牌</option>
+              <option value="pending">未翻牌/翻牌中</option>
+              <option value="refunded">已退款</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="typeFilter">回复类型</label>
+            <select id="typeFilter">
+              <option value="all">全部类型</option>
+              <option value="audio">语音</option>
+              <option value="text">文字</option>
+              <option value="video">视频</option>
+              <option value="none">无回复</option>
+            </select>
+          </div>
+          <button id="resetBtn" class="action-btn" type="button">重置</button>
         </div>
-        <div class="field">
-          <label for="typeFilter">回复类型</label>
-          <select id="typeFilter">
-            <option value="all">全部类型</option>
-            <option value="audio">语音</option>
-            <option value="text">文字</option>
-            <option value="video">视频</option>
-            <option value="none">无回复</option>
-          </select>
-        </div>
-        <button id="resetBtn" class="action-btn" type="button">重置</button>
-        <div id="filterSummary" class="filter-summary"></div>
-      </div>
+      </details>
     </header>
     <section class="chat-shell">
       <div id="chatScroll" class="chat-scroll">
@@ -522,6 +563,7 @@
     const messageList = document.getElementById("messageList");
     const statusFilter = document.getElementById("statusFilter");
     const typeFilter = document.getElementById("typeFilter");
+    const filterPanel = document.getElementById("filterPanel");
     const filterSummary = document.getElementById("filterSummary");
     const latestBtn = document.getElementById("latestBtn");
     const resetBtn = document.getElementById("resetBtn");
@@ -981,6 +1023,13 @@
       typeFilter.value = "all";
       renderTimeline(true);
       track("admin_filter", filterTrackPayload("reset_filters"));
+    });
+
+    filterPanel.addEventListener("toggle", function () {
+      track("admin_filter", {
+        action: "toggle_filters",
+        expanded: filterPanel.open
+      });
     });
 
     latestBtn.addEventListener("click", function () {

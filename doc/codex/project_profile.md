@@ -194,7 +194,7 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航并设置 `noindex,nofollow`；登录页、应用数据和本地 MP3/MP4 都必须先鉴权。
 - 后端只读取 fan-hub 已生成的 `flip_data/web/flip_cards.json`，并按文件名从 `flip_data/audio/`、`flip_data/video/` 流式读取本地媒体；不得把 `flip_data/` 挂到 `/static`。schema v2 的语音记录可带 `audio_transcript.text/updated_at`，页面在播放条下方显示“转录参考”，缺失时不显示该区块。
 - 阿里云只同步在线查看必要的 `flip_data/web/flip_cards.json`、`flip_data/audio/` 和 `flip_data/video/`；不常规同步 `flip_chat.html`、`flip_data/metadata/`、账号 Token、Cookie、脚本运行日志或下载缓存。
-- 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录在 fan-hub 数据生成阶段完成，网站只负责鉴权发布和前端渲染，不负责拉取口袋48数据或现场转录。对方头像优先使用 `member_avatar_text`，陈嘉仪数据显示“嘉仪”。等待回复、翻牌处理中、已退款和已回复状态显示在我的提问 Tag 上；已回复 Tag 与回复引用可双向跳转，目标使用 4 秒高对比金色高亮。
+- 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录在 fan-hub 数据生成阶段完成，网站只负责鉴权发布和前端渲染，不负责拉取口袋48数据或现场转录。顶部筛选栏可展开/收起且默认收起，减少手机首屏占用。对方头像优先使用 `member_avatar_text`，陈嘉仪数据显示“嘉仪”。等待回复、翻牌处理中、已退款和已回复状态显示在我的提问 Tag 上；已回复 Tag 与回复引用可双向跳转，目标使用 4 秒高对比金色高亮。
 
 ### 计分礼物管理页
 

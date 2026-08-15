@@ -105,6 +105,10 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('avatar.textContent = memberAvatarText()', template)
         self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
         self.assertIn('appendText(box, "transcript-label", "转录参考")', template)
+        self.assertIn('<details id="filterPanel" class="filter-panel">', template)
+        self.assertNotIn('<details id="filterPanel" class="filter-panel" open>', template)
+        self.assertIn('filterPanel.addEventListener("toggle"', template)
+        self.assertIn('action: "toggle_filters"', template)
         self.assertIn('addQuestionStatus(meta, record)', template)
         self.assertIn('statusButton.dataset.target = "answer-" + safeId(record.question_id)', template)
         self.assertIn('statusButton.textContent = "已回复 · 查看回复"', template)
@@ -120,6 +124,7 @@ class FlipCardsTemplateTests(unittest.TestCase):
         for action in (
             "filter_status",
             "filter_answer_type",
+            "toggle_filters",
             "reset_filters",
             "jump_latest",
             "open_official_media",
