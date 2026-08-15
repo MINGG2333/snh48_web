@@ -8,6 +8,7 @@ Events are recorded to:
   - user_{client_id}_events.md (human-readable, per user)
   - notification_center.md (for important events)
   - ip_clients.json (IP→client_id mapping, for admin observation page)
+  - visitor_page_views.jsonl (page-view browser profile, coarse device, and IP)
 """
 from __future__ import annotations
 
@@ -22,10 +23,11 @@ from pydantic import BaseModel
 from website.logging_setup import get_session_dir
 from website.rate_limiter import check_track_event_limit, get_client_ip
 from website.user_events import record_user_event
+from website.visitor_observation import record_page_view
 
 router = APIRouter(prefix="/api/track", tags=["用户行为追踪"])
 
-# ── IP ↔ Client mapping file (for admin OB page, never exposed to frontend) ──
+# ── Legacy IP ↔ Client mapping (kept for old OB records) ───────────────────
 IP_CLIENTS_FILE = Path(__file__).resolve().parent.parent / "data" / "ip_clients.json"
 
 
@@ -52,6 +54,7 @@ def _track_ip_to_client(ip: str, client_id: str):
 
 class TrackEventRequest(BaseModel):
     client_id: str
+    visitor_id: str | None = None
     event_type: str
     data: dict[str, Any] = {}
 
@@ -111,6 +114,19 @@ def track_event(
         event_data=req.data,
         push_to_notification=push_to_notification,
     )
+
+    # OB visitor grouping is deliberately limited to page views.  It records
+    # the request IP and a coarse label from the existing User-Agent header;
+    # no GeoIP/city lookup or active device fingerprinting is performed.
+    if req.event_type == "page_view" and req.visitor_id:
+        record_page_view(
+            session_dir,
+            visitor_id=req.visitor_id,
+            client_id=client_id,
+            ip=ip,
+            user_agent=request.headers.get("user-agent", ""),
+            page=str(req.data.get("page", "")),
+        )
 
     # ── If new user, also push a "new_user" notification ─────────────────
     if is_new_user:

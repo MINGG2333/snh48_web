@@ -68,7 +68,7 @@ SCROLLER_TEXTS_PATH = os.getenv(
 )
 
 # 观察页管理密码（独立密码，环境变量 OB_PASSWORD）
-# 观察页用于管理员查看用户使用情况（按 IP 分组）
+# 观察页用于管理员查看估算访客、设备与访问时 IP（按浏览器档案分组）
 # 留空则观察页功能将被禁用
 OB_PASSWORD = os.getenv("OB_PASSWORD", "")
 

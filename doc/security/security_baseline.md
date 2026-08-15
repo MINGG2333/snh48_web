@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-07-20
+> 更新日期：2026-08-16
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -23,6 +23,7 @@
 | 记忆页访问控制 | `/api/memories/*` 普通访问/提交要求 `MEMORIES_VIEW_PASSWORD`；应援会模式和本人模式使用独立密码；普通数据接口不返回平台 ID | 降低小房间、半私密互动和后台身份标识误公开风险 | 真实密码只放服务器 `.env`；两端提交都由腾讯云权威节点串行提交版本 |
 | 可写运行状态防覆盖 | 首页背景词、房间忽略、计分业务核实和记忆页只向腾讯云提交操作；使用 `flock`、原子替换、幂等 operation ID、revision、不可变 gzip 快照和持久 outbox | 防止两个节点互相覆盖整份 JSON、网络超时后重复执行或旧 outbox 回滚新版本 | 当前状态、历史和 outbox 都不进 Git；恢复只能在腾讯云执行；巡检见 `doc/shared_runtime_state.md` |
 | 可靠待处理箱与来源审计 | 投诉、QA 邮箱请求和处理状态采用一事件一文件，权限 `0600`；每条请求记录腾讯云/阿里云来源，`/ob` 需密码后展示 | 避免并发 JSONL 同步丢请求，同时让管理员区分请求入口 | 事件含邮箱和投诉正文，不得进 Git、静态目录、公开日志或诊断输出；旧 Markdown/JSONL 仅作兼容视图 |
+| 观察页访客估算最小化 | tracker 使用独立第一方 `visitor_id` 表达浏览器档案，不改变 QA 的会话 ID、配额或鉴权；仅在 `page_view` 时把页面、请求 IP 和粗粒度设备标签写入本机 `interaction_logs/session_*/visitor_page_views.jsonl`；`/ob` 密码验证后才返回逐次 IP | 同一浏览器跨标签页和 IP 变化仍归为一个估算访客，同时避免把共享 IP 下所有会话错误合并 | 浏览器档案不等于实名自然人；不得加入 GeoIP、城市、经纬度、完整 User-Agent、Canvas、字体、GPU、音频等主动指纹；该日志保持节点本地，不进入 Git 或双服务器业务状态复制；旧记录无法可靠倒推逐次设备/IP，必须明确标为旧会话 |
 | 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；只接受 `segment_000001.m4a` / `segment_000001_original.m4a` 形式，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`，真实密码只放 `.env` |
 | 翻牌记录访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD`，未设置时复用 `OB_PASSWORD`；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；应用 JSON、MP3 和 MP4 都鉴权，媒体只通过固定文件名和 HTTP Range API 提供 | 避免个人翻牌内容和本地音视频被公共静态目录、搜索引擎或直链获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；不得把 `flip_data/` 挂到 `/static`，真实密码只放 `.env` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |

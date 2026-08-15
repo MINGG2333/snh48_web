@@ -300,7 +300,7 @@ async def complaint_page(request: Request):
 
 @app.get("/ob", response_class=HTMLResponse)
 async def ob_page(request: Request):
-    """Admin observation page - user activity grouped by IP."""
+    """Admin observation page - activity grouped by estimated browser visitor."""
     return templates.TemplateResponse(
         "ob.html",
         {

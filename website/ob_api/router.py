@@ -1,14 +1,18 @@
 """
 Observation (OB) API Router
 
-Provides data for the admin observation page, grouping user activity by IP.
-IP addresses are NEVER sent to the frontend — only client_ids are exposed.
+Provides data for the password-protected admin observation page.  New records
+are grouped by a stable first-party browser profile ID so IP changes do not
+split one browser into multiple cards.  Legacy records remain separate session
+cards because their physical device or natural-person identity cannot be
+reliably reconstructed.
 """
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Collection
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -17,6 +21,7 @@ from website import config as cfg
 from website.logging_setup import LOG_ROOT
 from website.rate_limiter import check_ob_login_limit, get_client_ip
 from website.action_inbox import InboxError, list_requests, record_status
+from website.visitor_observation import is_valid_client_id, load_page_views
 
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
 
@@ -92,93 +97,68 @@ def verify_ob_login(response: Response, _=Depends(verify_ob_password)):
 
 
 @router.get("/data")
-def get_ob_data(_=Depends(verify_ob_password)):
-    """
-    Return user activity data grouped by IP (IPs NOT exposed to frontend).
-
-    Returns:
-      {
-        "groups": [
-          {
-            "id": 0,
-            "users": ["user_xxx", "user_yyy"],
-            "notification_count": 3,
-            "notifications": [              // notification event summaries
-              { "event_id": "EVT-...", "time_str": "...", "type_label": "...", "event_idx": 5 }
-            ],
-            "events": [
-              {
-                "time_str": "2026-06-05 17:16:35",
-                "type": "new_user",
-                "type_label": "🆕 新用户登入",
-                "client_id": "user_xxx",
-                "page": "/",
-                "detail": "...",
-                "is_notification": true,
-                "event_id": "EVT-..."
-              },
-              ...
-            ]
-          }
-        ]
-      }
-    """
+def get_ob_data(response: Response, _=Depends(verify_ob_password)):
+    """Return activity grouped by estimated browser visitor, not by IP."""
+    response.headers["Cache-Control"] = "no-store"
     inbox = list_requests()
-    if not IP_CLIENTS_FILE.exists():
-        return {"groups": [], "inbox": inbox}
+    ip_clients = _load_ip_clients()
+    client_ips = _build_client_ip_index(ip_clients)
+    page_views = load_page_views(LOG_ROOT)
+    profile_specs = _build_profile_specs(page_views, client_ips)
+    all_client_ids = {
+        client_id
+        for spec in profile_specs
+        for client_id in spec["client_ids"]
+    }
+    activity_index = _load_activity_index(all_client_ids)
 
-    try:
-        ip_clients = json.loads(IP_CLIENTS_FILE.read_text())
-    except Exception:
-        return {"groups": [], "inbox": inbox}
+    groups: list[dict[str, Any]] = []
+    for spec in profile_specs:
+        client_ids = sorted(spec["client_ids"])
+        events, notifications = _collect_activity(client_ids, activity_index)
+        visits = sorted(
+            spec["visits"],
+            key=lambda item: str(item.get("timestamp", "")),
+            reverse=True,
+        )
+        if not events and not visits:
+            continue
 
-    groups = []
-    group_id = 0
+        devices = _summarize_visits(visits, "device_label")
+        networks = _summarize_visits(visits, "ip")
+        observed_ips = {item["value"] for item in networks}
+        for client_id in client_ids:
+            for ip in client_ips.get(client_id, []):
+                if ip in observed_ips:
+                    continue
+                networks.append({
+                    "value": ip,
+                    "visit_count": None,
+                    "first_seen": "",
+                    "last_seen": "",
+                    "historical_only": True,
+                })
+                observed_ips.add(ip)
 
-    for ip, client_ids in ip_clients.items():
-        events = []
-        notifications = []
-        notification_count = 0
-
-        # Collect events from all notification_center.md files across sessions
-        # and from per-user event files
-        event_set: dict[str, dict] = {}  # dedup by event_id
-        notif_idx = 0
-
-        for session_dir in sorted(LOG_ROOT.iterdir(), reverse=True):
-            if not session_dir.is_dir() or not session_dir.name.startswith("session_"):
-                continue
-
-            # Read notification_center.md for this session
-            notif_path = session_dir / "notification_center.md"
-            if notif_path.exists():
-                _parse_notification_file(notif_path, client_ids, events, notifications)
-
-            # Read per-user event files for non-notification events
-            for cid in client_ids:
-                user_md = session_dir / f"user_{cid}_events.md"
-                if user_md.exists():
-                    _parse_user_event_file(user_md, cid, events)
-
-        # Sort events by time (newest first) and assign indices
-        _sort_events(events)
-
-        # Map notification event_ids to event indices
-        for notif in notifications:
-            for idx, ev in enumerate(events):
-                if ev.get("event_id") == notif.get("event_id"):
-                    notif["event_idx"] = idx
-                    break
-
+        recent_time = ""
         if events:
-            groups.append({
-                "id": group_id,
-                "users": client_ids,
-                "notification_count": len(notifications),
-                "notifications": notifications,
-                "events": events,
-            })
-            group_id += 1
+            recent_time = str(events[0].get("time_str", ""))
+        if visits:
+            recent_time = max(recent_time, str(visits[0].get("time_str", "")))
+
+        groups.append({
+            "visitor_id": spec["visitor_id"],
+            "profile_label": _profile_label(spec["visitor_id"], devices, spec["is_legacy"]),
+            "is_legacy": spec["is_legacy"],
+            "users": client_ids,
+            "devices": devices,
+            "networks": networks,
+            "visits": visits,
+            "recent_time": recent_time,
+            "notification_count": len(notifications),
+            "notifications": notifications,
+            "events": events,
+        })
 
     # Apply read status from tracking file
     read_ids = _load_read_notifs()
@@ -197,10 +177,209 @@ def get_ob_data(_=Depends(verify_ob_password)):
             if n.get("event_id") not in read_ids
         ]
 
-    # Sort groups by newest event first
-    groups.sort(key=lambda g: g["events"][0]["time_str"] if g["events"] else "", reverse=True)
+    groups.sort(key=lambda group: group["recent_time"], reverse=True)
+    for group_id, group in enumerate(groups):
+        group["id"] = group_id
 
-    return {"groups": groups, "inbox": inbox}
+    stable_profiles = sum(1 for group in groups if not group["is_legacy"])
+    legacy_sessions = len(groups) - stable_profiles
+    return {
+        "groups": groups,
+        "stats": {
+            # Legacy session IDs are deliberately excluded from the visitor
+            # estimate: counting them as people was the original overcounting
+            # problem this redesign is intended to remove.
+            "estimated_visitors": stable_profiles,
+            "stable_profiles": stable_profiles,
+            "legacy_sessions": legacy_sessions,
+            "recorded_page_views": sum(len(group["visits"]) for group in groups),
+        },
+        "inbox": inbox,
+    }
+
+
+def _load_ip_clients() -> dict[str, list[str]]:
+    if not IP_CLIENTS_FILE.exists():
+        return {}
+    try:
+        raw = json.loads(IP_CLIENTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+
+    result: dict[str, list[str]] = {}
+    for ip, client_ids in raw.items():
+        if not isinstance(ip, str) or not isinstance(client_ids, list):
+            continue
+        valid_ids = [item for item in client_ids if is_valid_client_id(item)]
+        if valid_ids:
+            result[ip] = valid_ids
+    return result
+
+
+def _build_client_ip_index(ip_clients: dict[str, list[str]]) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = defaultdict(list)
+    for ip, client_ids in ip_clients.items():
+        for client_id in client_ids:
+            if ip not in result[client_id]:
+                result[client_id].append(ip)
+    return dict(result)
+
+
+def _build_profile_specs(
+    page_views: list[dict[str, Any]],
+    client_ips: dict[str, list[str]],
+) -> list[dict[str, Any]]:
+    profiles: dict[str, dict[str, Any]] = {}
+    claimed_client_ids: set[str] = set()
+    # ``load_page_views`` returns newest first.  If site storage was cleared
+    # while one tab session stayed open, the same client_id can briefly report
+    # two visitor IDs.  Keep the newest visitor ID as the canonical owner so
+    # its event history is never duplicated across two OB cards.
+    canonical_visitor_by_client: dict[str, str] = {}
+    for view in page_views:
+        client_id = view["client_id"]
+        visitor_id = canonical_visitor_by_client.setdefault(client_id, view["visitor_id"])
+        device = view.get("device") or {}
+        normalized_view = {
+            "time_str": str(view.get("time_str", "")),
+            "timestamp": str(view.get("timestamp", "")),
+            "page": str(view.get("page", "")),
+            "ip": str(view.get("ip", "未知")),
+            "device_label": str(device.get("label", "未知设备")),
+            "client_id": client_id,
+        }
+        profile = profiles.setdefault(visitor_id, {
+            "visitor_id": visitor_id,
+            "is_legacy": False,
+            "client_ids": set(),
+            "visits": [],
+        })
+        profile["client_ids"].add(client_id)
+        profile["visits"].append(normalized_view)
+        claimed_client_ids.add(client_id)
+
+    for client_id in client_ips:
+        if client_id in claimed_client_ids:
+            continue
+        legacy_id = f"legacy_{client_id}"
+        profiles[legacy_id] = {
+            "visitor_id": legacy_id,
+            "is_legacy": True,
+            "client_ids": {client_id},
+            "visits": [],
+        }
+    return list(profiles.values())
+
+
+def _summarize_visits(visits: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
+    summary: dict[str, dict[str, Any]] = {}
+    for visit in visits:
+        value = str(visit.get(field, "") or "未知")
+        time_str = str(visit.get("time_str", ""))
+        item = summary.setdefault(value, {
+            "value": value,
+            "visit_count": 0,
+            "first_seen": time_str,
+            "last_seen": time_str,
+            "historical_only": False,
+        })
+        item["visit_count"] += 1
+        if time_str:
+            item["first_seen"] = min(item["first_seen"] or time_str, time_str)
+            item["last_seen"] = max(item["last_seen"] or time_str, time_str)
+    return sorted(
+        summary.values(),
+        key=lambda item: (str(item["last_seen"]), str(item["value"])),
+        reverse=True,
+    )
+
+
+def _profile_label(visitor_id: str, devices: list[dict[str, Any]], is_legacy: bool) -> str:
+    if is_legacy:
+        client_id = visitor_id.removeprefix("legacy_")
+        return f"旧会话 · {client_id}"
+    device = devices[0]["value"] if devices else "浏览器档案"
+    return f"{device} · {visitor_id[-8:]}"
+
+
+def _load_activity_index(
+    target_client_ids: set[str],
+) -> dict[str, tuple[list[dict], list[dict]]]:
+    events_by_client: dict[str, list[dict]] = defaultdict(list)
+    notifications_by_client: dict[str, list[dict]] = defaultdict(list)
+    if not LOG_ROOT.is_dir():
+        return {}
+
+    for session_dir in sorted(LOG_ROOT.iterdir(), reverse=True):
+        if not session_dir.is_dir() or not session_dir.name.startswith("session_"):
+            continue
+
+        notif_path = session_dir / "notification_center.md"
+        if notif_path.exists():
+            session_events: list[dict] = []
+            session_notifications: list[dict] = []
+            _parse_notification_file(
+                notif_path,
+                target_client_ids,
+                session_events,
+                session_notifications,
+            )
+            for event in session_events:
+                events_by_client[event["client_id"]].append(event)
+            for notification in session_notifications:
+                notifications_by_client[notification["client_id"]].append(notification)
+
+        for user_md in session_dir.glob("user_*_events.md"):
+            name = user_md.name
+            client_id = name[len("user_"):-len("_events.md")]
+            if client_id not in target_client_ids:
+                continue
+            _parse_user_event_file(user_md, client_id, events_by_client[client_id])
+
+    return {
+        client_id: (events_by_client[client_id], notifications_by_client[client_id])
+        for client_id in target_client_ids
+    }
+
+
+def _collect_activity(
+    client_ids: list[str],
+    activity_index: dict[str, tuple[list[dict], list[dict]]],
+) -> tuple[list[dict], list[dict]]:
+    events: list[dict] = []
+    notifications: list[dict] = []
+    event_keys: set[tuple[str, str, str, str]] = set()
+    notification_keys: set[tuple[str, str]] = set()
+    for client_id in client_ids:
+        client_events, client_notifications = activity_index.get(client_id, ([], []))
+        for event in client_events:
+            key = (
+                str(event.get("event_id", "")),
+                str(event.get("client_id", "")),
+                str(event.get("type", "")),
+                str(event.get("page", "")),
+            )
+            if key not in event_keys:
+                events.append(dict(event))
+                event_keys.add(key)
+        for notification in client_notifications:
+            key = (
+                str(notification.get("event_id", "")),
+                str(notification.get("client_id", "")),
+            )
+            if key not in notification_keys:
+                notifications.append(dict(notification))
+                notification_keys.add(key)
+
+    _sort_events(events)
+    for notification in notifications:
+        for index, event in enumerate(events):
+            if event.get("event_id") == notification.get("event_id"):
+                notification["event_idx"] = index
+                break
+    return events, notifications
 
 
 @router.post("/mark-read")
@@ -291,7 +470,10 @@ def _parse_user_event_file(
 
 
 def _parse_notification_file(
-    filepath: Path, client_ids: list[str], events: list[dict], notifications: list[dict]
+    filepath: Path,
+    client_ids: Collection[str],
+    events: list[dict],
+    notifications: list[dict],
 ):
     """Parse a notification_center.md file and extract events for given client_ids."""
     try:

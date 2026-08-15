@@ -34,7 +34,10 @@
 
 - 腾讯云和阿里云均能记录 `/score`、`/room` 等管理页的 `page_view`、登录尝试和 `admin_*` 操作。
 - `admin_*` 事件只写用户操作日志，不推送通知中心；通知中心仍只推送 `new_user`、`qa_submit`、`email_submit`、`complaint_submit` 等需要处理的事件。
-- 同一访问来源在不同浏览器环境、隐私模式或本地存储隔离时，可能生成多个匿名 `client_id`；可通过服务器端 `website/data/ip_clients.json` 辅助判断来源。
+- `client_id` 继续使用 `sessionStorage`，只表达当前标签页/会话，不能当作设备或自然人 ID。
+- tracker 另用 `localStorage` 保存第一方 `visitor_id`，只用于 `/ob` 的浏览器档案估算；同一浏览器可跨标签页和 IP 聚合，但换浏览器、无痕模式、清除站点数据或多设备仍会产生多个档案，共用浏览器则可能少算。
+- 每个 `page_view` 在当前服务器会话目录的 `visitor_page_views.jsonl` 记录当时页面、真实 IP 和由请求 User-Agent 归一化的粗粒度设备标签。不得加入城市、经纬度、Canvas、字体、GPU、音频等主动指纹字段，也不得把完整 User-Agent 复制进该文件。
+- `website/data/ip_clients.json` 仅供旧记录兼容；它只表示某会话 ID 曾经使用过哪些 IP，没有逐次时间关联，不能据此把同 IP 下的多个会话自动认定为同一个人。
 
 ## 新页面开发检查清单
 

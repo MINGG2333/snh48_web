@@ -106,7 +106,20 @@
     .inbox-action { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; }
     .inbox-action:hover { border-color: var(--accent); }
 
-    /* ── IP Group Flex Grid ── */
+    .ob-note {
+      display: none;
+      margin: 16px 32px 0;
+      padding: 12px 16px;
+      border: 1px solid rgba(124, 77, 255, 0.3);
+      border-radius: 12px;
+      background: rgba(124, 77, 255, 0.08);
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .ob-note.visible { display: block; }
+
+    /* ── Estimated visitor profiles ── */
     .groups-container {
       display: flex;
       flex-wrap: wrap;
@@ -139,6 +152,43 @@
       box-shadow: 0 8px 24px var(--accent-glow);
     }
     .group-card:active { transform: translateY(0); }
+    .group-card.legacy { border-color: rgba(255, 165, 2, 0.35); }
+
+    .profile-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .profile-title { font-size: 14px; font-weight: 650; word-break: break-word; }
+    .profile-kind {
+      flex-shrink: 0;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 10px;
+      color: var(--green);
+      border: 1px solid rgba(46, 213, 115, 0.35);
+      background: rgba(46, 213, 115, 0.09);
+    }
+    .profile-kind.legacy {
+      color: var(--gold);
+      border-color: rgba(255, 165, 2, 0.35);
+      background: rgba(255, 165, 2, 0.09);
+    }
+    .profile-metrics { margin-top: 8px; color: var(--text-dim); font-size: 11px; }
+    .profile-facts { display: grid; gap: 6px; margin-top: 10px; }
+    .profile-fact { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; }
+    .profile-fact-label { color: var(--text-dim); flex-shrink: 0; }
+    .profile-fact-values { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+    .fact-chip {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: var(--text);
+      background: rgba(255,255,255,.025);
+      overflow-wrap: anywhere;
+    }
+    .fact-chip.network { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
     /* Notification badge */
     .notif-badge {
@@ -235,6 +285,40 @@
       overflow-y: auto;
       flex: 1;
     }
+
+    .profile-summary {
+      display: grid;
+      gap: 14px;
+      padding: 4px 0 16px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-block h3 { font-size: 12px; margin-bottom: 7px; color: var(--text); }
+    .summary-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .summary-chip {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 8px;
+      color: var(--text-dim);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+    .summary-chip.network { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .legacy-hint { color: var(--gold); font-size: 11px; line-height: 1.6; }
+    .visits-list { display: grid; gap: 6px; }
+    .visit-row {
+      display: grid;
+      grid-template-columns: minmax(118px, auto) minmax(90px, 1fr) minmax(130px, 1.2fr) minmax(105px, auto);
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-size: 11px;
+    }
+    .visit-time, .visit-device { color: var(--text-dim); }
+    .visit-page { color: var(--accent); overflow-wrap: anywhere; }
+    .visit-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 
     /* ── Notification Nav ── */
     .notif-nav {
@@ -410,8 +494,10 @@
         padding: 16px 20px;
       }
       .inbox-panel { margin: 16px 20px 0; }
+      .ob-note { margin: 14px 20px 0; }
       .modal-content { width: 95%; max-height: 90vh; }
       .modal-body { padding: 12px 16px; }
+      .visit-row { grid-template-columns: 1fr; gap: 3px; }
     }
   </style>
 </head>
@@ -430,13 +516,19 @@
 
 <!-- ── Header ── -->
 <header id="mainHeader" style="display:none">
-  <h1>🔍 观察 · 用户动态</h1>
+  <h1>🔍 观察 · 估算访客动态</h1>
   <div class="stats">
-    <span id="groupCount">0</span> 个活跃IP组 ·
+    <span id="visitorCount">0</span> 个估算访客 ·
+    <span id="stableProfileCount">0</span> 个稳定浏览器档案 ·
+    <span id="legacySessionCount">0</span> 个旧会话 ·
     <span id="totalNotifs">0</span> 条通知 ·
     <span id="inboxPendingCount">0</span> 条待处理请求
   </div>
 </header>
+
+<div class="ob-note" id="obNote">
+  估算口径：一个第一方浏览器档案视为一名访客，可跨标签页和 IP 变化聚合；同一人使用多台设备或多个浏览器时仍可能多算，共用浏览器时可能少算，因此不等同于实名自然人数。旧记录没有稳定档案，只按会话单列。这里只记录访问时的设备类型、IP 和页面，不查询城市或经纬度。
+</div>
 
 <!-- ── Cross-server durable action inbox ── -->
 <section class="inbox-panel" id="inboxPanel">
@@ -474,6 +566,7 @@
   let obPassword = '';
   let groupsData = [];
   let inboxData = [];
+  let statsData = {};
   let currentGroupId = -1;
   let currentNotifIdx = -1;
   let loginBusy = false;
@@ -486,7 +579,9 @@
   const loginError = document.getElementById('loginError');
   const mainHeader = document.getElementById('mainHeader');
   const groupsContainer = document.getElementById('groupsContainer');
-  const groupCount = document.getElementById('groupCount');
+  const visitorCount = document.getElementById('visitorCount');
+  const stableProfileCount = document.getElementById('stableProfileCount');
+  const legacySessionCount = document.getElementById('legacySessionCount');
   const totalNotifs = document.getElementById('totalNotifs');
   const inboxPendingCount = document.getElementById('inboxPendingCount');
   const inboxPanel = document.getElementById('inboxPanel');
@@ -498,6 +593,7 @@
   const modalBody = document.getElementById('modalBody');
   const modalClose = document.getElementById('modalClose');
   const notifNav = document.getElementById('notifNav');
+  const obNote = document.getElementById('obNote');
 
   function trackAdminEvent(eventType, data) {
     if (!window._trackEvent) return;
@@ -583,7 +679,8 @@
     const attemptedLogin = wasLoginVisible && Boolean(obPassword);
     try {
       const resp = await fetch('/api/ob/data', {
-        headers: { 'X-Ob-Password': obPassword }
+        headers: { 'X-Ob-Password': obPassword },
+        cache: 'no-store'
       });
       if (resp.status === 401 || resp.status === 403) {
         const error = await resp.json().catch(() => ({}));
@@ -597,8 +694,10 @@
       const data = await resp.json();
       groupsData = data.groups || [];
       inboxData = data.inbox || [];
+      statsData = data.stats || {};
       loginOverlay.classList.add('hidden');
       mainHeader.style.display = 'flex';
+      obNote.classList.add('visible');
       loginBusy = false;
       if (attemptedLogin) {
         trackAdminEvent('login_attempt', { action: 'ob_login', result: 'success' });
@@ -696,7 +795,9 @@
   // ── Render Groups ──
   function renderGroups() {
     groupsContainer.innerHTML = '';
-    groupCount.textContent = groupsData.length;
+    visitorCount.textContent = statsData.estimated_visitors ?? groupsData.length;
+    stableProfileCount.textContent = statsData.stable_profiles ?? 0;
+    legacySessionCount.textContent = statsData.legacy_sessions ?? 0;
     let totalN = 0;
     groupsData.forEach(g => totalN += g.notification_count);
     totalNotifs.textContent = totalN;
@@ -710,6 +811,7 @@
     groupsData.forEach((group) => {
       const card = document.createElement('div');
       card.className = 'group-card';
+      card.classList.toggle('legacy', Boolean(group.is_legacy));
       card.dataset.groupId = group.id;
 
       // Notification badge
@@ -720,7 +822,32 @@
         card.appendChild(badge);
       }
 
-      // Users
+      const profileHead = document.createElement('div');
+      profileHead.className = 'profile-head';
+      const title = document.createElement('div');
+      title.className = 'profile-title';
+      title.textContent = group.profile_label || group.visitor_id;
+      profileHead.appendChild(title);
+      const kind = document.createElement('span');
+      kind.className = 'profile-kind' + (group.is_legacy ? ' legacy' : '');
+      kind.textContent = group.is_legacy ? '旧会话' : '稳定档案';
+      profileHead.appendChild(kind);
+      card.appendChild(profileHead);
+
+      const metrics = document.createElement('div');
+      metrics.className = 'profile-metrics';
+      metrics.textContent = (group.visits || []).length + ' 次已关联页面访问 · '
+        + (group.networks || []).length + ' 个曾用 IP · '
+        + group.users.length + ' 个会话 ID';
+      card.appendChild(metrics);
+
+      const facts = document.createElement('div');
+      facts.className = 'profile-facts';
+      appendFact(facts, '设备', (group.devices || []).map(item => item.value), false, group.is_legacy ? '旧记录未知' : '暂无');
+      appendFact(facts, 'IP', (group.networks || []).map(item => item.value), true, '暂无');
+      card.appendChild(facts);
+
+      // Anonymous session IDs remain visible as supporting evidence.
       const usersDiv = document.createElement('div');
       usersDiv.className = 'group-users';
       group.users.forEach((uid) => {
@@ -732,16 +859,42 @@
       card.appendChild(usersDiv);
 
       // Latest activity time
-      if (group.events.length > 0) {
+      if (group.recent_time) {
         const timeDiv = document.createElement('div');
         timeDiv.className = 'group-time';
-        timeDiv.textContent = '最近活动: ' + group.events[0].time_str;
+        timeDiv.textContent = '最近活动: ' + group.recent_time;
         card.appendChild(timeDiv);
       }
 
       card.addEventListener('click', () => openModal(group.id));
       groupsContainer.appendChild(card);
     });
+  }
+
+  function appendFact(container, label, values, network, emptyText) {
+    const row = document.createElement('div');
+    row.className = 'profile-fact';
+    const name = document.createElement('span');
+    name.className = 'profile-fact-label';
+    name.textContent = label + '：';
+    row.appendChild(name);
+    const list = document.createElement('div');
+    list.className = 'profile-fact-values';
+    const normalizedValues = values.length ? values : [emptyText];
+    normalizedValues.slice(0, 4).forEach(value => {
+      const chip = document.createElement('span');
+      chip.className = 'fact-chip' + (network ? ' network' : '');
+      chip.textContent = value;
+      list.appendChild(chip);
+    });
+    if (normalizedValues.length > 4) {
+      const more = document.createElement('span');
+      more.className = 'fact-chip';
+      more.textContent = '+' + (normalizedValues.length - 4);
+      list.appendChild(more);
+    }
+    row.appendChild(list);
+    container.appendChild(row);
   }
 
   // ── Open Modal ──
@@ -757,8 +910,8 @@
       notification_count: group.notifications.length
     });
 
-    modalTitle.textContent = '用户活动记录 (' + group.events.length + ' 条)';
-    modalUsers.textContent = '用户: ' + group.users.join(', ');
+    modalTitle.textContent = group.profile_label || '估算访客活动';
+    modalUsers.textContent = (group.is_legacy ? '旧会话 ID：' : '关联会话 ID：') + group.users.join(', ');
 
     // Notification navigation
     if (group.notifications.length > 0) {
@@ -819,8 +972,12 @@
   // ── Render Events ──
   function renderEvents(group) {
     modalBody.innerHTML = '';
+    renderProfileSummary(group);
     if (group.events.length === 0) {
-      modalBody.innerHTML = '<div class="empty-events">暂无事件记录</div>';
+      const empty = document.createElement('div');
+      empty.className = 'empty-events';
+      empty.textContent = '暂无其他事件记录';
+      modalBody.appendChild(empty);
       return;
     }
 
@@ -903,6 +1060,81 @@
       item.appendChild(body);
       modalBody.appendChild(item);
     });
+  }
+
+  function renderProfileSummary(group) {
+    const summary = document.createElement('section');
+    summary.className = 'profile-summary';
+
+    const devices = document.createElement('div');
+    devices.className = 'summary-block';
+    appendSummaryTitle(devices, '设备环境');
+    appendSummaryChips(devices, (group.devices || []).map(item => {
+      const count = item.visit_count == null ? '' : ' · ' + item.visit_count + ' 次';
+      return item.value + count;
+    }), false, group.is_legacy ? '旧记录没有设备关联' : '暂无设备记录');
+    summary.appendChild(devices);
+
+    const networks = document.createElement('div');
+    networks.className = 'summary-block';
+    appendSummaryTitle(networks, '曾用 IP');
+    appendSummaryChips(networks, (group.networks || []).map(item => {
+      const count = item.visit_count == null ? ' · 旧记录，具体访问未知' : ' · ' + item.visit_count + ' 次';
+      return item.value + count;
+    }), true, '暂无 IP 记录');
+    summary.appendChild(networks);
+
+    const visits = document.createElement('div');
+    visits.className = 'summary-block';
+    appendSummaryTitle(visits, '逐次页面访问（设备与 IP）');
+    if ((group.visits || []).length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'legacy-hint';
+      hint.textContent = group.is_legacy
+        ? '旧记录只保存了“会话曾用哪些 IP”，没有保存每次访问对应的设备和 IP，不能可靠倒推。新访问会自动记录。'
+        : '暂无页面访问记录。';
+      visits.appendChild(hint);
+    } else {
+      const list = document.createElement('div');
+      list.className = 'visits-list';
+      group.visits.forEach(visit => {
+        const row = document.createElement('div');
+        row.className = 'visit-row';
+        appendVisitCell(row, 'visit-time', visit.time_str || '');
+        appendVisitCell(row, 'visit-page', visit.page || '/');
+        appendVisitCell(row, 'visit-device', visit.device_label || '未知设备');
+        appendVisitCell(row, 'visit-ip', visit.ip || '未知 IP');
+        list.appendChild(row);
+      });
+      visits.appendChild(list);
+    }
+    summary.appendChild(visits);
+    modalBody.appendChild(summary);
+  }
+
+  function appendSummaryTitle(container, text) {
+    const title = document.createElement('h3');
+    title.textContent = text;
+    container.appendChild(title);
+  }
+
+  function appendSummaryChips(container, values, network, emptyText) {
+    const list = document.createElement('div');
+    list.className = 'summary-chips';
+    (values.length ? values : [emptyText]).forEach(value => {
+      const chip = document.createElement('span');
+      chip.className = 'summary-chip' + (network ? ' network' : '');
+      chip.textContent = value;
+      list.appendChild(chip);
+    });
+    container.appendChild(list);
+  }
+
+  function appendVisitCell(row, className, text) {
+    const cell = document.createElement('div');
+    cell.className = className;
+    cell.textContent = text;
+    row.appendChild(cell);
   }
 
   function getEmoji(type) {
