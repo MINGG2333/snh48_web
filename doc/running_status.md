@@ -1,6 +1,8 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-08-08 CST +0800
+更新日期：2026-08-16 CST +0800
+
+观察页浏览器档案聚合腾讯云阶段发布专项复核：2026-08-16 03:18 CST +0800
 
 计分礼物送礼用户 Excel 导出腾讯云阶段发布专项复核：2026-08-08 20:15 CST +0800
 
@@ -34,7 +36,7 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `f423a38`。2026-08-08 20:13:32 CST 重启为 screen `565818.snh48`、Python PID `566275`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/score-gifts` 为 200，未授权 `/api/score-gifts/sender-export.xlsx` 为 401，服务器内鉴权导出为 200，Excel 含 2 个工作表且 ZIP 完整性检查通过；共享状态开关保持既有配置 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `3d7cf5e`。2026-08-16 03:17:10 CST 重启为 screen `1725632.snh48`、Python PID `1725637`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/ob` 为 200，未授权 `/api/ob/data` 为 401，服务器内鉴权接口为 200 且响应带 `Cache-Control: no-store`；阿里云尚未同步，等待用户验收 |
 | 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `9b0bce4`；运行进程加载的功能代码来自 `35a4134`，后续 `9b0bce4` 仅更新文档且未重启。部署流程已于 2026-07-21 15:29:22 CST 重启服务，PID `3257540`，active/running；公网 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除且同步脚本不再引用；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
@@ -84,6 +86,8 @@ systemctl status nginx
 ## 腾讯云到阿里云的数据同步任务
 
 当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
+
+> 2026-08-16 03:18 观察页浏览器档案聚合腾讯云阶段发布：功能提交 `3d7cf5e` 已推送并由腾讯云 screen 加载。`/ob` 不再按 IP 合并旧会话；上线后的访问使用本域浏览器档案估算访客，可把同一浏览器切换 IP 后的访问合并，并逐次显示粗粒度设备、IP 和页面。实现不查询城市、经纬度，不保存完整 User-Agent，也不使用 Canvas、字体、GPU 等主动指纹。603 条旧会话保留为单独历史记录但不计入估算人数，稳定档案从上线后的真实浏览器访问开始累积。公网 `/ob` 返回 200，未授权 `/api/ob/data` 返回 401，服务器内鉴权接口返回 200、`Cache-Control: no-store`，数据字段检查未发现城市、经纬度或完整 UA。项目部署工具因腾讯云本机回连公网 SSH 无可用密钥而未执行远端步骤，随后直接核对本机 checkout 并重启 `snh48` screen；首次按标准命令启动触发既有 QA 预热导致短时等待，最终恢复既有 `QA_WARMUP_ON_STARTUP=false` 覆盖后本机和公网 `/ob` 分别约 0.04 秒和 0.05 秒返回。阿里云尚未部署，等待用户验收腾讯云页面后再继续。
 
 > 2026-08-08 20:15 计分礼物送礼用户 Excel 导出腾讯云阶段发布：功能提交 `f423a38` 已推送并由腾讯云 screen 加载。`/score-gifts` 的“送礼用户分布”新增导出入口，新接口沿用当前来源、礼物、用户和日期筛选，返回“送礼用户汇总”与“投分明细”两个工作表；明细按用户分组，保留送礼时间、房间/直播来源、礼物、数量、单个分值和对应分数。真实 `score_gifts.json` 共 2098 条记录的导出为 542585 bytes，ZIP 完整性检查无错误。公网页面为 200、未授权新接口为 401、服务器内鉴权新接口为 200。项目部署工具因腾讯云本机回连公网 SSH 无可用密钥而未执行远端步骤，随后直接核对本机 checkout 为目标提交并仅重启 `snh48` screen；阿里云尚未部署，等待用户验收腾讯云页面后再继续。
 
