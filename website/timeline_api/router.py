@@ -553,6 +553,10 @@ def read_schedule() -> List[Dict[str, Any]]:
 
                 # event_type (行程/里程碑/日常)
                 row_event_type = (row.get("event_type") or "").strip()
+                # Personal-Weibo daily posts have their own social timeline.
+                # Keep the CSV as provenance, but do not duplicate them here.
+                if row_event_type == "日常":
+                    continue
                 timeline_category = "schedule" if row_event_type == "行程" else "event"
 
                 # Optional enhanced fields from CSV
@@ -709,15 +713,26 @@ def read_manual_events(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
     # without modifying manual_events.csv or cross-cloud runtime data.
     today = on_date or datetime.now(BJT).date()
     existing_ids = {record.get("id") for record in records}
+    schedule_records = read_schedule()
     debut_date_text = debut_date().strftime("%Y年%m月%d日")
     for day_number in timeline_milestone_days(today):
         event_id = f"debut-{day_number}"
         if event_id in existing_ids:
             continue
+        milestone_date_text = milestone_date(day_number).isoformat()
+        if any(
+            record.get("date") == milestone_date_text
+            and "出道" in str(record.get("title", ""))
+            and str(day_number) in str(record.get("title", ""))
+            for record in schedule_records
+        ):
+            # Prefer the authoritative schedule row, which may carry source
+            # links and images, over the generated fallback milestone.
+            continue
         records.append({
             "id": event_id,
             "source": "manual",
-            "date": milestone_date(day_number).isoformat(),
+            "date": milestone_date_text,
             "title": f"陈嘉仪出道{day_number}天",
             "type": "milestone",
             "typeLabel": "里程碑",

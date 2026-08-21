@@ -40,7 +40,7 @@ async def verify_pk_score_password(
 
 
 @router.get("/verify")
-async def verify_pk_score_login(response: Response, _=Depends(verify_pk_score_password)):
+def verify_pk_score_login(response: Response, _=Depends(verify_pk_score_password)):
     response.headers["Cache-Control"] = "no-store"
     return {"verified": True}
 

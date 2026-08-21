@@ -267,7 +267,7 @@ node script/obfuscate_js.cjs
 - 生产产物：`website/static/js-dist/timeline.js`
 - 详细行为文档：`doc/timeline_badges.md`、`doc/admin_guide.md`、`doc/ai_agent_instructions.md`
 
-时光轴将传统的行程与事件拆成独立的“行程”和“事件”筛选；`schedule.csv` 中 `event_type=行程` 归入行程，`里程碑`、`日常` 和手工历史节点归入事件。微博、抖音、抖音共创和直播仍分别按来源筛选。社交卡片标题使用来源加正文摘要，过长时截断并追加省略号。
+时光轴将传统的行程与事件拆成独立的“行程”和“事件”筛选；`schedule.csv` 中 `event_type=行程` 归入行程，`里程碑` 和手工历史节点归入事件，`日常` 不再输出到时间轴。微博、抖音、抖音共创和直播仍分别按来源筛选。抖音“相关视频”使用稳定的作品页面 URL，不展示会过期的签名 MP4 URL；社交卡片标题使用来源加正文摘要，过长时截断并追加省略号。
 
 维护边界：
 
