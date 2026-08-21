@@ -95,11 +95,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
   }
 
+  function assistantCategory(event) {
+    if (event.timelineCategory === 'schedule' || event.timelineCategory === 'event') {
+      return event.timelineCategory;
+    }
+    if (event.source === 'manual') return 'event';
+    if (event.source === 'assistant') return event.eventType === '行程' ? 'schedule' : 'event';
+    return '';
+  }
+
   // ── Get filtered event list ──
   function getFilteredEvents() {
     let list = [];
     const showAll = activeSources.has('all');
-    if (showAll || activeSources.has('assistant')) list = list.concat(MANUAL_EVENTS, allScheduleEvents);
+    if (showAll || activeSources.has('schedule')) {
+      list = list.concat(MANUAL_EVENTS.filter(ev => assistantCategory(ev) === 'schedule'));
+      list = list.concat(allScheduleEvents.filter(ev => assistantCategory(ev) === 'schedule'));
+    }
+    if (showAll || activeSources.has('event')) {
+      list = list.concat(MANUAL_EVENTS.filter(ev => assistantCategory(ev) === 'event'));
+      list = list.concat(allScheduleEvents.filter(ev => assistantCategory(ev) === 'event'));
+    }
     if (showAll || activeSources.has('room')) list = list.concat(allLiveEvents);
     if (showAll || activeSources.has('weibo')) list = list.concat(allSocialEvents.filter(ev => ev.platform === 'weibo'));
     if (showAll || activeSources.has('douyin')) list = list.concat(allSocialEvents.filter(ev => ev.platform === 'douyin'));

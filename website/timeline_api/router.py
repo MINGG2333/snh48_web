@@ -553,6 +553,7 @@ def read_schedule() -> List[Dict[str, Any]]:
 
                 # event_type (行程/里程碑/日常)
                 row_event_type = (row.get("event_type") or "").strip()
+                timeline_category = "schedule" if row_event_type == "行程" else "event"
 
                 # Optional enhanced fields from CSV
                 location = (row.get("location") or "").strip()
@@ -612,6 +613,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                     "type": event_type,
                     "typeLabel": type_label,
                     "eventType": row_event_type,
+                    "timelineCategory": timeline_category,
                     "source": "assistant",
                     "description": "\n".join(desc_parts),
                     "cover_url": cover_url,
@@ -693,6 +695,7 @@ def read_manual_events(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
                         "title": title,
                         "type": ev_type,
                         "typeLabel": type_label,
+                        "timelineCategory": "event",
                         "description": description,
                         "image": image,
                         "icon": icon,
