@@ -38,7 +38,7 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `3d7cf5e`。2026-08-16 03:17:10 CST 重启为 screen `1725632.snh48`、Python PID `1725637`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/ob` 为 200，未授权 `/api/ob/data` 为 401，服务器内鉴权接口为 200 且响应带 `Cache-Control: no-store`；阿里云尚未同步，等待用户验收 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `c8f506a`。2026-08-21 19:54:53 CST 重启为 screen `1523938.snh48`、Python PID `1523943`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 18 条；阿里云尚未同步，等待用户验收 |
 | 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `9b0bce4`；运行进程加载的功能代码来自 `35a4134`，后续 `9b0bce4` 仅更新文档且未重启。部署流程已于 2026-07-21 15:29:22 CST 重启服务，PID `3257540`，active/running；公网 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除且同步脚本不再引用；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
