@@ -258,7 +258,7 @@ node script/obfuscate_js.cjs
 - 每次提交产生 gzip 不可变历史快照；复制失败进入 `website/data/shared_state_outbox/`，网站进程内线程自动重试，不新增常驻服务。
 - 投诉和 QA 邮箱请求写入 `website/data/action_inbox/events/` 的不可变事件。`/ob` 显示来源服务器并用状态事件处理待办。
 
-### 时光轴地图打开
+### 时光轴与分类筛选
 
 入口和文档：
 
@@ -266,6 +266,8 @@ node script/obfuscate_js.cjs
 - 源文件：`website/static/js/timeline.js`
 - 生产产物：`website/static/js-dist/timeline.js`
 - 详细行为文档：`doc/timeline_badges.md`、`doc/admin_guide.md`、`doc/ai_agent_instructions.md`
+
+时光轴将传统的行程与事件拆成独立的“行程”和“事件”筛选；`schedule.csv` 中 `event_type=行程` 归入行程，`里程碑`、`日常` 和手工历史节点归入事件。微博、抖音、抖音共创和直播仍分别按来源筛选。社交卡片标题使用来源加正文摘要，过长时截断并追加省略号。
 
 维护边界：
 

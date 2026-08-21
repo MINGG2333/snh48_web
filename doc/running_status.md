@@ -2,9 +2,9 @@
 
 更新日期：2026-08-21 CST +0800
 
-2026-08-21 时光轴微博/抖音统一数据与筛选改造已完成腾讯云验收，并按用户确认部署到阿里云；两端 `/api/timeline/social` 均返回 56 条（微博 25、抖音 31）。
+2026-08-21 时光轴行程/事件拆分、微博/抖音统一数据与抖音共创改造已完成腾讯云验收，并按用户确认部署到阿里云；两端 `/api/timeline/social` 均返回 61 条（微博 25、抖音 36），时间轴提供“行程”和“事件”独立筛选。
 
-抖音分页采集后的时间轴阿里云同步专项复核：2026-08-21 21:42 CST +0800
+抖音共创采集与时间轴分类阿里云同步专项复核：2026-08-21 22:34 CST +0800
 
 观察页浏览器档案聚合腾讯云阶段发布专项复核：2026-08-16 03:18 CST +0800
 
@@ -40,8 +40,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `c8f506a`。screen `1523938.snh48`、Python PID `1523943`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 31 条；时间轴轻量数据已由阿里云主动拉取 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `e95244a`，2026-08-21 21:41:56 CST 重启，PID `2242338`，active/running；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 31 条；`social_record/timeline/chenjiayi_social_timeline.json` 已从腾讯云同步；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `f2e9cc3`。screen `1634258.snh48`、Python PID `1634263`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 36 条；时间轴提供“行程/事件”独立筛选，轻量数据已由阿里云主动拉取 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `f2e9cc3`，2026-08-21 22:28:29 CST 重启，PID `2246506`，active/running；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 36 条；`social_record/timeline/chenjiayi_social_timeline.json` 已从腾讯云同步；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
