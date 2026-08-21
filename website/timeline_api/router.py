@@ -551,7 +551,7 @@ def read_schedule() -> List[Dict[str, Any]]:
                 time_str = (row.get("time") or "").strip()
                 type_label = TYPE_LABEL_MAP.get(event_type, event_type)
 
-                # event_type (行程/里程碑/日常)
+                # event_type (行程/里程碑; legacy 日常 rows are ignored)
                 row_event_type = (row.get("event_type") or "").strip()
                 # Personal-Weibo daily posts have their own social timeline.
                 # Keep the CSV as provenance, but do not duplicate them here.
