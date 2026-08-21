@@ -2,7 +2,9 @@
 
 更新日期：2026-08-21 CST +0800
 
-2026-08-21 时光轴微博/抖音统一数据与筛选改造已在腾讯云代码侧完成，网站部署等待腾讯云页面验收；阿里云尚未同步该提交或社交时间轴数据。
+2026-08-21 时光轴微博/抖音统一数据与筛选改造已完成腾讯云验收，并按用户确认部署到阿里云；两端 `/api/timeline/social` 均返回 56 条（微博 25、抖音 31）。
+
+抖音分页采集后的时间轴阿里云同步专项复核：2026-08-21 21:42 CST +0800
 
 观察页浏览器档案聚合腾讯云阶段发布专项复核：2026-08-16 03:18 CST +0800
 
@@ -38,8 +40,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `c8f506a`。2026-08-21 19:54:53 CST 重启为 screen `1523938.snh48`、Python PID `1523943`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 18 条；阿里云尚未同步，等待用户验收 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout 为 `9b0bce4`；运行进程加载的功能代码来自 `35a4134`，后续 `9b0bce4` 仅更新文档且未重启。部署流程已于 2026-07-21 15:29:22 CST 重启服务，PID `3257540`，active/running；公网 `/flip-cards` 为 200，旧 `/api/flip-cards/html` 为 404，未登录 `/api/flip-cards/status` 为 401，页面不再含下载 HTML 入口；阿里云旧 `/home/snh48-fan-hub/flip_chat.html` 副本已删除且同步脚本不再引用；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `c8f506a`。screen `1523938.snh48`、Python PID `1523943`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 31 条；时间轴轻量数据已由阿里云主动拉取 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `e95244a`，2026-08-21 21:41:56 CST 重启，PID `2242338`，active/running；公网 `/timeline` 和 `/api/timeline/social` 均为 200，返回微博 25 条、抖音 31 条；`social_record/timeline/chenjiayi_social_timeline.json` 已从腾讯云同步；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
