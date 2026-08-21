@@ -52,6 +52,7 @@
 
 - `schedule_record/chenjiayi_events.csv`（事件/行程主文件，网站优先读取）
 - `schedule_record/schedule.csv`（事件/行程兼容副本，旧配置和回退读取）
+- `social_record/timeline/chenjiayi_social_timeline.json`（微博/抖音已过滤的轻量时光轴数据；网站消费副本，阿里云不运行采集器）
 - `/home/snh48_web/website/data/manual_events.csv`（网站运行数据手动事件 CSV，接口按请求读取；格式示例见 `website/data/manual_events.example.csv`）
 - `/home/snh48_web/website/data/scroller_texts.json`（首页背景词非 Git 运行状态）
 - `/home/snh48_web/website/data/memories/memories.json`（记忆页运行数据；格式示例见 `website/data/memories/memories.example.json`）

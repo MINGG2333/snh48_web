@@ -1,6 +1,8 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-08-16 CST +0800
+更新日期：2026-08-21 CST +0800
+
+2026-08-21 时光轴微博/抖音统一数据与筛选改造已在腾讯云代码侧完成，网站部署等待腾讯云页面验收；阿里云尚未同步该提交或社交时间轴数据。
 
 观察页浏览器档案聚合腾讯云阶段发布专项复核：2026-08-16 03:18 CST +0800
 
@@ -136,6 +138,7 @@ systemctl status nginx
 |--------------|----------------|------|
 | `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 事件/行程主文件，网站优先读取 |
 | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 兼容副本 |
+| `/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json` | 同路径 | 微博/抖音已过滤的轻量时间轴数据；不包含原始社交 CSV、Cookie 或采集器 |
 | `/home/snh48_web/website/data/manual_events.csv` | 同路径 | 网站手动事件运行数据 |
 | `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面 |

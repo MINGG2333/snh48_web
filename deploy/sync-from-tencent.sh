@@ -48,6 +48,7 @@ echo "$LOG_TAG Starting sync groups=$(IFS=,; echo "${SYNC_GROUPS[*]}")..."
 
 mkdir -p \
   /home/snh48-fan-hub/schedule_record \
+  /home/snh48-fan-hub/social_record/timeline \
   /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies \
@@ -81,7 +82,11 @@ if [ "$sync_core" -eq 1 ]; then
   rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/schedule_record/schedule.csv" /home/snh48-fan-hub/schedule_record/schedule.csv
   echo "$LOG_TAG schedule.csv done"
 
-  # 3. manual_events.csv（网站手动事件，接口按请求读取）
+  # 3. lightweight authored Weibo/Douyin timeline data; no raw social CSV/Cookie is synced
+  rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json" /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
+  echo "$LOG_TAG social timeline done"
+
+  # 4. manual_events.csv（网站手动事件，接口按请求读取）
   rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48_web/website/data/manual_events.csv" /home/snh48_web/website/data/manual_events.csv
   echo "$LOG_TAG manual_events.csv done"
 

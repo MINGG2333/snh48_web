@@ -2,7 +2,7 @@
  * SNH48 演艺信息站 - 时光轴 Timeline (Phase 2)
  *
  * 功能：水平拖拽滑动时间轴 + 节点分支引出卡片 + 点击弹出详情弹窗
- * 数据：手动硬编码事件 + 服务器直播记录(LIVEPUSH) 自动合并
+ * 数据：行程、直播、微博和抖音统一合并为独立时间轴卡片
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -15,15 +15,17 @@ const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
   event: 'event', external: 'external', live: 'event',
   公演: 'show', 外务: 'external', 见面会: 'event', 其他: 'event',
-  里程碑: 'milestone', 日常: 'event',
+  里程碑: 'milestone', 日常: 'event', 微博: 'weibo', 抖音: 'douyin',
+  weibo: 'weibo', douyin: 'douyin',
 };
 
 // ── Today's date for comparison (normalize to midnight for pure date comparison) ──
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
-let activeSources = new Set(['room', 'assistant']); // which sources are selected
+let activeSources = new Set(['all']); // one visible category at a time
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
+let allSocialEvents = []; // fetched from fan-hub social timeline dataset
 
 // ── Format date (top-level so data can reference it) ──
 function formatDate(dateInput) {
@@ -95,13 +97,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Get filtered event list ──
   function getFilteredEvents() {
-    let list = [...MANUAL_EVENTS];  // always show manual events
-    if (activeSources.has('room')) {
-      list = list.concat(allLiveEvents);
-    }
-    if (activeSources.has('assistant')) {
-      list = list.concat(allScheduleEvents);
-    }
+    let list = [];
+    const showAll = activeSources.has('all');
+    if (showAll || activeSources.has('assistant')) list = list.concat(MANUAL_EVENTS, allScheduleEvents);
+    if (showAll || activeSources.has('room')) list = list.concat(allLiveEvents);
+    if (showAll || activeSources.has('weibo')) list = list.concat(allSocialEvents.filter(ev => ev.platform === 'weibo'));
+    if (showAll || activeSources.has('douyin')) list = list.concat(allSocialEvents.filter(ev => ev.platform === 'douyin'));
     list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
     return list;
   }
@@ -126,7 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
       let cardsHtml = '';
       events.forEach(ev => {
         const badgeClass = BADGE_CLASS_MAP[ev.type] || 'event';
-        const coverSrc = safeUrl(ev.cover_url || ev.image);
+        const coverValue = Array.isArray(ev.cover_url) ? ev.cover_url[0] : ev.cover_url;
+        const coverSrc = safeUrl(coverValue || ev.image);
         const hasCover = !!coverSrc;
         const titleText = escapeHtml(ev.title || '');
         const typeLabelText = escapeHtml(ev.typeLabel || '');
@@ -138,22 +140,22 @@ document.addEventListener('DOMContentLoaded', () => {
           : `<div class="timeline-card-img-placeholder"><i class="fas ${iconClass}"></i></div>`;
 
         const imgClass = hasCover ? 'timeline-card-img loading' : 'timeline-card-img-placeholder';
-        // Check for title keyword badges (replace default type badge if matched)
+        // Keep the primary category badge and show performance keywords as secondary badges.
         const title_ = ev.title || '';
         const keywordBadge =
           title_.includes('助演') ? 'show|助演' :
           title_.includes('首演') ? 'milestone|首演' :
           title_.includes('巡演') ? 'tour|巡演' : '';
-        const showTypeBadge = !keywordBadge;
         cardsHtml += `
           <div class="timeline-card" data-event-id="${eventId}">
             ${hasCover ? `<img class="${imgClass}" src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
             <div class="timeline-card-body">
               <div class="timeline-card-date">${escapeHtml(formatDate(ev.date))}${eventTime}</div>
               <div class="timeline-card-title">${titleText}</div>
-              ${showTypeBadge ? `<span class="timeline-card-badge ${badgeClass}">${typeLabelText}</span>` : ''}
+              <span class="timeline-card-badge ${badgeClass}">${typeLabelText}</span>
               ${keywordBadge ? `<span class="timeline-card-badge ${keywordBadge.split('|')[0]}" style="margin-left:4px;">${keywordBadge.split('|')[1]}</span>` : ''}
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
+              ${ev.content_type === 'live' ? '<span class="timeline-card-badge live" style="margin-left:4px;">直播</span>' : ''}
               ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
             </div>
           </div>
@@ -458,11 +460,11 @@ document.addEventListener('DOMContentLoaded', () => {
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const src = btn.dataset.source;
-      if (activeSources.has(src)) {
-        activeSources.delete(src);
-        if (activeSources.size === 0) activeSources.add(src);
+      if (src === 'all') {
+        activeSources = new Set(['all']);
       } else {
-        activeSources.add(src);
+        activeSources.delete('all');
+        activeSources = new Set([src]);
       }
       updateFilterUI();
       refreshTimeline(true);
@@ -544,6 +546,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.warn('[timeline] Failed to fetch live events:', err);
+    }
+  }
+
+  async function fetchSocialEvents() {
+    try {
+      const resp = await fetch('/api/timeline/social');
+      const data = await resp.json();
+      if (data.success && Array.isArray(data.data)) {
+        allSocialEvents = data.data.map(ev => ({
+          ...ev,
+          source: 'social',
+          icon: ev.platform === 'weibo' ? 'fa-weibo' : 'fa-music',
+          cover_url: Array.isArray(ev.cover_url) ? ev.cover_url[0] : ev.cover_url,
+        }));
+      }
+    } catch (err) {
+      console.warn('[timeline] Failed to fetch social events:', err);
     }
   }
 
@@ -745,17 +764,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const badgeClassMap = {
       milestone: 'milestone', tour: 'tour', show: 'show',
       event: 'event', external: 'external', live: 'event',
-      里程碑: 'milestone', 日常: 'event',
+      里程碑: 'milestone', 日常: 'event', 微博: 'weibo', 抖音: 'douyin',
+      weibo: 'weibo', douyin: 'douyin',
     };
     const badgeClass = badgeClassMap[event.type] || 'event';
 
-    // Modal: also replace type badge with keyword badge if matched
+    // Modal: keep the type badge and add performance keywords as secondary badges.
     const title_ = event.title || '';
     const modalKeywordBadge =
       title_.includes('助演') ? 'show|助演' :
       title_.includes('首演') ? 'milestone|首演' :
       title_.includes('巡演') ? 'tour|巡演' : '';
-    const showModalTypeBadge = !modalKeywordBadge;
 
     const descHtml = escapeHtml(event.description || '').replace(/\n/g, '<br>');
 
@@ -811,9 +830,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="timeline-modal-body">
         <div class="timeline-modal-date">${escapeHtml(formatDate(event.date))}</div>
         <div class="timeline-modal-title">${escapeHtml(event.title || '')}</div>
-        ${showModalTypeBadge ? `<span class="timeline-modal-badge ${badgeClass}">${escapeHtml(event.typeLabel || '')}</span>` : ''}
+        <span class="timeline-modal-badge ${badgeClass}">${escapeHtml(event.typeLabel || '')}</span>
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
+        ${event.content_type === 'live' ? '<span class="timeline-modal-badge live" style="margin-left:0;">直播</span>' : ''}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
         ${buildLocationMapLinks(event.location)}
         ${buildSourceLinks(event)}
@@ -1138,6 +1158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchManualEvents(),
     fetchLiveEvents(),
     fetchScheduleEvents(),
+    fetchSocialEvents(),
   ]).then(() => {
     refreshTimeline();
     applyScale(1);

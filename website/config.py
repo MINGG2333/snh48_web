@@ -355,6 +355,12 @@ SCHEDULE_CSV_PATH = os.getenv(
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "schedule.csv"),
 )
 
+# fan-hub 生成的轻量社交时间轴数据；不读取微博/抖音原始 CSV，也不在网站侧采集。
+SOCIAL_TIMELINE_PATH = os.getenv(
+    "SOCIAL_TIMELINE_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "social_record" / "timeline" / "chenjiayi_social_timeline.json"),
+)
+
 # ── Manual Events CSV (手动事件，修改后无需重启即可生效) ─────────────────
 MANUAL_EVENTS_CSV_PATH = os.getenv(
     "MANUAL_EVENTS_CSV_PATH",

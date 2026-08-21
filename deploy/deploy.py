@@ -99,6 +99,11 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "type": "file",
+                "path": "/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json",
+                "optional": True,
+            },
+            {
+                "type": "file",
                 "path": "/home/snh48_web/website/data/manual_events.csv",
             },
             {

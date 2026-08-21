@@ -12,6 +12,7 @@ Summary CSV columns:
 from __future__ import annotations
 
 import csv
+import json
 import hashlib
 import ipaddress
 import socket
@@ -427,6 +428,39 @@ def get_live_pushes_grouped(limit: int = Query(500, ge=1, le=2000)):
         "total": len(records),
         "member": MEMBER_NAME,
     }
+
+
+def read_social_timeline() -> List[Dict[str, Any]]:
+    """Read the public, pre-filtered Weibo/Douyin timeline dataset."""
+    path = Path(cfg.SOCIAL_TIMELINE_PATH)
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[timeline_api] Error reading social timeline: {exc}")
+        return []
+    records = []
+    for row in payload.get("records", []) if isinstance(payload, dict) else []:
+        if not isinstance(row, dict) or not row.get("id") or not row.get("date"):
+            continue
+        item = dict(row)
+        item["source"] = "social"
+        item["cover_url"] = sinaimg_to_proxy(
+            (item.get("cover_url") or [""])[0] if isinstance(item.get("cover_url"), list) else item.get("cover_url", "")
+        )
+        item["image_urls"] = [sinaimg_to_proxy(value) for value in (item.get("image_urls") or [])]
+        item["video_urls"] = [str(value) for value in (item.get("video_urls") or [])]
+        records.append(item)
+    records.sort(key=lambda item: (str(item.get("date", "")), str(item.get("datetime", ""))))
+    return records
+
+
+@router.get("/social")
+def get_social_timeline():
+    """Return each authored Weibo/Douyin item as an independent timeline card."""
+    records = read_social_timeline()
+    return {"success": True, "data": records, "total": len(records), "member": MEMBER_NAME}
 
 
 @router.get("/danmu")
