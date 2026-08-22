@@ -184,6 +184,17 @@
       white-space: nowrap;
     }
 
+    .filter-modal,
+    .filter-modal-card,
+    .filter-modal-scroll {
+      display: contents;
+    }
+
+    .filter-modal-backdrop,
+    .filter-modal-header {
+      display: none;
+    }
+
     .filters {
       padding: 0 20px 14px;
       display: grid;
@@ -289,7 +300,7 @@
       min-height: 0;
       overflow-y: auto;
       overflow-anchor: none;
-      padding: 18px 18px 122px;
+      padding: 18px 18px 178px;
       scroll-behavior: auto;
     }
 
@@ -580,7 +591,7 @@
 
     .update-pill.show { display: block; }
 
-    .unreplied-panel {
+    .floating-actions {
       position: absolute;
       right: 18px;
       bottom: 18px;
@@ -591,6 +602,36 @@
       width: max-content;
       max-width: min(360px, calc(100vw - 36px));
     }
+
+    .feedback-nav {
+      min-width: 118px;
+      min-height: 42px;
+      border: 1px solid rgba(98, 168, 255, 0.58);
+      border-radius: 8px;
+      background: rgba(98, 168, 255, 0.14);
+      color: #b9d8ff;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 750;
+      white-space: nowrap;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    }
+
+    .feedback-nav:hover,
+    .feedback-nav:focus-visible {
+      filter: brightness(1.12);
+      outline: none;
+    }
+
+    .unreplied-panel {
+      display: none;
+      flex-direction: column;
+      gap: 7px;
+      width: max-content;
+      max-width: min(360px, calc(100vw - 36px));
+    }
+
+    .unreplied-panel.visible { display: flex; }
 
     .unreplied-nav {
       min-width: 118px;
@@ -696,6 +737,165 @@
 
     .jump-status.hidden { display: none; }
 
+    .room-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .room-modal.open { display: flex; }
+
+    .room-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 8, 13, 0.72);
+    }
+
+    .room-modal-card {
+      position: relative;
+      z-index: 1;
+      width: min(560px, calc(100vw - 24px));
+      max-height: min(88dvh, 760px);
+      margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+    }
+
+    .room-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .room-modal-header h2 {
+      font-size: 16px;
+      font-weight: 750;
+    }
+
+    .room-modal-close {
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 11px;
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .room-modal-close:hover,
+    .room-modal-close:focus-visible {
+      border-color: var(--teal);
+      color: var(--teal);
+      outline: none;
+    }
+
+    .room-modal-scroll {
+      max-height: calc(min(88dvh, 760px) - 61px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+    }
+
+    .feedback-modal-scroll { padding: 16px; }
+
+    .feedback-copy {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+
+    .feedback-field {
+      margin-bottom: 13px;
+    }
+
+    .feedback-field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .feedback-field select,
+    .feedback-field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      outline: none;
+    }
+
+    .feedback-field select {
+      min-height: 38px;
+      padding: 0 10px;
+    }
+
+    .feedback-field textarea {
+      min-height: 132px;
+      padding: 10px;
+      line-height: 1.55;
+      resize: vertical;
+    }
+
+    .feedback-field select:focus,
+    .feedback-field textarea:focus { border-color: var(--teal); }
+
+    .feedback-count {
+      color: var(--faint);
+      font-size: 12px;
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .feedback-status {
+      display: none;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.45;
+      margin-bottom: 13px;
+      padding: 9px 10px;
+    }
+
+    .feedback-status.show { display: block; }
+    .feedback-status.error {
+      border: 1px solid rgba(227, 111, 111, 0.42);
+      background: rgba(227, 111, 111, 0.12);
+      color: #f1b2b2;
+    }
+
+    .feedback-status.success {
+      border: 1px solid rgba(76, 194, 122, 0.42);
+      background: rgba(76, 194, 122, 0.12);
+      color: #b8f5cf;
+    }
+
+    .feedback-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .feedback-actions .btn { flex: 1 1 150px; }
+
+    .feedback-actions a.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+
     .message.jump-highlight .card {
       border-color: var(--teal);
       box-shadow: 0 0 0 2px rgba(64, 184, 168, 0.26);
@@ -718,6 +918,7 @@
     @media (max-width: 720px) {
       body,
       .page { height: 100dvh; }
+      .topbar { backdrop-filter: none; }
       .topline {
         align-items: flex-start;
         flex-direction: row;
@@ -739,13 +940,64 @@
         gap: 5px 10px;
         font-size: 12px;
       }
-      .filters {
+      .filter-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
         display: none;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .filter-modal.open { display: flex; }
+      .filter-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        display: block;
+        background: rgba(4, 8, 13, 0.72);
+      }
+      .filter-modal-card {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        width: min(560px, calc(100vw - 24px));
+        max-height: min(88dvh, 760px);
+        margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+      }
+      .filter-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .filter-modal-header h2 {
+        font-size: 16px;
+        font-weight: 750;
+      }
+      .filter-modal-scroll {
+        display: block;
+        min-height: 0;
+        max-height: calc(min(88dvh, 760px) - 61px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
+      .filters {
+        display: grid;
         grid-template-columns: 1fr !important;
         padding: 0 12px 10px;
         gap: 8px;
       }
-      .topbar.filters-open .filters { display: grid; }
+      .filter-modal-scroll .filters:first-child { padding-top: 2px; }
+      .filter-modal-scroll .filters:last-child { padding-bottom: 16px; }
       .field label { margin-bottom: 4px; }
       .field input,
       .field select,
@@ -753,14 +1005,23 @@
       .btn { min-height: 34px; }
       .actions .btn { flex: 1; }
       .chat-scroll {
-        padding: 14px 12px calc(164px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+        padding: 14px 12px calc(216px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
       }
       .update-pill {
         bottom: calc(14px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
       }
-      .unreplied-panel {
+      .floating-actions {
         right: 12px;
         bottom: calc(64px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
+        max-width: calc(100vw - 24px);
+      }
+      .feedback-nav {
+        min-width: 0;
+        min-height: 38px;
+        padding: 0 11px;
+        font-size: 12px;
+      }
+      .unreplied-panel {
         max-width: calc(100vw - 24px);
       }
       .unreplied-nav {
@@ -808,94 +1069,109 @@
           <a class="combined-reply-link" id="combinedReplyLink" href="/room/gift-senders">综合回礼</a>
           <span>总数 <strong id="totalMessages">0</strong></span>
           <span id="latestTime">最新：-</span>
-          <span>刷新 <strong id="refreshSeconds">60</strong> 秒</span>
         </div>
       </div>
-      <div class="filters">
-        <div class="field">
-          <label>消息分组</label>
-          <div class="family-strip" id="familyStrip">
-            <button class="chip active" type="button" data-family="all">全部</button>
-            <button class="chip" type="button" data-family="text">文本</button>
-            <button class="chip" type="button" data-family="reply">回复</button>
-            <button class="chip" type="button" data-family="gift">礼物</button>
-            <button class="chip" type="button" data-family="gift_reply">回礼物</button>
-            <button class="chip" type="button" data-family="media">媒体</button>
-            <button class="chip" type="button" data-family="flipcard">翻牌</button>
-            <button class="chip" type="button" data-family="live">直播</button>
-            <button class="chip" type="button" data-family="share">分享</button>
-            <button class="chip" type="button" data-family="event">事件</button>
+      <div class="filter-modal" id="filterModal">
+        <div class="filter-modal-backdrop" id="filterModalBackdrop"></div>
+        <div class="filter-modal-card" id="filterModalCard" aria-labelledby="filterModalTitle">
+          <div class="filter-modal-header">
+            <h2 id="filterModalTitle">筛选房间消息</h2>
+            <button class="room-modal-close" id="filterModalClose" type="button">收起</button>
+          </div>
+          <div class="filter-modal-scroll">
+            <div class="filters">
+              <div class="field">
+                <label>消息分组</label>
+                <div class="family-strip" id="familyStrip">
+                  <button class="chip active" type="button" data-family="all">全部</button>
+                  <button class="chip" type="button" data-family="text">文本</button>
+                  <button class="chip" type="button" data-family="reply">回复</button>
+                  <button class="chip" type="button" data-family="gift">礼物</button>
+                  <button class="chip" type="button" data-family="gift_reply">回礼物</button>
+                  <button class="chip" type="button" data-family="media">媒体</button>
+                  <button class="chip" type="button" data-family="flipcard">翻牌</button>
+                  <button class="chip" type="button" data-family="live">直播</button>
+                  <button class="chip" type="button" data-family="share">分享</button>
+                  <button class="chip" type="button" data-family="event">事件</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="typeSelect">具体类型</label>
+                <select id="typeSelect">
+                  <option value="all">全部类型</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="roomSelect">房间</label>
+                <select id="roomSelect">
+                  <option value="all">全部房间</option>
+                  <option value="main">公开房间</option>
+                  <option value="small">小房间</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="senderInput">发送者</label>
+                <input id="senderInput" type="search" placeholder="昵称关键词">
+              </div>
+              <div class="field">
+                <label for="keywordInput">内容关键词</label>
+                <input id="keywordInput" type="search" placeholder="消息/回复/礼物">
+              </div>
+              <div class="field">
+                <label for="limitSelect">每次加载</label>
+                <select id="limitSelect">
+                  <option value="50">50 条</option>
+                  <option value="100" selected>100 条</option>
+                  <option value="200">200 条</option>
+                  <option value="300">300 条</option>
+                </select>
+              </div>
+              <div class="actions">
+                <button class="btn primary" id="applyBtn" type="button">筛选</button>
+                <button class="btn" id="resetBtn" type="button">重置</button>
+              </div>
+            </div>
+            <div class="filters" style="grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) 1fr;">
+              <div class="field">
+                <label for="jumpDateInput">日期跳转</label>
+                <input id="jumpDateInput" type="date">
+              </div>
+              <div class="field">
+                <label for="dateFromInput">开始日期</label>
+                <input id="dateFromInput" type="date">
+              </div>
+              <div class="field">
+                <label for="dateToInput">结束日期</label>
+                <input id="dateToInput" type="date">
+              </div>
+              <div class="field">
+                <label for="mediaSelect">媒体</label>
+                <select id="mediaSelect">
+                  <option value="all">全部消息</option>
+                  <option value="with">有媒体</option>
+                  <option value="without">无媒体</option>
+                </select>
+              </div>
+              <div></div>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label for="typeSelect">具体类型</label>
-          <select id="typeSelect">
-            <option value="all">全部类型</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="roomSelect">房间</label>
-          <select id="roomSelect">
-            <option value="all">全部房间</option>
-            <option value="main">公开房间</option>
-            <option value="small">小房间</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="senderInput">发送者</label>
-          <input id="senderInput" type="search" placeholder="昵称关键词">
-        </div>
-        <div class="field">
-          <label for="keywordInput">内容关键词</label>
-          <input id="keywordInput" type="search" placeholder="消息/回复/礼物">
-        </div>
-        <div class="field">
-          <label for="limitSelect">每次加载</label>
-          <select id="limitSelect">
-            <option value="50">50 条</option>
-            <option value="100" selected>100 条</option>
-            <option value="200">200 条</option>
-            <option value="300">300 条</option>
-          </select>
-        </div>
-        <div class="actions">
-          <button class="btn primary" id="applyBtn" type="button">筛选</button>
-          <button class="btn" id="resetBtn" type="button">重置</button>
-        </div>
-      </div>
-      <div class="filters" style="grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) minmax(150px, 190px) 1fr;">
-        <div class="field">
-          <label for="jumpDateInput">日期跳转</label>
-          <input id="jumpDateInput" type="date">
-        </div>
-        <div class="field">
-          <label for="dateFromInput">开始日期</label>
-          <input id="dateFromInput" type="date">
-        </div>
-        <div class="field">
-          <label for="dateToInput">结束日期</label>
-          <input id="dateToInput" type="date">
-        </div>
-        <div class="field">
-          <label for="mediaSelect">媒体</label>
-          <select id="mediaSelect">
-            <option value="all">全部消息</option>
-            <option value="with">有媒体</option>
-            <option value="without">无媒体</option>
-          </select>
-        </div>
-        <div></div>
       </div>
     </header>
 
     <main class="chat-shell" id="chatShell">
       <div class="jump-status hidden" id="jumpStatus">正在加载目标消息...</div>
       <button class="update-pill" id="updatePill" type="button">有新消息，点击查看最新</button>
-      <div class="unreplied-panel" id="unrepliedPanel">
-        <button class="unreplied-nav" id="unrepliedNav" type="button" disabled>暂无未回</button>
-        <div class="ignore-actions">
-          <button class="ignore-btn mark" id="ignoreBatchBtn" type="button" disabled>标记为忽略</button>
-          <button class="ignore-btn undo" id="undoIgnoreBtn" type="button" disabled>撤销</button>
+      <div class="floating-actions" id="floatingActions">
+        <button class="feedback-nav" id="feedbackNav" type="button" aria-haspopup="dialog" aria-expanded="false">
+          <i class="fas fa-headset" aria-hidden="true"></i> 反馈
+        </button>
+        <div class="unreplied-panel" id="unrepliedPanel">
+          <button class="unreplied-nav" id="unrepliedNav" type="button" disabled>暂无未回</button>
+          <div class="ignore-actions">
+            <button class="ignore-btn mark" id="ignoreBatchBtn" type="button" disabled>标记为忽略</button>
+            <button class="ignore-btn undo" id="undoIgnoreBtn" type="button" disabled>撤销</button>
+          </div>
         </div>
       </div>
       <div class="chat-scroll" id="chatScroll">
@@ -907,6 +1183,38 @@
         </div>
       </div>
     </main>
+
+    <div class="room-modal" id="feedbackModal" aria-hidden="true">
+      <div class="room-modal-backdrop" id="feedbackModalBackdrop"></div>
+      <section class="room-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle">
+        <div class="room-modal-header">
+          <h2 id="feedbackModalTitle">小偶像反馈</h2>
+          <button class="room-modal-close" id="feedbackModalClose" type="button">收起</button>
+        </div>
+        <div class="room-modal-scroll feedback-modal-scroll">
+          <p class="feedback-copy">可以反馈网站问题，也可以写下期待的功能。提交后会进入网站反馈处理流程。</p>
+          <form id="feedbackForm">
+            <div class="feedback-field">
+              <label for="feedbackType">反馈类型</label>
+              <select id="feedbackType">
+                <option value="technical">网站问题</option>
+                <option value="other">功能建议</option>
+              </select>
+            </div>
+            <div class="feedback-field">
+              <label for="feedbackContent">反馈内容</label>
+              <textarea id="feedbackContent" maxlength="2000" required placeholder="请写下想反馈的内容（至少 10 个字）"></textarea>
+              <div class="feedback-count" id="feedbackCharCount">0/2000</div>
+            </div>
+            <div class="feedback-status" id="feedbackStatus" role="status" aria-live="polite"></div>
+            <div class="feedback-actions">
+              <button class="btn primary" id="feedbackSubmit" type="submit">提交反馈</button>
+              <a class="btn" href="/complaint" target="_blank" rel="noopener noreferrer" id="feedbackAllLink">网站总反馈</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
   </div>
 
   <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
@@ -942,6 +1250,10 @@
     var pageEl = document.getElementById("page");
     var topbar = document.getElementById("topbar");
     var filterToggle = document.getElementById("filterToggle");
+    var filterModal = document.getElementById("filterModal");
+    var filterModalCard = document.getElementById("filterModalCard");
+    var filterModalBackdrop = document.getElementById("filterModalBackdrop");
+    var filterModalClose = document.getElementById("filterModalClose");
     var chatShell = document.getElementById("chatShell");
     var chatScroll = document.getElementById("chatScroll");
     var messageList = document.getElementById("messageList");
@@ -952,7 +1264,6 @@
     var totalMessages = document.getElementById("totalMessages");
     var loadedMessages = document.getElementById("loadedMessages");
     var latestTime = document.getElementById("latestTime");
-    var refreshSecondsEl = document.getElementById("refreshSeconds");
     var familyStrip = document.getElementById("familyStrip");
     var typeSelect = document.getElementById("typeSelect");
     var roomSelect = document.getElementById("roomSelect");
@@ -966,10 +1277,22 @@
     var applyBtn = document.getElementById("applyBtn");
     var resetBtn = document.getElementById("resetBtn");
     var updatePill = document.getElementById("updatePill");
+    var unrepliedPanel = document.getElementById("unrepliedPanel");
     var unrepliedNav = document.getElementById("unrepliedNav");
     var ignoreBatchBtn = document.getElementById("ignoreBatchBtn");
     var undoIgnoreBtn = document.getElementById("undoIgnoreBtn");
     var combinedReplyLink = document.getElementById("combinedReplyLink");
+    var feedbackNav = document.getElementById("feedbackNav");
+    var feedbackModal = document.getElementById("feedbackModal");
+    var feedbackModalBackdrop = document.getElementById("feedbackModalBackdrop");
+    var feedbackModalClose = document.getElementById("feedbackModalClose");
+    var feedbackForm = document.getElementById("feedbackForm");
+    var feedbackType = document.getElementById("feedbackType");
+    var feedbackContent = document.getElementById("feedbackContent");
+    var feedbackCharCount = document.getElementById("feedbackCharCount");
+    var feedbackStatus = document.getElementById("feedbackStatus");
+    var feedbackSubmit = document.getElementById("feedbackSubmit");
+    var feedbackAllLink = document.getElementById("feedbackAllLink");
 
     function trackAdminEvent(eventType, data) {
       if (!window._trackEvent) return;
@@ -1251,7 +1574,6 @@
       }
       latestTime.textContent = "最新：" + (summary.latest_bj_time || "-");
       refreshSeconds = Number(data.refresh_interval_seconds || 60);
-      refreshSecondsEl.textContent = String(refreshSeconds);
       latestSeen = summary.latest_bj_time || latestSeen;
       latestUnrepliedGiftBatch = summary.latest_unreplied_gift_batch || null;
       latestIgnoredBatch = summary.latest_ignored_batch || null;
@@ -1269,6 +1591,14 @@
 
     function renderUnrepliedNav() {
       if (!unrepliedNav) return;
+      var shouldShow = isGiftReplyFamilyView();
+      if (unrepliedPanel) {
+        unrepliedPanel.classList.toggle("visible", shouldShow);
+      }
+      if (!shouldShow) {
+        renderIgnoreButtons(false);
+        return;
+      }
       var hasTarget = latestUnrepliedGiftBatch && latestUnrepliedGiftBatch.start_message_id;
       unrepliedNav.disabled = !hasTarget;
       if (!hasTarget) {
@@ -1715,7 +2045,6 @@
           latestUnrepliedGiftBatch = data.summary.latest_unreplied_gift_batch || null;
           latestIgnoredBatch = data.summary.latest_ignored_batch || null;
           refreshSeconds = Number(data.refresh_interval_seconds || refreshSeconds || 60);
-          refreshSecondsEl.textContent = String(refreshSeconds);
           renderUnrepliedNav();
         }
         var latest = data.summary && data.summary.latest_bj_time;
@@ -1749,15 +2078,140 @@
     }
 
     function setFilterPanelOpen(open) {
-      if (!topbar || !filterToggle) return;
-      topbar.classList.toggle("filters-open", open);
+      if (!filterToggle) return;
+      if (topbar) {
+        topbar.classList.toggle("filters-open", open);
+      }
+      if (filterModal) {
+        filterModal.classList.toggle("open", open);
+        var isMobile = isMobileViewport();
+        if (isMobile) {
+          filterModal.setAttribute("aria-hidden", open ? "false" : "true");
+        } else {
+          filterModal.removeAttribute("aria-hidden");
+        }
+        if (filterModalCard) {
+          if (isMobile && open) {
+            filterModalCard.setAttribute("role", "dialog");
+            filterModalCard.setAttribute("aria-modal", "true");
+          } else {
+            filterModalCard.removeAttribute("role");
+            filterModalCard.removeAttribute("aria-modal");
+          }
+        }
+      }
       filterToggle.setAttribute("aria-expanded", open ? "true" : "false");
       filterToggle.textContent = open ? "收起" : "筛选";
+      if (open && filterModalClose) {
+        window.setTimeout(function() { filterModalClose.focus(); }, 0);
+      } else if (!open && isMobileViewport()) {
+        filterToggle.focus();
+      }
+    }
+
+    function isMobileViewport() {
+      return window.matchMedia
+        ? window.matchMedia("(max-width: 720px)").matches
+        : window.innerWidth <= 720;
     }
 
     function toggleFilterPanel() {
-      if (!topbar) return;
-      setFilterPanelOpen(!topbar.classList.contains("filters-open"));
+      var open = filterModal
+        ? filterModal.classList.contains("open")
+        : Boolean(topbar && topbar.classList.contains("filters-open"));
+      setFilterPanelOpen(!open);
+    }
+
+    var feedbackPreviousFocus = null;
+
+    function showFeedbackStatus(kind, message) {
+      if (!feedbackStatus) return;
+      feedbackStatus.textContent = message;
+      feedbackStatus.className = "feedback-status show " + kind;
+    }
+
+    function setFeedbackModalOpen(open) {
+      if (!feedbackModal) return;
+      if (open) {
+        feedbackPreviousFocus = document.activeElement;
+        setFilterPanelOpen(false);
+        feedbackModal.classList.add("open");
+        feedbackModal.setAttribute("aria-hidden", "false");
+        if (feedbackNav) feedbackNav.setAttribute("aria-expanded", "true");
+        if (feedbackStatus) {
+          feedbackStatus.textContent = "";
+          feedbackStatus.className = "feedback-status";
+        }
+        trackAdminEvent("admin_modal", { modal: "idol_feedback", action: "open" });
+        window.setTimeout(function() {
+          if (feedbackContent) feedbackContent.focus();
+        }, 0);
+        return;
+      }
+
+      feedbackModal.classList.remove("open");
+      feedbackModal.setAttribute("aria-hidden", "true");
+      if (feedbackNav) feedbackNav.setAttribute("aria-expanded", "false");
+      trackAdminEvent("admin_modal", { modal: "idol_feedback", action: "close" });
+      if (feedbackPreviousFocus && typeof feedbackPreviousFocus.focus === "function") {
+        feedbackPreviousFocus.focus();
+      }
+      feedbackPreviousFocus = null;
+    }
+
+    async function submitFeedback(event) {
+      event.preventDefault();
+      var content = feedbackContent ? feedbackContent.value.trim() : "";
+      if (content.length < 10) {
+        showFeedbackStatus("error", "反馈内容不能少于 10 个字");
+        if (feedbackContent) feedbackContent.focus();
+        return;
+      }
+
+      var type = feedbackType ? feedbackType.value : "technical";
+      var requestContent = type === "other" ? "[功能建议] " + content : content;
+      if (requestContent.length > 2000) {
+        requestContent = requestContent.slice(0, 2000);
+      }
+      if (feedbackSubmit) {
+        feedbackSubmit.disabled = true;
+        feedbackSubmit.textContent = "提交中…";
+      }
+      showFeedbackStatus("success", "正在提交反馈…");
+
+      try {
+        var resp = await fetch("/api/complaint/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: type, content: requestContent })
+        });
+        var data = {};
+        try { data = await resp.json(); } catch (err) { data = {}; }
+        if (!resp.ok) {
+          throw new Error(data.detail || "提交失败，请稍后重试");
+        }
+
+        showFeedbackStatus("success", "反馈已提交，受理编号：" + (data.ticket_id || "已生成"));
+        if (feedbackContent) feedbackContent.value = "";
+        if (feedbackCharCount) feedbackCharCount.textContent = "0/2000";
+        trackAdminEvent("admin_update", {
+          action: "submit_idol_feedback",
+          result: "success",
+          feedback_type: type
+        });
+      } catch (err) {
+        showFeedbackStatus("error", err.message || "提交失败，请稍后重试");
+        trackAdminEvent("admin_update", {
+          action: "submit_idol_feedback",
+          result: "failure",
+          feedback_type: type
+        });
+      } finally {
+        if (feedbackSubmit) {
+          feedbackSubmit.disabled = false;
+          feedbackSubmit.textContent = "提交反馈";
+        }
+      }
     }
 
     function familyParam() {
@@ -2243,6 +2697,7 @@
       dateToInput.value = "";
       if (jumpDateInput) jumpDateInput.value = "";
       mediaSelect.value = "all";
+      renderUnrepliedNav();
       reloadLatest("reset_filters");
     }
 
@@ -2287,6 +2742,52 @@
     if (filterToggle) {
       filterToggle.addEventListener("click", toggleFilterPanel);
     }
+    if (filterModalClose) {
+      filterModalClose.addEventListener("click", function() {
+        setFilterPanelOpen(false);
+      });
+    }
+    if (filterModalBackdrop) {
+      filterModalBackdrop.addEventListener("click", function() {
+        setFilterPanelOpen(false);
+      });
+    }
+    if (feedbackNav) {
+      feedbackNav.addEventListener("click", function() {
+        setFeedbackModalOpen(true);
+      });
+    }
+    if (feedbackModalClose) {
+      feedbackModalClose.addEventListener("click", function() {
+        setFeedbackModalOpen(false);
+      });
+    }
+    if (feedbackModalBackdrop) {
+      feedbackModalBackdrop.addEventListener("click", function() {
+        setFeedbackModalOpen(false);
+      });
+    }
+    if (feedbackForm) {
+      feedbackForm.addEventListener("submit", submitFeedback);
+    }
+    if (feedbackAllLink) {
+      feedbackAllLink.addEventListener("click", function() {
+        trackAdminEvent("click", { action: "open_total_feedback" });
+      });
+    }
+    if (feedbackContent && feedbackCharCount) {
+      feedbackContent.addEventListener("input", function() {
+        feedbackCharCount.textContent = String(feedbackContent.value.length) + "/2000";
+      });
+    }
+    document.addEventListener("keydown", function(event) {
+      if (event.key !== "Escape") return;
+      if (feedbackModal && feedbackModal.classList.contains("open")) {
+        setFeedbackModalOpen(false);
+      } else if (filterModal && filterModal.classList.contains("open")) {
+        setFilterPanelOpen(false);
+      }
+    });
     messageList.addEventListener("click", function(event) {
       var button = event.target.closest("button[data-target-id]");
       if (!button) return;
@@ -2297,6 +2798,7 @@
       var button = event.target.closest("button[data-family]");
       if (!button) return;
       toggleFamily(button.getAttribute("data-family"));
+      renderUnrepliedNav();
       reloadLatest("family_filter");
     });
 
