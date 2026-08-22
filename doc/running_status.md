@@ -141,7 +141,6 @@ systemctl status nginx
 | `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 事件/行程主文件，网站优先读取 |
 | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 兼容副本 |
 | `/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json` | 同路径 | 微博/抖音已过滤的轻量时间轴数据；不包含原始社交 CSV、Cookie 或采集器 |
-| `/home/snh48_web/website/data/manual_events.csv` | 同路径 | 网站手动事件运行数据 |
 | `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
@@ -156,7 +155,7 @@ systemctl status nginx
 
 | 分组 | 内容 | 典型频率 |
 |------|------|----------|
-| `core` | 事件/行程 CSV、手动事件 CSV、直播回放汇总、直播封面 | 低频或人工更新 |
+| `core` | 统一事件/行程 CSV、社交时间轴、直播回放汇总、直播封面 | 低频或人工更新 |
 | `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、翻牌应用 JSON、翻牌音视频 | 后台导出、上麦会话结束或翻牌批处理更新时变化 |
 
 不作为常规同步项：
@@ -193,7 +192,7 @@ systemctl status nginx
 
 - `source changed groups=dynamic, pulling...` 每分钟出现不一定异常。礼物回复、计分礼物、房间消息分片、语音转录、上麦发布包或翻牌应用数据等运行数据更新时，动态组源数据指纹会变化。
 - `source changed groups=core,dynamic, pulling...` 如果长期每分钟出现，需要确认 `core` 组是否真的持续变化；否则检查状态文件是否被删除或无法写入。
-- 稳定单向文件如 `chenjiayi_events.csv`、`schedule.csv`、`manual_events.csv` 应可以用 `sha256sum` 严格比对；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
+- 稳定单向文件如 `chenjiayi_events.csv`、`schedule.csv` 和社交时间轴 JSON 应可以用 `sha256sum` 严格比对；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
 - 动态目录只能按同步日志、mtime 和 1 到 2 分钟延迟判断，不要要求瞬时 hash 完全一致。
 - 修改同步目录、同步方向或云服务器 IP 时，必须同步更新 `doc/codex/project_profile.md`、`doc/daily_website_check.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`。
 - 如果新增同步目标或更换阿里云 IP，需要提醒用户更新腾讯云登录风险白名单。

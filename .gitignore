@@ -18,7 +18,6 @@ nohup.out
 # Website data
 website/data/interaction_logs/
 website/data/complaints/
-website/data/manual_events.csv
 website/data/room_messages_ignored_batches.json
 website/data/scroller_texts.json
 website/data/shared_state_history/

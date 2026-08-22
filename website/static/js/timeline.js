@@ -5,12 +5,6 @@
  * 数据：行程、直播、微博和抖音统一合并为独立时间轴卡片
  */
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Manual Event Data (fetched from backend API, not hardcoded)
-// ═══════════════════════════════════════════════════════════════════════════
-
-let MANUAL_EVENTS = [];  // populated by fetchManualEvents()
-
 const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
   event: 'event', external: 'external', live: 'event',
@@ -99,7 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.timelineCategory === 'schedule' || event.timelineCategory === 'event') {
       return event.timelineCategory;
     }
-    if (event.source === 'manual') return 'event';
     if (event.source === 'assistant') return event.eventType === '行程' ? 'schedule' : 'event';
     return '';
   }
@@ -109,11 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let list = [];
     const showAll = activeSources.has('all');
     if (showAll || activeSources.has('schedule')) {
-      list = list.concat(MANUAL_EVENTS.filter(ev => assistantCategory(ev) === 'schedule'));
       list = list.concat(allScheduleEvents.filter(ev => assistantCategory(ev) === 'schedule'));
     }
     if (showAll || activeSources.has('event')) {
-      list = list.concat(MANUAL_EVENTS.filter(ev => assistantCategory(ev) === 'event'));
       list = list.concat(allScheduleEvents.filter(ev => assistantCategory(ev) === 'event'));
     }
     if (showAll || activeSources.has('room')) list = list.concat(allLiveEvents);
@@ -530,19 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       console.warn('[timeline] Failed to fetch schedule events:', err);
-    }
-  }
-
-  // ── Fetch manual events from API ──
-  async function fetchManualEvents() {
-    try {
-      const resp = await fetch('/api/timeline/manual-events');
-      const data = await resp.json();
-      if (data.success && Array.isArray(data.data)) {
-        MANUAL_EVENTS = data.data;
-      }
-    } catch (err) {
-      console.warn('[timeline] Failed to fetch manual events:', err);
     }
   }
 
@@ -1169,9 +1147,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingEl = document.getElementById('timelineLoading');
   // Sync initial filter UI state
   updateFilterUI();
-  // Fetch all data sources in parallel (manual events from API, not hardcoded)
+  // Fetch all timeline data sources in parallel.
   Promise.all([
-    fetchManualEvents(),
     fetchLiveEvents(),
     fetchScheduleEvents(),
     fetchSocialEvents(),

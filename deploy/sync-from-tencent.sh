@@ -86,10 +86,6 @@ if [ "$sync_core" -eq 1 ]; then
   rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json" /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
   echo "$LOG_TAG social timeline done"
 
-  # 4. manual_events.csv（网站手动事件，接口按请求读取）
-  rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48_web/website/data/manual_events.csv" /home/snh48_web/website/data/manual_events.csv
-  echo "$LOG_TAG manual_events.csv done"
-
   # 4. live_push_replays（仅同步陈嘉仪的数据）
   rsync -az --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
   echo "$LOG_TAG live_push_replays done"

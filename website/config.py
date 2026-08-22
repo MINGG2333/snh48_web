@@ -361,12 +361,6 @@ SOCIAL_TIMELINE_PATH = os.getenv(
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "social_record" / "timeline" / "chenjiayi_social_timeline.json"),
 )
 
-# ── Manual Events CSV (手动事件，修改后无需重启即可生效) ─────────────────
-MANUAL_EVENTS_CSV_PATH = os.getenv(
-    "MANUAL_EVENTS_CSV_PATH",
-    str(WEBSITE_DIR / "data" / "manual_events.csv"),
-)
-
 # ── 出道整百天庆祝 ────────────────────────────────────────────────────────
 # 第 300 天是整百天计算基准；此后每隔指定天数自动生成永久飘屏和时光轴事件。
 DEBUT_300_DATE = os.getenv("DEBUT_300_DATE", "2026-07-31").strip() or "2026-07-31"

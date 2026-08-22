@@ -46,14 +46,13 @@
 |------|----------------------|----------|
 | 本地 | 功能验证副本，路径 `/mnt/zhitainew/snh48/snh48-fan-hub` | 与腾讯云全量工程通过 GitHub 同步，主要用于验证脚本和对接逻辑 |
 | 腾讯云 | 全量代码和数据生成服务器，路径 `/home/snh48-fan-hub` | 常驻采集、监控、生成网站数据，供内地版暨测试版网站使用 |
-| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub`，另含网站仓库内手动事件 CSV | 由阿里云 cron 主动从腾讯云拉取最小数据集，供香港版暨对外公开版网站使用 |
+| 阿里云香港 | 网站必要数据副本，路径 `/home/snh48-fan-hub` | 由阿里云 cron 主动从腾讯云拉取最小数据集，供香港版暨对外公开版网站使用 |
 
 网站必要数据集：
 
 - `schedule_record/chenjiayi_events.csv`（事件/行程主文件，网站优先读取）
 - `schedule_record/schedule.csv`（事件/行程兼容副本，旧配置和回退读取）
 - `social_record/timeline/chenjiayi_social_timeline.json`（微博/抖音已过滤的轻量时光轴数据；网站消费副本，阿里云不运行采集器）
-- `/home/snh48_web/website/data/manual_events.csv`（网站运行数据手动事件 CSV，接口按请求读取；格式示例见 `website/data/manual_events.example.csv`）
 - `/home/snh48_web/website/data/scroller_texts.json`（首页背景词非 Git 运行状态）
 - `/home/snh48_web/website/data/memories/memories.json`（记忆页运行数据；格式示例见 `website/data/memories/memories.example.json`）
 - `live_push_replays/陈嘉仪_161808449/`
@@ -78,7 +77,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。`room_voice_replays/` 在三个入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话。手动事件 CSV 不由 Git 跟踪，仍按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。`room_voice_replays/` 在三个入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话。管理员新增的事件和行程统一写入 fan-hub 事件/行程 CSV 并按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。
 
 自动同步运行状态口径：
 
@@ -88,7 +87,7 @@ bash deploy/sync-to-aliyun-if-changed.sh
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含事件/行程 CSV、手动事件 CSV、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、`flip_data/web/flip_cards.json` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组：`core` 包含统一事件/行程 CSV、社交时间轴、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、`flip_data/web/flip_cards.json` 和翻牌音视频依赖。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
 排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/flip_cards.json` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 

@@ -46,11 +46,7 @@ echo "$LOG_TAG chenjiayi_events.csv done"
 rsync -az --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/schedule_record/schedule.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/schedule.csv"
 echo "$LOG_TAG schedule.csv done"
 
-# 3. manual_events.csv（网站手动事件，接口按请求读取）
-rsync -az --partial -e "$RSYNC_RSH" /home/snh48_web/website/data/manual_events.csv "$ALIYUN:/home/snh48_web/website/data/manual_events.csv"
-echo "$LOG_TAG manual_events.csv done"
-
-# 4. live_push_replays（仅同步陈嘉仪的数据）
+# 3. live_push_replays（仅同步陈嘉仪的数据）
 rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/"
 echo "$LOG_TAG live_push_replays done"
 

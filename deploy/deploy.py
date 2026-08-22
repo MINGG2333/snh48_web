@@ -103,10 +103,6 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "optional": True,
             },
             {
-                "type": "file",
-                "path": "/home/snh48_web/website/data/manual_events.csv",
-            },
-            {
                 "type": "dir",
                 "path": "/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449",
                 "delete": True,

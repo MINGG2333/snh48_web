@@ -526,7 +526,7 @@ def _find_schedule_csv() -> Optional[Path]:
     return None
 
 
-def read_schedule() -> List[Dict[str, Any]]:
+def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """Read the Chen Jiayi event CSV, return timeline-ready event dicts."""
     csv_path = _find_schedule_csv()
     if not csv_path:
@@ -635,6 +635,44 @@ def read_schedule() -> List[Dict[str, Any]]:
         print(f"[timeline_api] Error reading schedule CSV: {e}")
         return []
 
+    today = on_date or datetime.now(BJT).date()
+    debut_date_text = debut_date().strftime("%Y年%m月%d日")
+    for day_number in timeline_milestone_days(today):
+        milestone_date_text = milestone_date(day_number).isoformat()
+        if any(
+            record.get("date") == milestone_date_text
+            and "出道" in str(record.get("title", ""))
+            and str(day_number) in str(record.get("title", ""))
+            for record in records
+        ):
+            continue
+        records.append({
+            "id": f"debut-{day_number}",
+            "source": "assistant",
+            "date": milestone_date_text,
+            "datetime": f"{milestone_date_text} 00:00:00",
+            "title": f"陈嘉仪出道{day_number}天",
+            "type": "里程碑",
+            "typeLabel": "里程碑",
+            "eventType": "里程碑",
+            "timelineCategory": "event",
+            "description": (
+                f"从{debut_date_text}《B·RISE 梦之门》新生公演首演算起，"
+                f"陈嘉仪迎来出道第{day_number}天。{day_number}天的舞台、成长与闪耀，"
+                f"都值得被认真珍藏。祝嘉仪出道{day_number}天快乐，继续勇敢发光！"
+            ),
+            "cover_url": "",
+            "icon": "fa-star",
+            "location": "",
+            "source_url": "",
+            "image_urls": [],
+            "event_link": "",
+            "video_urls": [],
+            "bilibili_urls": [],
+            "snh48_weibo_urls": [],
+            "chenjiayi_weibo_urls": [],
+        })
+
     # Sort by date
     records.sort(key=lambda r: r["date"])
     return records
@@ -649,113 +687,4 @@ def get_schedule():
         "data": records,
         "total": len(records),
         "member": MEMBER_NAME,
-    }
-
-
-# ── Manual Events ────────────────────────────────────────────────────────
-# Previously hardcoded in timeline.js, then hardcoded in this file.
-# Now loaded from CSV so events can be updated without restarting the server.
-# CSV columns: id, date, title, type, typeLabel, description, image, icon, link, images
-
-
-def _find_manual_csv() -> Optional[Path]:
-    """Locate manual_events.csv using config path (no hardcoded absolute paths)."""
-    csv_path = Path(cfg.MANUAL_EVENTS_CSV_PATH)
-    if csv_path.exists():
-        return csv_path
-    return None
-
-
-def read_manual_events(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
-    """Read manual_events.csv, return list of timeline-ready event dicts."""
-    csv_path = _find_manual_csv()
-    records = []
-    if csv_path:
-        try:
-            with open(csv_path, "r", encoding="utf-8-sig") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    ev_id = (row.get("id") or "").strip()
-                    date_str = (row.get("date") or "").strip()
-                    if not ev_id or not date_str:
-                        continue
-
-                    title = (row.get("title") or "").strip()
-                    ev_type = (row.get("type") or "event").strip()
-                    type_label = (row.get("typeLabel") or ev_type).strip()
-                    description = (row.get("description") or "").strip()
-                    image = (row.get("image") or "").strip() or None
-                    icon = (row.get("icon") or "fa-calendar").strip()
-                    link = (row.get("link") or "").strip() or None
-
-                    # Images: semicolon-separated URLs
-                    images_raw = (row.get("images") or "").strip()
-                    images = [u.strip() for u in images_raw.split(";") if u.strip()] if images_raw else []
-
-                    records.append({
-                        "id": ev_id,
-                        "source": "manual",
-                        "date": date_str,
-                        "title": title,
-                        "type": ev_type,
-                        "typeLabel": type_label,
-                        "timelineCategory": "event",
-                        "description": description,
-                        "image": image,
-                        "icon": icon,
-                        "link": link,
-                        "images": images,
-                    })
-        except (IOError, csv.Error) as e:
-            print(f"[timeline_api] Error reading manual events CSV: {e}")
-
-    # Keep recurring milestones in website code so they appear automatically
-    # without modifying manual_events.csv or cross-cloud runtime data.
-    today = on_date or datetime.now(BJT).date()
-    existing_ids = {record.get("id") for record in records}
-    schedule_records = read_schedule()
-    debut_date_text = debut_date().strftime("%Y年%m月%d日")
-    for day_number in timeline_milestone_days(today):
-        event_id = f"debut-{day_number}"
-        if event_id in existing_ids:
-            continue
-        milestone_date_text = milestone_date(day_number).isoformat()
-        if any(
-            record.get("date") == milestone_date_text
-            and "出道" in str(record.get("title", ""))
-            and str(day_number) in str(record.get("title", ""))
-            for record in schedule_records
-        ):
-            # Prefer the authoritative schedule row, which may carry source
-            # links and images, over the generated fallback milestone.
-            continue
-        records.append({
-            "id": event_id,
-            "source": "manual",
-            "date": milestone_date_text,
-            "title": f"陈嘉仪出道{day_number}天",
-            "type": "milestone",
-            "typeLabel": "里程碑",
-            "description": (
-                f"从{debut_date_text}《B·RISE 梦之门》新生公演首演算起，"
-                f"陈嘉仪迎来出道第{day_number}天。{day_number}天的舞台、成长与闪耀，"
-                f"都值得被认真珍藏。祝嘉仪出道{day_number}天快乐，继续勇敢发光！"
-            ),
-            "image": None,
-            "icon": "fa-star",
-            "link": None,
-            "images": [],
-        })
-
-    return records
-
-
-@router.get("/manual-events")
-def get_manual_events():
-    """Return manually curated timeline events (loaded from CSV, no restart needed)."""
-    records = read_manual_events()
-    return {
-        "success": True,
-        "data": records,
-        "total": len(records),
     }

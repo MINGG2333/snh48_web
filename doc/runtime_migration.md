@@ -15,7 +15,6 @@
 |------|--------------|------|---------------|
 | `/home/snh48_web/.env` | 必须 | 生产密码、API key、监听、安全和数据路径配置 | 手动安全迁移，按 `.env.example` 补齐；不要输出明文 |
 | `/home/snh48_web/deploy/targets.local.json` | 需要时迁移 | 部署目标本地覆盖配置 | 手动迁移；不存在时按部署目标重新生成 |
-| `/home/snh48_web/website/data/manual_events.csv` | 必须 | 时光轴手动事件运行数据 | 腾讯云为源；阿里云由 `sync-from-tencent.sh core` 拉取；新服务器迁移时直接复制 |
 | `/home/snh48_web/website/data/memories/memories.json` | 必须 | 记忆页运行数据 | 非 Git 版本化共享状态；迁移时以腾讯云权威 revision 为当前值，普通 `core` 拉取不覆盖 |
 | `/home/snh48_web/website/data/room_messages_ignored_batches.json` | 必须 | 房间消息页“忽略未回礼物批次”状态 | 非 Git 版本化共享状态；迁移时保留腾讯云权威 revision，不按 `updated_at` 猜测并互相覆盖 |
 | `/home/snh48_web/website/data/scroller_texts.json` | 必须 | 首页背景词内容 | 非 Git 版本化共享状态；从腾讯云权威节点迁移 |
@@ -64,6 +63,6 @@
 1. `python3 deploy/deploy.py check-env <target>` 确认必要环境变量存在。
 2. `python3 -m compileall -q website` 确认代码可导入。
 3. `curl -sS -D - -o /dev/null https://新域名/`、`/timeline`、`/room/gifts`、`/room/gift-senders`、`/room-messages`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、`/memories`。
-4. 核对 `manual_events.csv`、四类当前共享状态、`shared_state_history/`、`shared_state_outbox/` 和 `action_inbox/` 存在且不是空目录覆盖。
+4. 核对统一事件/行程 CSV、四类当前共享状态、`shared_state_history/`、`shared_state_outbox/` 和 `action_inbox/` 存在且不是空目录覆盖。
 5. 在新的腾讯云权威节点运行 `script/shared_state_history.py list <resource>`，确认当前 revision 可在历史中找到；在 `/ob` 核对待处理箱来源标签。
 6. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。
