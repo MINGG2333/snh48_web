@@ -244,13 +244,11 @@ FLIP_CARDS_DATASET_PATH = os.getenv("FLIP_CARDS_DATASET_PATH") or str(
 FLIP_CARDS_ACCOUNTS_PATH = os.getenv("FLIP_CARDS_ACCOUNTS_PATH") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data" / "web" / "accounts.json"
 )
-FLIP_CARDS_ACCOUNT_ADMIN_PYTHON = os.getenv(
-    "FLIP_CARDS_ACCOUNT_ADMIN_PYTHON",
-    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "venv" / "bin" / "python3"),
+FLIP_CARDS_ACCOUNT_ADMIN_PYTHON = os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_PYTHON") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "venv" / "bin" / "python3"
 )
-FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT = os.getenv(
-    "FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT",
-    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "flip_account_admin.py"),
+FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT = os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "flip_account_admin.py"
 )
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
@@ -307,10 +305,12 @@ SHARED_STATE_IS_PRIMARY = os.getenv(
     "SHARED_STATE_IS_PRIMARY",
     "true" if SHARED_STATE_NODE_ID == "tencent" else "false",
 ).lower() not in ("0", "false", "no")
-FLIP_CARDS_ACCOUNT_ADMIN_ENABLED = os.getenv(
-    "FLIP_CARDS_ACCOUNT_ADMIN_ENABLED",
-    "true" if SHARED_STATE_IS_PRIMARY else "false",
-).lower() not in ("0", "false", "no")
+_flip_cards_account_admin_enabled = os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_ENABLED", "").strip().lower()
+FLIP_CARDS_ACCOUNT_ADMIN_ENABLED = (
+    SHARED_STATE_IS_PRIMARY
+    if not _flip_cards_account_admin_enabled
+    else _flip_cards_account_admin_enabled not in ("0", "false", "no")
+)
 SHARED_STATE_SYNC_ENABLED = os.getenv(
     "SHARED_STATE_SYNC_ENABLED",
     "true" if ROOM_MESSAGES_IGNORE_DIRECT_SYNC else "false",
