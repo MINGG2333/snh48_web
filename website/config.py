@@ -241,6 +241,17 @@ FLIP_CARDS_DATA_DIR = os.getenv("FLIP_CARDS_DATA_DIR") or str(
 FLIP_CARDS_DATASET_PATH = os.getenv("FLIP_CARDS_DATASET_PATH") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data" / "web" / "flip_cards.json"
 )
+FLIP_CARDS_ACCOUNTS_PATH = os.getenv("FLIP_CARDS_ACCOUNTS_PATH") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data" / "web" / "accounts.json"
+)
+FLIP_CARDS_ACCOUNT_ADMIN_PYTHON = os.getenv(
+    "FLIP_CARDS_ACCOUNT_ADMIN_PYTHON",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "venv" / "bin" / "python3"),
+)
+FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT = os.getenv(
+    "FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "flip_account_admin.py"),
+)
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。
@@ -295,6 +306,10 @@ SHARED_STATE_NODE_ID = os.getenv("SHARED_STATE_NODE_ID", _shared_state_default_n
 SHARED_STATE_IS_PRIMARY = os.getenv(
     "SHARED_STATE_IS_PRIMARY",
     "true" if SHARED_STATE_NODE_ID == "tencent" else "false",
+).lower() not in ("0", "false", "no")
+FLIP_CARDS_ACCOUNT_ADMIN_ENABLED = os.getenv(
+    "FLIP_CARDS_ACCOUNT_ADMIN_ENABLED",
+    "true" if SHARED_STATE_IS_PRIMARY else "false",
 ).lower() not in ("0", "false", "no")
 SHARED_STATE_SYNC_ENABLED = os.getenv(
     "SHARED_STATE_SYNC_ENABLED",

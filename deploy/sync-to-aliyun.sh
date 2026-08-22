@@ -83,12 +83,20 @@ rsync -az --delete-delay --ignore-existing --exclude='/manifest.json' --exclude=
 echo "$LOG_TAG room_voice_replays obsolete payload cleaned"
 echo "$LOG_TAG room_voice_replays done"
 
-# 11. flip_data/web/flip_cards.json（网站应用页最小数据；不同步完整 metadata）
-if [ -e /home/snh48-fan-hub/flip_data/web/flip_cards.json ]; then
-  rsync -az --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/web/flip_cards.json "$ALIYUN:/home/snh48-fan-hub/flip_data/web/flip_cards.json"
-  echo "$LOG_TAG flip_data/web/flip_cards.json done"
+# 11. flip_data/web（多账号脱敏清单和网页数据；accounts.json 最后提交）
+if [ -d /home/snh48-fan-hub/flip_data/web ]; then
+  FLIP_WEB_SOURCE="/home/snh48-fan-hub/flip_data/web"
+  FLIP_WEB_DEST="/home/snh48-fan-hub/flip_data/web"
+  FLIP_ACCOUNTS_TMP="$FLIP_WEB_DEST/.accounts.json.sync.$$"
+  rsync -az --partial --delay-updates --exclude='/accounts.json' --exclude='*.tmp' --exclude='.*.sync.*' -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE/" "$ALIYUN:$FLIP_WEB_DEST/"
+  if [ -f "$FLIP_WEB_SOURCE/accounts.json" ]; then
+    rsync -az --partial -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE/accounts.json" "$ALIYUN:$FLIP_ACCOUNTS_TMP"
+    "${SSH_MUX[@]}" "$ALIYUN" "mv -f '$FLIP_ACCOUNTS_TMP' '$FLIP_WEB_DEST/accounts.json'"
+  fi
+  rsync -az --delete-delay --ignore-existing --exclude='/accounts.json' --exclude='*.tmp' --exclude='.*.sync.*' -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE/" "$ALIYUN:$FLIP_WEB_DEST/"
+  echo "$LOG_TAG flip_data/web done"
 else
-  echo "$LOG_TAG flip_data/web/flip_cards.json skipped (source missing)"
+  echo "$LOG_TAG flip_data/web skipped (source missing)"
 fi
 
 # 12. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）

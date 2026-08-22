@@ -59,6 +59,42 @@ class RoomVoiceSyncCommandTests(unittest.TestCase):
         self.assertLess(manifest_at, commit_at)
         self.assertLess(commit_at, cleanup_at)
 
+    def test_flip_web_sync_commits_accounts_manifest_last(self) -> None:
+        deploy_root = MODULE_PATH.parent
+        for filename in ("sync-from-tencent.sh", "sync-to-aliyun.sh"):
+            script = (deploy_root / filename).read_text(encoding="utf-8")
+            payload_at = script.index("--delay-updates --exclude='/accounts.json'")
+            manifest_at = script.index("accounts.json\"", payload_at)
+            commit_at = script.index("mv -f", manifest_at)
+            cleanup_at = script.index("--delete-delay --ignore-existing", commit_at)
+            self.assertLess(payload_at, manifest_at, filename)
+            self.assertLess(manifest_at, commit_at, filename)
+            self.assertLess(commit_at, cleanup_at, filename)
+
+    def test_named_manifest_sync_uses_accounts_json(self) -> None:
+        source = {
+            "ssh": "source.example",
+            "data_paths": [{
+                "type": "dir",
+                "path": "/data/flip_data/web",
+                "delete": True,
+                "manifest_last": True,
+                "manifest_name": "accounts.json",
+            }],
+        }
+        calls = []
+        with mock.patch.object(
+            deploy,
+            "remote",
+            side_effect=lambda target, command, dry_run=False: calls.append(command),
+        ):
+            deploy.sync_data(source, {"ssh": "dest.example"}, Namespace(dry_run=False))
+
+        command = calls[1]
+        self.assertIn("--exclude=/accounts.json", command)
+        self.assertIn("accounts.json dest.example:/data/flip_data/web/.accounts.json.sync", command)
+        self.assertIn("/data/flip_data/web/accounts.json", command)
+
 
 if __name__ == "__main__":
     unittest.main()

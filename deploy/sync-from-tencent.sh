@@ -125,13 +125,21 @@ if [ "$sync_dynamic" -eq 1 ]; then
   echo "$LOG_TAG room_voice_replays obsolete payload cleaned"
   echo "$LOG_TAG room_voice_replays done"
 
-  # 11. flip_data/web/flip_cards.json（网站应用页最小数据；不同步完整 metadata）
+  # 11. flip_data/web（多账号脱敏清单和网页数据；accounts.json 最后提交）
   mkdir -p /home/snh48-fan-hub/flip_data/web
-  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -e /home/snh48-fan-hub/flip_data/web/flip_cards.json'; then
-    rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/web/flip_cards.json" /home/snh48-fan-hub/flip_data/web/flip_cards.json
-    echo "$LOG_TAG flip_data/web/flip_cards.json done"
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/flip_data/web'; then
+    FLIP_WEB_SOURCE="$TENCENT:/home/snh48-fan-hub/flip_data/web/"
+    FLIP_WEB_DEST="/home/snh48-fan-hub/flip_data/web"
+    FLIP_ACCOUNTS_TMP="$FLIP_WEB_DEST/.accounts.json.sync.$$"
+    rsync -az --partial --delay-updates --exclude='/accounts.json' --exclude='*.tmp' --exclude='.*.sync.*' -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE" "$FLIP_WEB_DEST/"
+    if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -f /home/snh48-fan-hub/flip_data/web/accounts.json'; then
+      rsync -az --partial -e "$RSYNC_RSH" "${FLIP_WEB_SOURCE}accounts.json" "$FLIP_ACCOUNTS_TMP"
+      mv -f "$FLIP_ACCOUNTS_TMP" "$FLIP_WEB_DEST/accounts.json"
+    fi
+    rsync -az --delete-delay --ignore-existing --exclude='/accounts.json' --exclude='*.tmp' --exclude='.*.sync.*' -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE" "$FLIP_WEB_DEST/"
+    echo "$LOG_TAG flip_data/web done"
   else
-    echo "$LOG_TAG flip_data/web/flip_cards.json skipped (source missing)"
+    echo "$LOG_TAG flip_data/web skipped (source missing)"
   fi
 
   # 12. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）

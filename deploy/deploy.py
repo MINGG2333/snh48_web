@@ -142,9 +142,12 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "manifest_last": True,
             },
             {
-                "type": "file",
-                "path": "/home/snh48-fan-hub/flip_data/web/flip_cards.json",
+                "type": "dir",
+                "path": "/home/snh48-fan-hub/flip_data/web",
+                "delete": True,
                 "optional": True,
+                "manifest_last": True,
+                "manifest_name": "accounts.json",
             },
             {
                 "type": "dir",
@@ -768,18 +771,19 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
         if item.get("manifest_last"):
             if not is_dir:
                 raise SystemExit("manifest_last is only supported for directory data paths")
-            manifest_tmp = dest_path.rstrip("/") + "/.manifest.json.sync"
-            payload_opts = "-az --partial --delay-updates --exclude=/manifest.json"
+            manifest_name = str(item.get("manifest_name") or "manifest.json")
+            manifest_tmp = dest_path.rstrip("/") + f"/.{manifest_name}.sync"
+            payload_opts = f"-az --partial --delay-updates --exclude=/{quote(manifest_name)} --exclude='*.tmp' --exclude='.*.sync*'"
             cleanup_opts = (
-                "-az --delete-delay --ignore-existing --exclude=/manifest.json "
-                "--exclude=/.manifest.json.sync"
+                f"-az --delete-delay --ignore-existing --exclude=/{quote(manifest_name)} "
+                f"--exclude='*.tmp' --exclude='.*.sync*'"
             )
             sync_command = (
                 f"rsync {payload_opts} {quote(src)} {quote(dst)} && "
-                f"rsync -az --partial {quote(src + 'manifest.json')} "
+                f"rsync -az --partial {quote(src + manifest_name)} "
                 f"{quote(dest['ssh'] + ':' + manifest_tmp)} && "
                 f"ssh -F /dev/null {quote(dest['ssh'])} "
-                f"{quote('mv -f ' + quote(manifest_tmp) + ' ' + quote(dest_path.rstrip('/') + '/manifest.json'))} && "
+                f"{quote('mv -f ' + quote(manifest_tmp) + ' ' + quote(dest_path.rstrip('/') + '/' + manifest_name))} && "
                 f"rsync {cleanup_opts} {quote(src)} {quote(dst)}"
             )
         else:

@@ -140,6 +140,19 @@
       gap: 8px;
     }
 
+    .account-select {
+      width: min(210px, 28vw);
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 30px 0 10px;
+      outline: none;
+    }
+
+    .account-select:focus { border-color: var(--teal); }
+
     .action-btn {
       min-height: 34px;
       border: 1px solid var(--line);
@@ -444,6 +457,97 @@
       font-size: 14px;
     }
 
+    .account-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(5, 9, 13, .78);
+    }
+
+    .account-dialog {
+      position: relative;
+      width: min(430px, 100%);
+      max-height: min(640px, calc(100vh - 36px));
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+    }
+
+    .account-dialog h2 { font-size: 18px; padding-right: 36px; }
+
+    .modal-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 34px;
+      height: 34px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .modal-close:hover { color: var(--text); }
+
+    .account-state {
+      min-height: 22px;
+      margin: 10px 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .account-state.error { color: var(--red); }
+    .account-state.success { color: var(--green); }
+
+    .account-form { display: grid; gap: 12px; }
+
+    .account-form-row {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .account-form label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .account-form input,
+    .account-form select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 11px;
+      outline: none;
+    }
+
+    .account-form input:focus,
+    .account-form select:focus { border-color: var(--teal); }
+
+    .account-submit {
+      min-height: 42px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--teal);
+      color: var(--ink);
+      font-weight: 750;
+    }
+
+    .account-submit:disabled { cursor: wait; opacity: .65; }
+
     .highlight .bubble {
       outline: 3px solid #ffd666;
       box-shadow: 0 0 0 7px rgba(255, 214, 102, .35), 0 0 26px rgba(255, 173, 51, .62);
@@ -469,6 +573,7 @@
       .title p { font-size: 12px; }
       .actions { flex-wrap: wrap; justify-content: flex-end; }
       .action-btn { min-height: 32px; padding: 0 10px; }
+      .account-select { width: min(180px, 48vw); min-height: 32px; }
       .stats { padding: 0 12px 9px; }
       .stats span { font-size: 11px; padding: 3px 7px; }
       .filter-panel summary { padding: 8px 12px; }
@@ -482,6 +587,7 @@
       .avatar { width: 32px; height: 32px; font-size: 11px; margin-right: 7px; }
       .bubble { max-width: 84%; padding: 9px 11px; }
       .media audio { width: 230px; }
+      .account-dialog { padding: 20px 16px; }
     }
   </style>
 </head>
@@ -504,6 +610,8 @@
           <p id="subtitle">正在载入</p>
         </div>
         <div class="actions">
+          <select id="accountSelect" class="account-select" aria-label="翻牌账号"></select>
+          <button id="manageAccountBtn" class="action-btn" type="button">账号</button>
           <button id="latestBtn" class="action-btn" type="button">最新</button>
           <button id="logoutBtn" class="action-btn" type="button">退出</button>
         </div>
@@ -546,6 +654,40 @@
     </section>
   </main>
 
+  <section id="accountModal" class="account-modal" hidden aria-modal="true" role="dialog" aria-labelledby="accountModalTitle">
+    <div class="account-dialog">
+      <button id="accountModalClose" class="modal-close" type="button" aria-label="关闭">&times;</button>
+      <h2 id="accountModalTitle">登录口袋48账号</h2>
+      <div id="accountState" class="account-state" role="status"></div>
+      <form id="phoneForm" class="account-form" hidden>
+        <div class="account-form-row">
+          <label>地区
+            <select id="phoneArea">
+              <option value="86">+86</option>
+              <option value="852">+852</option>
+            </select>
+          </label>
+          <label>手机号
+            <input id="phoneInput" type="tel" inputmode="numeric" autocomplete="tel" maxlength="20" required>
+          </label>
+        </div>
+        <button class="account-submit" type="submit">发送验证码</button>
+      </form>
+      <form id="securityForm" class="account-form" hidden>
+        <label><span id="securityQuestion">安全验证</span>
+          <select id="securityOption" required></select>
+        </label>
+        <button class="account-submit" type="submit">提交并发送验证码</button>
+      </form>
+      <form id="codeForm" class="account-form" hidden>
+        <label>短信验证码
+          <input id="codeInput" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+        </label>
+        <button class="account-submit" type="submit">登录并刷新翻牌</button>
+      </form>
+    </div>
+  </section>
+
   <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
   <script>
     "use strict";
@@ -568,11 +710,28 @@
     const latestBtn = document.getElementById("latestBtn");
     const resetBtn = document.getElementById("resetBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    const accountSelect = document.getElementById("accountSelect");
+    const manageAccountBtn = document.getElementById("manageAccountBtn");
+    const accountModal = document.getElementById("accountModal");
+    const accountModalClose = document.getElementById("accountModalClose");
+    const accountState = document.getElementById("accountState");
+    const phoneForm = document.getElementById("phoneForm");
+    const phoneArea = document.getElementById("phoneArea");
+    const phoneInput = document.getElementById("phoneInput");
+    const securityForm = document.getElementById("securityForm");
+    const securityQuestion = document.getElementById("securityQuestion");
+    const securityOption = document.getElementById("securityOption");
+    const codeForm = document.getElementById("codeForm");
+    const codeInput = document.getElementById("codeInput");
 
     let dataset = null;
     let records = [];
     let loginBusy = false;
     let loginVerified = false;
+    let accountsManifest = { accounts: [], default_account_id: "" };
+    let selectedAccountId = "";
+    let accountSessionId = "";
+    let accountBusy = false;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -616,6 +775,57 @@
       loginBusy = false;
       loginOverlay.classList.add("hidden");
       page.classList.add("ready");
+    }
+
+    function setAccountState(message, kind) {
+      accountState.textContent = message || "";
+      accountState.classList.toggle("error", kind === "error");
+      accountState.classList.toggle("success", kind === "success");
+    }
+
+    function setAccountForms(step) {
+      phoneForm.hidden = step !== "phone";
+      securityForm.hidden = step !== "security";
+      codeForm.hidden = step !== "code";
+    }
+
+    function setAccountBusy(value) {
+      accountBusy = value;
+      accountModal.querySelectorAll("button, input, select").forEach(function (node) {
+        if (node !== accountModalClose) node.disabled = value;
+      });
+    }
+
+    function accountLabel(account) {
+      const nickname = String(account.nickname || "").trim();
+      return nickname ? nickname + " · " + account.id : account.id;
+    }
+
+    function renderAccountSelect() {
+      const accounts = Array.isArray(accountsManifest.accounts) ? accountsManifest.accounts : [];
+      accountSelect.textContent = "";
+      if (!accounts.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "默认账号";
+        accountSelect.appendChild(option);
+        accountSelect.disabled = true;
+        selectedAccountId = "";
+        return;
+      }
+      accounts.forEach(function (account) {
+        const option = document.createElement("option");
+        option.value = account.id;
+        option.textContent = accountLabel(account);
+        accountSelect.appendChild(option);
+      });
+      const stored = window.localStorage.getItem("flip_cards_account_id") || "";
+      const validIds = accounts.map(function (account) { return account.id; });
+      selectedAccountId = validIds.includes(selectedAccountId)
+        ? selectedAccountId
+        : (validIds.includes(stored) ? stored : accountsManifest.default_account_id || validIds[0]);
+      accountSelect.value = selectedAccountId;
+      accountSelect.disabled = false;
     }
 
     async function apiJson(path, options) {
@@ -947,17 +1157,71 @@
       }
     }
 
+    async function loadAccounts() {
+      accountsManifest = await apiJson("/accounts");
+      renderAccountSelect();
+    }
+
+    async function loadSelectedAccount(scrollBottom) {
+      const suffix = selectedAccountId ? "?account_id=" + encodeURIComponent(selectedAccountId) : "";
+      dataset = await apiJson("/data" + suffix);
+      records = Array.isArray(dataset.records) ? dataset.records : [];
+      renderStats();
+      renderTimeline(scrollBottom);
+    }
+
     async function loadApp() {
       const status = await apiJson("/status");
       if (!status.dataset_exists) {
         throw new Error("翻牌应用数据尚未生成，请先在数据服务器运行翻牌 HTML 生成脚本。");
       }
-      dataset = await apiJson("/data");
-      records = Array.isArray(dataset.records) ? dataset.records : [];
-      renderStats();
+      await loadAccounts();
+      await loadSelectedAccount(true);
       showPage();
-      renderTimeline(true);
       track("admin_modal", { action: "view_flip_cards_app", record_count: records.length });
+    }
+
+    async function openAccountModal() {
+      accountModal.hidden = false;
+      accountSessionId = "";
+      setAccountForms("");
+      setAccountState("正在检查账号管理状态");
+      setAccountBusy(true);
+      try {
+        const capability = await apiJson("/account-management/status");
+        if (!capability.enabled) {
+          setAccountState(capability.message || "当前节点不开放账号操作");
+          return;
+        }
+        setAccountForms("phone");
+        setAccountState("");
+        phoneInput.focus();
+      } catch (error) {
+        setAccountState(error.message || "无法读取账号管理状态", "error");
+      } finally {
+        setAccountBusy(false);
+      }
+      track("admin_modal", { action: "open_flip_account_login" });
+    }
+
+    async function pollRefreshJob(jobId, accountId) {
+      for (let attempt = 0; attempt < 1800; attempt += 1) {
+        await new Promise(function (resolve) { window.setTimeout(resolve, 2000); });
+        const result = await apiJson("/account-management/jobs/" + encodeURIComponent(jobId));
+        const job = result.job || {};
+        setAccountState(job.stage || "正在刷新翻牌记录");
+        if (job.state === "completed") {
+          selectedAccountId = accountId;
+          window.localStorage.setItem("flip_cards_account_id", accountId);
+          await loadAccounts();
+          await loadSelectedAccount(true);
+          setAccountState("登录成功，翻牌记录已刷新", "success");
+          setAccountBusy(false);
+          return;
+        }
+        if (job.state === "failed") throw new Error(job.message || "翻牌记录刷新失败");
+      }
+      throw new Error("翻牌记录刷新超时，请稍后重新查看");
     }
 
     async function openIfReady() {
@@ -1016,6 +1280,103 @@
           control === statusFilter ? "filter_status" : "filter_answer_type"
         ));
       });
+    });
+
+    accountSelect.addEventListener("change", async function () {
+      selectedAccountId = accountSelect.value;
+      window.localStorage.setItem("flip_cards_account_id", selectedAccountId);
+      accountSelect.disabled = true;
+      try {
+        await loadSelectedAccount(true);
+        track("admin_filter", { action: "switch_flip_account", account_id: selectedAccountId });
+      } catch (error) {
+        messageList.textContent = error.message || "账号翻牌记录加载失败";
+      } finally {
+        accountSelect.disabled = false;
+      }
+    });
+
+    manageAccountBtn.addEventListener("click", openAccountModal);
+    accountModalClose.addEventListener("click", function () { accountModal.hidden = true; });
+    accountModal.addEventListener("click", function (event) {
+      if (event.target === accountModal && !accountBusy) accountModal.hidden = true;
+    });
+
+    phoneForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (accountBusy) return;
+      setAccountBusy(true);
+      setAccountState("正在发送验证码");
+      try {
+        const result = await apiJson("/account-management/send-sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: phoneInput.value, area: phoneArea.value })
+        });
+        accountSessionId = result.session_id;
+        if (result.state === "awaiting_security") {
+          securityQuestion.textContent = result.question || "安全验证";
+          securityOption.textContent = "";
+          (result.options || []).forEach(function (item) {
+            const option = document.createElement("option");
+            option.value = item.option;
+            option.textContent = item.value;
+            securityOption.appendChild(option);
+          });
+          setAccountForms("security");
+          setAccountState("请完成安全验证");
+        } else {
+          setAccountForms("code");
+          setAccountState("验证码已发送至 " + result.phone_masked);
+          codeInput.focus();
+        }
+      } catch (error) {
+        setAccountState(error.message || "验证码发送失败", "error");
+      } finally {
+        setAccountBusy(false);
+      }
+    });
+
+    securityForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (accountBusy) return;
+      setAccountBusy(true);
+      setAccountState("正在提交安全验证");
+      try {
+        const result = await apiJson("/account-management/security-answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: accountSessionId, option: securityOption.value })
+        });
+        setAccountForms("code");
+        setAccountState("验证码已发送至 " + result.phone_masked);
+        codeInput.focus();
+      } catch (error) {
+        setAccountState(error.message || "安全验证失败", "error");
+      } finally {
+        setAccountBusy(false);
+      }
+    });
+
+    codeForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (accountBusy) return;
+      setAccountBusy(true);
+      setAccountState("正在登录口袋48");
+      try {
+        const result = await apiJson("/account-management/verify-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: accountSessionId, code: codeInput.value })
+        });
+        codeInput.value = "";
+        setAccountForms("");
+        setAccountState("登录成功，正在刷新翻牌记录");
+        await pollRefreshJob(result.job_id, result.account.id);
+      } catch (error) {
+        setAccountState(error.message || "登录或刷新失败", "error");
+        setAccountBusy(false);
+      }
     });
 
     resetBtn.addEventListener("click", function () {

@@ -54,6 +54,8 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             mock.patch("website.flip_cards_api.cfg.SECURE_COOKIES", False),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_DATASET_PATH", str(self.dataset_path)),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_DATA_DIR", str(self.data_dir)),
+            mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNTS_PATH", str(self.data_dir / "web" / "accounts.json")),
+            mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNT_ADMIN_ENABLED", False),
         ]
         for patcher in self.patches:
             patcher.start()
@@ -95,12 +97,76 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         html = await self.client.get("/api/flip-cards/html")
         self.assertEqual(html.status_code, 404)
 
+    async def test_selects_account_scoped_dataset_and_media_from_manifest(self) -> None:
+        account_id = "172884074"
+        (self.data_dir / "web" / "accounts").mkdir()
+        (self.data_dir / "audio" / account_id).mkdir()
+        (self.data_dir / "audio" / account_id / "scoped.mp3").write_bytes(b"account-audio")
+        (self.data_dir / "web" / "accounts.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "default_account_id": account_id,
+                "accounts": [{"id": account_id, "nickname": "xxgg2333"}],
+            }),
+            encoding="utf-8",
+        )
+        (self.data_dir / "web" / "accounts" / f"{account_id}.json").write_text(
+            json.dumps({
+                "schema_version": 3,
+                "account": {"id": account_id, "nickname": "xxgg2333"},
+                "summary": {"total": 1},
+                "records": [{"question_id": "q2", "media": {"kind": "audio", "filename": "scoped.mp3"}}],
+            }),
+            encoding="utf-8",
+        )
+        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
+
+        accounts = await self.client.get("/api/flip-cards/accounts")
+        self.assertEqual(accounts.json()["accounts"][0]["nickname"], "xxgg2333")
+        data = await self.client.get(f"/api/flip-cards/data?account_id={account_id}")
+        self.assertEqual(data.json()["account"]["id"], account_id)
+        self.assertEqual(
+            data.json()["records"][0]["media"]["url"],
+            f"/api/flip-cards/accounts/{account_id}/flip_data/audio/scoped.mp3",
+        )
+        media = await self.client.get(f"/api/flip-cards/accounts/{account_id}/flip_data/audio/scoped.mp3")
+        self.assertEqual(media.content, b"account-audio")
+        missing = await self.client.get("/api/flip-cards/data?account_id=999999")
+        self.assertEqual(missing.status_code, 404)
+
+    async def test_account_management_is_disabled_on_non_primary_node(self) -> None:
+        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
+        capability = await self.client.get("/api/flip-cards/account-management/status")
+        self.assertFalse(capability.json()["enabled"])
+        response = await self.client.post(
+            "/api/flip-cards/account-management/send-sms",
+            json={"phone": "13800001234", "area": "86"},
+            headers={"Origin": "http://testserver"},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    async def test_account_management_requires_same_origin(self) -> None:
+        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
+        with mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNT_ADMIN_ENABLED", True):
+            response = await self.client.post(
+                "/api/flip-cards/account-management/send-sms",
+                json={"phone": "13800001234", "area": "86"},
+                headers={"Origin": "https://evil.example"},
+            )
+        self.assertEqual(response.status_code, 403)
+
 
 class FlipCardsTemplateTests(unittest.TestCase):
     def test_template_renders_application_instead_of_redirecting_to_html(self) -> None:
         template = Path("website/templates/flip_cards.html").read_text(encoding="utf-8")
         self.assertIn('const API = "/api/flip-cards"', template)
-        self.assertIn('apiJson("/data")', template)
+        self.assertIn('apiJson("/data" + suffix)', template)
+        self.assertIn('id="accountSelect"', template)
+        self.assertIn('id="accountModal"', template)
+        self.assertIn('apiJson("/account-management/status")', template)
+        self.assertIn('"/account-management/send-sms"', template)
+        self.assertIn('"/account-management/verify-code"', template)
+        self.assertNotIn("前往腾讯云", template)
         self.assertIn("我发于 ", template)
         self.assertIn('avatar.textContent = memberAvatarText()', template)
         self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
