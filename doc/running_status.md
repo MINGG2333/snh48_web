@@ -2,6 +2,8 @@
 
 更新日期：2026-08-22 CST +0800
 
+2026-08-22 15:20 管理员行程/事件统一入口完成腾讯云阶段发布：功能提交 `c6f2302` 已由 `cjy.plus` 加载，旧 `/api/timeline/manual-events` 返回 404，原手工文件中的“加入 SNH48 二十三期生”和“Mini Live”已迁入统一行程 CSV，并补充“陈嘉仪出道首演”里程碑。腾讯云 `/api/timeline/schedule` 当前返回 131 条。阿里云的必要行程数据已由既有 cron 自动拉到 131 条，但网站 checkout 仍为 `72d1cd1`，旧手工接口仍返回 200；这说明数据副本已更新、统一接口代码尚未部署，等待用户验收腾讯云后再发布代码。
+
 2026-08-22 时光轴行程/事件拆分、微博/抖音统一数据、抖音稳定作品链接和微博日常去重改造已完成腾讯云验收，并按用户确认部署到阿里云；本次补处理新助手 `182321334` 的 8/16、8/17 行程后，两端 `/api/timeline/schedule` 均返回 128 条有效记录（无 `event_type=日常`），新增 8/19、8/28、8/30 行程；社交时间轴两端仍返回微博 25 条、抖音 36 条，出道 300 天仅保留一条。
 
 抖音稳定作品链接、微博日常去重与 300 天事件合并专项复核：2026-08-22 CST +0800
@@ -40,8 +42,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `5ffe622`。screen `1770296.snh48`、Python PID `1770301`，03:00 左右重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；本机 API 返回 128 条有效事件/行程（无 `日常`、300 天一条）和 61 条社交记录（微博 25、抖音 36），抖音链接均为稳定作品页 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `5ffe622`，2026-08-22 02:59:58 CST 重启，PID `2266723`，active/running；本机和公网 API 均返回 128 条有效事件/行程（无 `日常`、300 天一条）和 61 条社交记录（微博 25、抖音 36），本次新增行程 CSV 已与腾讯云 SHA-256 一致；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `c6f2302`。screen `2130752.snh48`、Python PID `2130756`，2026-08-22 15:20:34 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 API 返回 131 条有效事件/行程和 61 条社交记录（微博 25、抖音 36），旧手工事件接口为 404 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `72d1cd1`，2026-08-22 02:59:58 CST 启动，PID `2266723`，active/running、`NRestarts=0`；既有数据同步已把统一行程 CSV 更新到 131 条，社交记录仍为 61 条（微博 25、抖音 36），但旧手工接口仍为 200，统一接口代码尚未发布；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
