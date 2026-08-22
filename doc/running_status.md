@@ -2,6 +2,8 @@
 
 更新日期：2026-08-22 CST +0800
 
+2026-08-22 18:43 翻牌多账号与腾讯云网页验证码登录完成腾讯云阶段发布：网站提交 `24e7f7b`、fan-hub 提交 `24f4ddc` 已推送，腾讯云 screen 重启为 `2251248.snh48`、Python PID `2251252`，继续覆盖 `QA_WARMUP_ON_STARTUP=false`。公网 `/flip-cards` 已包含账号选择器和统一管理弹窗；受保护 API 返回默认账号 `172884074 / xxgg2333`、schema v3 共 338 条、312 条语音转录，账号级媒体 Range 为 206；腾讯云账号管理能力为 true，伪造跨站 POST 为 403。现有单账号运行产物已只复制迁移到账号目录，旧文件保留。阿里云代码和同步脚本尚未部署，等待用户验收腾讯云；最终两端使用同一代码和弹窗，阿里云能力开关为 false 且不提供跨站跳转。
+
 2026-08-22 15:20 管理员行程/事件统一入口完成腾讯云阶段发布：功能提交 `c6f2302` 已由 `cjy.plus` 加载，旧 `/api/timeline/manual-events` 返回 404，原手工文件中的“加入 SNH48 二十三期生”和“Mini Live”已迁入统一行程 CSV，并补充“陈嘉仪出道首演”里程碑。腾讯云 `/api/timeline/schedule` 当前返回 131 条。阿里云的必要行程数据已由既有 cron 自动拉到 131 条，但网站 checkout 仍为 `72d1cd1`，旧手工接口仍返回 200；这说明数据副本已更新、统一接口代码尚未部署，等待用户验收腾讯云后再发布代码。
 
 2026-08-22 时光轴行程/事件拆分、微博/抖音统一数据、抖音稳定作品链接和微博日常去重改造已完成腾讯云验收，并按用户确认部署到阿里云；本次补处理新助手 `182321334` 的 8/16、8/17 行程后，两端 `/api/timeline/schedule` 均返回 128 条有效记录（无 `event_type=日常`），新增 8/19、8/28、8/30 行程；社交时间轴两端仍返回微博 25 条、抖音 36 条，出道 300 天仅保留一条。
@@ -42,7 +44,7 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `c6f2302`。screen `2130752.snh48`、Python PID `2130756`，2026-08-22 15:20:34 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`，screen 窗口日志写入 `/var/log/snh48/snh48_screen.log`；公网 API 返回 131 条有效事件/行程和 61 条社交记录（微博 25、抖音 36），旧手工事件接口为 404 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行功能代码为 `24e7f7b`。screen `2251248.snh48`、Python PID `2251252`，2026-08-22 18:43:17 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；翻牌多账号页面/API 和仅腾讯云账号管理已生效，其他既有功能保持累计提交状态 |
 | 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `72d1cd1`，2026-08-22 02:59:58 CST 启动，PID `2266723`，active/running、`NRestarts=0`；既有数据同步已把统一行程 CSV 更新到 131 条，社交记录仍为 61 条（微博 25、抖音 36），但旧手工接口仍为 200，统一接口代码尚未发布；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
@@ -150,15 +152,15 @@ systemctl status nginx
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 语音转录文本数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；包含兼容版/原始音质版派生 M4A、元数据和同期消息，原始 FLV 不同步 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物只读派生文件；排除 `live_business_fulfillments.json` 和 `.*.lock`，可写业务状态走版本化共享状态 |
-| `/home/snh48-fan-hub/flip_data/web/flip_cards.json` | 同路径 | 翻牌记录应用页最小 JSON；不含完整 metadata、Token 或配置 |
-| `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 同路径 | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` |
+| `/home/snh48-fan-hub/flip_data/web/` | 同路径 | 脱敏账号清单、schema v3 账号 JSON 和默认兼容副本；`accounts.json` 最后原子提交，不含手机号、Token 或完整 metadata |
+| `/home/snh48-fan-hub/flip_data/audio/{account_id}/`、`/home/snh48-fan-hub/flip_data/video/{account_id}/` | 同路径 | 账号级翻牌音视频依赖；不含 `metadata/`、`transcripts/`、登录会话或任务日志 |
 
 同步分组：
 
 | 分组 | 内容 | 典型频率 |
 |------|------|----------|
 | `core` | 统一事件/行程 CSV、社交时间轴、直播回放汇总、直播封面 | 低频或人工更新 |
-| `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、翻牌应用 JSON、翻牌音视频 | 后台导出、上麦会话结束或翻牌批处理更新时变化 |
+| `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、脱敏翻牌 `web/`、账号级翻牌音视频 | 后台导出、上麦会话结束或翻牌批处理更新时变化 |
 
 不作为常规同步项：
 
