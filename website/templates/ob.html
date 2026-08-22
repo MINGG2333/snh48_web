@@ -77,10 +77,29 @@
       padding: 20px 32px;
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
+      gap: 16px;
     }
     header h1 { font-size: 18px; font-weight: 600; }
     header .stats { color: var(--text-dim); font-size: 13px; }
     header .stats span { color: var(--accent); font-weight: 600; }
+    .ob-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
+    .ob-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ob-action-btn {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 11px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .ob-action-btn:hover,
+    .ob-action-btn:focus-visible { border-color: var(--accent); outline: none; }
+    .ob-action-btn.has-pending { border-color: rgba(255, 165, 2, .65); color: var(--gold); }
+    .ob-action-btn:disabled { cursor: default; opacity: .55; }
+    .ob-action-count { margin-left: 4px; color: var(--gold); font-weight: 700; }
 
     .inbox-panel {
       display: none;
@@ -92,6 +111,8 @@
     }
     .inbox-panel.visible { display: block; }
     .inbox-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .inbox-header > div,
+    .chat-admin-header > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .inbox-header h2 { font-size: 16px; }
     .inbox-count { color: var(--gold); font-size: 13px; }
     .inbox-list { display: grid; gap: 10px; }
@@ -115,6 +136,52 @@
       background: var(--surface);
     }
     .chat-admin-panel.visible { display: block; }
+    .ob-tool-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: max(18px, 8dvh) 18px 18px;
+      overscroll-behavior: contain;
+    }
+    .ob-tool-modal.open { display: flex; }
+    .ob-tool-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, .72);
+      touch-action: none;
+    }
+    .ob-tool-card {
+      position: relative;
+      z-index: 1;
+      width: min(960px, 100%);
+      max-height: calc(100dvh - max(18px, 8dvh) - 18px);
+      margin: 0;
+      overflow: hidden;
+      border-radius: 14px;
+    }
+    .ob-tool-card.inbox-panel,
+    .ob-tool-card.chat-admin-panel { display: block; }
+    .ob-tool-close {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .ob-tool-close:hover,
+    .ob-tool-close:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+    .ob-tool-card .inbox-list { max-height: calc(100dvh - 170px); overflow-y: auto; overscroll-behavior: contain; }
+    .ob-tool-card .chat-admin-layout { min-height: 0; max-height: calc(100dvh - 170px); }
+    .ob-tool-card .chat-admin-list,
+    .ob-tool-card .chat-admin-detail { min-height: 240px; }
+    .ob-tool-card .chat-admin-panel { overflow: hidden; }
     .chat-admin-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
     .chat-admin-header h2 { font-size: 16px; }
     .chat-admin-count { color: var(--gold); font-size: 13px; }
@@ -138,7 +205,7 @@
     .chat-admin-message.support .chat-admin-bubble { background: rgba(124, 77, 255, 0.2); }
     .chat-admin-time { color: var(--text-dim); font-size: 10px; }
     .chat-admin-composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
-    .chat-admin-composer textarea { min-width: 0; flex: 1; min-height: 40px; max-height: 110px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); resize: vertical; outline: none; font: inherit; font-size: 12px; }
+    .chat-admin-composer textarea { min-width: 0; flex: 1; min-height: 40px; max-height: 110px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); resize: vertical; outline: none; font: inherit; font-size: 16px; }
     .chat-admin-composer textarea:focus { border-color: var(--accent); }
     .chat-admin-send { flex: 0 0 auto; align-self: flex-end; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 8px; background: rgba(124, 77, 255, 0.18); color: var(--text); cursor: pointer; font-size: 12px; }
     .chat-admin-send:hover, .chat-admin-send:focus-visible { background: rgba(124, 77, 255, 0.3); outline: none; }
@@ -528,14 +595,20 @@
 
     /* ── Responsive ── */
     @media (max-width: 640px) {
-      header { padding: 16px 20px; }
+      header { align-items: flex-start; flex-direction: column; padding: 16px 20px; }
+      .ob-header-right { width: 100%; align-items: flex-start; flex-direction: column; gap: 10px; }
+      .ob-actions { width: 100%; }
+      .ob-action-btn { flex: 1 1 0; min-width: 0; }
       .groups-container {
         padding: 16px 20px;
       }
-      .inbox-panel { margin: 16px 20px 0; }
-      .chat-admin-panel { margin: 16px 20px 0; }
-      .chat-admin-layout { grid-template-columns: 1fr; }
-      .chat-admin-list { max-height: 220px; }
+      .ob-tool-modal { padding: max(14px, 5dvh) 12px 12px; }
+      .ob-tool-card { max-height: calc(100dvh - max(14px, 5dvh) - 12px); }
+      .ob-tool-card .inbox-list { max-height: calc(100dvh - 190px); }
+      .ob-tool-card .chat-admin-layout { grid-template-columns: 1fr; max-height: calc(100dvh - 190px); overflow-y: auto; }
+      .ob-tool-card .chat-admin-list { max-height: 220px; min-height: 0; }
+      .ob-tool-card .chat-admin-detail { min-height: 420px; }
+      .chat-admin-composer { padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
       .ob-note { margin: 14px 20px 0; }
       .modal-content { width: 95%; max-height: 90vh; }
       .modal-body { padding: 12px 16px; }
@@ -559,12 +632,22 @@
 <!-- ── Header ── -->
 <header id="mainHeader" style="display:none">
   <h1>🔍 观察 · 估算访客动态</h1>
-  <div class="stats">
-    <span id="visitorCount">0</span> 个估算访客 ·
-    <span id="stableProfileCount">0</span> 个稳定浏览器档案 ·
-    <span id="legacySessionCount">0</span> 个旧会话 ·
-    <span id="totalNotifs">0</span> 条通知 ·
-    <span id="inboxPendingCount">0</span> 条待处理请求
+  <div class="ob-header-right">
+    <div class="stats">
+      <span id="visitorCount">0</span> 个估算访客 ·
+      <span id="stableProfileCount">0</span> 个稳定浏览器档案 ·
+      <span id="legacySessionCount">0</span> 个旧会话 ·
+      <span id="totalNotifs">0</span> 条通知 ·
+      <span id="inboxPendingCount">0</span> 条待处理请求
+    </div>
+    <nav class="ob-actions" aria-label="管理工具">
+      <button class="ob-action-btn" id="inboxOpenBtn" type="button" aria-haspopup="dialog" aria-expanded="false">
+        <i class="fas fa-inbox" aria-hidden="true"></i> 处理箱 <span class="ob-action-count" id="inboxActionCount">0</span>
+      </button>
+      <button class="ob-action-btn" id="chatOpenBtn" type="button" aria-haspopup="dialog" aria-expanded="false">
+        <i class="fas fa-headset" aria-hidden="true"></i> 客服 <span class="ob-action-count" id="chatActionCount">0</span>
+      </button>
+    </nav>
   </div>
 </header>
 
@@ -573,33 +656,45 @@
 </div>
 
 <!-- ── Cross-server durable action inbox ── -->
-<section class="inbox-panel" id="inboxPanel">
-  <div class="inbox-header">
-    <h2>📥 双服务器可靠待处理箱</h2>
-    <span class="inbox-count" id="inboxCount"></span>
-  </div>
-  <div class="inbox-list" id="inboxList"></div>
-</section>
-
-<section class="chat-admin-panel" id="chatAdminPanel">
-  <div class="chat-admin-header">
-    <h2><i class="fas fa-headset" aria-hidden="true"></i> 客服聊天</h2>
-    <span class="chat-admin-count" id="chatAdminCount"></span>
-  </div>
-  <div class="chat-admin-layout">
-    <div class="chat-admin-list" id="chatAdminList"></div>
-    <div class="chat-admin-detail">
-      <div class="chat-admin-detail-head" id="chatAdminDetailHead">选择一个会话查看消息</div>
-      <div class="chat-admin-messages" id="chatAdminMessages">
-        <div class="chat-admin-empty">暂无客服聊天记录</div>
+<div class="ob-tool-modal" id="inboxModal" aria-hidden="true">
+  <div class="ob-tool-backdrop" id="inboxBackdrop"></div>
+  <section class="inbox-panel ob-tool-card" id="inboxPanel" role="dialog" aria-modal="true" aria-labelledby="inboxTitle">
+    <div class="inbox-header">
+      <h2 id="inboxTitle">📥 双服务器可靠待处理箱</h2>
+      <div>
+        <span class="inbox-count" id="inboxCount"></span>
+        <button class="ob-tool-close" id="inboxClose" type="button" aria-label="关闭处理箱">×</button>
       </div>
-      <form class="chat-admin-composer" id="chatAdminForm">
-        <textarea id="chatAdminInput" maxlength="2000" rows="2" placeholder="回复当前会话"></textarea>
-        <button class="chat-admin-send" id="chatAdminSend" type="submit"><i class="fas fa-paper-plane" aria-hidden="true"></i> 回复</button>
-      </form>
     </div>
-  </div>
-</section>
+    <div class="inbox-list" id="inboxList"></div>
+  </section>
+</div>
+
+<div class="ob-tool-modal" id="chatAdminModal" aria-hidden="true">
+  <div class="ob-tool-backdrop" id="chatAdminBackdrop"></div>
+  <section class="chat-admin-panel ob-tool-card" id="chatAdminPanel" role="dialog" aria-modal="true" aria-labelledby="chatAdminTitle">
+    <div class="chat-admin-header">
+      <h2 id="chatAdminTitle"><i class="fas fa-headset" aria-hidden="true"></i> 客服聊天</h2>
+      <div>
+        <span class="chat-admin-count" id="chatAdminCount"></span>
+        <button class="ob-tool-close" id="chatAdminClose" type="button" aria-label="关闭客服聊天">×</button>
+      </div>
+    </div>
+    <div class="chat-admin-layout">
+      <div class="chat-admin-list" id="chatAdminList"></div>
+      <div class="chat-admin-detail">
+        <div class="chat-admin-detail-head" id="chatAdminDetailHead">选择一个会话查看消息</div>
+        <div class="chat-admin-messages" id="chatAdminMessages">
+          <div class="chat-admin-empty">暂无客服聊天记录</div>
+        </div>
+        <form class="chat-admin-composer" id="chatAdminForm">
+          <textarea id="chatAdminInput" maxlength="2000" rows="2" placeholder="回复当前会话"></textarea>
+          <button class="chat-admin-send" id="chatAdminSend" type="submit"><i class="fas fa-paper-plane" aria-hidden="true"></i> 回复</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
 
 <!-- ── Groups Grid ── -->
 <div class="groups-container" id="groupsContainer"></div>
@@ -635,6 +730,8 @@
   let loginVerified = false;
   let chatConversations = [];
   let selectedChatId = '';
+  let chatRefreshBusy = false;
+  let obToolScrollLockY = null;
 
   // ── DOM refs ──
   const loginOverlay = document.getElementById('loginOverlay');
@@ -648,6 +745,11 @@
   const legacySessionCount = document.getElementById('legacySessionCount');
   const totalNotifs = document.getElementById('totalNotifs');
   const inboxPendingCount = document.getElementById('inboxPendingCount');
+  const inboxOpenBtn = document.getElementById('inboxOpenBtn');
+  const inboxActionCount = document.getElementById('inboxActionCount');
+  const inboxModal = document.getElementById('inboxModal');
+  const inboxBackdrop = document.getElementById('inboxBackdrop');
+  const inboxClose = document.getElementById('inboxClose');
   const inboxPanel = document.getElementById('inboxPanel');
   const inboxCount = document.getElementById('inboxCount');
   const inboxList = document.getElementById('inboxList');
@@ -658,6 +760,11 @@
   const modalClose = document.getElementById('modalClose');
   const notifNav = document.getElementById('notifNav');
   const obNote = document.getElementById('obNote');
+  const chatOpenBtn = document.getElementById('chatOpenBtn');
+  const chatActionCount = document.getElementById('chatActionCount');
+  const chatAdminModal = document.getElementById('chatAdminModal');
+  const chatAdminBackdrop = document.getElementById('chatAdminBackdrop');
+  const chatAdminClose = document.getElementById('chatAdminClose');
   const chatAdminPanel = document.getElementById('chatAdminPanel');
   const chatAdminCount = document.getElementById('chatAdminCount');
   const chatAdminList = document.getElementById('chatAdminList');
@@ -673,6 +780,66 @@
       area: 'ob'
     }, data || {}));
   }
+
+  function setObToolScrollLocked(locked) {
+    if (locked) {
+      if (obToolScrollLockY !== null) return;
+      obToolScrollLockY = window.scrollY || window.pageYOffset || 0;
+      document.body.style.position = 'fixed';
+      document.body.style.top = '-' + obToolScrollLockY + 'px';
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+    if (obToolScrollLockY === null) return;
+    const restoreY = obToolScrollLockY;
+    obToolScrollLockY = null;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+    window.scrollTo(0, restoreY);
+  }
+
+  function setObToolModalOpen(modal, trigger, open) {
+    if (!modal) return;
+    modal.classList.toggle('open', open);
+    modal.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      setObToolScrollLocked(true);
+      const closeButton = modal.querySelector('.ob-tool-close');
+      if (closeButton) window.setTimeout(() => closeButton.focus(), 0);
+    } else if (!document.querySelector('.ob-tool-modal.open')) {
+      setObToolScrollLocked(false);
+      if (trigger) trigger.focus();
+    }
+  }
+
+  function closeObToolModals() {
+    setObToolModalOpen(inboxModal, inboxOpenBtn, false);
+    setObToolModalOpen(chatAdminModal, chatOpenBtn, false);
+  }
+
+  inboxOpenBtn.addEventListener('click', () => {
+    setObToolModalOpen(chatAdminModal, chatOpenBtn, false);
+    setObToolModalOpen(inboxModal, inboxOpenBtn, true);
+  });
+  inboxClose.addEventListener('click', () => setObToolModalOpen(inboxModal, inboxOpenBtn, false));
+  inboxBackdrop.addEventListener('click', () => setObToolModalOpen(inboxModal, inboxOpenBtn, false));
+  chatOpenBtn.addEventListener('click', () => {
+    setObToolModalOpen(inboxModal, inboxOpenBtn, false);
+    setObToolModalOpen(chatAdminModal, chatOpenBtn, true);
+  });
+  chatAdminClose.addEventListener('click', () => setObToolModalOpen(chatAdminModal, chatOpenBtn, false));
+  chatAdminBackdrop.addEventListener('click', () => setObToolModalOpen(chatAdminModal, chatOpenBtn, false));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeObToolModals();
+  });
 
   // ── Login ──
   function setLoginFeedback(kind, message) {
@@ -793,7 +960,8 @@
   function renderChatConversations() {
     chatAdminList.replaceChildren();
     const pending = chatConversations.filter((item) => item.pending_reply).length;
-    chatAdminPanel.classList.toggle('visible', chatConversations.length > 0);
+    chatActionCount.textContent = String(pending);
+    chatOpenBtn.classList.toggle('has-pending', pending > 0);
     chatAdminCount.textContent = chatConversations.length + ' 个会话，其中 ' + pending + ' 个待回复';
     if (!chatConversations.length) {
       const empty = document.createElement('div');
@@ -834,6 +1002,8 @@
   }
 
   async function fetchChatConversations() {
+    if (chatRefreshBusy || !obPassword || loginOverlay.classList.contains('hidden') === false) return;
+    chatRefreshBusy = true;
     try {
       const resp = await fetch('/api/feedback-chat/conversations', {
         headers: { 'X-Ob-Password': obPassword },
@@ -845,7 +1015,9 @@
       chatConversations = data.conversations || [];
       renderChatConversations();
     } catch (error) {
-      chatAdminPanel.classList.remove('visible');
+      chatActionCount.textContent = '0';
+    } finally {
+      chatRefreshBusy = false;
     }
   }
 
@@ -919,9 +1091,10 @@
 
   function renderInbox() {
     inboxList.innerHTML = '';
-    inboxPanel.classList.toggle('visible', inboxData.length > 0);
     const pending = inboxData.filter(item => item.status === 'pending' || item.status === 'processing').length;
     inboxPendingCount.textContent = pending;
+    inboxActionCount.textContent = String(pending);
+    inboxOpenBtn.classList.toggle('has-pending', pending > 0);
     inboxCount.textContent = inboxData.length + ' 条记录，其中 ' + pending + ' 条待处理';
     inboxData.forEach((event) => {
       const payload = event.payload || {};
@@ -1467,6 +1640,12 @@
 
   // ── Auto-refresh every 10s ──
   setInterval(fetchData, 10000);
+  // 客服会话独立高频刷新，避免等待整页观察数据更新。
+  setInterval(() => {
+    if (loginVerified && obPassword && loginOverlay.classList.contains('hidden')) {
+      fetchChatConversations();
+    }
+  }, 3000);
 
   // ── Focus password input ──
   passwordInput.focus();

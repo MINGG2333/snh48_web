@@ -34,9 +34,21 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn('<span>反馈</span>', template)
         self.assertNotIn('<span>客服反馈</span>', template)
         self.assertIn('id="supportChatIdentifier"', template)
+        self.assertIn('autocomplete="off"', template)
+        self.assertNotIn('localStorage.getItem("snh48_feedback_chat_id")', template)
+        self.assertNotIn('localStorage.setItem("snh48_feedback_chat_id"', template)
         self.assertIn('fetch("/api/feedback-chat/history"', template)
         self.assertIn('fetch("/api/feedback-chat/message"', template)
         self.assertIn('href="/complaint"', template)
+
+    def test_ob_tools_are_modal_and_chat_refresh_is_separate(self) -> None:
+        template = (ROOT / "website/templates/ob.html").read_text(encoding="utf-8")
+        for element_id in ("inboxOpenBtn", "inboxModal", "inboxClose", "chatOpenBtn", "chatAdminModal", "chatAdminClose"):
+            self.assertIn(f'id="{element_id}"', template)
+        self.assertIn("setObToolScrollLocked", template)
+        self.assertIn("body.style.position = 'fixed'", template)
+        self.assertIn("}, 3000);", template)
+        self.assertIn("chatRefreshBusy", template)
 
 
 if __name__ == "__main__":

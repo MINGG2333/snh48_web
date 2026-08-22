@@ -157,6 +157,10 @@
       min-width: 0;
       max-width: 100%;
       font-size: 16px;
+      -webkit-appearance: none;
+      appearance: none;
+      padding-left: 8px;
+      padding-right: 8px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -344,9 +348,9 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid rgba(64, 184, 168, 0.62);
+      border: 1px solid rgba(64, 184, 168, 0.38);
       border-radius: 50%;
-      background: rgba(64, 184, 168, 0.16);
+      background: rgba(64, 184, 168, 0.08);
       color: #9de4d8;
       font-size: 21px;
       box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
@@ -354,7 +358,7 @@
     }
     .support-chat-nav:hover,
     .support-chat-nav:focus-visible {
-      background: rgba(64, 184, 168, 0.28);
+      background: rgba(64, 184, 168, 0.16);
       color: #c6fff5;
       outline: none;
     }
@@ -771,6 +775,7 @@
     var supportChatSend = document.getElementById("supportChatSend");
     var supportChatChange = document.getElementById("supportChatChange");
     var supportChatPollTimer = null;
+    var supportChatHistoryBusy = false;
     var currentSupportChatIdentifier = "";
     var supportChatPreviousFocus = null;
     var pageScrollLockY = null;
@@ -863,11 +868,6 @@
         supportChatModal.setAttribute("aria-hidden", "false");
         supportChatNav.setAttribute("aria-expanded", "true");
         setPageScrollLocked(true);
-        if (supportChatIdentifier) {
-          try {
-            supportChatIdentifier.value = window.localStorage.getItem("snh48_feedback_chat_id") || "";
-          } catch (error) {}
-        }
         window.setTimeout(function() {
           if (currentSupportChatIdentifier) {
             if (supportChatInput) supportChatInput.focus();
@@ -917,7 +917,8 @@
     }
 
     async function loadSupportChatHistory(showLoading) {
-      if (!currentSupportChatIdentifier) return;
+      if (!currentSupportChatIdentifier || supportChatHistoryBusy) return;
+      supportChatHistoryBusy = true;
       if (showLoading) setChatStatus(supportChatStatus, "正在加载聊天记录…", false);
       try {
         var response = await fetch("/api/feedback-chat/history", {
@@ -932,6 +933,8 @@
         setChatStatus(supportChatStatus, "", false);
       } catch (error) {
         setChatStatus(supportChatStatus, error.message || "聊天记录加载失败", true);
+      } finally {
+        supportChatHistoryBusy = false;
       }
     }
 
@@ -946,9 +949,6 @@
       setChatStatus(supportChatSetupStatus, "正在打开聊天…", false);
       currentSupportChatIdentifier = identifier;
       try {
-        window.localStorage.setItem("snh48_feedback_chat_id", identifier);
-      } catch (error) {}
-      try {
         var response = await fetch("/api/feedback-chat/history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -961,7 +961,7 @@
         supportChatConversation.classList.remove("hidden");
         renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
         setChatStatus(supportChatSetupStatus, "", false);
-        supportChatPollTimer = window.setInterval(function() { loadSupportChatHistory(false); }, 20000);
+        supportChatPollTimer = window.setInterval(function() { loadSupportChatHistory(false); }, 3000);
         if (supportChatInput) supportChatInput.focus();
         track("admin_update", { action: "open_feedback_chat", result: "success" });
       } catch (error) {

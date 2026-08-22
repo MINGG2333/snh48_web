@@ -124,10 +124,17 @@ complaint_limiter = SlidingWindowLimiter(
     window_seconds=cfg.COMPLAINT_WINDOW_SECONDS,
 )
 
-# Customer-service chat message/history requests
+# Customer-service chat message requests
 feedback_chat_limiter = SlidingWindowLimiter(
     max_requests=cfg.FEEDBACK_CHAT_MAX_PER_WINDOW,
     window_seconds=cfg.FEEDBACK_CHAT_WINDOW_SECONDS,
+)
+
+# Read-only history polling has a separate, higher ceiling so the chat can
+# refresh promptly without weakening the anti-spam limit for message sends.
+feedback_chat_history_limiter = SlidingWindowLimiter(
+    max_requests=cfg.FEEDBACK_CHAT_HISTORY_MAX_PER_WINDOW,
+    window_seconds=cfg.FEEDBACK_CHAT_HISTORY_WINDOW_SECONDS,
 )
 
 # Memories submission anti-spam
@@ -517,6 +524,16 @@ def check_feedback_chat_limit(ip: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="客服消息过于频繁，请稍后再试",
+        )
+
+
+def check_feedback_chat_history_limit(ip: str) -> None:
+    """Rate-limit read-only customer-service history polling."""
+    allowed, _ = feedback_chat_history_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="客服记录查询过于频繁，请稍后再试",
         )
 
 

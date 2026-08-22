@@ -21,6 +21,7 @@ class FeedbackChatApiTests(unittest.TestCase):
             mock.patch.object(action_inbox.cfg, "SHARED_STATE_SYNC_ENABLED", False),
             mock.patch.object(action_inbox.cfg, "SHARED_STATE_PEER", ""),
             mock.patch.object(chat_api, "check_feedback_chat_limit"),
+            mock.patch.object(chat_api, "check_feedback_chat_history_limit"),
         ]
         for patcher in self.patches:
             patcher.start()

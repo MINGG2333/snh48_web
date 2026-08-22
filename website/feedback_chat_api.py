@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 
 from website.action_inbox import InboxError, list_chat_events, record_request
 from website.ob_api.router import verify_ob_password
-from website.rate_limiter import check_feedback_chat_limit, get_client_ip
+from website.rate_limiter import check_feedback_chat_history_limit, check_feedback_chat_limit, get_client_ip
 
 router = APIRouter(prefix="/api/feedback-chat", tags=["客服聊天"])
 
@@ -117,7 +117,7 @@ def _chat_response(response: Response, conversation_id: str, messages: list[dict
 
 @router.post("/history")
 def get_history(req: ChatIdentifierRequest, request: Request, response: Response):
-    check_feedback_chat_limit(get_client_ip(request))
+    check_feedback_chat_history_limit(get_client_ip(request))
     conversation_id = _conversation_id(req.identifier)
     return _chat_response(response, conversation_id, _history(conversation_id))
 
