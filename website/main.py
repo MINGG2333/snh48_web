@@ -573,6 +573,9 @@ app.include_router(pk_score_router)
 from website.memories_api import router as memories_router
 app.include_router(memories_router)
 
+from website.feedback_chat_api import router as feedback_chat_router
+app.include_router(feedback_chat_router)
+
 
 # ── Security Headers Middleware ─────────────────────────────────────────────
 

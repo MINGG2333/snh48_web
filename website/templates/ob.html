@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ site_title }} · 观察</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
   <meta name="robots" content="noindex, nofollow">
   <style>
@@ -105,6 +106,44 @@
     .inbox-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .inbox-action { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; }
     .inbox-action:hover { border-color: var(--accent); }
+    .chat-admin-panel {
+      display: none;
+      margin: 20px 32px 0;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .chat-admin-panel.visible { display: block; }
+    .chat-admin-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .chat-admin-header h2 { font-size: 16px; }
+    .chat-admin-count { color: var(--gold); font-size: 13px; }
+    .chat-admin-layout { display: grid; grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.28fr); gap: 12px; }
+    .chat-admin-list,
+    .chat-admin-detail { min-height: 280px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+    .chat-admin-list { max-height: 480px; overflow-y: auto; padding: 8px; }
+    .chat-admin-item { width: 100%; display: grid; gap: 4px; padding: 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+    .chat-admin-item:hover, .chat-admin-item.active { border-color: var(--accent); background: var(--surface-hover); }
+    .chat-admin-item.pending .chat-admin-item-title { color: var(--gold); }
+    .chat-admin-item-title { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .chat-admin-item-meta { color: var(--text-dim); font-size: 11px; }
+    .chat-admin-detail { display: flex; flex-direction: column; overflow: hidden; }
+    .chat-admin-detail-head { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: 12px; }
+    .chat-admin-messages { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+    .chat-admin-message { max-width: 84%; display: grid; gap: 3px; }
+    .chat-admin-message.visitor { align-self: flex-start; }
+    .chat-admin-message.support { align-self: flex-end; text-align: right; }
+    .chat-admin-bubble { padding: 8px 10px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; }
+    .chat-admin-message.visitor .chat-admin-bubble { background: var(--surface-hover); }
+    .chat-admin-message.support .chat-admin-bubble { background: rgba(124, 77, 255, 0.2); }
+    .chat-admin-time { color: var(--text-dim); font-size: 10px; }
+    .chat-admin-composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+    .chat-admin-composer textarea { min-width: 0; flex: 1; min-height: 40px; max-height: 110px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); resize: vertical; outline: none; font: inherit; font-size: 12px; }
+    .chat-admin-composer textarea:focus { border-color: var(--accent); }
+    .chat-admin-send { flex: 0 0 auto; align-self: flex-end; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 8px; background: rgba(124, 77, 255, 0.18); color: var(--text); cursor: pointer; font-size: 12px; }
+    .chat-admin-send:hover, .chat-admin-send:focus-visible { background: rgba(124, 77, 255, 0.3); outline: none; }
+    .chat-admin-send:disabled { cursor: wait; opacity: .55; }
+    .chat-admin-empty { display: grid; place-items: center; min-height: 260px; padding: 20px; color: var(--text-dim); font-size: 12px; text-align: center; }
 
     .ob-note {
       display: none;
@@ -494,6 +533,9 @@
         padding: 16px 20px;
       }
       .inbox-panel { margin: 16px 20px 0; }
+      .chat-admin-panel { margin: 16px 20px 0; }
+      .chat-admin-layout { grid-template-columns: 1fr; }
+      .chat-admin-list { max-height: 220px; }
       .ob-note { margin: 14px 20px 0; }
       .modal-content { width: 95%; max-height: 90vh; }
       .modal-body { padding: 12px 16px; }
@@ -539,6 +581,26 @@
   <div class="inbox-list" id="inboxList"></div>
 </section>
 
+<section class="chat-admin-panel" id="chatAdminPanel">
+  <div class="chat-admin-header">
+    <h2><i class="fas fa-headset" aria-hidden="true"></i> 客服聊天</h2>
+    <span class="chat-admin-count" id="chatAdminCount"></span>
+  </div>
+  <div class="chat-admin-layout">
+    <div class="chat-admin-list" id="chatAdminList"></div>
+    <div class="chat-admin-detail">
+      <div class="chat-admin-detail-head" id="chatAdminDetailHead">选择一个会话查看消息</div>
+      <div class="chat-admin-messages" id="chatAdminMessages">
+        <div class="chat-admin-empty">暂无客服聊天记录</div>
+      </div>
+      <form class="chat-admin-composer" id="chatAdminForm">
+        <textarea id="chatAdminInput" maxlength="2000" rows="2" placeholder="回复当前会话"></textarea>
+        <button class="chat-admin-send" id="chatAdminSend" type="submit"><i class="fas fa-paper-plane" aria-hidden="true"></i> 回复</button>
+      </form>
+    </div>
+  </div>
+</section>
+
 <!-- ── Groups Grid ── -->
 <div class="groups-container" id="groupsContainer"></div>
 
@@ -571,6 +633,8 @@
   let currentNotifIdx = -1;
   let loginBusy = false;
   let loginVerified = false;
+  let chatConversations = [];
+  let selectedChatId = '';
 
   // ── DOM refs ──
   const loginOverlay = document.getElementById('loginOverlay');
@@ -594,6 +658,14 @@
   const modalClose = document.getElementById('modalClose');
   const notifNav = document.getElementById('notifNav');
   const obNote = document.getElementById('obNote');
+  const chatAdminPanel = document.getElementById('chatAdminPanel');
+  const chatAdminCount = document.getElementById('chatAdminCount');
+  const chatAdminList = document.getElementById('chatAdminList');
+  const chatAdminDetailHead = document.getElementById('chatAdminDetailHead');
+  const chatAdminMessages = document.getElementById('chatAdminMessages');
+  const chatAdminForm = document.getElementById('chatAdminForm');
+  const chatAdminInput = document.getElementById('chatAdminInput');
+  const chatAdminSend = document.getElementById('chatAdminSend');
 
   function trackAdminEvent(eventType, data) {
     if (!window._trackEvent) return;
@@ -672,6 +744,136 @@
   passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
   loginBtn.addEventListener('click', doLogin);
 
+  function renderChatMessages(messages) {
+    chatAdminMessages.replaceChildren();
+    if (!messages.length) {
+      const empty = document.createElement('div');
+      empty.className = 'chat-admin-empty';
+      empty.textContent = '这个会话还没有消息';
+      chatAdminMessages.appendChild(empty);
+      return;
+    }
+    messages.forEach((message) => {
+      const row = document.createElement('div');
+      row.className = 'chat-admin-message ' + (message.sender === 'support' ? 'support' : 'visitor');
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-admin-bubble';
+      bubble.textContent = message.content || '';
+      const time = document.createElement('div');
+      time.className = 'chat-admin-time';
+      time.textContent = message.created_at || '';
+      row.appendChild(bubble);
+      row.appendChild(time);
+      chatAdminMessages.appendChild(row);
+    });
+    chatAdminMessages.scrollTop = chatAdminMessages.scrollHeight;
+  }
+
+  async function loadChatHistory(conversationId) {
+    if (!conversationId) return;
+    try {
+      const resp = await fetch('/api/feedback-chat/admin-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
+        body: JSON.stringify({ conversation_id: conversationId }),
+        cache: 'no-store',
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || '聊天记录加载失败');
+      renderChatMessages(data.messages || []);
+      const item = chatConversations.find((entry) => entry.conversation_id === conversationId);
+      chatAdminDetailHead.textContent = item
+        ? '识别码会话 · ' + conversationId.slice(0, 12) + '… · ' + item.message_count + ' 条消息'
+        : '客服聊天';
+    } catch (error) {
+      chatAdminDetailHead.textContent = error.message || '聊天记录加载失败';
+    }
+  }
+
+  function renderChatConversations() {
+    chatAdminList.replaceChildren();
+    const pending = chatConversations.filter((item) => item.pending_reply).length;
+    chatAdminPanel.classList.toggle('visible', chatConversations.length > 0);
+    chatAdminCount.textContent = chatConversations.length + ' 个会话，其中 ' + pending + ' 个待回复';
+    if (!chatConversations.length) {
+      const empty = document.createElement('div');
+      empty.className = 'chat-admin-empty';
+      empty.textContent = '暂无客服聊天记录';
+      chatAdminList.appendChild(empty);
+      selectedChatId = '';
+      renderChatMessages([]);
+      chatAdminDetailHead.textContent = '选择一个会话查看消息';
+      return;
+    }
+    chatConversations.forEach((conversation) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chat-admin-item' + (conversation.pending_reply ? ' pending' : '') + (conversation.conversation_id === selectedChatId ? ' active' : '');
+      const title = document.createElement('span');
+      title.className = 'chat-admin-item-title';
+      title.textContent = conversation.conversation_id.slice(0, 16) + '…';
+      const meta = document.createElement('span');
+      meta.className = 'chat-admin-item-meta';
+      meta.textContent = (conversation.pending_reply ? '待回复 · ' : '') + conversation.message_count + ' 条 · ' + (conversation.latest_at || '');
+      button.appendChild(title);
+      button.appendChild(meta);
+      button.addEventListener('click', () => {
+        selectedChatId = conversation.conversation_id;
+        renderChatConversations();
+        loadChatHistory(selectedChatId);
+      });
+      chatAdminList.appendChild(button);
+    });
+    if (selectedChatId && chatConversations.some((item) => item.conversation_id === selectedChatId)) {
+      loadChatHistory(selectedChatId);
+    } else {
+      selectedChatId = chatConversations[0].conversation_id;
+      renderChatConversations();
+      loadChatHistory(selectedChatId);
+    }
+  }
+
+  async function fetchChatConversations() {
+    try {
+      const resp = await fetch('/api/feedback-chat/conversations', {
+        headers: { 'X-Ob-Password': obPassword },
+        cache: 'no-store',
+      });
+      if (resp.status === 401 || resp.status === 403) return;
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || '客服会话加载失败');
+      chatConversations = data.conversations || [];
+      renderChatConversations();
+    } catch (error) {
+      chatAdminPanel.classList.remove('visible');
+    }
+  }
+
+  async function sendChatReply(event) {
+    event.preventDefault();
+    const content = chatAdminInput.value.trim();
+    if (!selectedChatId || !content || chatAdminSend.disabled) return;
+    chatAdminSend.disabled = true;
+    try {
+      const resp = await fetch('/api/feedback-chat/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
+        body: JSON.stringify({ conversation_id: selectedChatId, content }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || '回复失败');
+      chatAdminInput.value = '';
+      renderChatMessages(data.messages || []);
+      await fetchChatConversations();
+    } catch (error) {
+      chatAdminDetailHead.textContent = error.message || '回复失败';
+    } finally {
+      chatAdminSend.disabled = false;
+    }
+  }
+
+  chatAdminForm.addEventListener('submit', sendChatReply);
+
   // ── Fetch Data ──
   async function fetchData(options) {
     options = options || {};
@@ -704,6 +906,7 @@
       }
       renderGroups();
       renderInbox();
+      await fetchChatConversations();
     } catch (err) {
       if (options.loginAttempt && wasLoginVisible) {
         showLoginLoadRetry('密码正确，但观察数据加载失败，请点击重试加载');

@@ -53,7 +53,7 @@ cd /home/snh48_web
 
 ## 可靠待处理箱
 
-投诉和 QA 邮箱请求采用一事件一文件，而不是同步会并发追加的 JSONL：
+投诉、QA 邮箱请求和客服聊天消息采用一事件一文件，而不是同步会并发追加的 JSONL：
 
 ```text
 website/data/action_inbox/events/<event_id>.json
@@ -63,7 +63,8 @@ website/data/action_inbox/events/<event_id>.json
 - 每条请求记录 `origin_node` 和 `origin_label`。`/ob` 的“可靠待处理箱”用不同颜色明确显示“腾讯云 cjy.plus”或“阿里云 cjy.我爱你”。
 - 任一服务器收到请求或状态事件后立即复制到对端；失败时进入 `website/data/shared_state_outbox/inbox/` 重试。
 - `website/data/complaints/` 与会话目录中的邮箱 Markdown/JSONL 继续作为本节点兼容日志，但不再是跨服务器权威待办。
-- 待处理箱含邮箱、投诉正文等个人信息，目录文件权限为 `0600`，不得提交 Git、放入静态目录或在诊断输出中打印正文。
+- 客服聊天事件类型为 `feedback_message` / `feedback_reply`，按用户输入的识别码计算 SHA-256 会话编号，不保存识别码明文；公开端点按 IP 限速，管理员在 `/ob` 回复。
+- 待处理箱含邮箱、投诉正文和客服聊天正文等个人信息，目录文件权限为 `0600`，不得提交 Git、放入静态目录或在诊断输出中打印正文。
 
 导入两台服务器既有记录时分别运行；命令只打印数量：
 

@@ -1163,9 +1163,6 @@
       <div class="jump-status hidden" id="jumpStatus">正在加载目标消息...</div>
       <button class="update-pill" id="updatePill" type="button">有新消息，点击查看最新</button>
       <div class="floating-actions" id="floatingActions">
-        <button class="feedback-nav" id="feedbackNav" type="button" aria-haspopup="dialog" aria-expanded="false">
-          <i class="fas fa-headset" aria-hidden="true"></i> 反馈
-        </button>
         <div class="unreplied-panel" id="unrepliedPanel">
           <button class="unreplied-nav" id="unrepliedNav" type="button" disabled>暂无未回</button>
           <div class="ignore-actions">
@@ -1184,37 +1181,6 @@
       </div>
     </main>
 
-    <div class="room-modal" id="feedbackModal" aria-hidden="true">
-      <div class="room-modal-backdrop" id="feedbackModalBackdrop"></div>
-      <section class="room-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle">
-        <div class="room-modal-header">
-          <h2 id="feedbackModalTitle">小偶像反馈</h2>
-          <button class="room-modal-close" id="feedbackModalClose" type="button">收起</button>
-        </div>
-        <div class="room-modal-scroll feedback-modal-scroll">
-          <p class="feedback-copy">可以反馈网站问题，也可以写下期待的功能。提交后会进入网站反馈处理流程。</p>
-          <form id="feedbackForm">
-            <div class="feedback-field">
-              <label for="feedbackType">反馈类型</label>
-              <select id="feedbackType">
-                <option value="technical">网站问题</option>
-                <option value="other">功能建议</option>
-              </select>
-            </div>
-            <div class="feedback-field">
-              <label for="feedbackContent">反馈内容</label>
-              <textarea id="feedbackContent" maxlength="2000" required placeholder="请写下想反馈的内容（至少 10 个字）"></textarea>
-              <div class="feedback-count" id="feedbackCharCount">0/2000</div>
-            </div>
-            <div class="feedback-status" id="feedbackStatus" role="status" aria-live="polite"></div>
-            <div class="feedback-actions">
-              <button class="btn primary" id="feedbackSubmit" type="submit">提交反馈</button>
-              <a class="btn" href="/complaint" target="_blank" rel="noopener noreferrer" id="feedbackAllLink">网站总反馈</a>
-            </div>
-          </form>
-        </div>
-      </section>
-    </div>
   </div>
 
   <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
@@ -1282,17 +1248,6 @@
     var ignoreBatchBtn = document.getElementById("ignoreBatchBtn");
     var undoIgnoreBtn = document.getElementById("undoIgnoreBtn");
     var combinedReplyLink = document.getElementById("combinedReplyLink");
-    var feedbackNav = document.getElementById("feedbackNav");
-    var feedbackModal = document.getElementById("feedbackModal");
-    var feedbackModalBackdrop = document.getElementById("feedbackModalBackdrop");
-    var feedbackModalClose = document.getElementById("feedbackModalClose");
-    var feedbackForm = document.getElementById("feedbackForm");
-    var feedbackType = document.getElementById("feedbackType");
-    var feedbackContent = document.getElementById("feedbackContent");
-    var feedbackCharCount = document.getElementById("feedbackCharCount");
-    var feedbackStatus = document.getElementById("feedbackStatus");
-    var feedbackSubmit = document.getElementById("feedbackSubmit");
-    var feedbackAllLink = document.getElementById("feedbackAllLink");
 
     function trackAdminEvent(eventType, data) {
       if (!window._trackEvent) return;
@@ -2122,98 +2077,6 @@
       setFilterPanelOpen(!open);
     }
 
-    var feedbackPreviousFocus = null;
-
-    function showFeedbackStatus(kind, message) {
-      if (!feedbackStatus) return;
-      feedbackStatus.textContent = message;
-      feedbackStatus.className = "feedback-status show " + kind;
-    }
-
-    function setFeedbackModalOpen(open) {
-      if (!feedbackModal) return;
-      if (open) {
-        feedbackPreviousFocus = document.activeElement;
-        setFilterPanelOpen(false);
-        feedbackModal.classList.add("open");
-        feedbackModal.setAttribute("aria-hidden", "false");
-        if (feedbackNav) feedbackNav.setAttribute("aria-expanded", "true");
-        if (feedbackStatus) {
-          feedbackStatus.textContent = "";
-          feedbackStatus.className = "feedback-status";
-        }
-        trackAdminEvent("admin_modal", { modal: "idol_feedback", action: "open" });
-        window.setTimeout(function() {
-          if (feedbackContent) feedbackContent.focus();
-        }, 0);
-        return;
-      }
-
-      feedbackModal.classList.remove("open");
-      feedbackModal.setAttribute("aria-hidden", "true");
-      if (feedbackNav) feedbackNav.setAttribute("aria-expanded", "false");
-      trackAdminEvent("admin_modal", { modal: "idol_feedback", action: "close" });
-      if (feedbackPreviousFocus && typeof feedbackPreviousFocus.focus === "function") {
-        feedbackPreviousFocus.focus();
-      }
-      feedbackPreviousFocus = null;
-    }
-
-    async function submitFeedback(event) {
-      event.preventDefault();
-      var content = feedbackContent ? feedbackContent.value.trim() : "";
-      if (content.length < 10) {
-        showFeedbackStatus("error", "反馈内容不能少于 10 个字");
-        if (feedbackContent) feedbackContent.focus();
-        return;
-      }
-
-      var type = feedbackType ? feedbackType.value : "technical";
-      var requestContent = type === "other" ? "[功能建议] " + content : content;
-      if (requestContent.length > 2000) {
-        requestContent = requestContent.slice(0, 2000);
-      }
-      if (feedbackSubmit) {
-        feedbackSubmit.disabled = true;
-        feedbackSubmit.textContent = "提交中…";
-      }
-      showFeedbackStatus("success", "正在提交反馈…");
-
-      try {
-        var resp = await fetch("/api/complaint/submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: type, content: requestContent })
-        });
-        var data = {};
-        try { data = await resp.json(); } catch (err) { data = {}; }
-        if (!resp.ok) {
-          throw new Error(data.detail || "提交失败，请稍后重试");
-        }
-
-        showFeedbackStatus("success", "反馈已提交，受理编号：" + (data.ticket_id || "已生成"));
-        if (feedbackContent) feedbackContent.value = "";
-        if (feedbackCharCount) feedbackCharCount.textContent = "0/2000";
-        trackAdminEvent("admin_update", {
-          action: "submit_idol_feedback",
-          result: "success",
-          feedback_type: type
-        });
-      } catch (err) {
-        showFeedbackStatus("error", err.message || "提交失败，请稍后重试");
-        trackAdminEvent("admin_update", {
-          action: "submit_idol_feedback",
-          result: "failure",
-          feedback_type: type
-        });
-      } finally {
-        if (feedbackSubmit) {
-          feedbackSubmit.disabled = false;
-          feedbackSubmit.textContent = "提交反馈";
-        }
-      }
-    }
-
     function familyParam() {
       return selectedFamilies.indexOf("all") !== -1 ? "all" : selectedFamilies.join(",");
     }
@@ -2752,39 +2615,9 @@
         setFilterPanelOpen(false);
       });
     }
-    if (feedbackNav) {
-      feedbackNav.addEventListener("click", function() {
-        setFeedbackModalOpen(true);
-      });
-    }
-    if (feedbackModalClose) {
-      feedbackModalClose.addEventListener("click", function() {
-        setFeedbackModalOpen(false);
-      });
-    }
-    if (feedbackModalBackdrop) {
-      feedbackModalBackdrop.addEventListener("click", function() {
-        setFeedbackModalOpen(false);
-      });
-    }
-    if (feedbackForm) {
-      feedbackForm.addEventListener("submit", submitFeedback);
-    }
-    if (feedbackAllLink) {
-      feedbackAllLink.addEventListener("click", function() {
-        trackAdminEvent("click", { action: "open_total_feedback" });
-      });
-    }
-    if (feedbackContent && feedbackCharCount) {
-      feedbackContent.addEventListener("input", function() {
-        feedbackCharCount.textContent = String(feedbackContent.value.length) + "/2000";
-      });
-    }
     document.addEventListener("keydown", function(event) {
       if (event.key !== "Escape") return;
-      if (feedbackModal && feedbackModal.classList.contains("open")) {
-        setFeedbackModalOpen(false);
-      } else if (filterModal && filterModal.classList.contains("open")) {
+      if (filterModal && filterModal.classList.contains("open")) {
         setFilterPanelOpen(false);
       }
     });

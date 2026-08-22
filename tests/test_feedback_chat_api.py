@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
+
+from website import action_inbox
+from website import feedback_chat_api as chat_api
+
+
+class FeedbackChatApiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.patches = [
+            mock.patch.object(action_inbox.cfg, "ACTION_INBOX_ROOT", str(self.root / "inbox")),
+            mock.patch.object(action_inbox.cfg, "SHARED_STATE_OUTBOX_ROOT", str(self.root / "outbox")),
+            mock.patch.object(action_inbox.cfg, "SHARED_STATE_SYNC_ENABLED", False),
+            mock.patch.object(action_inbox.cfg, "SHARED_STATE_PEER", ""),
+            mock.patch.object(chat_api, "check_feedback_chat_limit"),
+        ]
+        for patcher in self.patches:
+            patcher.start()
+        self.request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
+
+    def tearDown(self) -> None:
+        for patcher in reversed(self.patches):
+            patcher.stop()
+        self.tmp.cleanup()
+
+    def test_identifier_history_and_admin_reply_round_trip(self) -> None:
+        identifier = "idol-test-2026"
+        sent = chat_api.send_message(
+            chat_api.ChatMessageRequest(identifier=identifier, content="网站筛选在手机上不方便"),
+            self.request,
+            chat_api.Response(),
+        )
+        self.assertEqual(sent["messages"][-1]["sender"], "visitor")
+        conversation_id = sent["conversation_id"]
+        self.assertNotIn(identifier, json.dumps(sent, ensure_ascii=False))
+
+        chat_api.reply_message(
+            chat_api.AdminReplyRequest(conversation_id=conversation_id, content="收到，我们会尽快处理"),
+            chat_api.Response(),
+            True,
+        )
+        history = chat_api.get_history(
+            chat_api.ChatIdentifierRequest(identifier=identifier),
+            self.request,
+            chat_api.Response(),
+        )
+        self.assertEqual([item["sender"] for item in history["messages"]], ["visitor", "support"])
+
+        conversations = chat_api.list_conversations(chat_api.Response(), True)
+        self.assertEqual(conversations["conversations"][0]["conversation_id"], conversation_id)
+        self.assertFalse(conversations["conversations"][0]["pending_reply"])
+
+        event_files = list((self.root / "inbox" / "events").glob("*.json"))
+        self.assertEqual(len(event_files), 2)
+        self.assertNotIn(identifier, event_files[0].read_text(encoding="utf-8"))
+
+    def test_identifier_and_content_validation(self) -> None:
+        with self.assertRaises(ValueError):
+            chat_api.ChatIdentifierRequest(identifier="abc")
+        with self.assertRaises(ValueError):
+            chat_api.ChatMessageRequest(identifier="valid-code", content=" ")
+        with self.assertRaises(ValueError):
+            chat_api.AdminConversationRequest(conversation_id="not-a-hash")
+
+
+if __name__ == "__main__":
+    unittest.main()

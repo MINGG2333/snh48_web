@@ -18,7 +18,8 @@ from website.shared_runtime_state import SharedStatePeerError, node_id, node_lab
 
 EVENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 REQUEST_TYPES = {"complaint", "email_request"}
-EVENT_TYPES = REQUEST_TYPES | {"status_update"}
+CHAT_EVENT_TYPES = {"feedback_message", "feedback_reply"}
+EVENT_TYPES = REQUEST_TYPES | CHAT_EVENT_TYPES | {"status_update"}
 VALID_STATUSES = {"pending", "processing", "resolved", "rejected"}
 
 
@@ -141,7 +142,7 @@ def record_request(
     event_id: str | None = None,
     created_at: str | None = None,
 ) -> dict[str, Any]:
-    if event_type not in REQUEST_TYPES:
+    if event_type not in REQUEST_TYPES | CHAT_EVENT_TYPES:
         raise InboxError("unsupported inbox request type")
     eid = event_id or f"REQ-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:12]}"
     event = {
@@ -260,3 +261,26 @@ def list_requests() -> list[dict[str, Any]]:
         output.append(item)
     output.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("event_id") or "")), reverse=True)
     return output
+
+
+def list_chat_events(conversation_id: str | None = None) -> list[dict[str, Any]]:
+    """Return immutable customer-service chat events, oldest first."""
+    events: list[dict[str, Any]] = []
+    root = _events_dir()
+    if not root.exists():
+        return events
+    for path in root.glob("*.json"):
+        try:
+            event = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(event.get("event_type") or "") not in CHAT_EVENT_TYPES:
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if conversation_id and str(payload.get("conversation_id") or "") != conversation_id:
+            continue
+        events.append(event)
+    events.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("event_id") or "")))
+    return events

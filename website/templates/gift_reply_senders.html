@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ site_title }} · 房间内回礼情况</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <meta name="robots" content="noindex, nofollow">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -291,6 +292,153 @@
       border-top: 1px solid var(--line);
     }
     .collapse-btn { min-width: 150px; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .support-chat-nav {
+      position: fixed;
+      right: 18px;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      z-index: 30;
+      width: 52px;
+      height: 52px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(64, 184, 168, 0.62);
+      border-radius: 50%;
+      background: rgba(64, 184, 168, 0.16);
+      color: #9de4d8;
+      font-size: 21px;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+    }
+    .support-chat-nav:hover,
+    .support-chat-nav:focus-visible {
+      background: rgba(64, 184, 168, 0.28);
+      color: #c6fff5;
+      outline: none;
+    }
+    .support-chat-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 18px;
+      pointer-events: none;
+    }
+    .support-chat-modal.open { display: flex; pointer-events: auto; }
+    .support-chat-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 8, 13, 0.48);
+    }
+    .support-chat-card {
+      position: relative;
+      z-index: 1;
+      width: min(410px, 100%);
+      height: min(660px, calc(100dvh - 36px));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+    }
+    .support-chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .support-chat-title { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 750; }
+    .support-chat-title i { color: var(--teal); }
+    .support-chat-close {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+    }
+    .support-chat-close:hover,
+    .support-chat-close:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .support-chat-setup,
+    .support-chat-conversation { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+    .support-chat-setup { justify-content: center; gap: 12px; padding: 24px; }
+    .support-chat-setup.hidden,
+    .support-chat-conversation.hidden { display: none; }
+    .support-chat-copy { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .support-chat-field { display: grid; gap: 6px; }
+    .support-chat-field label { color: var(--muted); font-size: 12px; }
+    .support-chat-field input,
+    .support-chat-composer textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      outline: none;
+    }
+    .support-chat-field input { min-height: 42px; padding: 0 11px; }
+    .support-chat-field input:focus,
+    .support-chat-composer textarea:focus { border-color: var(--teal); }
+    .support-chat-setup-actions { display: flex; align-items: center; gap: 8px; }
+    .support-chat-setup-actions .btn { flex: 1; }
+    .support-chat-messages {
+      min-height: 0;
+      flex: 1;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+    }
+    .support-chat-empty { margin: auto 0; color: var(--muted); font-size: 13px; text-align: center; }
+    .support-chat-message { display: flex; flex-direction: column; gap: 3px; max-width: 84%; }
+    .support-chat-message.visitor { align-self: flex-end; align-items: flex-end; }
+    .support-chat-message.support { align-self: flex-start; align-items: flex-start; }
+    .support-chat-bubble {
+      padding: 9px 11px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .support-chat-message.visitor .support-chat-bubble { background: rgba(64, 184, 168, 0.2); color: #d5fff8; border-bottom-right-radius: 4px; }
+    .support-chat-message.support .support-chat-bubble { background: var(--panel-2); color: var(--text); border-bottom-left-radius: 4px; }
+    .support-chat-time { color: var(--faint); font-size: 10px; }
+    .support-chat-composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+    .support-chat-composer textarea { min-height: 42px; max-height: 120px; padding: 9px 10px; resize: vertical; line-height: 1.45; }
+    .support-chat-send { flex: 0 0 auto; min-width: 78px; min-height: 42px; }
+    .support-chat-status { min-height: 20px; padding: 0 12px 8px; color: var(--muted); font-size: 12px; }
+    .support-chat-status.error { color: var(--red); }
+    .support-chat-footer { display: flex; justify-content: space-between; gap: 8px; padding: 0 12px 12px; }
+    .support-chat-footer button,
+    .support-chat-footer a { border: 0; background: transparent; color: var(--faint); font-size: 11px; text-decoration: none; }
+    .support-chat-footer button:hover,
+    .support-chat-footer button:focus-visible,
+    .support-chat-footer a:hover,
+    .support-chat-footer a:focus-visible { color: var(--teal); outline: none; }
     .empty { display: none; color: var(--muted); text-align: center; padding: 52px 12px; }
     .empty.show { display: block; }
     .btn:disabled { cursor: not-allowed; opacity: 0.45; }
@@ -312,6 +460,8 @@
       .reply-detail { grid-column: 1 / -1; grid-row: 3; }
       .result-head { align-items: flex-start; flex-direction: column; }
       .result-actions { width: 100%; justify-content: space-between; }
+      .support-chat-modal { align-items: flex-end; justify-content: center; padding: 12px; }
+      .support-chat-card { height: min(680px, calc(100dvh - 24px)); }
     }
     @media (prefers-reduced-motion: reduce) {
       .sender-card.return-highlight summary {
@@ -378,6 +528,44 @@
       <section class="sender-list" id="senderList" aria-label="按送礼人整理的礼物历史"></section>
       <div class="empty" id="emptyState">当前筛选条件下没有送礼人</div>
     </main>
+
+    <button class="support-chat-nav" id="supportChatNav" type="button" aria-haspopup="dialog" aria-expanded="false" title="客服反馈">
+      <i class="fas fa-headset" aria-hidden="true"></i>
+      <span class="sr-only">客服反馈</span>
+    </button>
+
+    <div class="support-chat-modal" id="supportChatModal" aria-hidden="true">
+      <div class="support-chat-backdrop" id="supportChatBackdrop"></div>
+      <section class="support-chat-card" role="dialog" aria-modal="true" aria-labelledby="supportChatTitle">
+        <header class="support-chat-header">
+          <div class="support-chat-title" id="supportChatTitle"><i class="fas fa-headset" aria-hidden="true"></i><span>客服反馈</span></div>
+          <button class="support-chat-close" id="supportChatClose" type="button" aria-label="关闭客服窗口">×</button>
+        </header>
+        <div class="support-chat-setup" id="supportChatSetup">
+          <p class="support-chat-copy">设置一个只有你知道的唯一识别码，就可以在以后查看这段聊天记录。识别码请妥善保存，忘记后无法找回原记录。</p>
+          <div class="support-chat-field">
+            <label for="supportChatIdentifier">唯一识别码</label>
+            <input id="supportChatIdentifier" type="text" minlength="4" maxlength="64" autocomplete="off" placeholder="至少 4 个字符">
+          </div>
+          <div class="support-chat-setup-actions">
+            <button class="btn primary" id="supportChatStart" type="button">进入聊天</button>
+          </div>
+          <div class="support-chat-status" id="supportChatSetupStatus" role="status" aria-live="polite"></div>
+        </div>
+        <div class="support-chat-conversation hidden" id="supportChatConversation">
+          <div class="support-chat-messages" id="supportChatMessages" aria-live="polite"></div>
+          <div class="support-chat-status" id="supportChatStatus" role="status" aria-live="polite"></div>
+          <form class="support-chat-composer" id="supportChatForm">
+            <textarea id="supportChatInput" maxlength="2000" rows="2" placeholder="写下你的消息"></textarea>
+            <button class="btn primary support-chat-send" id="supportChatSend" type="submit"><i class="fas fa-paper-plane" aria-hidden="true"></i><span>发送</span></button>
+          </form>
+          <div class="support-chat-footer">
+            <button type="button" id="supportChatChange">更换识别码</button>
+            <a href="/complaint" target="_blank" rel="noopener noreferrer">网站总反馈</a>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 
   <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
@@ -412,10 +600,203 @@
     var emptyState = document.getElementById("emptyState");
     var statsToggle = document.getElementById("statsToggle");
     var updatePill = document.getElementById("updatePill");
+    var supportChatNav = document.getElementById("supportChatNav");
+    var supportChatModal = document.getElementById("supportChatModal");
+    var supportChatBackdrop = document.getElementById("supportChatBackdrop");
+    var supportChatClose = document.getElementById("supportChatClose");
+    var supportChatSetup = document.getElementById("supportChatSetup");
+    var supportChatConversation = document.getElementById("supportChatConversation");
+    var supportChatIdentifier = document.getElementById("supportChatIdentifier");
+    var supportChatStart = document.getElementById("supportChatStart");
+    var supportChatSetupStatus = document.getElementById("supportChatSetupStatus");
+    var supportChatMessages = document.getElementById("supportChatMessages");
+    var supportChatStatus = document.getElementById("supportChatStatus");
+    var supportChatForm = document.getElementById("supportChatForm");
+    var supportChatInput = document.getElementById("supportChatInput");
+    var supportChatSend = document.getElementById("supportChatSend");
+    var supportChatChange = document.getElementById("supportChatChange");
+    var supportChatPollTimer = null;
+    var currentSupportChatIdentifier = "";
+    var supportChatPreviousFocus = null;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
       window._trackEvent(eventType, Object.assign({ area: "gift_reply_senders" }, data || {}));
+    }
+
+    function chatErrorMessage(data, fallback) {
+      var detail = data && data.detail;
+      if (Array.isArray(detail)) {
+        return detail.map(function(item) { return item.msg || ""; }).filter(Boolean).join("；") || fallback;
+      }
+      return typeof detail === "string" && detail ? detail : fallback;
+    }
+
+    function setChatStatus(node, message, isError) {
+      if (!node) return;
+      node.textContent = message || "";
+      node.classList.toggle("error", Boolean(isError));
+    }
+
+    function setChatModalOpen(open) {
+      if (!supportChatModal) return;
+      if (open) {
+        supportChatPreviousFocus = document.activeElement;
+        supportChatModal.classList.add("open");
+        supportChatModal.setAttribute("aria-hidden", "false");
+        supportChatNav.setAttribute("aria-expanded", "true");
+        if (supportChatIdentifier) {
+          try {
+            supportChatIdentifier.value = window.localStorage.getItem("snh48_feedback_chat_id") || "";
+          } catch (error) {}
+        }
+        window.setTimeout(function() {
+          if (currentSupportChatIdentifier) {
+            if (supportChatInput) supportChatInput.focus();
+          } else if (supportChatIdentifier) {
+            supportChatIdentifier.focus();
+          }
+        }, 0);
+        track("admin_modal", { modal: "feedback_chat", action: "open" });
+        return;
+      }
+      supportChatModal.classList.remove("open");
+      supportChatModal.setAttribute("aria-hidden", "true");
+      supportChatNav.setAttribute("aria-expanded", "false");
+      if (supportChatPollTimer) {
+        window.clearInterval(supportChatPollTimer);
+        supportChatPollTimer = null;
+      }
+      if (supportChatPreviousFocus && typeof supportChatPreviousFocus.focus === "function") supportChatPreviousFocus.focus();
+      supportChatPreviousFocus = null;
+      track("admin_modal", { modal: "feedback_chat", action: "close" });
+    }
+
+    function renderSupportChatMessages(messages) {
+      supportChatMessages.replaceChildren();
+      if (!messages.length) {
+        var empty = document.createElement("div");
+        empty.className = "support-chat-empty";
+        empty.textContent = "还没有消息，可以先告诉我们遇到的问题。";
+        supportChatMessages.appendChild(empty);
+        return;
+      }
+      messages.forEach(function(message) {
+        var row = document.createElement("div");
+        row.className = "support-chat-message " + (message.sender === "support" ? "support" : "visitor");
+        var bubble = document.createElement("div");
+        bubble.className = "support-chat-bubble";
+        bubble.textContent = message.content || "";
+        var time = document.createElement("div");
+        time.className = "support-chat-time";
+        time.textContent = message.created_at || "";
+        row.appendChild(bubble);
+        row.appendChild(time);
+        supportChatMessages.appendChild(row);
+      });
+      supportChatMessages.scrollTop = supportChatMessages.scrollHeight;
+    }
+
+    async function loadSupportChatHistory(showLoading) {
+      if (!currentSupportChatIdentifier) return;
+      if (showLoading) setChatStatus(supportChatStatus, "正在加载聊天记录…", false);
+      try {
+        var response = await fetch("/api/feedback-chat/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: currentSupportChatIdentifier }),
+          cache: "no-store"
+        });
+        var data = await response.json().catch(function() { return {}; });
+        if (!response.ok) throw new Error(chatErrorMessage(data, "聊天记录加载失败"));
+        renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
+        setChatStatus(supportChatStatus, "", false);
+      } catch (error) {
+        setChatStatus(supportChatStatus, error.message || "聊天记录加载失败", true);
+      }
+    }
+
+    async function enterSupportChat() {
+      var identifier = supportChatIdentifier.value.trim();
+      if (identifier.length < 4 || identifier.length > 64 || /\s/.test(identifier)) {
+        setChatStatus(supportChatSetupStatus, "识别码需为 4-64 个字符且不能包含空格", true);
+        supportChatIdentifier.focus();
+        return;
+      }
+      supportChatStart.disabled = true;
+      setChatStatus(supportChatSetupStatus, "正在打开聊天…", false);
+      currentSupportChatIdentifier = identifier;
+      try {
+        window.localStorage.setItem("snh48_feedback_chat_id", identifier);
+      } catch (error) {}
+      try {
+        var response = await fetch("/api/feedback-chat/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: identifier }),
+          cache: "no-store"
+        });
+        var data = await response.json().catch(function() { return {}; });
+        if (!response.ok) throw new Error(chatErrorMessage(data, "聊天记录加载失败"));
+        supportChatSetup.classList.add("hidden");
+        supportChatConversation.classList.remove("hidden");
+        renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
+        setChatStatus(supportChatSetupStatus, "", false);
+        supportChatPollTimer = window.setInterval(function() { loadSupportChatHistory(false); }, 20000);
+        if (supportChatInput) supportChatInput.focus();
+        track("admin_update", { action: "open_feedback_chat", result: "success" });
+      } catch (error) {
+        currentSupportChatIdentifier = "";
+        setChatStatus(supportChatSetupStatus, error.message || "聊天记录加载失败", true);
+        track("admin_update", { action: "open_feedback_chat", result: "failure" });
+      } finally {
+        supportChatStart.disabled = false;
+      }
+    }
+
+    async function submitSupportChatMessage(event) {
+      event.preventDefault();
+      var content = supportChatInput.value.trim();
+      if (!currentSupportChatIdentifier) return;
+      if (!content) {
+        setChatStatus(supportChatStatus, "消息不能为空", true);
+        supportChatInput.focus();
+        return;
+      }
+      supportChatSend.disabled = true;
+      setChatStatus(supportChatStatus, "正在发送…", false);
+      try {
+        var response = await fetch("/api/feedback-chat/message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: currentSupportChatIdentifier, content: content }),
+          cache: "no-store"
+        });
+        var data = await response.json().catch(function() { return {}; });
+        if (!response.ok) throw new Error(chatErrorMessage(data, "发送失败，请稍后重试"));
+        supportChatInput.value = "";
+        renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
+        setChatStatus(supportChatStatus, data.replication_pending ? "已发送，正在同步客服记录…" : "", false);
+        track("admin_update", { action: "send_feedback_chat_message", result: "success" });
+      } catch (error) {
+        setChatStatus(supportChatStatus, error.message || "发送失败，请稍后重试", true);
+        track("admin_update", { action: "send_feedback_chat_message", result: "failure" });
+      } finally {
+        supportChatSend.disabled = false;
+      }
+    }
+
+    function changeSupportChatIdentifier() {
+      currentSupportChatIdentifier = "";
+      if (supportChatPollTimer) {
+        window.clearInterval(supportChatPollTimer);
+        supportChatPollTimer = null;
+      }
+      supportChatConversation.classList.add("hidden");
+      supportChatSetup.classList.remove("hidden");
+      setChatStatus(supportChatStatus, "", false);
+      setChatStatus(supportChatSetupStatus, "", false);
+      supportChatIdentifier.focus();
     }
 
     function setLoading(value) {
@@ -914,6 +1295,18 @@
       track("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
     updatePill.addEventListener("click", loadLatestData);
+    supportChatNav.addEventListener("click", function() { setChatModalOpen(true); });
+    supportChatClose.addEventListener("click", function() { setChatModalOpen(false); });
+    supportChatBackdrop.addEventListener("click", function() { setChatModalOpen(false); });
+    supportChatStart.addEventListener("click", enterSupportChat);
+    supportChatIdentifier.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") enterSupportChat();
+    });
+    supportChatForm.addEventListener("submit", submitSupportChatMessage);
+    supportChatChange.addEventListener("click", changeSupportChatIdentifier);
+    document.addEventListener("keydown", function(event) {
+      if (event.key === "Escape" && supportChatModal.classList.contains("open")) setChatModalOpen(false);
+    });
     Array.prototype.forEach.call(document.querySelectorAll(".top-actions a"), function(link) {
       link.addEventListener("click", function() {
         track("click", { action: link.getAttribute("href") === "/room" ? "back_to_room" : "open_gift_details" });

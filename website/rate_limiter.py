@@ -124,6 +124,12 @@ complaint_limiter = SlidingWindowLimiter(
     window_seconds=cfg.COMPLAINT_WINDOW_SECONDS,
 )
 
+# Customer-service chat message/history requests
+feedback_chat_limiter = SlidingWindowLimiter(
+    max_requests=cfg.FEEDBACK_CHAT_MAX_PER_WINDOW,
+    window_seconds=cfg.FEEDBACK_CHAT_WINDOW_SECONDS,
+)
+
 # Memories submission anti-spam
 memories_submit_limiter = SlidingWindowLimiter(
     max_requests=cfg.MEMORIES_SUBMIT_MAX_PER_WINDOW,
@@ -501,6 +507,16 @@ def check_complaint_limit(ip: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="投诉提交过于频繁，请稍后再试",
+        )
+
+
+def check_feedback_chat_limit(ip: str) -> None:
+    """Rate-limit public customer-service chat traffic."""
+    allowed, _ = feedback_chat_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="客服消息过于频繁，请稍后再试",
         )
 
 

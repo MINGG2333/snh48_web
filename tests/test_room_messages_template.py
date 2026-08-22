@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RoomMessagesTemplateTests(unittest.TestCase):
-    def test_room_controls_cover_mobile_filter_and_feedback_workflow(self) -> None:
+    def test_room_controls_keep_mobile_filter_and_gift_reply_visibility(self) -> None:
         template = (ROOT / "website/templates/room_messages.html").read_text(encoding="utf-8")
 
         self.assertNotIn('刷新 <strong id="refreshSeconds">', template)
@@ -17,10 +17,18 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn("-webkit-overflow-scrolling: touch;", template)
         self.assertIn('unrepliedPanel.classList.toggle("visible", shouldShow)', template)
         self.assertIn('function isGiftReplyFamilyView()', template)
-        self.assertIn('id="feedbackNav"', template)
-        self.assertIn("background: rgba(98, 168, 255, 0.14);", template)
-        self.assertIn('id="feedbackForm"', template)
-        self.assertIn('fetch("/api/complaint/submit"', template)
+        self.assertNotIn('id="feedbackNav"', template)
+        self.assertNotIn('id="feedbackForm"', template)
+
+    def test_gift_senders_contains_customer_service_chat(self) -> None:
+        template = (ROOT / "website/templates/gift_reply_senders.html").read_text(encoding="utf-8")
+
+        self.assertIn('id="supportChatNav"', template)
+        self.assertIn('class="fas fa-headset"', template)
+        self.assertIn('id="supportChatModal"', template)
+        self.assertIn('id="supportChatIdentifier"', template)
+        self.assertIn('fetch("/api/feedback-chat/history"', template)
+        self.assertIn('fetch("/api/feedback-chat/message"', template)
         self.assertIn('href="/complaint"', template)
 
 

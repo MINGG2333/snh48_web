@@ -256,7 +256,7 @@ node script/obfuscate_js.cjs
 - 详细契约、环境变量、迁移、历史恢复和巡检命令见 `doc/shared_runtime_state.md`。
 - 腾讯云为唯一权威提交节点；阿里云是可接受操作的副本节点。首页背景词、房间忽略状态、计分礼物业务核实和记忆页都采用操作转发，不做对等整文件合并。
 - 每次提交产生 gzip 不可变历史快照；复制失败进入 `website/data/shared_state_outbox/`，网站进程内线程自动重试，不新增常驻服务。
-- 投诉和 QA 邮箱请求写入 `website/data/action_inbox/events/` 的不可变事件。`/ob` 显示来源服务器并用状态事件处理待办。
+- 投诉、QA 邮箱请求和客服聊天消息写入 `website/data/action_inbox/events/` 的不可变事件。客服识别码只保存 SHA-256 会话编号；`/ob` 显示来源服务器并提供客服会话回复，事件通过现有双服务器待处理箱复制。
 
 ### 时光轴与分类筛选
 
