@@ -213,7 +213,15 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('datasetUpdateTimer = window.setInterval(checkDatasetUpdates, 15000)', template)
         self.assertIn('await loadSelectedAccount(true, true)', template)
         self.assertIn('"有新记录，点击查看最新"', template)
-        self.assertIn('updatePill.addEventListener("click", loadLatestRecords)', template)
+        self.assertIn('updatePill.classList.toggle("has-update", datasetUpdateAvailable)', template)
+        self.assertIn('function jumpToLatestLoadedRecord()', template)
+        self.assertIn('chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: "smooth" })', template)
+        self.assertIn('if (datasetUpdateAvailable) {', template)
+        self.assertIn('updatePill.addEventListener("click", handleUpdatePillClick)', template)
+        self.assertIn('background: #ededed', template)
+        self.assertIn('background: var(--green)', template)
+        self.assertIn('border-top: 1px solid #e4e6e8', template)
+        self.assertNotIn('border: 1px solid rgba(98, 168, 255, 0.28)', template)
         self.assertIn('addQuestionStatus(meta, record)', template)
         self.assertIn('statusButton.dataset.target = "answer-" + safeId(record.question_id)', template)
         self.assertIn('statusButton.textContent = "已回复 · 查看回复"', template)
@@ -233,6 +241,7 @@ class FlipCardsTemplateTests(unittest.TestCase):
             "toggle_filters",
             "reset_filters",
             "load_latest",
+            "jump_latest",
             "open_official_media",
             "jump_to_flip_question",
             "jump_to_flip_answer",

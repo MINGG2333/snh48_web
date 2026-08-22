@@ -7,20 +7,20 @@
   <title>翻牌记录 · {{ site_title }}</title>
   <style>
     :root {
-      --bg: #0d1117;
-      --panel: #151b23;
-      --panel-2: #1b2330;
-      --panel-3: #222c3a;
-      --line: #2d3848;
-      --text: #e6edf3;
-      --muted: #98a6b7;
-      --faint: #667384;
-      --teal: #40b8a8;
-      --green: #88d66c;
-      --gold: #f0b84b;
-      --red: #e36f6f;
-      --blue: #62a8ff;
-      --ink: #0a0f15;
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --panel-2: #f5f5f5;
+      --panel-3: #e8e8e8;
+      --line: #d9d9d9;
+      --text: #1f2328;
+      --muted: #667085;
+      --faint: #667085;
+      --teal: #078645;
+      --green: #95ec69;
+      --gold: #9a6700;
+      --red: #d92d20;
+      --blue: #1677c8;
+      --ink: #ffffff;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -57,6 +57,7 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 28px;
+      box-shadow: 0 16px 44px rgba(31, 35, 40, .1);
     }
 
     .login-box h1 { font-size: 20px; margin-bottom: 8px; }
@@ -97,7 +98,7 @@
 
     .login-error.show { display: block; }
     .login-error.status { color: var(--teal); }
-    .login-error.success { color: var(--green); }
+    .login-error.success { color: var(--teal); }
 
     .page {
       display: none;
@@ -110,7 +111,7 @@
     .topbar {
       flex: 0 0 auto;
       border-bottom: 1px solid var(--line);
-      background: rgba(13, 17, 23, 0.96);
+      background: rgba(255, 255, 255, 0.96);
       backdrop-filter: blur(10px);
       z-index: 5;
     }
@@ -206,7 +207,7 @@
     }
 
     .filter-panel summary::-webkit-details-marker { display: none; }
-    .filter-panel summary:hover { background: rgba(255, 255, 255, .025); }
+    .filter-panel summary:hover { background: rgba(31, 35, 40, .035); }
     .filter-panel[open] summary { border-bottom: 1px solid var(--line); }
 
     .filter-title {
@@ -271,7 +272,7 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
-      background: #111820;
+      background: #ededed;
     }
 
     .chat-scroll {
@@ -289,18 +290,22 @@
       z-index: 10;
       display: none;
       transform: translateX(-50%);
-      border: 1px solid var(--teal);
+      border: 1px solid #d5d7da;
       border-radius: 999px;
       background: var(--panel);
-      color: var(--teal);
+      color: #576b95;
       padding: 8px 14px;
       font-size: 13px;
       font-weight: 720;
       white-space: nowrap;
-      box-shadow: 0 8px 22px rgba(0, 0, 0, .35);
+      box-shadow: 0 5px 18px rgba(31, 35, 40, .16);
     }
 
     .update-pill.show { display: block; }
+    .update-pill.has-update {
+      border-color: #b9e4c9;
+      color: #078645;
+    }
     .update-pill:disabled { cursor: wait; opacity: .72; }
 
     .date-divider {
@@ -309,8 +314,8 @@
       margin: 18px auto 12px;
       padding: 4px 10px;
       border-radius: 999px;
-      background: var(--panel-3);
-      color: var(--muted);
+      background: #6b7280;
+      color: #ffffff;
       font-size: 12px;
       line-height: 1.3;
     }
@@ -328,7 +333,7 @@
       width: 34px;
       height: 34px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #6aa8ff, #a88af5);
+      background: #576b95;
       color: #fff;
       display: flex;
       align-items: center;
@@ -341,23 +346,43 @@
 
     .bubble {
       max-width: min(78%, 560px);
-      border-radius: 12px;
+      position: relative;
+      border-radius: 4px;
       padding: 10px 14px;
       font-size: 14px;
       word-break: break-word;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
+      box-shadow: 0 1px 2px rgba(31, 35, 40, .08);
     }
 
     .self .bubble {
       background: var(--green);
-      color: #10200c;
-      border-bottom-right-radius: 4px;
+      color: #1f2328;
     }
 
     .other .bubble {
       background: var(--panel);
       color: var(--text);
-      border-bottom-left-radius: 4px;
+    }
+
+    .self .bubble::after,
+    .other .bubble::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+    }
+
+    .self .bubble::after {
+      right: -7px;
+      border-left: 8px solid var(--green);
+    }
+
+    .other .bubble::before {
+      left: -7px;
+      border-right: 8px solid var(--panel);
     }
 
     .meta {
@@ -378,13 +403,13 @@
       color: var(--muted);
     }
 
-    .tag.cost { background: #332812; color: var(--gold); }
-    .tag.privacy { background: #142838; color: #8dc8ff; }
-    .tag.kind { background: #123128; color: #76dec9; }
-    .tag.status-answered { background: #17345d; color: #9ac7ff; }
-    .tag.status-pending { background: #3b2d10; color: #ffd36d; }
-    .tag.status-processing { background: #2d274b; color: #c9b6ff; }
-    .tag.status-refunded { background: #451d24; color: #ffadb5; }
+    .tag.cost { background: #fff1c7; color: var(--gold); }
+    .tag.privacy { background: #eaf4ff; color: #2368a2; }
+    .tag.kind { background: #e5f6f0; color: #167c69; }
+    .tag.status-answered { background: #e8f2ff; color: #2266a3; }
+    .tag.status-pending { background: #fff3cf; color: #8a5a00; }
+    .tag.status-processing { background: #f0ebff; color: #6941a5; }
+    .tag.status-refunded { background: #ffebed; color: #b42318; }
     .tag.status-other { background: var(--panel-3); color: var(--muted); }
     .status-link {
       border: 0;
@@ -393,22 +418,23 @@
     }
     .status-link:hover { filter: brightness(1.2); text-decoration: underline; }
     .time { color: var(--faint); font-size: 11px; }
+    .self .time { color: #4f604b; }
     .text { white-space: pre-wrap; }
 
     .quote {
       width: 100%;
       margin-bottom: 8px;
-      padding: 7px 9px;
+      padding: 7px 9px 7px 10px;
       border: 0;
-      border-left: 3px solid var(--faint);
-      border-radius: 6px;
-      background: var(--panel-2);
+      border-left: 3px solid #b5bac1;
+      border-radius: 2px;
+      background: #f3f3f3;
       color: var(--muted);
       text-align: left;
     }
 
-    .quote:hover { border-left-color: var(--teal); }
-    .quote-title { display: block; font-size: 11px; color: var(--muted); }
+    .quote:hover { border-left-color: #576b95; background: #eeeeee; }
+    .quote-title { display: block; font-size: 11px; color: #576b95; font-weight: 700; }
     .quote-time { display: block; margin-top: 2px; font-size: 11px; color: var(--faint); }
     .quote-text {
       display: -webkit-box;
@@ -439,24 +465,22 @@
 
     .transcript {
       width: min(520px, 100%);
-      margin-top: 8px;
-      border: 1px solid rgba(98, 168, 255, 0.28);
-      border-radius: 8px;
-      background: rgba(98, 168, 255, 0.08);
-      padding: 8px 10px;
+      margin-top: 10px;
+      border-top: 1px solid #e4e6e8;
+      padding-top: 9px;
     }
 
     .transcript-label {
-      color: var(--blue);
-      font-size: 12px;
-      font-weight: 720;
-      margin-bottom: 4px;
+      color: #576b95;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 5px;
     }
 
     .transcript-text {
-      color: var(--text);
+      color: #4b5563;
       font-size: 13px;
-      line-height: 1.55;
+      line-height: 1.7;
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -487,7 +511,7 @@
       align-items: center;
       justify-content: center;
       padding: 18px;
-      background: rgba(5, 9, 13, .78);
+      background: rgba(31, 35, 40, .42);
     }
 
     .account-dialog {
@@ -499,7 +523,7 @@
       border-radius: 8px;
       background: var(--panel);
       padding: 22px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+      box-shadow: 0 20px 60px rgba(31, 35, 40, .22);
     }
 
     .account-dialog h2 { font-size: 18px; padding-right: 36px; }
@@ -543,7 +567,7 @@
     }
 
     .account-state.error { color: var(--red); }
-    .account-state.success { color: var(--green); }
+    .account-state.success { color: var(--teal); }
 
     .account-form { display: grid; gap: 12px; }
 
@@ -1346,6 +1370,7 @@
       const show = page.classList.contains("ready") && (datasetUpdateAvailable || !isNearBottom());
       updatePill.textContent = datasetUpdateAvailable ? "有新记录，点击查看最新" : "跳到最新";
       updatePill.classList.toggle("show", show);
+      updatePill.classList.toggle("has-update", datasetUpdateAvailable);
     }
 
     function stopDatasetUpdateTimer() {
@@ -1399,6 +1424,19 @@
         resetDatasetUpdateTimer();
         if (!failed) syncUpdatePill();
       }
+    }
+
+    function jumpToLatestLoadedRecord() {
+      chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: "smooth" });
+      track("admin_filter", filterTrackPayload("jump_latest"));
+    }
+
+    function handleUpdatePillClick() {
+      if (datasetUpdateAvailable) {
+        loadLatestRecords();
+        return;
+      }
+      jumpToLatestLoadedRecord();
     }
 
     async function loadApp() {
@@ -1742,7 +1780,7 @@
       });
     });
 
-    updatePill.addEventListener("click", loadLatestRecords);
+    updatePill.addEventListener("click", handleUpdatePillClick);
     chatScroll.addEventListener("scroll", syncUpdatePill, { passive: true });
 
     logoutBtn.addEventListener("click", async function () {
