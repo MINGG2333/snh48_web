@@ -8,7 +8,7 @@
 const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
   event: 'event', external: 'external', live: 'event',
-  公演: 'show', 外务: 'external', 见面会: 'event', 其他: 'event',
+  公演: 'show', Live: 'event', 外务: 'external', 见面会: 'event', 其他: 'event',
   里程碑: 'milestone', 日常: 'event', 微博: 'weibo', 抖音: 'douyin',
   weibo: 'weibo', douyin: 'douyin',
 };

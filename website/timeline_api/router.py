@@ -496,6 +496,7 @@ def get_live_danmu(live_id: str = Query(..., min_length=1)):
 
 TYPE_LABEL_MAP = {
     "公演": "公演",
+    "Live": "Live",
     "外务": "外务",
     "见面会": "见面会",
     "里程碑": "里程碑",
@@ -601,6 +602,7 @@ def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
                 if not icon:
                     icon = {
                         "公演": "fa-music",
+                        "Live": "fa-microphone",
                         "外务": "fa-plane",
                         "见面会": "fa-handshake",
                         "里程碑": "fa-star",

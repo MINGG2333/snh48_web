@@ -25,6 +25,7 @@ class TimelineApiContractTests(unittest.TestCase):
             writer.writeheader()
             writer.writerow({"date": "2026-07-30", "type": "日常", "name": "微博状态", "event_type": "日常"})
             writer.writerow({"date": "2026-07-31", "time": "19:13", "type": "里程碑", "name": "出道300天纪念", "event_type": "里程碑"})
+            writer.writerow({"date": "2026-11-06", "type": "Live", "name": "Mini Live", "event_type": "行程"})
 
     def test_daily_rows_are_not_exposed_and_csv_milestone_suppresses_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -35,7 +36,10 @@ class TimelineApiContractTests(unittest.TestCase):
                     router, "milestone_date", return_value=router.date(2026, 7, 31)
                 ):
                     records = router.read_schedule(on_date=router.date(2026, 8, 22))
-            self.assertEqual([record["title"] for record in records], ["出道300天纪念"])
+            self.assertEqual([record["title"] for record in records], ["出道300天纪念", "Mini Live"])
+            mini_live = records[1]
+            self.assertEqual(mini_live["typeLabel"], "Live")
+            self.assertEqual(mini_live["timelineCategory"], "schedule")
 
 
 if __name__ == "__main__":
