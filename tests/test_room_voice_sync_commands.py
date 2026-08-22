@@ -63,13 +63,24 @@ class RoomVoiceSyncCommandTests(unittest.TestCase):
         deploy_root = MODULE_PATH.parent
         for filename in ("sync-from-tencent.sh", "sync-to-aliyun.sh"):
             script = (deploy_root / filename).read_text(encoding="utf-8")
+            audio_at = script.index("flip_data/audio done")
+            video_at = script.index("flip_data/video done")
             payload_at = script.index("--delay-updates --exclude='/accounts.json'")
             manifest_at = script.index("accounts.json\"", payload_at)
             commit_at = script.index("mv -f", manifest_at)
             cleanup_at = script.index("--delete-delay --ignore-existing", commit_at)
+            self.assertLess(audio_at, payload_at, filename)
+            self.assertLess(video_at, payload_at, filename)
             self.assertLess(payload_at, manifest_at, filename)
             self.assertLess(manifest_at, commit_at, filename)
             self.assertLess(commit_at, cleanup_at, filename)
+
+        data_paths = [item["path"] for item in deploy.BUILTIN_TARGETS["tencent"]["data_paths"]]
+        audio_at = data_paths.index("/home/snh48-fan-hub/flip_data/audio")
+        video_at = data_paths.index("/home/snh48-fan-hub/flip_data/video")
+        web_at = data_paths.index("/home/snh48-fan-hub/flip_data/web")
+        self.assertLess(audio_at, web_at)
+        self.assertLess(video_at, web_at)
 
     def test_named_manifest_sync_uses_accounts_json(self) -> None:
         source = {

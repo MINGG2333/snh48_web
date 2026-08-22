@@ -83,7 +83,23 @@ rsync -az --delete-delay --ignore-existing --exclude='/manifest.json' --exclude=
 echo "$LOG_TAG room_voice_replays obsolete payload cleaned"
 echo "$LOG_TAG room_voice_replays done"
 
-# 11. flip_data/web（多账号脱敏清单和网页数据；accounts.json 最后提交）
+# 11. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）
+if [ -d /home/snh48-fan-hub/flip_data/audio ]; then
+  rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/audio/ "$ALIYUN:/home/snh48-fan-hub/flip_data/audio/"
+  echo "$LOG_TAG flip_data/audio done"
+else
+  echo "$LOG_TAG flip_data/audio skipped (source missing)"
+fi
+
+# 12. flip_data/video（翻牌页本地视频依赖；不同步 metadata、Token 或配置）
+if [ -d /home/snh48-fan-hub/flip_data/video ]; then
+  rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/video/ "$ALIYUN:/home/snh48-fan-hub/flip_data/video/"
+  echo "$LOG_TAG flip_data/video done"
+else
+  echo "$LOG_TAG flip_data/video skipped (source missing)"
+fi
+
+# 13. flip_data/web（媒体到齐后同步账号数据，accounts.json 最后原子提交）
 if [ -d /home/snh48-fan-hub/flip_data/web ]; then
   FLIP_WEB_SOURCE="/home/snh48-fan-hub/flip_data/web"
   FLIP_WEB_DEST="/home/snh48-fan-hub/flip_data/web"
@@ -97,22 +113,6 @@ if [ -d /home/snh48-fan-hub/flip_data/web ]; then
   echo "$LOG_TAG flip_data/web done"
 else
   echo "$LOG_TAG flip_data/web skipped (source missing)"
-fi
-
-# 12. flip_data/audio（翻牌页本地语音依赖；不同步 metadata、Token 或配置）
-if [ -d /home/snh48-fan-hub/flip_data/audio ]; then
-  rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/audio/ "$ALIYUN:/home/snh48-fan-hub/flip_data/audio/"
-  echo "$LOG_TAG flip_data/audio done"
-else
-  echo "$LOG_TAG flip_data/audio skipped (source missing)"
-fi
-
-# 13. flip_data/video（翻牌页本地视频依赖；不同步 metadata、Token 或配置）
-if [ -d /home/snh48-fan-hub/flip_data/video ]; then
-  rsync -az --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/flip_data/video/ "$ALIYUN:/home/snh48-fan-hub/flip_data/video/"
-  echo "$LOG_TAG flip_data/video done"
-else
-  echo "$LOG_TAG flip_data/video skipped (source missing)"
 fi
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then
