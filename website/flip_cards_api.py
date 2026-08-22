@@ -223,13 +223,16 @@ async def logout(response: Response):
 
 
 @router.get("/status")
-async def auth_status(response: Response, _=Depends(verify_flip_cards_auth)):
-    dataset_path = _dataset_path()
+async def auth_status(response: Response, account_id: str = "", _=Depends(verify_flip_cards_auth)):
+    dataset_path, selected_account_id = _resolve_dataset(account_id)
+    dataset_stat = dataset_path.stat() if dataset_path.is_file() else None
     response.headers["Cache-Control"] = "no-store"
     return {
         "success": True,
-        "dataset_exists": dataset_path.is_file(),
-        "dataset_mtime": int(dataset_path.stat().st_mtime) if dataset_path.is_file() else 0,
+        "account_id": selected_account_id,
+        "dataset_exists": dataset_stat is not None,
+        "dataset_mtime": int(dataset_stat.st_mtime) if dataset_stat else 0,
+        "dataset_version": f"{dataset_stat.st_mtime_ns}:{dataset_stat.st_size}" if dataset_stat else "",
     }
 
 
@@ -268,6 +271,15 @@ async def account_management_verify_code(payload: VerifyCodeRequest, request: Re
     _require_account_admin(request)
     response.headers["Cache-Control"] = "no-store"
     return await asyncio.to_thread(_run_account_admin, "verify-code", {"session_id": payload.session_id, "code": payload.code})
+
+
+@router.get("/account-management/latest-job")
+async def account_management_latest_job(account_id: str, response: Response, _=Depends(verify_flip_cards_auth)):
+    if not cfg.FLIP_CARDS_ACCOUNT_ADMIN_ENABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前节点不开放账号操作")
+    safe_account_id = _safe_account_id(account_id)
+    response.headers["Cache-Control"] = "no-store"
+    return await asyncio.to_thread(_run_account_admin, "latest-job", {"account_id": safe_account_id})
 
 
 @router.get("/account-management/jobs/{job_id}")

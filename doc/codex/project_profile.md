@@ -63,7 +63,7 @@
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - `room_record/pk_scores/current.json`（房间计分 PK 派生小数据；首轮只供腾讯云 `/pk`，阿里云同步待用户验收后另行确认）
-- `flip_data/web/`（密码保护的脱敏账号清单、schema v3 账号数据和默认兼容副本）
+- `flip_data/web/`（密码保护的脱敏账号清单、schema v4 账号数据和默认兼容副本）
 - `flip_data/audio/{account_id}/`、`flip_data/video/{account_id}/`（账号级本地播放依赖；不含 `metadata/`、Token 或登录状态）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
@@ -192,10 +192,10 @@ node script/obfuscate_js.cjs
 维护边界：
 
 - 页面不进入公开导航并设置 `noindex,nofollow`；登录页、应用数据和本地 MP3/MP4 都必须先鉴权。
-- 后端只按脱敏清单允许的稳定口袋号读取账号 JSON 和账号子目录媒体；不得把 `flip_data/` 挂到 `/static`。schema v3 语音记录可带转录参考，缺失时隐藏。
+- 后端只按脱敏清单允许的稳定口袋号读取账号 JSON 和账号子目录媒体；不得把 `flip_data/` 挂到 `/static`。schema v4 逐条包含回复成员身份，语音记录可带转录参考，缺失时隐藏。
 - 腾讯云、阿里云使用同一页面和代码。`FLIP_CARDS_ACCOUNT_ADMIN_ENABLED` 默认跟随 `SHARED_STATE_IS_PRIMARY`：腾讯云可在同一弹窗发送短信、验证码登录并启动后台刷新；阿里云弹窗只显示当前节点不开放账号操作，不提供腾讯云跳转。
 - 网页账号管理继续受翻牌密码 Cookie 保护，POST 还要求同源；手机号只进入 fan-hub 本机短期 `0600` 会话，验证码不落盘，Token 只进入 `config/accounts.json`。阿里云只同步脱敏 `web/`、账号级音频和视频，不同步 `metadata/`、`transcripts/`、登录会话或任务日志。
-- 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录仍在 fan-hub 数据生成阶段完成。顶部筛选默认收起；“嘉仪”头像、问题状态 Tag、双向跳转和 4 秒高对比高亮保持不变。
+- 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录仍在 fan-hub 数据生成阶段完成。顶部筛选默认收起且默认选择陈嘉仪，其他回复成员可单独筛选；陈嘉仪头像显示“嘉仪”，其他成员显示完整姓名。账号登录和更新状态入口分离，状态弹窗可收起并恢复；底部按钮检查、重新加载并跳到最新记录。问题状态 Tag、双向跳转和 4 秒高对比高亮保持不变。
 
 ### 计分礼物管理页
 

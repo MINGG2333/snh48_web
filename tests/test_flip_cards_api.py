@@ -78,6 +78,7 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         status = await self.client.get("/api/flip-cards/status")
         self.assertEqual(status.status_code, 200)
         self.assertTrue(status.json()["dataset_exists"])
+        self.assertTrue(status.json()["dataset_version"])
 
         data = await self.client.get("/api/flip-cards/data")
         self.assertEqual(data.status_code, 200)
@@ -134,6 +135,10 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         missing = await self.client.get("/api/flip-cards/data?account_id=999999")
         self.assertEqual(missing.status_code, 404)
 
+        status = await self.client.get(f"/api/flip-cards/status?account_id={account_id}")
+        self.assertEqual(status.json()["account_id"], account_id)
+        self.assertTrue(status.json()["dataset_version"])
+
     async def test_account_management_is_disabled_on_non_primary_node(self) -> None:
         await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
         capability = await self.client.get("/api/flip-cards/account-management/status")
@@ -144,6 +149,10 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             headers={"Origin": "http://testserver"},
         )
         self.assertEqual(response.status_code, 403)
+        latest = await self.client.get(
+            "/api/flip-cards/account-management/latest-job?account_id=172884074"
+        )
+        self.assertEqual(latest.status_code, 403)
 
     async def test_account_management_requires_same_origin(self) -> None:
         await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
@@ -155,6 +164,22 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(response.status_code, 403)
 
+    async def test_latest_job_uses_safe_account_id_and_admin_bridge(self) -> None:
+        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
+        with (
+            mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNT_ADMIN_ENABLED", True),
+            mock.patch(
+                "website.flip_cards_api._run_account_admin",
+                return_value={"ok": True, "job": {"job_id": "a" * 32, "state": "running"}},
+            ) as run_admin,
+        ):
+            response = await self.client.get(
+                "/api/flip-cards/account-management/latest-job?account_id=172884074"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        run_admin.assert_called_once_with("latest-job", {"account_id": "172884074"})
+
 
 class FlipCardsTemplateTests(unittest.TestCase):
     def test_template_renders_application_instead_of_redirecting_to_html(self) -> None:
@@ -162,19 +187,33 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('const API = "/api/flip-cards"', template)
         self.assertIn('apiJson("/data" + suffix)', template)
         self.assertIn('id="accountSelect"', template)
+        self.assertIn('id="memberFilter"', template)
         self.assertIn('id="accountModal"', template)
+        self.assertIn('id="updateModal"', template)
+        self.assertIn('id="updateModalMinimize"', template)
+        self.assertIn('aria-label="收起更新状态"', template)
+        self.assertIn('id="updatePill"', template)
+        self.assertNotIn('id="latestBtn"', template)
         self.assertIn('apiJson("/account-management/status")', template)
+        self.assertIn('"/account-management/latest-job?account_id="', template)
         self.assertIn('"/account-management/send-sms"', template)
         self.assertIn('"/account-management/verify-code"', template)
         self.assertNotIn("前往腾讯云", template)
         self.assertIn("我发于 ", template)
-        self.assertIn('avatar.textContent = memberAvatarText()', template)
+        self.assertIn('const avatarText = memberAvatarText(record)', template)
+        self.assertIn('avatar.textContent = avatarText', template)
+        self.assertIn('record.member_avatar_text', template)
+        self.assertIn('String(member.name || "").includes("陈嘉仪")', template)
         self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
         self.assertIn('appendText(box, "transcript-label", "转录参考")', template)
         self.assertIn('<details id="filterPanel" class="filter-panel">', template)
         self.assertNotIn('<details id="filterPanel" class="filter-panel" open>', template)
         self.assertIn('filterPanel.addEventListener("toggle"', template)
         self.assertIn('action: "toggle_filters"', template)
+        self.assertIn('datasetUpdateTimer = window.setInterval(checkDatasetUpdates, 15000)', template)
+        self.assertIn('await loadSelectedAccount(true, true)', template)
+        self.assertIn('"有新记录，点击查看最新"', template)
+        self.assertIn('updatePill.addEventListener("click", loadLatestRecords)', template)
         self.assertIn('addQuestionStatus(meta, record)', template)
         self.assertIn('statusButton.dataset.target = "answer-" + safeId(record.question_id)', template)
         self.assertIn('statusButton.textContent = "已回复 · 查看回复"', template)
@@ -189,10 +228,11 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertNotIn("downloadHtmlLink", template)
         for action in (
             "filter_status",
+            "filter_member",
             "filter_answer_type",
             "toggle_filters",
             "reset_filters",
-            "jump_latest",
+            "load_latest",
             "open_official_media",
             "jump_to_flip_question",
             "jump_to_flip_answer",
