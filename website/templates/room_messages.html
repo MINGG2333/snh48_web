@@ -229,6 +229,13 @@
       color-scheme: dark;
     }
 
+    .field input[type="date"] {
+      height: 38px;
+      line-height: 38px;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
     .field input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       opacity: 1;
@@ -1029,12 +1036,18 @@
         appearance: none;
         padding-left: 8px;
         padding-right: 8px;
+        height: 34px;
+        line-height: 34px;
+        padding-top: 0;
+        padding-bottom: 0;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .filter-modal-scroll .field input[type="date"]::-webkit-date-and-time-value {
         min-width: 0;
         text-align: left;
+        line-height: 1.2;
+        padding: 0;
       }
       .actions .btn { flex: 1; }
       .chat-scroll {

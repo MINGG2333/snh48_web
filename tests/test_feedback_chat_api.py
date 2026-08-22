@@ -57,11 +57,19 @@ class FeedbackChatApiTests(unittest.TestCase):
 
         conversations = chat_api.list_conversations(chat_api.Response(), True)
         self.assertEqual(conversations["conversations"][0]["conversation_id"], conversation_id)
+        self.assertEqual(conversations["conversations"][0]["user_identifier"], identifier)
         self.assertFalse(conversations["conversations"][0]["pending_reply"])
+
+        admin_history = chat_api.get_admin_history(
+            chat_api.AdminConversationRequest(conversation_id=conversation_id),
+            chat_api.Response(),
+            True,
+        )
+        self.assertEqual(admin_history["user_identifier"], identifier)
 
         event_files = list((self.root / "inbox" / "events").glob("*.json"))
         self.assertEqual(len(event_files), 2)
-        self.assertNotIn(identifier, event_files[0].read_text(encoding="utf-8"))
+        self.assertIn(identifier, event_files[0].read_text(encoding="utf-8"))
 
     def test_identifier_and_content_validation(self) -> None:
         with self.assertRaises(ValueError):

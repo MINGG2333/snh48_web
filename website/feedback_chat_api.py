@@ -106,13 +106,36 @@ def _history(conversation_id: str) -> list[dict[str, Any]]:
     return [_message_from_event(event) for event in list_chat_events(conversation_id)]
 
 
-def _chat_response(response: Response, conversation_id: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+def _user_identifier_from_events(events: list[dict[str, Any]]) -> str:
+    """Read the user-defined label only for password-protected admin views."""
+    for event in events:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        identifier = str(payload.get("user_identifier") or "").strip()
+        if identifier:
+            return identifier
+    return ""
+
+
+def _user_identifier(conversation_id: str) -> str:
+    return _user_identifier_from_events(list_chat_events(conversation_id))
+
+
+def _chat_response(
+    response: Response,
+    conversation_id: str,
+    messages: list[dict[str, Any]],
+    *,
+    user_identifier: str = "",
+) -> dict[str, Any]:
     response.headers["Cache-Control"] = "no-store"
-    return {
+    body = {
         "success": True,
         "conversation_id": conversation_id,
         "messages": messages,
     }
+    if user_identifier:
+        body["user_identifier"] = user_identifier
+    return body
 
 
 @router.post("/history")
@@ -135,6 +158,7 @@ def send_message(req: ChatMessageRequest, request: Request, response: Response):
                 "conversation_id": conversation_id,
                 "message_id": message_id,
                 "content": req.content,
+                "user_identifier": req.identifier,
                 "created_at": created_at,
             },
             event_id=message_id,
@@ -162,6 +186,7 @@ def list_conversations(response: Response, _=Depends(verify_ob_password)):
         messages = [_message_from_event(event) for event in events]
         conversations.append({
             "conversation_id": conversation_id,
+            "user_identifier": _user_identifier_from_events(events),
             "message_count": len(messages),
             "latest_at": messages[-1]["created_at"],
             "latest_sender": messages[-1]["sender"],
@@ -174,13 +199,19 @@ def list_conversations(response: Response, _=Depends(verify_ob_password)):
 
 @router.post("/admin-history")
 def get_admin_history(req: AdminConversationRequest, response: Response, _=Depends(verify_ob_password)):
-    return _chat_response(response, req.conversation_id, _history(req.conversation_id))
+    return _chat_response(
+        response,
+        req.conversation_id,
+        _history(req.conversation_id),
+        user_identifier=_user_identifier(req.conversation_id),
+    )
 
 
 @router.post("/reply")
 def reply_message(req: AdminReplyRequest, response: Response, _=Depends(verify_ob_password)):
     created_at = _now()
     message_id = f"FR-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:12].upper()}"
+    user_identifier = _user_identifier(req.conversation_id)
     try:
         result = record_request(
             "feedback_reply",
@@ -188,6 +219,7 @@ def reply_message(req: AdminReplyRequest, response: Response, _=Depends(verify_o
                 "conversation_id": req.conversation_id,
                 "message_id": message_id,
                 "content": req.content,
+                "user_identifier": user_identifier,
                 "created_at": created_at,
             },
             event_id=message_id,
@@ -196,7 +228,12 @@ def reply_message(req: AdminReplyRequest, response: Response, _=Depends(verify_o
     except InboxError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="回复保存失败") from exc
     messages = _history(req.conversation_id)
-    body = _chat_response(response, req.conversation_id, messages)
+    body = _chat_response(
+        response,
+        req.conversation_id,
+        messages,
+        user_identifier=user_identifier,
+    )
     body["message"] = messages[-1] if messages else {}
     body["replication_pending"] = not result["replicated"]
     return body

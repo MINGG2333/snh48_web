@@ -47,7 +47,7 @@ class RoomMessagesTemplateTests(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', template)
         self.assertIn("setObToolScrollLocked", template)
         self.assertIn("body.style.position = 'fixed'", template)
-        self.assertIn("}, 3000);", template)
+        self.assertIn("}, 1000);", template)
         self.assertIn("chatRefreshBusy", template)
 
 
