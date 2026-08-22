@@ -173,6 +173,28 @@
     .segment button:last-child { border-right: 0; }
     .segment button.active { background: var(--teal); color: var(--ink); font-weight: 750; }
     .toolbar-actions { display: flex; gap: 8px; }
+    .toolbar > *,
+    .field,
+    .segment,
+    .toolbar-actions { min-width: 0; }
+    .mobile-filter-toggle {
+      display: none;
+      width: 100%;
+      min-height: 38px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-weight: 720;
+      margin-bottom: 12px;
+    }
+    .gift-filter-modal,
+    .gift-filter-card,
+    .gift-filter-scroll { display: contents; }
+    .gift-filter-backdrop,
+    .gift-filter-header { display: none; }
     .result-head, .result-actions {
       display: flex;
       align-items: center;
@@ -444,12 +466,93 @@
     .btn:disabled { cursor: not-allowed; opacity: 0.45; }
     .loading { opacity: 0.65; pointer-events: none; }
     @media (max-width: 820px) {
+      html.gift-filters-open,
+      body.gift-filters-open { overflow: hidden; }
       .topbar-inner { align-items: flex-start; flex-direction: column; padding: 14px; }
       .top-actions { justify-content: flex-start; }
       main { padding: 14px 12px 32px; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .toolbar { grid-template-columns: 1fr; }
-      .toolbar-actions .btn { flex: 1; }
+      .mobile-filter-toggle { display: inline-flex; }
+      .gift-filter-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: none;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .gift-filter-modal.open { display: flex; }
+      .gift-filter-backdrop {
+        position: absolute;
+        inset: 0;
+        display: block;
+        background: rgba(4, 8, 13, 0.72);
+      }
+      .gift-filter-card {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        width: min(420px, calc(100% - 24px));
+        max-width: calc(100% - 24px);
+        min-width: 0;
+        max-height: min(88dvh, 720px);
+        margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+      }
+      .gift-filter-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .gift-filter-header h2 { min-width: 0; font-size: 16px; font-weight: 750; }
+      .gift-filter-close {
+        flex: 0 0 auto;
+        min-height: 32px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--text);
+        padding: 0 10px;
+      }
+      .gift-filter-scroll {
+        display: block;
+        min-width: 0;
+        min-height: 0;
+        max-height: calc(min(88dvh, 720px) - 61px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
+      .gift-filter-scroll .toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) !important;
+        min-width: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: 12px;
+        margin-bottom: 0;
+        gap: 10px;
+      }
+      .gift-filter-scroll .field,
+      .gift-filter-scroll .field input,
+      .gift-filter-scroll .segment,
+      .gift-filter-scroll .toolbar-actions { width: 100%; max-width: 100%; }
+      .gift-filter-scroll .field input { min-width: 0; }
+      .gift-filter-scroll .segment { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .gift-filter-scroll .segment button { min-width: 0; padding: 0 5px; white-space: normal; line-height: 1.25; }
+      .gift-filter-scroll .toolbar-actions { gap: 8px; }
+      .gift-filter-scroll .toolbar-actions .btn { flex: 1 1 0; min-width: 0; }
       .sender-head { flex-direction: column; gap: 6px; }
       .sender-latest { text-align: left; white-space: normal; }
       .history-head { display: none; }
@@ -505,20 +608,32 @@
         <div class="stat"><div class="label">当前筛选人数</div><div class="value" id="filteredSenders">0</div><div class="sub" id="generatedAt">生成时间：-</div></div>
       </section>
 
-      <section class="toolbar" aria-label="筛选条件">
-        <div class="field">
-          <label>送礼人状态</label>
-          <div class="segment" id="statusSegment">
-            <button type="button" data-status="all" class="active">全部</button>
-            <button type="button" data-status="unreplied">有未回复</button>
-            <button type="button" data-status="all_replied">已全部回复</button>
+      <button class="mobile-filter-toggle" id="giftFilterToggle" type="button" aria-expanded="false" aria-controls="giftFilterModal">筛选</button>
+      <div class="gift-filter-modal" id="giftFilterModal">
+        <div class="gift-filter-backdrop" id="giftFilterBackdrop"></div>
+        <section class="gift-filter-card" id="giftFilterCard" role="dialog" aria-modal="true" aria-labelledby="giftFilterTitle">
+          <header class="gift-filter-header">
+            <h2 id="giftFilterTitle">筛选送礼人</h2>
+            <button class="gift-filter-close" id="giftFilterClose" type="button">收起</button>
+          </header>
+          <div class="gift-filter-scroll">
+            <section class="toolbar" aria-label="筛选条件">
+              <div class="field">
+                <label>送礼人状态</label>
+                <div class="segment" id="statusSegment">
+                  <button type="button" data-status="all" class="active">全部</button>
+                  <button type="button" data-status="unreplied">有未回复</button>
+                  <button type="button" data-status="all_replied">已全部回复</button>
+                </div>
+              </div>
+              <div class="field"><label for="senderInput">送礼人</label><input id="senderInput" type="search" placeholder="昵称或用户 ID"></div>
+              <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date" value="2026-05-30"></div>
+              <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
+              <div class="toolbar-actions"><button class="btn primary" id="applyBtn" type="button">筛选</button><button class="btn" id="resetBtn" type="button">重置</button></div>
+            </section>
           </div>
-        </div>
-        <div class="field"><label for="senderInput">送礼人</label><input id="senderInput" type="search" placeholder="昵称或用户 ID"></div>
-        <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date" value="2026-05-30"></div>
-        <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
-        <div class="toolbar-actions"><button class="btn primary" id="applyBtn" type="button">筛选</button><button class="btn" id="resetBtn" type="button">重置</button></div>
-      </section>
+        </section>
+      </div>
 
       <div class="result-head">
         <span id="resultSummary">共 0 人，当前显示 0 人</span>
@@ -529,16 +644,16 @@
       <div class="empty" id="emptyState">当前筛选条件下没有送礼人</div>
     </main>
 
-    <button class="support-chat-nav" id="supportChatNav" type="button" aria-haspopup="dialog" aria-expanded="false" title="客服反馈">
+    <button class="support-chat-nav" id="supportChatNav" type="button" aria-haspopup="dialog" aria-expanded="false" title="反馈">
       <i class="fas fa-headset" aria-hidden="true"></i>
-      <span class="sr-only">客服反馈</span>
+      <span class="sr-only">反馈</span>
     </button>
 
     <div class="support-chat-modal" id="supportChatModal" aria-hidden="true">
       <div class="support-chat-backdrop" id="supportChatBackdrop"></div>
       <section class="support-chat-card" role="dialog" aria-modal="true" aria-labelledby="supportChatTitle">
         <header class="support-chat-header">
-          <div class="support-chat-title" id="supportChatTitle"><i class="fas fa-headset" aria-hidden="true"></i><span>客服反馈</span></div>
+          <div class="support-chat-title" id="supportChatTitle"><i class="fas fa-headset" aria-hidden="true"></i><span>反馈</span></div>
           <button class="support-chat-close" id="supportChatClose" type="button" aria-label="关闭客服窗口">×</button>
         </header>
         <div class="support-chat-setup" id="supportChatSetup">
@@ -598,6 +713,11 @@
     var dateToInput = document.getElementById("dateToInput");
     var senderList = document.getElementById("senderList");
     var emptyState = document.getElementById("emptyState");
+    var giftFilterToggle = document.getElementById("giftFilterToggle");
+    var giftFilterModal = document.getElementById("giftFilterModal");
+    var giftFilterBackdrop = document.getElementById("giftFilterBackdrop");
+    var giftFilterClose = document.getElementById("giftFilterClose");
+    var giftFilterPreviousFocus = null;
     var statsToggle = document.getElementById("statsToggle");
     var updatePill = document.getElementById("updatePill");
     var supportChatNav = document.getElementById("supportChatNav");
@@ -618,6 +738,39 @@
     var supportChatPollTimer = null;
     var currentSupportChatIdentifier = "";
     var supportChatPreviousFocus = null;
+
+    function isGiftFilterMobile() {
+      return window.matchMedia
+        ? window.matchMedia("(max-width: 820px)").matches
+        : window.innerWidth <= 820;
+    }
+
+    function setGiftFilterModalOpen(open) {
+      if (!giftFilterModal) return;
+      if (open) {
+        giftFilterPreviousFocus = document.activeElement;
+        giftFilterModal.classList.add("open");
+        giftFilterModal.setAttribute("aria-hidden", "false");
+        giftFilterToggle.setAttribute("aria-expanded", "true");
+        document.documentElement.classList.add("gift-filters-open");
+        document.body.classList.add("gift-filters-open");
+        window.setTimeout(function() {
+          if (giftFilterClose) giftFilterClose.focus();
+        }, 0);
+        track("admin_modal", { modal: "gift_sender_filters", action: "open" });
+        return;
+      }
+      giftFilterModal.classList.remove("open");
+      giftFilterModal.setAttribute("aria-hidden", "true");
+      giftFilterToggle.setAttribute("aria-expanded", "false");
+      document.documentElement.classList.remove("gift-filters-open");
+      document.body.classList.remove("gift-filters-open");
+      if (giftFilterPreviousFocus && typeof giftFilterPreviousFocus.focus === "function") {
+        giftFilterPreviousFocus.focus();
+      }
+      giftFilterPreviousFocus = null;
+      track("admin_modal", { modal: "gift_sender_filters", action: "close" });
+    }
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -1171,6 +1324,7 @@
         has_date_from: Boolean(dateFromInput.value),
         has_date_to: Boolean(dateToInput.value)
       });
+      if (isGiftFilterMobile()) setGiftFilterModalOpen(false);
       loadData(false);
     }
 
@@ -1295,6 +1449,11 @@
       track("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
     updatePill.addEventListener("click", loadLatestData);
+    giftFilterToggle.addEventListener("click", function() {
+      setGiftFilterModalOpen(!giftFilterModal.classList.contains("open"));
+    });
+    giftFilterClose.addEventListener("click", function() { setGiftFilterModalOpen(false); });
+    giftFilterBackdrop.addEventListener("click", function() { setGiftFilterModalOpen(false); });
     supportChatNav.addEventListener("click", function() { setChatModalOpen(true); });
     supportChatClose.addEventListener("click", function() { setChatModalOpen(false); });
     supportChatBackdrop.addEventListener("click", function() { setChatModalOpen(false); });
@@ -1305,7 +1464,12 @@
     supportChatForm.addEventListener("submit", submitSupportChatMessage);
     supportChatChange.addEventListener("click", changeSupportChatIdentifier);
     document.addEventListener("keydown", function(event) {
-      if (event.key === "Escape" && supportChatModal.classList.contains("open")) setChatModalOpen(false);
+      if (event.key !== "Escape") return;
+      if (supportChatModal.classList.contains("open")) {
+        setChatModalOpen(false);
+      } else if (giftFilterModal.classList.contains("open")) {
+        setGiftFilterModalOpen(false);
+      }
     });
     Array.prototype.forEach.call(document.querySelectorAll(".top-actions a"), function(link) {
       link.addEventListener("click", function() {

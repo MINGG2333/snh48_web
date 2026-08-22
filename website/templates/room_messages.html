@@ -916,6 +916,8 @@
     }
 
     @media (max-width: 720px) {
+      html.room-filters-open,
+      body.room-filters-open { overflow: hidden; }
       body,
       .page { height: 100dvh; }
       .topbar { backdrop-filter: none; }
@@ -960,7 +962,9 @@
         z-index: 1;
         display: flex;
         flex-direction: column;
-        width: min(560px, calc(100vw - 24px));
+        width: min(420px, calc(100vw - 24px));
+        max-width: calc(100% - 24px);
+        min-width: 0;
         max-height: min(88dvh, 760px);
         margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
         overflow: hidden;
@@ -974,6 +978,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+        min-width: 0;
         padding: 14px 16px;
         border-bottom: 1px solid var(--line);
       }
@@ -984,6 +989,7 @@
       .filter-modal-scroll {
         display: block;
         min-height: 0;
+        min-width: 0;
         max-height: calc(min(88dvh, 760px) - 61px);
         overflow-y: auto;
         overscroll-behavior: contain;
@@ -993,16 +999,23 @@
       .filters {
         display: grid;
         grid-template-columns: 1fr !important;
+        width: 100%;
+        min-width: 0;
         padding: 0 12px 10px;
         gap: 8px;
       }
       .filter-modal-scroll .filters:first-child { padding-top: 2px; }
       .filter-modal-scroll .filters:last-child { padding-bottom: 16px; }
       .field label { margin-bottom: 4px; }
+      .field,
+      .family-strip,
+      .actions { min-width: 0; max-width: 100%; }
       .field input,
       .field select,
       .chip,
-      .btn { min-height: 34px; }
+      .btn { min-height: 34px; max-width: 100%; }
+      .field input,
+      .field select { min-width: 0; }
       .actions .btn { flex: 1; }
       .chat-scroll {
         padding: 14px 12px calc(216px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
@@ -1068,7 +1081,7 @@
         <div class="stats">
           <a class="combined-reply-link" id="combinedReplyLink" href="/room/gift-senders">综合回礼</a>
           <span>总数 <strong id="totalMessages">0</strong></span>
-          <span id="latestTime">最新：-</span>
+          <span id="latestTime">更新时间：-</span>
         </div>
       </div>
       <div class="filter-modal" id="filterModal">
@@ -1527,7 +1540,7 @@
       if (typeof total === "number") {
         totalMessages.textContent = formatNumber(total);
       }
-      latestTime.textContent = "最新：" + (summary.latest_bj_time || "-");
+      latestTime.textContent = "更新时间：" + (summary.source_mtime || "-");
       refreshSeconds = Number(data.refresh_interval_seconds || 60);
       latestSeen = summary.latest_bj_time || latestSeen;
       latestUnrepliedGiftBatch = summary.latest_unreplied_gift_batch || null;
@@ -2034,12 +2047,14 @@
 
     function setFilterPanelOpen(open) {
       if (!filterToggle) return;
+      var isMobile = isMobileViewport();
       if (topbar) {
         topbar.classList.toggle("filters-open", open);
       }
+      document.documentElement.classList.toggle("room-filters-open", open && isMobile);
+      document.body.classList.toggle("room-filters-open", open && isMobile);
       if (filterModal) {
         filterModal.classList.toggle("open", open);
-        var isMobile = isMobileViewport();
         if (isMobile) {
           filterModal.setAttribute("aria-hidden", open ? "false" : "true");
         } else {
