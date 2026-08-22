@@ -152,6 +152,15 @@
     }
     .field input:focus, .field select:focus { border-color: var(--teal); }
     .field input[type="date"] { color-scheme: dark; }
+    .field input[type="date"] {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+      font-size: 16px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .field input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
     .field input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       opacity: 1;
@@ -358,12 +367,14 @@
       justify-content: flex-end;
       padding: 18px;
       pointer-events: none;
+      overscroll-behavior: contain;
     }
     .support-chat-modal.open { display: flex; pointer-events: auto; }
     .support-chat-backdrop {
       position: absolute;
       inset: 0;
       background: rgba(4, 8, 13, 0.48);
+      touch-action: none;
     }
     .support-chat-card {
       position: relative;
@@ -373,6 +384,8 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
       border: 1px solid var(--line);
       border-radius: 14px;
       background: var(--panel);
@@ -417,7 +430,7 @@
       color: var(--text);
       outline: none;
     }
-    .support-chat-field input { min-height: 42px; padding: 0 11px; }
+    .support-chat-field input { min-height: 42px; padding: 0 11px; font-size: 16px; }
     .support-chat-field input:focus,
     .support-chat-composer textarea:focus { border-color: var(--teal); }
     .support-chat-setup-actions { display: flex; align-items: center; gap: 8px; }
@@ -450,8 +463,18 @@
     .support-chat-message.support .support-chat-bubble { background: var(--panel-2); color: var(--text); border-bottom-left-radius: 4px; }
     .support-chat-time { color: var(--faint); font-size: 10px; }
     .support-chat-composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
-    .support-chat-composer textarea { min-height: 42px; max-height: 120px; padding: 9px 10px; resize: vertical; line-height: 1.45; }
-    .support-chat-send { flex: 0 0 auto; min-width: 78px; min-height: 42px; }
+    .support-chat-composer textarea {
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 0;
+      min-height: 42px;
+      max-height: 120px;
+      padding: 9px 10px;
+      resize: vertical;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+    .support-chat-send { flex: 0 0 78px; min-width: 0; min-height: 42px; padding: 0 8px; }
     .support-chat-status { min-height: 20px; padding: 0 12px 8px; color: var(--muted); font-size: 12px; }
     .support-chat-status.error { color: var(--red); }
     .support-chat-footer { display: flex; justify-content: space-between; gap: 8px; padding: 0 12px 12px; }
@@ -465,6 +488,8 @@
     .empty.show { display: block; }
     .btn:disabled { cursor: not-allowed; opacity: 0.45; }
     .loading { opacity: 0.65; pointer-events: none; }
+    html.page-scroll-locked,
+    body.page-scroll-locked { overflow: hidden; }
     @media (max-width: 820px) {
       html.gift-filters-open,
       body.gift-filters-open { overflow: hidden; }
@@ -473,13 +498,20 @@
       main { padding: 14px 12px 32px; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mobile-filter-toggle { display: inline-flex; }
+      .top-actions .mobile-filter-toggle {
+        width: auto;
+        min-height: 36px;
+        margin-bottom: 0;
+        padding: 0 12px;
+      }
       .gift-filter-modal {
         position: fixed;
         inset: 0;
         z-index: 20;
         display: none;
-        align-items: flex-end;
+        align-items: flex-start;
         justify-content: center;
+        padding: max(18px, calc(8dvh + env(safe-area-inset-top, 0px))) 12px 12px;
       }
       .gift-filter-modal.open { display: flex; }
       .gift-filter-backdrop {
@@ -496,8 +528,8 @@
         width: min(420px, calc(100% - 24px));
         max-width: calc(100% - 24px);
         min-width: 0;
-        max-height: min(88dvh, 720px);
-        margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - max(18px, calc(8dvh + env(safe-area-inset-top, 0px))) - 12px);
+        margin: 0;
         overflow: hidden;
         border: 1px solid var(--line);
         border-radius: 12px;
@@ -549,6 +581,8 @@
       .gift-filter-scroll .segment,
       .gift-filter-scroll .toolbar-actions { width: 100%; max-width: 100%; }
       .gift-filter-scroll .field input { min-width: 0; }
+      .gift-filter-scroll .field input,
+      .gift-filter-scroll .field select { font-size: 16px; }
       .gift-filter-scroll .segment { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .gift-filter-scroll .segment button { min-width: 0; padding: 0 5px; white-space: normal; line-height: 1.25; }
       .gift-filter-scroll .toolbar-actions { gap: 8px; }
@@ -564,7 +598,8 @@
       .result-head { align-items: flex-start; flex-direction: column; }
       .result-actions { width: 100%; justify-content: space-between; }
       .support-chat-modal { align-items: flex-end; justify-content: center; padding: 12px; }
-      .support-chat-card { height: min(680px, calc(100dvh - 24px)); }
+      .support-chat-card { height: min(680px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); }
+      .support-chat-composer { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
     }
     @media (prefers-reduced-motion: reduce) {
       .sender-card.return-highlight summary {
@@ -596,6 +631,7 @@
         <nav class="top-actions" aria-label="页面导航">
           <a class="nav-link primary" href="/room">返回 Room</a>
           <a class="nav-link" href="/room/gifts">逐条明细</a>
+          <button class="mobile-filter-toggle" id="giftFilterToggle" type="button" aria-expanded="false" aria-controls="giftFilterModal">筛选</button>
         </nav>
       </div>
     </header>
@@ -608,7 +644,6 @@
         <div class="stat"><div class="label">当前筛选人数</div><div class="value" id="filteredSenders">0</div><div class="sub" id="generatedAt">生成时间：-</div></div>
       </section>
 
-      <button class="mobile-filter-toggle" id="giftFilterToggle" type="button" aria-expanded="false" aria-controls="giftFilterModal">筛选</button>
       <div class="gift-filter-modal" id="giftFilterModal">
         <div class="gift-filter-backdrop" id="giftFilterBackdrop"></div>
         <section class="gift-filter-card" id="giftFilterCard" role="dialog" aria-modal="true" aria-labelledby="giftFilterTitle">
@@ -738,6 +773,33 @@
     var supportChatPollTimer = null;
     var currentSupportChatIdentifier = "";
     var supportChatPreviousFocus = null;
+    var pageScrollLockY = null;
+
+    function setPageScrollLocked(locked) {
+      if (locked) {
+        if (pageScrollLockY !== null) return;
+        pageScrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
+        document.documentElement.classList.add("page-scroll-locked");
+        document.body.classList.add("page-scroll-locked");
+        document.body.style.position = "fixed";
+        document.body.style.top = "-" + pageScrollLockY + "px";
+        document.body.style.left = "0";
+        document.body.style.right = "0";
+        document.body.style.width = "100%";
+        return;
+      }
+      if (pageScrollLockY === null) return;
+      var restoreY = pageScrollLockY;
+      pageScrollLockY = null;
+      document.documentElement.classList.remove("page-scroll-locked");
+      document.body.classList.remove("page-scroll-locked");
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
+      window.scrollTo(0, restoreY);
+    }
 
     function isGiftFilterMobile() {
       return window.matchMedia
@@ -754,6 +816,7 @@
         giftFilterToggle.setAttribute("aria-expanded", "true");
         document.documentElement.classList.add("gift-filters-open");
         document.body.classList.add("gift-filters-open");
+        setPageScrollLocked(true);
         window.setTimeout(function() {
           if (giftFilterClose) giftFilterClose.focus();
         }, 0);
@@ -765,6 +828,7 @@
       giftFilterToggle.setAttribute("aria-expanded", "false");
       document.documentElement.classList.remove("gift-filters-open");
       document.body.classList.remove("gift-filters-open");
+      setPageScrollLocked(false);
       if (giftFilterPreviousFocus && typeof giftFilterPreviousFocus.focus === "function") {
         giftFilterPreviousFocus.focus();
       }
@@ -798,6 +862,7 @@
         supportChatModal.classList.add("open");
         supportChatModal.setAttribute("aria-hidden", "false");
         supportChatNav.setAttribute("aria-expanded", "true");
+        setPageScrollLocked(true);
         if (supportChatIdentifier) {
           try {
             supportChatIdentifier.value = window.localStorage.getItem("snh48_feedback_chat_id") || "";
@@ -816,6 +881,7 @@
       supportChatModal.classList.remove("open");
       supportChatModal.setAttribute("aria-hidden", "true");
       supportChatNav.setAttribute("aria-expanded", "false");
+      setPageScrollLocked(false);
       if (supportChatPollTimer) {
         window.clearInterval(supportChatPollTimer);
         supportChatPollTimer = null;

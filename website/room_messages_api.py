@@ -15,6 +15,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
@@ -232,6 +233,7 @@ def get_room_messages_data(
         "type_counts": summary.get("type_counts", []),
         "family_counts": summary.get("family_counts", []),
         "room_counts": summary.get("room_counts", []),
+        "refreshed_at": _refresh_time_label(),
         "refresh_interval_seconds": cfg.ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS,
     }
 
@@ -248,6 +250,7 @@ def get_room_messages_summary(
         "summary": summary,
         "type_counts": summary.get("type_counts", []),
         "family_counts": summary.get("family_counts", []),
+        "refreshed_at": _refresh_time_label(),
         "refresh_interval_seconds": cfg.ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS,
     }
 
@@ -971,8 +974,14 @@ def _summary_payload(summary: dict[str, Any]) -> dict[str, Any]:
         "summary": summary,
         "type_counts": summary.get("type_counts", []),
         "family_counts": summary.get("family_counts", []),
+        "refreshed_at": _refresh_time_label(),
         "refresh_interval_seconds": cfg.ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS,
     }
+
+
+def _refresh_time_label() -> str:
+    """Return the server-side data refresh response time in Beijing time."""
+    return datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _reply_target(row: dict[str, Any]) -> dict[str, Any]:

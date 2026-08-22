@@ -16,7 +16,7 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn("overflow-y: auto;", template)
         self.assertIn("-webkit-overflow-scrolling: touch;", template)
         self.assertIn('id="latestTime">更新时间：-', template)
-        self.assertIn('summary.source_mtime || "-"', template)
+        self.assertIn('data.refreshed_at || "-"', template)
         self.assertIn("room-filters-open", template)
         self.assertIn('unrepliedPanel.classList.toggle("visible", shouldShow)', template)
         self.assertIn('function isGiftReplyFamilyView()', template)

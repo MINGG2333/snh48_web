@@ -1010,12 +1010,28 @@
       .field,
       .family-strip,
       .actions { min-width: 0; max-width: 100%; }
+      .filter-modal-scroll .field { overflow: hidden; }
       .field input,
       .field select,
       .chip,
       .btn { min-height: 34px; max-width: 100%; }
       .field input,
       .field select { min-width: 0; }
+      .filter-modal-scroll .field input,
+      .filter-modal-scroll .field select { font-size: 16px; }
+      .filter-modal-scroll .field input[type="date"] {
+        display: block;
+        width: 100%;
+        min-width: 0 !important;
+        max-width: 100%;
+        font-size: 16px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .filter-modal-scroll .field input[type="date"]::-webkit-date-and-time-value {
+        min-width: 0;
+        text-align: left;
+      }
       .actions .btn { flex: 1; }
       .chat-scroll {
         padding: 14px 12px calc(216px + env(safe-area-inset-bottom, 0px) + var(--visual-bottom-gap));
@@ -1540,7 +1556,7 @@
       if (typeof total === "number") {
         totalMessages.textContent = formatNumber(total);
       }
-      latestTime.textContent = "更新时间：" + (summary.source_mtime || "-");
+      latestTime.textContent = "更新时间：" + (data.refreshed_at || "-");
       refreshSeconds = Number(data.refresh_interval_seconds || 60);
       latestSeen = summary.latest_bj_time || latestSeen;
       latestUnrepliedGiftBatch = summary.latest_unreplied_gift_batch || null;
@@ -2009,6 +2025,9 @@
         });
         if (!resp.ok) return;
         var data = await resp.json();
+        if (data.refreshed_at) {
+          latestTime.textContent = "更新时间：" + data.refreshed_at;
+        }
         if (data.summary) {
           latestUnrepliedGiftBatch = data.summary.latest_unreplied_gift_batch || null;
           latestIgnoredBatch = data.summary.latest_ignored_batch || null;
@@ -2579,6 +2598,57 @@
       reloadLatest("reset_filters");
     }
 
+    function currentBeijingDate() {
+      var parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(new Date());
+      var values = {};
+      parts.forEach(function(part) { values[part.type] = part.value; });
+      return [values.year, values.month, values.day].join("-");
+    }
+
+    function installDateInputGuard(node, onChange) {
+      if (!node) return;
+      node.addEventListener("focus", function() {
+        node.dataset.emptyOnFocus = node.value ? "0" : "1";
+        node.dataset.focusAt = String(Date.now());
+        node.dataset.userEdited = "0";
+      });
+      node.addEventListener("input", function() {
+        var focusedEmpty = node.dataset.emptyOnFocus === "1";
+        var elapsed = Date.now() - Number(node.dataset.focusAt || 0);
+        if (focusedEmpty && elapsed < 700 && node.value === currentBeijingDate()) {
+          node.value = "";
+          node.dataset.autoCleared = "1";
+          return;
+        }
+        node.dataset.userEdited = "1";
+      });
+      node.addEventListener("change", function() {
+        var focusedEmpty = node.dataset.emptyOnFocus === "1";
+        var elapsed = Date.now() - Number(node.dataset.focusAt || 0);
+        if (focusedEmpty && node.value === currentBeijingDate() && node.dataset.userEdited !== "1" && elapsed < 1200) {
+          node.value = "";
+          node.dataset.autoCleared = "1";
+          return;
+        }
+        if (typeof onChange === "function") onChange();
+      });
+      node.addEventListener("blur", function() {
+        var focusedEmpty = node.dataset.emptyOnFocus === "1";
+        if (focusedEmpty && node.dataset.userEdited !== "1" && node.value === currentBeijingDate()) {
+          node.value = "";
+        }
+        delete node.dataset.emptyOnFocus;
+        delete node.dataset.focusAt;
+        delete node.dataset.userEdited;
+        delete node.dataset.autoCleared;
+      });
+    }
+
     function formatNumber(value) {
       return Number(value || 0).toLocaleString("zh-CN");
     }
@@ -2598,9 +2668,7 @@
     });
     resetBtn.addEventListener("click", resetFilters);
     if (jumpDateInput) {
-      jumpDateInput.addEventListener("change", function() {
-        jumpToDate(jumpDateInput.value);
-      });
+      installDateInputGuard(jumpDateInput, function() { jumpToDate(jumpDateInput.value); });
       jumpDateInput.addEventListener("keydown", function(event) {
         if (event.key === "Enter") jumpToDate();
       });
@@ -2650,11 +2718,13 @@
       reloadLatest("family_filter");
     });
 
-    [typeSelect, roomSelect, limitSelect, mediaSelect, dateFromInput, dateToInput].forEach(function(node) {
+    [typeSelect, roomSelect, limitSelect, mediaSelect].forEach(function(node) {
       node.addEventListener("change", function() {
         reloadLatest("change_filters");
       });
     });
+    installDateInputGuard(dateFromInput, function() { reloadLatest("change_filters"); });
+    installDateInputGuard(dateToInput, function() { reloadLatest("change_filters"); });
 
     [senderInput, keywordInput].forEach(function(node) {
       node.addEventListener("keydown", function(event) {
