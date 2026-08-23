@@ -59,6 +59,11 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn('new AbortController()', template)
         self.assertNotIn('客服会话独立高频刷新', template)
         self.assertIn("chatRefreshBusy", template)
+        self.assertIn("!options.loginAttempt", template)
+        self.assertIn("const requestPassword = obPassword", template)
+        self.assertIn("requestPassword !== obPassword", template)
+        self.assertNotIn("setInterval(fetchData, 10000)", template)
+        self.assertIn("loginVerified && obPassword && loginOverlay.classList.contains('hidden')", template)
 
 
 if __name__ == "__main__":

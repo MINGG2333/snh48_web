@@ -1263,14 +1263,20 @@
   // ── Fetch Data ──
   async function fetchData(options) {
     options = options || {};
+    if (
+      !options.loginAttempt &&
+      (!loginVerified || !obPassword || !loginOverlay.classList.contains('hidden'))
+    ) return;
+    const requestPassword = obPassword;
     const wasLoginVisible = !loginOverlay.classList.contains('hidden');
-    const attemptedLogin = wasLoginVisible && Boolean(obPassword);
+    const attemptedLogin = wasLoginVisible && Boolean(requestPassword);
     try {
       const resp = await fetch('/api/ob/data', {
-        headers: { 'X-Ob-Password': obPassword },
+        headers: { 'X-Ob-Password': requestPassword },
         cache: 'no-store'
       });
       if (resp.status === 401 || resp.status === 403) {
+        if (requestPassword !== obPassword) return;
         const error = await resp.json().catch(() => ({}));
         resetLoginForPassword(error.detail || '密码错误');
         if (attemptedLogin) {
@@ -1923,7 +1929,11 @@
   }
 
   // ── Auto-refresh every 10s ──
-  setInterval(fetchData, 10000);
+  setInterval(() => {
+    if (loginVerified && obPassword && loginOverlay.classList.contains('hidden')) {
+      fetchData();
+    }
+  }, 10000);
 
   // ── Focus password input ──
   passwordInput.focus();
