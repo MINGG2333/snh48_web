@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 19:31 OB IP 关联组展示完成腾讯云阶段发布：网站提交 `bb6ca36` 已推送并加载到腾讯云 screen `3300763.snh48`、Python PID `3300772`，继续覆盖 `QA_WARMUP_ON_STARTUP=false`。OB 新增仅用于整理展示的 `association_groups`，按稳定浏览器档案和旧会话共享 IP 的传递关系生成组，不改变估计访客数、稳定档案数、旧会话数或逐次访问记录；旧会话使用历史 IP 参与并明确标记限制。公网 `/ob` 返回 200，鉴权 `/api/ob/data` 返回 702 个原始成员、180 个关联组，统计仍为 99 个稳定档案、603 个旧会话和 215 条逐次访问；`/timeline` 返回 200。前端已改为默认收起的关联组总览，展开后显示成员行并可进入原详情弹窗。阿里云尚未同步，等待腾讯云验收。
+
 2026-08-23 18:42:44 阿里云上麦回放页面完成部署复核：`python3 deploy/deploy.py deploy aliyun` 已完成 Git 快进、`snh48-aliyun` 重启和目标页面烟测；远端随后自动合并文档提交，当前 checkout 为 `33f37be`，其中保留上麦回放移动端 `filterPanel` 改动。阿里云 PID `2454218`，`active/running`、`NRestarts=0`，18:41:01 启动；公网页面 `/radio` 返回 200、未登录 `/api/room-voice-replays/sessions` 返回 401。远端既有未跟踪运行文件保持原样。
 
 2026-08-23 18:39:59 阿里云部署网站提交 `778161a`：修复移动端日期筛选首次选择卡死风险，统一受保护页面的初始鉴权错误状态，并为 Room、礼物明细、送礼人和翻牌页调整“跳到最新”显示逻辑。`python3 deploy/deploy.py deploy aliyun` 已完成 Git 快进、`snh48-aliyun` 重启和首页、时间轴、礼物、上麦、翻牌、静态资源及关键 API 烟测；阿里云 PID `2453662`，`active/running`，`NRestarts=0`。远端既有未跟踪的 `website/data/manual_events.csv`、`website/data/runtime_backups/`、`website/static/js/timeline.js.bak` 保持原样；腾讯云未重启。
@@ -66,7 +68,7 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `9c3afec`。screen `3152206.snh48`、Python PID `3152211`，2026-08-23 16:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `bb6ca36`。screen `3300763.snh48`、Python PID `3300772`，2026-08-23 19:31 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 与 IP 关联组展示均已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
 | 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `33f37be`。2026-08-23 18:41:01 CST 重启，PID `2454218`，active/running、`NRestarts=0`；日期筛选、受保护页面初始鉴权、各页“跳到最新”和上麦回放移动端筛选收纳均已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
