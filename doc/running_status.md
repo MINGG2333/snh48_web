@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 17:37 Room 页移动端导航位置与筛选滚动边界完成阿里云发布：网站提交 `d49590e` 已重启 `snh48-aliyun`。`综合回礼`、`上麦回放`位于顶部第一行，`筛选`位于统计行；390×844 移动视口测量分别为 `y=10` 与 `y=52`。打开筛选后背景 `window.scrollY` 锁定为 0，遮罩阻止触摸穿透，筛选卡片内部保持可滚动。阿里云 PID `2446857`，`active/running`、`NRestarts=0`；腾讯云未重启。
+
 2026-08-23 17:19 修复 Room 页面移动端顶部栏消失：网站提交 `e1ebd96` 已部署到阿里云并重启 `snh48-aliyun`。移动端改为仅由 `html` 承担文档滚动，`body` 保持 `overflow: visible`，避免 `sticky` 顶部栏绑定到不实际滚动的 body 容器；390×844 移动视口登录后页面滚到底部时，顶部栏实际 `y=0`、`position: sticky`，线上截图和 DOM 计算样式复核通过。阿里云 PID `2444525`，`active/running`、`NRestarts=0`；腾讯云未重启。
 
 2026-08-23 16:55 阿里云完成网站导航、移动端固定顶部栏、筛选弹窗和公开记忆页改造部署：网站提交 `ed020aa` 已由 `python3 deploy/deploy.py deploy aliyun` 快进并重启 `snh48-aliyun`。阿里云主 PID `2441690`，`active/running`、`NRestarts=0`；首页、`/timeline`、`/room/gifts`、`/room/gift-senders`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、静态资源、时间轴/QA/图片代理接口均通过部署烟测，公开 `/memories` 与 `/api/memories/data` 返回 200，公开记录不包含内部审核字段或 `platform_id`。阿里云既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样；本次未同步 `snh48-fan-hub` 数据、Cookie、Token、`.env` 或其他密钥。腾讯云未重启，继续运行其现有 screen 进程。
@@ -57,7 +59,7 @@
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
 | 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `9c3afec`。screen `3152206.snh48`、Python PID `3152211`，2026-08-23 16:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `e1ebd96`。2026-08-23 17:18:19 CST 重启，PID `2444525`，active/running、`NRestarts=0`；Room 移动端顶部栏已修复并完成 390×844 线上复核；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `d49590e`。2026-08-23 17:36:14 CST 重启，PID `2446857`，active/running、`NRestarts=0`；Room 移动端顶部栏、导航位置和筛选弹窗滚动边界均已复核；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
