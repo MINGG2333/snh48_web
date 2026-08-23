@@ -359,7 +359,6 @@ async def gift_reply_senders_page(request: Request):
 
 
 @app.get("/room", response_class=HTMLResponse)
-@app.get("/rm", response_class=HTMLResponse, include_in_schema=False)
 @app.get("/room-messages", response_class=HTMLResponse)
 async def room_messages_page(request: Request):
     """Admin page for room messages."""
@@ -377,7 +376,6 @@ async def room_messages_page(request: Request):
 
 
 @app.get("/radio", response_class=HTMLResponse)
-@app.get("/radio-replays", response_class=HTMLResponse)
 @app.get("/room-voice-replays", response_class=HTMLResponse)
 async def room_voice_replays_page(request: Request):
     """Password-protected member-room voice replay page."""
@@ -411,7 +409,6 @@ async def flip_cards_page(request: Request):
     )
 
 
-@app.get("/sg", response_class=HTMLResponse)
 @app.get("/score", response_class=HTMLResponse)
 @app.get("/score-gifts", response_class=HTMLResponse)
 async def score_gifts_page(request: Request):
@@ -429,7 +426,6 @@ async def score_gifts_page(request: Request):
     )
 
 
-@app.get("/pk", response_class=HTMLResponse)
 @app.get("/score-pk", response_class=HTMLResponse)
 async def pk_score_page(request: Request):
     """Password-protected live room score-PK page."""

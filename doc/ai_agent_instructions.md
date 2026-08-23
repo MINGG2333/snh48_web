@@ -258,7 +258,7 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/room-messages` / `/room` | 房间消息管理页 | ❌ 仅 URL 访问（需密码） |
 | `/room-voice-replays` / `/radio` | 成员房间上麦回放页 | ❌ 仅 URL 访问（需密码、禁止索引） |
 | `/flip-cards` / `/flip` | 翻牌记录页 | ❌ 仅 URL 访问（需密码、禁止索引） |
-| `/score-gifts` / `/sg` | 计分礼物管理页 | ❌ 仅 URL 访问（需密码） |
+| `/score-gifts` / `/score` | 计分礼物管理页 | ❌ 仅 URL 访问（需密码） |
 
 ### 时光轴地图功能
 

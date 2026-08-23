@@ -234,12 +234,23 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
     def test_details_template_uses_summary_polling_and_click_to_refresh(self) -> None:
         template = Path("website/templates/gift_replies.html").read_text(encoding="utf-8")
         self.assertIn('id="statsToggle"', template)
+        self.assertIn('id="giftFilterModal"', template)
+        self.assertIn('id="giftFilterToggle"', template)
+        self.assertIn('id="giftFilterClose"', template)
+        self.assertIn('setGiftFilterModalOpen(!giftFilterModal.classList.contains("open"))', template)
         self.assertIn('id="updatePill"', template)
         self.assertIn('/api/gift-replies/summary', template)
         self.assertIn('window.setInterval(checkUpdates', template)
         self.assertIn('updatePill.addEventListener("click", loadLatestData)', template)
         self.assertIn('有新的送礼数据，点击刷新', template)
         self.assertNotIn('window.setInterval(function() {\n        fetchData({ resetTimer: false });', template)
+
+        main = Path("website/main.py").read_text(encoding="utf-8")
+        self.assertNotIn('@app.get("/rm"', main)
+        self.assertNotIn('@app.get("/radio-replays"', main)
+        self.assertNotIn('@app.get("/sg"', main)
+        self.assertNotIn('@app.get("/pk"', main)
+        self.assertIn('@app.get("/score"', main)
 
 
 if __name__ == "__main__":

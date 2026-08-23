@@ -62,7 +62,7 @@
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
-- `room_record/pk_scores/current.json`（房间计分 PK 派生小数据；首轮只供腾讯云 `/pk`，阿里云同步待用户验收后另行确认）
+- `room_record/pk_scores/current.json`（房间计分 PK 派生小数据；首轮只供腾讯云 `/score-pk`，阿里云同步待用户验收后另行确认）
 - `flip_data/web/`（密码保护的脱敏账号清单、schema v4 账号数据和默认兼容副本）
 - `flip_data/audio/{account_id}/`、`flip_data/video/{account_id}/`（账号级本地播放依赖；不含 `metadata/`、Token 或登录状态）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
@@ -150,7 +150,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/room-messages`，短入口：`/room`；旧短入口 `/rm` 保留兼容。
+- 页面入口：`/room-messages`，短入口：`/room`。
 - API：`/api/room-messages/verify`、`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore`
 - 数据源：优先读取 `ROOM_MESSAGES_SHARDS_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/`；没有分片时回退到 `ROOM_MESSAGES_CSV_PATH`；消息字段中的 `room_type=main/small` 和 `room_label=公开房间/小房间` 用于页面标识公开房间或小房间
 - 语音转录参考：`ROOM_AUDIO_TRANSCRIPTS_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/room_audio_transcripts.jsonl`
@@ -168,7 +168,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/room-voice-replays`，短入口：`/radio`；兼容入口 `/radio-replays`
+- 页面入口：`/room-voice-replays`，短入口：`/radio`
 - API：`/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/sessions/{session_id}/segments/{filename}`
 - 数据源：`ROOM_VOICE_REPLAYS_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/`
 - 鉴权：`ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Room-Voice-Replays-Password`
@@ -208,7 +208,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/score-gifts`，短入口：`/sg`
+- 页面入口：`/score-gifts`，兼容入口：`/score`
 - API：`/api/score-gifts/verify`、`/api/score-gifts/data`、`/api/score-gifts/summary`、`/api/score-gifts/export.xlsx`、`/api/score-gifts/sender-export.xlsx`、`/api/score-gifts/business-review`
 - 数据源：`SCORE_GIFTS_DATA_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/score_gifts.json`
 - 鉴权：默认复用 `GIFT_REPLIES_PASSWORD`；如需单独密码可设置 `SCORE_GIFTS_PASSWORD`；请求头 `X-Score-Gifts-Password`
@@ -227,7 +227,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/score-pk`，短入口：`/pk`
+- 页面入口：`/score-pk`
 - API：`/api/pk-score/verify`、`/api/pk-score/data`
 - 数据源：`/home/snh48-fan-hub/room_record/pk_scores/current.json`
 - 鉴权：复用 `SCORE_GIFTS_PASSWORD`，请求头 `X-PK-Score-Password`
@@ -397,7 +397,7 @@ curl -sS -D - -o /dev/null https://cjy.plus/timeline
 curl -sS -D - -o /dev/null https://cjy.plus/room/gifts
 curl -sS -D - -o /dev/null https://cjy.plus/room/gift-senders
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
-curl -sS -D - -o /dev/null https://cjy.plus/sg
+curl -sS -D - -o /dev/null https://cjy.plus/score
 curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
 curl -sS -D - -o /dev/null https://cjy.plus/radio
 curl -sS -D - -o /dev/null https://cjy.plus/memories
@@ -417,7 +417,7 @@ curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/timeline
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room/gifts
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room/gift-senders
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score-gifts
-curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/sg
+curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/score
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/room-voice-replays
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/radio
 curl -sS -D - -o /dev/null https://cjy.xn--6qq986b3xl/memories

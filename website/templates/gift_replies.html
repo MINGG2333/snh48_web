@@ -163,6 +163,27 @@
       gap: 8px;
     }
 
+    .mobile-filter-toggle {
+      display: none;
+      min-height: 34px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .mobile-filter-toggle:hover,
+    .mobile-filter-toggle:focus-visible {
+      border-color: var(--accent);
+      color: var(--accent-strong);
+      outline: none;
+    }
+
     .page-link {
       display: inline-flex;
       align-items: center;
@@ -236,6 +257,17 @@
       background: var(--surface);
       padding: 14px;
       margin-bottom: 16px;
+    }
+
+    .gift-filter-modal,
+    .gift-filter-card,
+    .gift-filter-scroll {
+      display: contents;
+    }
+
+    .gift-filter-backdrop,
+    .gift-filter-header {
+      display: none;
     }
 
     .toolbar-row {
@@ -537,16 +569,21 @@
         flex-direction: column;
       }
 
+      .page-links {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .mobile-filter-toggle {
+        display: inline-flex;
+      }
+
       main {
         padding: 16px;
       }
 
       .stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .toolbar-row {
-        grid-template-columns: 1fr;
       }
 
       .actions {
@@ -573,6 +610,147 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+
+      html.gift-filters-open,
+      body.gift-filters-open {
+        overflow: hidden;
+      }
+
+      .gift-filter-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: none;
+        align-items: flex-end;
+        justify-content: center;
+      }
+
+      .gift-filter-modal.open {
+        display: flex;
+      }
+
+      .gift-filter-backdrop {
+        position: absolute;
+        inset: 0;
+        display: block;
+        background: rgba(4, 8, 13, 0.72);
+      }
+
+      .gift-filter-card {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        width: min(460px, calc(100vw - 24px));
+        max-width: calc(100% - 24px);
+        min-width: 0;
+        max-height: min(88dvh, 760px);
+        margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+      }
+
+      .gift-filter-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .gift-filter-header h2 {
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .gift-filter-close {
+        min-height: 32px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--text);
+        padding: 0 10px;
+      }
+
+      .gift-filter-close:hover,
+      .gift-filter-close:focus-visible {
+        border-color: var(--accent);
+        color: var(--accent-strong);
+        outline: none;
+      }
+
+      .gift-filter-scroll {
+        display: block;
+        min-height: 0;
+        min-width: 0;
+        max-height: calc(min(88dvh, 760px) - 61px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
+
+      .gift-filter-scroll .toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) !important;
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: 12px;
+        margin-bottom: 0;
+        gap: 10px;
+      }
+
+      .gift-filter-scroll .toolbar-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) !important;
+        width: 100%;
+        min-width: 0;
+        gap: 10px;
+        margin-top: 0 !important;
+      }
+
+      .gift-filter-scroll .field,
+      .gift-filter-scroll .field input,
+      .gift-filter-scroll .field select,
+      .gift-filter-scroll .segment,
+      .gift-filter-scroll .actions {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      .gift-filter-scroll .field input,
+      .gift-filter-scroll .field select {
+        font-size: 16px;
+      }
+
+      .gift-filter-scroll .segment {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .gift-filter-scroll .segment button {
+        min-width: 0;
+        padding: 0 5px;
+        white-space: normal;
+        line-height: 1.25;
+      }
+
+      .gift-filter-scroll .actions {
+        justify-content: stretch;
+      }
+
+      .gift-filter-scroll .actions .btn {
+        flex: 1 1 0;
+        min-width: 0;
+      }
     }
   </style>
 </head>
@@ -597,6 +775,7 @@
         <nav class="page-links" aria-label="礼物页面导航">
           <a class="page-link" href="/room/gift-senders" data-track="gift_details_to_sender_summary">综合回礼</a>
           <a class="page-link" href="/room" data-track="gift_details_to_room">Room</a>
+          <button class="mobile-filter-toggle" id="giftFilterToggle" type="button" aria-expanded="false" aria-controls="giftFilterModal">筛选</button>
         </nav>
       </div>
     </div>
@@ -635,6 +814,14 @@
         </div>
       </section>
 
+      <div class="gift-filter-modal" id="giftFilterModal">
+        <div class="gift-filter-backdrop" id="giftFilterBackdrop"></div>
+        <section class="gift-filter-card" id="giftFilterCard" aria-labelledby="giftFilterTitle">
+          <header class="gift-filter-header">
+            <h2 id="giftFilterTitle">筛选礼物回复</h2>
+            <button class="gift-filter-close" id="giftFilterClose" type="button">收起</button>
+          </header>
+          <div class="gift-filter-scroll">
       <section class="toolbar" aria-label="筛选条件">
         <div class="toolbar-row">
           <div class="field">
@@ -688,6 +875,9 @@
           <div></div>
         </div>
       </section>
+          </div>
+        </section>
+      </div>
 
       <div class="result-head">
         <span id="resultSummary">共 0 条</span>
@@ -746,6 +936,7 @@
     var lastDatasetSnapshot = null;
     var loginBusy = false;
     var loginVerified = false;
+    var giftFilterPreviousFocus = null;
 
     var loginOverlay = document.getElementById("loginOverlay");
     var loginBtn = document.getElementById("loginBtn");
@@ -753,6 +944,11 @@
     var loginError = document.getElementById("loginError");
     var pageEl = document.getElementById("page");
     var mainContent = document.getElementById("mainContent");
+    var giftFilterToggle = document.getElementById("giftFilterToggle");
+    var giftFilterModal = document.getElementById("giftFilterModal");
+    var giftFilterBackdrop = document.getElementById("giftFilterBackdrop");
+    var giftFilterClose = document.getElementById("giftFilterClose");
+    var giftFilterCard = document.getElementById("giftFilterCard");
     var totalGiftMessages = document.getElementById("totalGiftMessages");
     var totalGiftCount = document.getElementById("totalGiftCount");
     var repliedGiftMessages = document.getElementById("repliedGiftMessages");
@@ -817,6 +1013,47 @@
       window._trackEvent(eventType, Object.assign({
         area: "gift_replies"
       }, data || {}));
+    }
+
+    function isGiftFilterMobile() {
+      return window.matchMedia
+        ? window.matchMedia("(max-width: 720px)").matches
+        : window.innerWidth <= 720;
+    }
+
+    function setGiftFilterModalOpen(open) {
+      if (!giftFilterModal || !giftFilterToggle) return;
+      var mobile = isGiftFilterMobile();
+      if (open && mobile) {
+        giftFilterPreviousFocus = document.activeElement;
+        document.documentElement.classList.add("gift-filters-open");
+        document.body.classList.add("gift-filters-open");
+      } else {
+        document.documentElement.classList.remove("gift-filters-open");
+        document.body.classList.remove("gift-filters-open");
+      }
+      giftFilterModal.classList.toggle("open", open && mobile);
+      if (mobile) {
+        giftFilterModal.setAttribute("aria-hidden", open ? "false" : "true");
+      } else {
+        giftFilterModal.removeAttribute("aria-hidden");
+      }
+      giftFilterToggle.setAttribute("aria-expanded", open && mobile ? "true" : "false");
+      if (giftFilterCard) {
+        if (open && mobile) {
+          giftFilterCard.setAttribute("role", "dialog");
+          giftFilterCard.setAttribute("aria-modal", "true");
+        } else {
+          giftFilterCard.removeAttribute("role");
+          giftFilterCard.removeAttribute("aria-modal");
+        }
+      }
+      if (open && mobile && giftFilterClose) {
+        window.setTimeout(function() { giftFilterClose.focus(); }, 0);
+      } else if (!open && mobile && giftFilterPreviousFocus && typeof giftFilterPreviousFocus.focus === "function") {
+        giftFilterPreviousFocus.focus();
+        giftFilterPreviousFocus = null;
+      }
     }
 
     function giftRepliesFilterPayload(action) {
@@ -1159,6 +1396,7 @@
       page = 1;
       pageSize = Number(pageSizeSelect.value || 100);
       trackAdminEvent("admin_filter", giftRepliesFilterPayload(action || "apply_filters"));
+      if (isGiftFilterMobile()) setGiftFilterModalOpen(false);
       fetchData({ resetTimer: true });
     }
 
@@ -1247,6 +1485,22 @@
     loginBtn.addEventListener("click", doLogin);
     passwordInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") doLogin();
+    });
+
+    giftFilterToggle.addEventListener("click", function() {
+      setGiftFilterModalOpen(!giftFilterModal.classList.contains("open"));
+      trackAdminEvent("filter_modal", { action: giftFilterModal.classList.contains("open") ? "open" : "close" });
+    });
+    giftFilterClose.addEventListener("click", function() {
+      setGiftFilterModalOpen(false);
+    });
+    giftFilterBackdrop.addEventListener("click", function() {
+      setGiftFilterModalOpen(false);
+    });
+    document.addEventListener("keydown", function(event) {
+      if (event.key === "Escape" && giftFilterModal.classList.contains("open")) {
+        setGiftFilterModalOpen(false);
+      }
     });
 
     statusSegment.addEventListener("click", function(event) {
