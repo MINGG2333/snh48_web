@@ -40,6 +40,9 @@ if _env_file.exists():
         pass
 
 # ── Transcript Knowledge Base ──────────────────────────────────────────────
+# Disabled nodes do not import the QA engine, inspect the knowledge-base
+# directory, expose QA APIs, or start warmup work.
+QA_ENABLED = os.getenv("QA_ENABLED", "true").lower() in ("1", "true", "yes")
 # 数据文件/目录默认放在 transcript_analyze/ 下（与 run_kb_qa.py 同目录）
 RECORDS_PATH = os.getenv("RECORDS_PATH", str(PROJECT_ROOT / "transcript_analyze" / "download_records.json"))
 SUBTITLE_ROOT = os.getenv("SUBTITLE_ROOT", str(PROJECT_ROOT / "transcript_analyze" / "firered_output_batch"))
@@ -119,7 +122,7 @@ QA_TIMEOUT_SECONDS = int(os.getenv("QA_TIMEOUT_SECONDS", "300"))
 QA_POLL_INTERVAL_MS = int(os.getenv("QA_POLL_INTERVAL_MS", "3000"))
 # 超时预警时间（秒），超过此时间前端显示警告
 QA_WARN_SECONDS = int(os.getenv("QA_WARN_SECONDS", "240"))
-# 是否在服务启动时后台预热 QA 知识库。默认开启，保持现有 QA 页面行为；调试管理页冷启动时可临时设为 false。
+# 是否在启用 QA 的节点启动时后台预热知识库。
 QA_WARMUP_ON_STARTUP = os.getenv("QA_WARMUP_ON_STARTUP", "true").lower() in ("1", "true", "yes")
 
 # ── 通用公开端点限速（防滥用）────────────────────────────────────────────────
@@ -169,7 +172,9 @@ TRUSTED_PROXY_PEERS = tuple(
 TRUSTED_HOSTS = tuple(
     item.strip()
     for item in os.getenv(
-        "TRUSTED_HOSTS", "cjy.plus,www.cjy.plus,localhost,127.0.0.1,[::1]"
+        "TRUSTED_HOSTS",
+        "cjy.plus,www.cjy.plus,cjy.xn--6qq986b3xl,www.cjy.xn--6qq986b3xl,"
+        "localhost,127.0.0.1,[::1]",
     ).split(",")
     if item.strip()
 )
