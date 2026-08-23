@@ -26,6 +26,7 @@
 | 观察页访客估算最小化 | tracker 使用独立第一方 `visitor_id` 表达浏览器档案，不改变 QA 的会话 ID、配额或鉴权；仅在 `page_view` 时把页面、请求 IP 和粗粒度设备标签写入本机 `interaction_logs/session_*/visitor_page_views.jsonl`；`/ob` 密码验证后才返回逐次 IP | 同一浏览器跨标签页和 IP 变化仍归为一个估算访客，同时避免把共享 IP 下所有会话错误合并 | 浏览器档案不等于实名自然人；不得加入 GeoIP、城市、经纬度、完整 User-Agent、Canvas、字体、GPU、音频等主动指纹；该日志保持节点本地，不进入 Git 或双服务器业务状态复制；旧记录无法可靠倒推逐次设备/IP，必须明确标为旧会话 |
 | 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；只接受 `segment_000001.m4a` / `segment_000001_original.m4a` 形式，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`，真实密码只放 `.env` |
 | 翻牌记录与账号管理访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD` 和路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；账号管理 POST 还校验同源，仅腾讯云权威节点启用。手机号只写腾讯云本机短期 `0600` 会话，验证码不落盘，Token 只写私有账号库；短信有冷却/小时限额，验证码最多尝试 5 次 | 避免个人翻牌、媒体和口袋48登录凭据被公开、跨站触发或同步到阿里云 | 两端页面和代码一致；阿里云同一弹窗只返回当前节点不开放操作且无跳转。媒体按清单允许的账号 ID、固定文件名和 Range API 提供；不得把 `flip_data/` 挂到 `/static` |
+| 社交 Cookie 隐藏管理 | `/api/social-credentials/*` 要求独立密码或迁移期复用 `OB_PASSWORD`，使用 30 分钟、路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；更新 POST 校验同源并受 `SHARED_STATE_IS_PRIMARY` 硬门禁 | 避免微博/抖音/B站 Cookie 被公开、跨站替换或进入阿里云 | Cookie 只经 HTTPS 请求体和 stdin-only 短进程传递；响应、状态和日志不得回显；严格桥先验证再原子保存，失败保留旧配置；页面不进导航并设置 `noindex,nofollow` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
@@ -72,6 +73,10 @@ FLIP_CARDS_DATASET_PATH=/home/snh48-fan-hub/flip_data/web/flip_cards.json
 FLIP_CARDS_ACCOUNTS_PATH=/home/snh48-fan-hub/flip_data/web/accounts.json
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 FLIP_CARDS_ACCOUNT_ADMIN_ENABLED=腾讯云 true；阿里云 false
+SOCIAL_CREDENTIALS_ADMIN_PASSWORD=独立社交凭据管理密码
+SOCIAL_CREDENTIALS_ADMIN_ENABLED=腾讯云 true；阿里云 false
+SOCIAL_CREDENTIALS_ADMIN_PYTHON=/home/snh48-fan-hub/venv/bin/python3
+SOCIAL_CREDENTIALS_ADMIN_SCRIPT=/home/snh48-fan-hub/scripts/web/social_credentials_admin.py
 ```
 
 云安全组只应公网放行 `80/443`，以及必要的 SSH `22` 管理入口；`22` 建议限制来源 IP 或配套强认证。不应公网放行后端 `8000` 或图片代理 `8899`。如果备案前或故障排查需要临时暴露 `8000`/`8899`，完成后必须撤销。
@@ -95,6 +100,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
 curl -sS -D - -o /dev/null https://cjy.plus/api/room-voice-replays/sessions
 curl -sS -D - -o /dev/null https://cjy.plus/flip-cards
 curl -sS -D - -o /dev/null https://cjy.plus/api/flip-cards/status
+curl -sS -D - -o /dev/null https://cjy.plus/social-credentials-admin
+curl -sS -D - -o /dev/null https://cjy.plus/api/social-credentials/status
 curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
 curl -I --connect-timeout 5 http://124.222.72.203:8000
@@ -112,6 +119,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - `/replay/{live_id}` 的外部 HLS 回放在 Chrome/Firefox 中可播放。
 - `/room-voice-replays` 页面返回 200；未登录访问 `/api/room-voice-replays/sessions` 返回 401；使用真实密码后列表、详情和音频 Range 请求正常，响应不暴露服务器文件路径或流 URL。
 - `/flip-cards` 页面返回 200；未登录访问 `/api/flip-cards/status` 返回 401；使用真实密码后应用 JSON、MP3/MP4 Range 请求正常，响应不暴露服务器文件路径或口袋48 Token。
+- `/social-credentials-admin` 页面返回 200 且带 `X-Robots-Tag: noindex, nofollow`；腾讯云未登录访问 status 返回 401，登录后只返回各槽位是否配置和最近验证时间，不含 Cookie。阿里云 API 返回 403，即使误设 enable 也不能写入。
 - 腾讯云和阿里云云安全组均已删除公网 `TCP:8000` 和 `TCP:8899` 入站规则；公网只保留 `80/443` 和必要 SSH `22`；这是云控制台操作，不能只靠代码库变更完成。
 
 涉及图片代理、URL 白名单、CSP 或弹幕抓取的安全加固时，还必须做用户体验验收：

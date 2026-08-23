@@ -247,6 +247,16 @@ async def scroller_admin_page(request: Request):
     )
 
 
+@app.get("/social-credentials-admin", response_class=HTMLResponse)
+async def social_credentials_admin_page(request: Request):
+    """Unlinked, password-protected social credential maintenance page."""
+    return templates.TemplateResponse(
+        "social_credentials_admin.html",
+        {"request": request, "site_title": cfg.SITE_TITLE},
+        headers={"Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow"},
+    )
+
+
 @app.get("/terms", response_class=HTMLResponse)
 async def terms_page(request: Request):
     """Terms of Service page."""
@@ -575,6 +585,9 @@ app.include_router(memories_router)
 
 from website.feedback_chat_api import router as feedback_chat_router
 app.include_router(feedback_chat_router)
+
+from website.social_credentials_admin_api import router as social_credentials_admin_router
+app.include_router(social_credentials_admin_router)
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

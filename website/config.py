@@ -76,6 +76,9 @@ OB_PASSWORD = os.getenv("OB_PASSWORD", "")
 # 翻牌记录和媒体都只能通过鉴权 API 读取，不做静态目录挂载。
 FLIP_CARDS_PASSWORD = os.getenv("FLIP_CARDS_PASSWORD") or OB_PASSWORD
 
+# 隐藏社交凭据管理页密码。迁移期留空时复用 OB_PASSWORD；生产可设置独立密码。
+SOCIAL_CREDENTIALS_ADMIN_PASSWORD = os.getenv("SOCIAL_CREDENTIALS_ADMIN_PASSWORD") or OB_PASSWORD
+
 # 礼物回复页管理密码（独立密码，环境变量 GIFT_REPLIES_PASSWORD）
 # 留空则礼物回复页 API 将被禁用
 GIFT_REPLIES_PASSWORD = os.getenv("GIFT_REPLIES_PASSWORD", "")
@@ -257,6 +260,12 @@ FLIP_CARDS_ACCOUNT_ADMIN_PYTHON = os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_PYTHON") o
 FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT = os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "flip_account_admin.py"
 )
+SOCIAL_CREDENTIALS_ADMIN_PYTHON = os.getenv("SOCIAL_CREDENTIALS_ADMIN_PYTHON") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "venv" / "bin" / "python3"
+)
+SOCIAL_CREDENTIALS_ADMIN_SCRIPT = os.getenv("SOCIAL_CREDENTIALS_ADMIN_SCRIPT") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "social_credentials_admin.py"
+)
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。
@@ -317,6 +326,14 @@ FLIP_CARDS_ACCOUNT_ADMIN_ENABLED = (
     SHARED_STATE_IS_PRIMARY
     if not _flip_cards_account_admin_enabled
     else _flip_cards_account_admin_enabled not in ("0", "false", "no")
+)
+_social_credentials_admin_enabled = os.getenv("SOCIAL_CREDENTIALS_ADMIN_ENABLED", "").strip().lower()
+SOCIAL_CREDENTIALS_ADMIN_ENABLED = (
+    SHARED_STATE_IS_PRIMARY and bool(SOCIAL_CREDENTIALS_ADMIN_PASSWORD)
+    if not _social_credentials_admin_enabled
+    else SHARED_STATE_IS_PRIMARY
+    and _social_credentials_admin_enabled not in ("0", "false", "no")
+    and bool(SOCIAL_CREDENTIALS_ADMIN_PASSWORD)
 )
 SHARED_STATE_SYNC_ENABLED = os.getenv(
     "SHARED_STATE_SYNC_ENABLED",
