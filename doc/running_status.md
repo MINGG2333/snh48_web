@@ -2,6 +2,8 @@
 
 更新日期：2026-08-24 CST +0800
 
+2026-08-24 06:07 最终复核：`snh48-aliyun.service` 当前 PID `2526577`、05:48:12 启动、`NRestarts=0`；journal 显示前一进程正常完成 application shutdown，新进程启动后标准页面/API 烟测通过，无崩溃重启。图片代理 PID 仍为 `2523186`、`NRestarts=0`。`sshd -T` 再次确认仅公钥认证；未知 HTTP/HTTPS Host 均为空响应，公网直连 8000/8899 均超时。最终文档快进到阿里云时未重启任何服务。
+
 2026-08-24 05:38:42 阿里云安全整改完成：安全代码基线 `c066bc0`，既有未跟踪运行文件 `website/data/manual_events.csv`、`website/data/runtime_backups/`、`website/static/js/timeline.js.bak` 均保留。`snh48-aliyun.service` enabled、active/running，PID `2523593`，05:24:49 启动，实际以 `snh48-web` UID/GID `998` 运行，`NoNewPrivs=1`、`UMask=0077`，FastAPI 只监听 `127.0.0.1:8000`；`snh48-weibo-img-proxy.service` enabled、active/running，PID `2523186`，05:22:26 启动，使用 systemd `DynamicUser`、`NoNewPrivs=1`，只监听 `127.0.0.1:8899`。运行数据目录/文件全部通过 0700/0600 检查，`.env` 为 root 0600，`/var/log/snh48` 为 root 0700 且内部文件均 0600。共享状态 outbox 为 0，action inbox 为 13 个已有事件。
 
 同轮安全验收：笔记本、台式机公钥登录均在修改前成功；阿里云 sshd 已改为 `AuthenticationMethods publickey`，密码专用回归被 `Permission denied (publickey)` 拒绝。网站专用跨云公钥指纹 `SHA256:3ZfFX2P7LY0ElfIRQe3BPqZ3kHl5xXYF8yptL6ATqKE` 在腾讯云绑定 `mutate inbox-put` 强制命令，交互 shell 探测被 403 拒绝。Nginx `nginx -t` 通过并已 reload，未知 HTTP/HTTPS Host 均返回 444 空响应，服务头仅显示 `nginx` 而无版本号；裸域名、`www`、`/complaint` 为 200，`/openapi.json` 为 404。真实微博图片首次代理为 `MISS`、第二次为 `HIT`，公网直连 8000/8899 均超时。FastAPI 依赖已对齐 `fastapi 0.141.1`、`starlette 1.6.0`、`Jinja2 3.1.6`、`python-multipart 0.0.32`，`pip check` 通过。Ubuntu Main/Restricted 无待 unattended 安全更新；22 项 Universe/Multiverse ESM 需 Ubuntu Pro，本轮未绑定；既往 `libc6` 更新仍留有 reboot-required 标记，本轮未重启整机。
