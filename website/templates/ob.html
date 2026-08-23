@@ -259,21 +259,33 @@
       display: flex;
       align-items: flex-end;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 18px;
       padding: 24px 32px 0;
     }
     .records-heading { min-width: 0; }
     .records-heading h2 { font-size: 17px; font-weight: 650; }
     .records-result-count { display: block; margin-top: 5px; color: var(--text-dim); font-size: 12px; }
-    .page-filter { width: min(420px, 100%); }
-    .page-filter label { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 11px; }
-    .page-filter-control {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 36px;
-      gap: 8px;
+    .records-filter-panel {
+      display: flex;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 18px 32px 0;
     }
-    .page-filter-input-wrap { position: relative; min-width: 0; }
-    .page-filter-input-wrap > i {
+    .record-filter-field { flex: 1 1 140px; min-width: 0; }
+    .record-filter-field.page { flex: 2 1 260px; }
+    .record-filter-field.date { flex: 1.7 1 260px; }
+    .record-filter-field.ip { flex: 1.4 1 190px; }
+    .record-filter-field label,
+    .record-filter-label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+    .record-filter-input-wrap { position: relative; min-width: 0; }
+    .record-filter-input-wrap > i {
       position: absolute;
       left: 12px;
       top: 50%;
@@ -281,31 +293,50 @@
       color: var(--text-dim);
       pointer-events: none;
     }
-    .page-filter input {
+    .record-filter-field input,
+    .record-filter-field select {
       width: 100%;
-      height: 36px;
-      padding: 0 12px 0 34px;
+      height: 38px;
+      padding: 0 11px;
       border: 1px solid var(--border);
       border-radius: 8px;
       background: var(--surface);
       color: var(--text);
       outline: none;
       font-size: 13px;
+      color-scheme: dark;
     }
-    .page-filter input:focus { border-color: var(--accent); }
-    .page-filter input::placeholder { color: var(--text-dim); }
-    .page-filter-clear {
-      width: 36px;
-      height: 36px;
+    .record-filter-input-wrap input { padding-left: 34px; }
+    .record-filter-field select { cursor: pointer; }
+    .record-filter-field input:focus,
+    .record-filter-field select:focus { border-color: var(--accent); }
+    .record-filter-field input::placeholder { color: var(--text-dim); }
+    .record-filter-date-range {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+      gap: 7px;
+    }
+    .record-filter-date-separator { color: var(--text-dim); font-size: 11px; }
+    .record-filter-clear {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      height: 38px;
+      padding: 0 13px;
       border: 1px solid var(--border);
       border-radius: 8px;
       background: var(--surface);
       color: var(--text-dim);
       cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
     }
-    .page-filter-clear:hover,
-    .page-filter-clear:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
-    .page-filter-clear:disabled { cursor: default; opacity: .4; }
+    .record-filter-clear:hover,
+    .record-filter-clear:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
+    .record-filter-clear:disabled { cursor: default; opacity: .4; }
     .groups-container {
       display: grid;
       gap: 10px;
@@ -914,8 +945,19 @@
       .ob-actions { width: 100%; }
       .ob-action-btn { flex: 1 1 0; min-width: 0; }
       .records-toolbar { align-items: stretch; flex-direction: column; padding: 20px 20px 0; }
-      .page-filter { width: 100%; }
-      .page-filter input { font-size: 16px; }
+      .records-filter-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        padding: 16px 20px 0;
+      }
+      .record-filter-field { width: 100%; }
+      .record-filter-field.page,
+      .record-filter-field.date,
+      .record-filter-field.ip,
+      .record-filter-clear { grid-column: 1 / -1; }
+      .record-filter-field input,
+      .record-filter-field select { font-size: 16px; }
+      .record-filter-clear { width: 100%; }
       .groups-container {
         padding: 16px 20px;
       }
@@ -1078,19 +1120,79 @@
         <span>立即刷新</span>
       </button>
     </div>
-    <div class="page-filter">
-      <label for="pageFilterInput">按访问页面筛选</label>
-      <div class="page-filter-control">
-        <div class="page-filter-input-wrap">
-          <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-          <input id="pageFilterInput" type="search" list="pageFilterOptions" placeholder="输入页面路径，例如 /room" autocomplete="off">
-          <datalist id="pageFilterOptions"></datalist>
-        </div>
-        <button class="page-filter-clear" id="pageFilterClear" type="button" aria-label="清除页面筛选" title="清除页面筛选" disabled>
-          <i class="fas fa-xmark" aria-hidden="true"></i>
-        </button>
+  </div>
+  <div class="records-filter-panel" aria-label="用户记录筛选">
+    <div class="record-filter-field page">
+      <label for="pageFilterInput">访问页面</label>
+      <div class="record-filter-input-wrap">
+        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="pageFilterInput" type="search" list="pageFilterOptions" placeholder="例如 /room" autocomplete="off">
+        <datalist id="pageFilterOptions"></datalist>
       </div>
     </div>
+    <div class="record-filter-field date">
+      <span class="record-filter-label">访问日期</span>
+      <div class="record-filter-date-range">
+        <input id="filterStartDate" type="date" aria-label="起始日期">
+        <span class="record-filter-date-separator" aria-hidden="true">至</span>
+        <input id="filterEndDate" type="date" aria-label="结束日期">
+      </div>
+    </div>
+    <div class="record-filter-field">
+      <label for="deviceTypeFilter">设备类型</label>
+      <select id="deviceTypeFilter">
+        <option value="">全部设备</option>
+        <option value="手机">手机</option>
+        <option value="平板">平板</option>
+        <option value="电脑">电脑</option>
+        <option value="未知设备">未知设备</option>
+      </select>
+    </div>
+    <div class="record-filter-field">
+      <label for="deviceOsFilter">系统</label>
+      <select id="deviceOsFilter">
+        <option value="">全部系统</option>
+        <option value="iPhone">iPhone</option>
+        <option value="Android">Android</option>
+        <option value="iPad">iPad</option>
+        <option value="Windows">Windows</option>
+        <option value="macOS">macOS</option>
+        <option value="Linux">Linux</option>
+        <option value="未知系统">未知系统</option>
+      </select>
+    </div>
+    <div class="record-filter-field">
+      <label for="browserFilter">浏览器</label>
+      <select id="browserFilter">
+        <option value="">全部浏览器</option>
+        <option value="Safari">Safari</option>
+        <option value="Chrome">Chrome</option>
+        <option value="Edge">Edge</option>
+        <option value="Firefox">Firefox</option>
+        <option value="微信内置浏览器">微信内置浏览器</option>
+        <option value="华为浏览器">华为浏览器</option>
+        <option value="未知浏览器">未知浏览器</option>
+      </select>
+    </div>
+    <div class="record-filter-field">
+      <label for="profileTypeFilter">档案类型</label>
+      <select id="profileTypeFilter">
+        <option value="">全部档案</option>
+        <option value="stable">稳定浏览器档案</option>
+        <option value="legacy">旧会话</option>
+      </select>
+    </div>
+    <div class="record-filter-field ip">
+      <label for="ipFilterInput">历史 IP</label>
+      <div class="record-filter-input-wrap">
+        <i class="fas fa-network-wired" aria-hidden="true"></i>
+        <input id="ipFilterInput" type="search" placeholder="例如 203.0.113" autocomplete="off" inputmode="decimal">
+      </div>
+    </div>
+    <button class="record-filter-clear" id="clearAllFilters" type="button" disabled>
+      <i class="fas fa-filter-circle-xmark" aria-hidden="true"></i>
+      <span>清除全部</span>
+    </button>
   </div>
   <section class="network-visualization" id="networkVisualization" aria-label="IP 网络关联图">
     <div class="network-canvas-wrap">
@@ -1172,7 +1274,16 @@
   let chatRevision = '';
   let chatConversationListOpen = false;
   let inboxListOpen = false;
-  let pageFilterQuery = '';
+  const recordFilters = {
+    page: '',
+    startDate: '',
+    endDate: '',
+    deviceType: '',
+    deviceOs: '',
+    browser: '',
+    profileType: '',
+    ip: '',
+  };
   let viewMode = 'network';
   let selectedIpNodeId = '';
   let network3dGraph = null;
@@ -1238,7 +1349,14 @@
   const networkTooltip = document.getElementById('networkTooltip');
   const pageFilterInput = document.getElementById('pageFilterInput');
   const pageFilterOptions = document.getElementById('pageFilterOptions');
-  const pageFilterClear = document.getElementById('pageFilterClear');
+  const filterStartDate = document.getElementById('filterStartDate');
+  const filterEndDate = document.getElementById('filterEndDate');
+  const deviceTypeFilter = document.getElementById('deviceTypeFilter');
+  const deviceOsFilter = document.getElementById('deviceOsFilter');
+  const browserFilter = document.getElementById('browserFilter');
+  const profileTypeFilter = document.getElementById('profileTypeFilter');
+  const ipFilterInput = document.getElementById('ipFilterInput');
+  const clearAllFilters = document.getElementById('clearAllFilters');
   const eventModal = document.getElementById('eventModal');
   const modalTitle = document.getElementById('modalTitle');
   const modalBody = document.getElementById('modalBody');
@@ -1814,6 +1932,90 @@
     });
   }
 
+  function hasActiveFilters() {
+    return Object.values(recordFilters).some(Boolean);
+  }
+
+  function activeFilterCount() {
+    return Object.values(recordFilters).filter(Boolean).length;
+  }
+
+  function activityDate(record) {
+    const raw = String(record && (record.timestamp || record.time_str) || '');
+    const match = raw.match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : '';
+  }
+
+  function recordMatchesPageAndDate(record) {
+    if (recordFilters.page) {
+      const page = normalizePagePath(record && record.page).toLocaleLowerCase();
+      if (!page.includes(recordFilters.page)) return false;
+    }
+    if (recordFilters.startDate || recordFilters.endDate) {
+      const date = activityDate(record);
+      if (!date) return false;
+      if (recordFilters.startDate && date < recordFilters.startDate) return false;
+      if (recordFilters.endDate && date > recordFilters.endDate) return false;
+    }
+    return true;
+  }
+
+  function visitDeviceMetadata(visit) {
+    const label = String(visit && visit.device_label || '');
+    let deviceType = String(visit && visit.device_type || '');
+    let deviceOs = String(visit && visit.device_os || '');
+    let browser = String(visit && visit.browser || '');
+
+    if (!deviceType) {
+      if (label.includes('iPad') || label.includes('平板')) deviceType = '平板';
+      else if (label.includes('iPhone') || label.includes('Android 手机') || label.includes('手机')) deviceType = '手机';
+      else if (/Windows|macOS|Linux|电脑/.test(label)) deviceType = '电脑';
+      else deviceType = '未知设备';
+    }
+    if (!deviceOs) {
+      deviceOs = ['iPhone', 'iPad', 'Android', 'Windows', 'macOS', 'Linux']
+        .find(value => label.includes(value)) || '未知系统';
+    }
+    if (!browser) {
+      browser = ['微信内置浏览器', '华为浏览器', 'Edge', 'Chrome', 'Firefox', 'Safari']
+        .find(value => label.includes(value)) || '未知浏览器';
+    }
+    return { deviceType, deviceOs, browser };
+  }
+
+  function visitMatchesFilters(visit) {
+    if (!recordMatchesPageAndDate(visit)) return false;
+    const metadata = visitDeviceMetadata(visit);
+    if (recordFilters.deviceType && metadata.deviceType !== recordFilters.deviceType) return false;
+    if (recordFilters.deviceOs && metadata.deviceOs !== recordFilters.deviceOs) return false;
+    if (recordFilters.browser && metadata.browser !== recordFilters.browser) return false;
+    return true;
+  }
+
+  function groupMatchesFilters(group) {
+    if (recordFilters.profileType === 'stable' && group.is_legacy) return false;
+    if (recordFilters.profileType === 'legacy' && !group.is_legacy) return false;
+    if (recordFilters.ip) {
+      const hasIp = (group.networks || []).some(network => (
+        String(network && network.value || '').toLocaleLowerCase().includes(recordFilters.ip)
+      ));
+      if (!hasIp) return false;
+    }
+
+    const hasActivityFilter = Boolean(
+      recordFilters.page || recordFilters.startDate || recordFilters.endDate
+      || recordFilters.deviceType || recordFilters.deviceOs || recordFilters.browser
+    );
+    if (!hasActivityFilter) return true;
+    if ((group.visits || []).some(visitMatchesFilters)) return true;
+
+    const needsStructuredDevice = Boolean(
+      recordFilters.deviceType || recordFilters.deviceOs || recordFilters.browser
+    );
+    if (needsStructuredDevice) return false;
+    return (group.events || []).some(recordMatchesPageAndDate);
+  }
+
   function buildAssociationFallback() {
     return groupsData.map(group => ({
       id: 'ip_association_' + group.id,
@@ -1837,34 +2039,18 @@
       .filter(Boolean);
   }
 
-  function associationPagePaths(association) {
-    const pages = new Set();
-    associationMembers(association).forEach(group => {
-      groupPagePaths(group).forEach(page => pages.add(page));
-    });
-    return Array.from(pages);
-  }
-
   function visibleAssociationMembers(association) {
-    const members = associationMembers(association);
-    if (!pageFilterQuery) return members;
-    return members.filter(group => groupPagePaths(group).some(page => (
-      page.toLocaleLowerCase().includes(pageFilterQuery)
-    )));
+    return associationMembers(association).filter(groupMatchesFilters);
   }
 
   function filteredAssociationGroups() {
-    if (!pageFilterQuery) return associationGroupsData;
-    return associationGroupsData.filter(association => associationPagePaths(association).some(page => (
-      page.toLocaleLowerCase().includes(pageFilterQuery)
-    )));
+    if (!hasActiveFilters()) return associationGroupsData;
+    return associationGroupsData.filter(association => visibleAssociationMembers(association).length > 0);
   }
 
   function filteredProfileGroups() {
-    if (!pageFilterQuery) return groupsData;
-    return groupsData.filter(group => groupPagePaths(group).some(page => (
-      page.toLocaleLowerCase().includes(pageFilterQuery)
-    )));
+    if (!hasActiveFilters()) return groupsData;
+    return groupsData.filter(groupMatchesFilters);
   }
 
   function findGroupById(groupId) {
@@ -2663,29 +2849,60 @@
   networkViewButton.addEventListener('click', () => setViewMode('network'));
   listViewButton.addEventListener('click', () => setViewMode('list'));
 
-  pageFilterInput.addEventListener('input', () => {
-    pageFilterQuery = pageFilterInput.value.trim().toLocaleLowerCase();
-    pageFilterClear.disabled = !pageFilterQuery;
+  function readRecordFilters() {
+    recordFilters.page = pageFilterInput.value.trim().toLocaleLowerCase();
+    recordFilters.startDate = filterStartDate.value;
+    recordFilters.endDate = filterEndDate.value;
+    recordFilters.deviceType = deviceTypeFilter.value;
+    recordFilters.deviceOs = deviceOsFilter.value;
+    recordFilters.browser = browserFilter.value;
+    recordFilters.profileType = profileTypeFilter.value;
+    recordFilters.ip = ipFilterInput.value.trim().toLocaleLowerCase();
+  }
+
+  function syncDateFilterBounds(changedControl) {
+    if (filterStartDate.value && filterEndDate.value && filterStartDate.value > filterEndDate.value) {
+      if (changedControl === filterEndDate) filterStartDate.value = filterEndDate.value;
+      else filterEndDate.value = filterStartDate.value;
+    }
+    filterStartDate.max = filterEndDate.value || '';
+    filterEndDate.min = filterStartDate.value || '';
+  }
+
+  function applyRecordFilters({ track = false, action = 'filter_ob_user_records' } = {}) {
+    readRecordFilters();
+    clearAllFilters.disabled = !hasActiveFilters();
     renderGroups();
+    if (track) {
+      trackAdminEvent('admin_filter', {
+        action,
+        active_filter_count: activeFilterCount(),
+        result_count: filteredAssociationGroups().length,
+      });
+    }
+  }
+
+  [pageFilterInput, ipFilterInput].forEach(input => {
+    input.addEventListener('input', () => applyRecordFilters());
+    input.addEventListener('change', () => applyRecordFilters({ track: true }));
   });
-  pageFilterInput.addEventListener('change', () => {
-    trackAdminEvent('admin_filter', {
-      action: 'filter_ob_users_by_page',
-      active: Boolean(pageFilterQuery),
-      result_count: filteredAssociationGroups().length
+  [deviceTypeFilter, deviceOsFilter, browserFilter, profileTypeFilter].forEach(select => {
+    select.addEventListener('change', () => applyRecordFilters({ track: true }));
+  });
+  [filterStartDate, filterEndDate].forEach(input => {
+    input.addEventListener('change', () => {
+      syncDateFilterBounds(input);
+      applyRecordFilters({ track: true });
     });
   });
-  pageFilterClear.addEventListener('click', () => {
-    pageFilterInput.value = '';
-    pageFilterQuery = '';
-    pageFilterClear.disabled = true;
-    renderGroups();
+  clearAllFilters.addEventListener('click', () => {
+    [pageFilterInput, filterStartDate, filterEndDate, deviceTypeFilter, deviceOsFilter,
+      browserFilter, profileTypeFilter, ipFilterInput].forEach(control => {
+      control.value = '';
+    });
+    syncDateFilterBounds();
+    applyRecordFilters({ track: true, action: 'clear_ob_user_record_filters' });
     pageFilterInput.focus();
-    trackAdminEvent('admin_filter', {
-      action: 'clear_ob_page_filter',
-      active: false,
-      result_count: associationGroupsData.length
-    });
   });
 
   function renderGroups() {
@@ -2705,15 +2922,15 @@
       (total, association) => total + visibleAssociationMembers(association).length,
       0,
     );
-    recordsResultCount.textContent = pageFilterQuery
+    recordsResultCount.textContent = hasActiveFilters()
       ? '显示 ' + visibleAssociations.length + ' / ' + associationGroupsData.length
-        + ' 个关联组 · ' + visibleMemberCount + ' 个成员'
+        + ' 个关联组 · ' + visibleMemberCount + ' 个成员 · ' + activeFilterCount() + ' 项筛选'
       : '共 ' + associationGroupsData.length + ' 个关联组 · ' + groupsData.length + ' 个成员';
 
     if (visibleAssociations.length === 0) {
       groupsContainer.dataset.emptyMessage = groupsData.length === 0
         ? '暂无用户记录'
-        : '没有关联组涉及该页面';
+        : '没有用户记录符合当前筛选条件';
       groupsContainer.classList.add('empty');
       return;
     }
@@ -2789,8 +3006,8 @@
       const linkNote = document.createElement('div');
       linkNote.className = 'association-group-link-note';
       linkNote.textContent = sharedIps.length
-        ? (pageFilterQuery
-          ? '当前只显示涉及筛选页面的成员；组内成员通过共享 IP 连接，这只是网络环境关联，不代表同一自然人。'
+        ? (hasActiveFilters()
+          ? '当前只显示符合筛选条件的成员；组内成员通过共享 IP 连接，这只是网络环境关联，不代表同一自然人。'
           : '组内成员通过共享 IP 连接；这只是网络环境关联，不代表同一自然人。点击成员查看完整访问记录。')
         : '该组没有发现可用于关联的共享 IP，成员保持独立。';
       body.appendChild(linkNote);

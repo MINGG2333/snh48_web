@@ -146,6 +146,9 @@ class VisitorObservationTests(unittest.TestCase):
                 "198.51.100.4",
             })
             self.assertEqual(stable["devices"][0]["value"], "iPhone · Safari")
+            self.assertEqual(stable["visits"][0]["device_type"], "手机")
+            self.assertEqual(stable["visits"][0]["device_os"], "iPhone")
+            self.assertEqual(stable["visits"][0]["browser"], "Safari")
 
             legacy = next(group for group in payload["groups"] if group["is_legacy"])
             self.assertEqual(legacy["users"], [legacy_client])
@@ -327,7 +330,7 @@ class VisitorObservationTests(unittest.TestCase):
         record.assert_called_once()
         self.assertTrue(record.call_args.kwargs["visitor_id"].startswith("visitor_"))
 
-    def test_ob_template_explains_identity_and_filters_profiles_by_page(self) -> None:
+    def test_ob_template_explains_identity_and_filters_profiles(self) -> None:
         template = (
             Path(__file__).resolve().parents[1] / "website" / "templates" / "ob.html"
         ).read_text(encoding="utf-8")
@@ -335,9 +338,20 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn('id="recordsTitle">用户记录</h2>', template)
         self.assertIn('id="pageFilterInput"', template)
         self.assertIn('id="pageFilterOptions"', template)
+        self.assertIn('id="filterStartDate"', template)
+        self.assertIn('id="filterEndDate"', template)
+        self.assertIn('id="deviceTypeFilter"', template)
+        self.assertIn('id="deviceOsFilter"', template)
+        self.assertIn('id="browserFilter"', template)
+        self.assertIn('id="profileTypeFilter"', template)
+        self.assertIn('id="ipFilterInput"', template)
+        self.assertIn('id="clearAllFilters"', template)
         self.assertIn("function normalizePagePath(value)", template)
         self.assertIn("function groupPagePaths(group)", template)
-        self.assertIn("filter_ob_users_by_page", template)
+        self.assertIn("function groupMatchesFilters(group)", template)
+        self.assertIn("function visitMatchesFilters(visit)", template)
+        self.assertIn("function hasActiveFilters()", template)
+        self.assertIn("filter_ob_user_records", template)
         self.assertIn('id="inboxListToggle"', template)
         self.assertIn('id="inboxListWrap"', template)
         self.assertIn("setInboxListOpen(false)", template)

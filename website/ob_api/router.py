@@ -256,6 +256,9 @@ def _build_profile_specs(
             "page": str(view.get("page", "")),
             "ip": str(view.get("ip", "未知")),
             "device_label": str(device.get("label", "未知设备")),
+            "device_type": str(device.get("type", "未知设备")),
+            "device_os": str(device.get("os", "未知系统")),
+            "browser": str(device.get("browser", "未知浏览器")),
             "client_id": client_id,
         }
         profile = profiles.setdefault(visitor_id, {
