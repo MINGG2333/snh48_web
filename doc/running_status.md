@@ -1,6 +1,8 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-08-22 CST +0800
+更新日期：2026-08-23 CST +0800
+
+2026-08-23 10:36 客服聊天长等待更新完成双服务器发布：网站提交 `369e4e0` 已推送，两端 Gift Senders 与 OB 客服从固定 1 秒轮询改为最多约 25 秒的可恢复长等待请求，新事件通常在服务端 200 毫秒检查周期内返回；隔离 HTTP 烟测从发消息到等待请求返回约 247 毫秒。腾讯云 screen `2867975.snh48`、Python PID `2867981` 于 10:35:40 重启；阿里云 `snh48-aliyun`、PID `2405889` 于 10:36:43 重启，均已通过 `/room`、`/room/gift-senders`、`/ob` 和新客服接口烟测。飞书反馈转发服务不受网站接口实现变化影响，保持 PID `2613036`、active/running、`NRestarts=0`，未重启。
 
 2026-08-22 19:45 翻牌成员筛选、独立更新状态和底部合并刷新入口完成腾讯云阶段发布：网站提交 `64e3d7f`、fan-hub 提交 `5309e0a` 已推送，腾讯云 screen 重启为 `2303857.snh48`、Python PID `2303871`，继续覆盖 `QA_WARMUP_ON_STARTUP=false`。账号 `172884074 / xxgg2333` 的 19:05 网页登录刷新任务已于 19:11 成功完成，Token 安全复查有效；公网账号数据为 schema v4 共 365 条、331 条语音转录，成员为陈嘉仪 364 条和闫娜 1 条，默认成员键为陈嘉仪 `161808449`。页面顶部旧“最新”按钮已移除；筛选默认陈嘉仪，逐条头像为“嘉仪”或其他成员完整姓名；独立更新状态弹窗可收起并恢复，底部按钮同时重新加载数据和跳到最新。受保护数据版本和最近任务 API、媒体 Range 206、伪造跨站 POST 403、账号清单无手机号/Token/验证码字段均通过。阿里云代码尚未部署，等待用户验收腾讯云后再同步同一提交。
 
@@ -46,8 +48,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `64e3d7f`。screen `2303857.snh48`、Python PID `2303871`，2026-08-22 19:45:34 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；翻牌 schema v4、成员筛选、独立更新状态和底部合并刷新入口已生效，其他既有功能保持累计提交状态 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | checkout `72d1cd1`，2026-08-22 02:59:58 CST 启动，PID `2266723`，active/running、`NRestarts=0`；既有数据同步已把统一行程 CSV 更新到 131 条，社交记录仍为 61 条（微博 25、抖音 36），但旧手工接口仍为 200，统一接口代码尚未发布；既有未跟踪 `website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `369e4e0`。screen `2867975.snh48`、Python PID `2867981`，2026-08-23 10:35:40 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；客服聊天长等待接口已生效，其他既有功能保持累计提交状态 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `369e4e0`。2026-08-23 10:36:43 CST 启动，PID `2405889`，active/running、`NRestarts=0`；客服聊天长等待接口已生效，既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
