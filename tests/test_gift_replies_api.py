@@ -231,6 +231,16 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
         self.assertNotIn('@app.get("/gift-replies/senders"', main)
         self.assertNotIn('@app.get("/gr"', main)
 
+    def test_details_template_uses_summary_polling_and_click_to_refresh(self) -> None:
+        template = Path("website/templates/gift_replies.html").read_text(encoding="utf-8")
+        self.assertIn('id="statsToggle"', template)
+        self.assertIn('id="updatePill"', template)
+        self.assertIn('/api/gift-replies/summary', template)
+        self.assertIn('window.setInterval(checkUpdates', template)
+        self.assertIn('updatePill.addEventListener("click", loadLatestData)', template)
+        self.assertIn('有新的送礼数据，点击刷新', template)
+        self.assertNotIn('window.setInterval(function() {\n        fetchData({ resetTimer: false });', template)
+
 
 if __name__ == "__main__":
     unittest.main()

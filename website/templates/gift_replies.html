@@ -156,11 +156,30 @@
       margin-top: 3px;
     }
 
-    .refresh {
-      text-align: right;
-      color: var(--muted);
+    .page-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .page-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      background: var(--surface-2);
+      text-decoration: none;
       font-size: 13px;
-      white-space: nowrap;
+      font-weight: 650;
+    }
+
+    .page-link:hover {
+      border-color: var(--accent);
+      color: var(--accent-strong);
     }
 
     .refresh strong {
@@ -175,10 +194,14 @@
     }
 
     .stats-grid {
-      display: grid;
+      display: none;
       grid-template-columns: repeat(6, minmax(140px, 1fr));
       gap: 12px;
       margin-bottom: 16px;
+    }
+
+    .page.show-stats .stats-grid {
+      display: grid;
     }
 
     .stat {
@@ -310,15 +333,64 @@
       overflow: hidden;
     }
 
-    .table-head {
+    .result-head,
+    .result-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
-      padding: 13px 14px;
-      border-bottom: 1px solid var(--border);
+    }
+
+    .result-head {
+      justify-content: space-between;
       color: var(--muted);
       font-size: 13px;
+      margin: 2px 2px 10px;
+    }
+
+    .result-actions {
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .stats-toggle {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      padding: 3px 2px;
+      font-size: 12px;
+    }
+
+    .stats-toggle:hover,
+    .stats-toggle:focus-visible {
+      color: var(--muted);
+    }
+
+    .update-pill {
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      display: none;
+      transform: translateX(-50%);
+      min-height: 40px;
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--accent-strong);
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+      white-space: nowrap;
+    }
+
+    .update-pill.show {
+      display: block;
+    }
+
+    .update-pill:disabled {
+      cursor: wait;
+      opacity: 0.72;
     }
 
     .table-wrap {
@@ -465,10 +537,6 @@
         flex-direction: column;
       }
 
-      .refresh {
-        text-align: left;
-      }
-
       main {
         padding: 16px;
       }
@@ -489,10 +557,21 @@
         flex: 1;
       }
 
-      .table-head,
+      .result-head,
       .pagination {
         align-items: flex-start;
         flex-direction: column;
+      }
+
+      .result-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .update-pill {
+        max-width: calc(100% - 24px);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
   </style>
@@ -515,10 +594,10 @@
           <h1>礼物回复</h1>
           <p>送礼消息、回礼物消息与未回复列表</p>
         </div>
-        <div class="refresh">
-          <div>数据每 <strong id="refreshSeconds">30</strong> 秒刷新</div>
-          <div id="generatedAt">生成时间：-</div>
-        </div>
+        <nav class="page-links" aria-label="礼物页面导航">
+          <a class="page-link" href="/room/gift-senders" data-track="gift_details_to_sender_summary">综合回礼</a>
+          <a class="page-link" href="/room" data-track="gift_details_to_room">Room</a>
+        </nav>
       </div>
     </div>
 
@@ -610,11 +689,18 @@
         </div>
       </section>
 
-      <section class="table-panel" id="tablePanel">
-        <div class="table-head">
-          <div id="resultSummary">共 0 条</div>
-          <div id="activeFilters">全部状态</div>
+      <div class="result-head">
+        <span id="resultSummary">共 0 条</span>
+        <div class="result-actions">
+          <span id="activeFilters">全部状态</span>
+          <span id="refreshLabel">每 30 秒检查更新</span>
+          <span id="generatedAt">生成时间：-</span>
+          <button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button>
         </div>
+      </div>
+      <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新的送礼数据，点击刷新</button>
+
+      <section class="table-panel" id="tablePanel">
         <div class="table-wrap" id="tableWrap">
           <table>
             <thead>
@@ -655,6 +741,9 @@
     var refreshTimer = null;
     var refreshSeconds = 30;
     var lastCatalogHash = "";
+    var loading = false;
+    var checkingUpdates = false;
+    var lastDatasetSnapshot = null;
     var loginBusy = false;
     var loginVerified = false;
 
@@ -664,8 +753,6 @@
     var loginError = document.getElementById("loginError");
     var pageEl = document.getElementById("page");
     var mainContent = document.getElementById("mainContent");
-    var refreshSecondsEl = document.getElementById("refreshSeconds");
-    var generatedAt = document.getElementById("generatedAt");
     var totalGiftMessages = document.getElementById("totalGiftMessages");
     var totalGiftCount = document.getElementById("totalGiftCount");
     var repliedGiftMessages = document.getElementById("repliedGiftMessages");
@@ -685,6 +772,10 @@
     var resetBtn = document.getElementById("resetBtn");
     var resultSummary = document.getElementById("resultSummary");
     var activeFilters = document.getElementById("activeFilters");
+    var refreshLabel = document.getElementById("refreshLabel");
+    var generatedAt = document.getElementById("generatedAt");
+    var statsToggle = document.getElementById("statsToggle");
+    var updatePill = document.getElementById("updatePill");
     var giftRows = document.getElementById("giftRows");
     var emptyState = document.getElementById("emptyState");
     var tableWrap = document.getElementById("tableWrap");
@@ -820,6 +911,7 @@
 
     async function fetchData(options) {
       options = options || {};
+      loading = true;
       mainContent.classList.add("loading");
       var wasLoginVisible = !loginOverlay.classList.contains("hidden");
       var loginAttempt = Boolean(options.loginAttempt && wasLoginVisible);
@@ -869,6 +961,7 @@
           loginError.classList.add("show");
         }
       } finally {
+        loading = false;
         mainContent.classList.remove("loading");
       }
     }
@@ -884,8 +977,10 @@
 
     function render(data) {
       var summary = data.summary || {};
-      refreshSeconds = Number(data.refresh_interval_seconds || 30);
-      refreshSecondsEl.textContent = String(refreshSeconds);
+      refreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || 30));
+      lastDatasetSnapshot = datasetSnapshot(data);
+      updatePill.classList.remove("show");
+      refreshLabel.textContent = "每 " + refreshSeconds + " 秒检查更新";
       generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
 
       var total = Number(summary.total_gift_messages || 0);
@@ -1078,6 +1173,65 @@
       applyFilters("reset_filters");
     }
 
+    function datasetSnapshot(data) {
+      var summary = data && (data.dataset_summary || data.summary) ? (data.dataset_summary || data.summary) : {};
+      return {
+        totalGiftMessages: Number(summary.total_gift_messages || 0),
+        totalGiftCount: Number(summary.total_gift_count || 0),
+        repliedGiftMessages: Number(summary.replied_gift_messages || 0),
+        unrepliedGiftMessages: Number(summary.unreplied_gift_messages || 0),
+        matchedReplyMessages: Number(summary.matched_reply_messages || 0),
+        unmatchedReplyMessages: Number(summary.unmatched_reply_messages || 0),
+        textReplyMessages: Number(summary.text_reply_messages || 0),
+        audioReplyMessages: Number(summary.audio_reply_messages || 0),
+        giftKinds: Number(summary.gift_kinds || 0),
+        latestGiftTime: String(summary.latest_gift_bj_time || "")
+      };
+    }
+
+    function hasDataUpdate(current) {
+      if (!lastDatasetSnapshot) return false;
+      return JSON.stringify(current) !== JSON.stringify(lastDatasetSnapshot);
+    }
+
+    async function checkUpdates() {
+      if (!password || loading || checkingUpdates || !pageEl.classList.contains("ready")) return;
+      checkingUpdates = true;
+      try {
+        var response = await fetch("/api/gift-replies/summary", {
+          headers: { "X-Gift-Replies-Password": password },
+          cache: "no-store"
+        });
+        if (!response.ok) return;
+        var data = await response.json();
+        var nextRefreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || refreshSeconds || 30));
+        if (nextRefreshSeconds !== refreshSeconds) {
+          refreshSeconds = nextRefreshSeconds;
+          resetRefreshTimer();
+        }
+        refreshLabel.textContent = "每 " + refreshSeconds + " 秒检查更新";
+        if (hasDataUpdate(datasetSnapshot(data))) {
+          updatePill.classList.add("show");
+        }
+      } catch (error) {
+        return;
+      } finally {
+        checkingUpdates = false;
+      }
+    }
+
+    async function loadLatestData() {
+      if (updatePill.disabled) return;
+      updatePill.disabled = true;
+      updatePill.textContent = "正在加载最新送礼数据…";
+      try {
+        await fetchData({ resetTimer: false });
+      } finally {
+        updatePill.disabled = false;
+        updatePill.textContent = "有新的送礼数据，点击刷新";
+      }
+    }
+
     function stopRefresh() {
       if (refreshTimer) {
         window.clearInterval(refreshTimer);
@@ -1087,9 +1241,7 @@
 
     function resetRefreshTimer() {
       stopRefresh();
-      refreshTimer = window.setInterval(function() {
-        fetchData({ resetTimer: false });
-      }, Math.max(refreshSeconds, 1) * 1000);
+      refreshTimer = window.setInterval(checkUpdates, Math.max(refreshSeconds, 1) * 1000);
     }
 
     loginBtn.addEventListener("click", doLogin);
@@ -1109,6 +1261,13 @@
     pageSizeSelect.addEventListener("change", function() { applyFilters("page_size_filter"); });
     applyBtn.addEventListener("click", function() { applyFilters("apply_filters"); });
     resetBtn.addEventListener("click", resetFilters);
+    statsToggle.addEventListener("click", function() {
+      var visible = pageEl.classList.toggle("show-stats");
+      statsToggle.textContent = visible ? "隐藏统计" : "统计";
+      statsToggle.setAttribute("aria-expanded", visible ? "true" : "false");
+      trackAdminEvent("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
+    });
+    updatePill.addEventListener("click", loadLatestData);
     senderInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") applyFilters("sender_filter");
     });
