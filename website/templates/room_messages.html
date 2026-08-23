@@ -625,6 +625,7 @@
       position: absolute;
       left: 50%;
       bottom: 18px;
+      z-index: 15;
       transform: translateX(-50%);
       border: 1px solid var(--teal);
       border-radius: 999px;
@@ -1333,6 +1334,8 @@
     var roomPageScrollLockY = null;
     var roomPageScrollLocked = false;
     var roomScrollRestorePending = false;
+    var appliedDateFrom = "";
+    var appliedDateTo = "";
     var initialRoomQuery = new URLSearchParams(window.location.search);
     var initialTargetId = initialRoomQuery.get("message_id") || "";
     var initialTargetDate = initialRoomQuery.get("jump_date") || "";
@@ -1394,8 +1397,8 @@
         has_sender_query: Boolean(senderInput.value.trim()),
         has_keyword_query: Boolean(keywordInput.value.trim()),
         has_media: mediaSelect.value || "all",
-        date_from: dateFromInput.value || "",
-        date_to: dateToInput.value || "",
+        date_from: appliedDateFrom,
+        date_to: appliedDateTo,
         limit: limitSelect.value || "100",
         loaded_count: loadedCount
       };
@@ -1559,8 +1562,8 @@
       params.set("sender", senderInput.value.trim());
       params.set("keyword", keywordInput.value.trim());
       params.set("has_media", mediaSelect.value || "all");
-      params.set("date_from", dateFromInput.value || "");
-      params.set("date_to", dateToInput.value || "");
+      params.set("date_from", appliedDateFrom);
+      params.set("date_to", appliedDateTo);
       return params;
     }
 
@@ -1629,7 +1632,7 @@
           loadedCount = 0;
           appendMessages(data.items || []);
           window.requestAnimationFrame(function() {
-            if (!isTargetLoad && !roomPageScrollLocked && !roomScrollRestorePending) {
+            if (!isTargetLoad && !options.deferLatestScroll && !roomPageScrollLocked && !roomScrollRestorePending) {
               scrollToLatestMessage();
             }
             syncRoomUpdatePill();
@@ -2224,13 +2227,22 @@
     }
 
     function syncRoomUpdatePill() {
-      updatePill.textContent = hasMoreNewer ? "有新消息，点击查看最新" : "跳到最新";
+      updatePill.textContent = hasMoreNewer ? "有新消息，点击加载最新" : "跳到最新";
       updatePill.classList.toggle("show", shouldShowRoomUpdatePill());
     }
 
-    function scrollToLatestMessage() {
+    function scrollToLatestMessage(smooth) {
       if (roomPageScrollLocked || roomScrollRestorePending) return;
-      setCurrentScrollTop(Math.max(0, currentScrollHeight() - currentClientHeight()));
+      var targetTop = Math.max(0, currentScrollHeight() - currentClientHeight());
+      if (!smooth) {
+        setCurrentScrollTop(targetTop);
+        return;
+      }
+      if (usesDocumentScroll()) {
+        window.scrollTo({ top: targetTop, behavior: "smooth" });
+      } else {
+        chatScroll.scrollTo({ top: targetTop, behavior: "smooth" });
+      }
     }
 
     function stopRefresh() {
@@ -2347,8 +2359,8 @@
         || roomSelect.value !== "all"
         || Boolean(senderInput.value.trim())
         || Boolean(keywordInput.value.trim())
-        || Boolean(dateFromInput.value)
-        || Boolean(dateToInput.value)
+        || Boolean(appliedDateFrom)
+        || Boolean(appliedDateTo)
         || mediaSelect.value !== "all";
     }
 
@@ -2359,6 +2371,8 @@
       keywordInput.value = "";
       dateFromInput.value = "";
       dateToInput.value = "";
+      appliedDateFrom = "";
+      appliedDateTo = "";
       mediaSelect.value = "all";
     }
 
@@ -2780,6 +2794,8 @@
       limitSelect.value = "100";
       dateFromInput.value = "";
       dateToInput.value = "";
+      appliedDateFrom = "";
+      appliedDateTo = "";
       if (jumpDateInput) jumpDateInput.value = "";
       mediaSelect.value = "all";
       renderUnrepliedNav();
@@ -2863,6 +2879,8 @@
       if (usesDocumentScroll()) syncRoomUpdatePill();
     }, { passive: true });
     applyBtn.addEventListener("click", function() {
+      appliedDateFrom = dateFromInput.value || "";
+      appliedDateTo = dateToInput.value || "";
       setFilterPanelOpen(false);
       window.requestAnimationFrame(function() {
         reloadLatest("apply_filters");
@@ -2876,12 +2894,16 @@
       });
     }
     updatePill.addEventListener("click", function() {
-      var request = reloadLatest("load_newer");
+      if (!hasMoreNewer) {
+        scrollToLatestMessage(true);
+        return;
+      }
+      var request = reloadLatest("load_newer", { deferLatestScroll: true });
       if (request && typeof request.then === "function") {
         request.then(function(data) {
           if (!data) return;
           window.requestAnimationFrame(function() {
-            window.requestAnimationFrame(scrollToLatestMessage);
+            window.requestAnimationFrame(function() { scrollToLatestMessage(true); });
           });
         });
       }

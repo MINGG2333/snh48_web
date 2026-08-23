@@ -356,7 +356,7 @@
     .support-chat-nav {
       position: fixed;
       right: 18px;
-      top: calc(92px + env(safe-area-inset-top, 0px));
+      bottom: max(18px, env(safe-area-inset-bottom, 0px));
       z-index: 30;
       width: 52px;
       height: 52px;
@@ -539,13 +539,12 @@
       .top-actions .nav-link:not(.primary) { right: 12px; }
       .top-actions .mobile-filter-toggle {
         position: absolute;
-        left: 12px;
-        bottom: 12px;
+        top: 54px;
+        right: 12px;
         width: auto;
         min-width: 72px;
         margin: 0;
       }
-      .support-chat-nav { top: calc(104px + env(safe-area-inset-top, 0px)); }
       main { padding: 14px 12px 32px; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mobile-filter-toggle { display: inline-flex; }
@@ -726,7 +725,7 @@
         <span id="resultSummary">共 0 人，当前显示 0 人</span>
         <div class="result-actions"><span id="refreshLabel">每 30 秒检查更新</span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
       </div>
-      <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新的送礼数据，点击刷新</button>
+      <button class="update-pill" id="updatePill" type="button" aria-live="polite">跳到最新</button>
       <section class="sender-list" id="senderList" aria-label="按送礼人整理的礼物历史"></section>
       <div class="empty" id="emptyState">当前筛选条件下没有送礼人</div>
     </main>
@@ -788,6 +787,8 @@
     var expandedSenderKeys = new Set();
     var historyCache = new Map();
     var highlightTimers = new WeakMap();
+    var appliedDateFrom = DEFAULT_DATE_FROM;
+    var appliedDateTo = "";
 
     var loginOverlay = document.getElementById("loginOverlay");
     var loginError = document.getElementById("loginError");
@@ -1152,21 +1153,21 @@
       var params = new URLSearchParams();
       params.set("status", activeStatus);
       params.set("sender", senderInput.value.trim());
-      params.set("date_from", dateFromInput.value);
-      params.set("date_to", dateToInput.value);
+      params.set("date_from", appliedDateFrom);
+      params.set("date_to", appliedDateTo);
       return params.toString();
     }
 
     function historyQueryString(senderKey) {
       var params = new URLSearchParams();
       params.set("sender_key", senderKey);
-      params.set("date_from", dateFromInput.value);
-      params.set("date_to", dateToInput.value);
+      params.set("date_from", appliedDateFrom);
+      params.set("date_to", appliedDateTo);
       return params.toString();
     }
 
     function currentHistoryCacheKey(senderKey) {
-      return [senderKey, dateFromInput.value, dateToInput.value].join("|");
+      return [senderKey, appliedDateFrom, appliedDateTo].join("|");
     }
 
     async function loadData(loginAttempt) {
@@ -1453,10 +1454,15 @@
       return row;
     }
 
-    function applyFilters(action) {
-      if (dateFromInput.value && dateToInput.value && dateFromInput.value > dateToInput.value) {
+    function applyFilters(action, options) {
+      options = options || {};
+      if (options.commitDates && dateFromInput.value && dateToInput.value && dateFromInput.value > dateToInput.value) {
         showPageError("开始日期不能晚于结束日期");
         return;
+      }
+      if (options.commitDates) {
+        appliedDateFrom = dateFromInput.value || "";
+        appliedDateTo = dateToInput.value || "";
       }
       expandedSenderKeys.clear();
       historyCache.clear();
@@ -1464,8 +1470,8 @@
         action: action,
         status: activeStatus,
         has_sender_query: Boolean(senderInput.value.trim()),
-        has_date_from: Boolean(dateFromInput.value),
-        has_date_to: Boolean(dateToInput.value)
+        has_date_from: Boolean(appliedDateFrom),
+        has_date_to: Boolean(appliedDateTo)
       });
       if (isGiftFilterMobile()) setGiftFilterModalOpen(false);
       loadData(false);
@@ -1516,6 +1522,10 @@
 
     async function loadLatestData() {
       if (updatePill.disabled) return;
+      if (!dataUpdateAvailable) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       updatePill.disabled = true;
       updatePill.textContent = "正在加载最新送礼数据…";
       historyCache.clear();
@@ -1523,8 +1533,8 @@
         action: "load_newer_gift_sender_data",
         status: activeStatus,
         has_sender_query: Boolean(senderInput.value.trim()),
-        has_date_from: Boolean(dateFromInput.value),
-        has_date_to: Boolean(dateToInput.value)
+        has_date_from: Boolean(appliedDateFrom),
+        has_date_to: Boolean(appliedDateTo)
       });
       try {
         await loadData(false);
@@ -1544,7 +1554,7 @@
     }
 
     function syncUpdatePill() {
-      updatePill.textContent = dataUpdateAvailable ? "有新的送礼数据，点击查看最新" : "跳到最新";
+      updatePill.textContent = dataUpdateAvailable ? "有新送礼数据，点击加载最新" : "跳到最新";
       updatePill.classList.toggle("show", shouldShowUpdatePill());
       updatePill.classList.toggle("has-update", dataUpdateAvailable);
     }
@@ -1587,12 +1597,14 @@
       syncStatusButtons();
       applyFilters("filter_sender_status");
     });
-    document.getElementById("applyBtn").addEventListener("click", function() { applyFilters("apply_sender_filters"); });
+    document.getElementById("applyBtn").addEventListener("click", function() { applyFilters("apply_sender_filters", { commitDates: true }); });
     document.getElementById("resetBtn").addEventListener("click", function() {
       activeStatus = "all";
       senderInput.value = "";
       dateFromInput.value = DEFAULT_DATE_FROM;
       dateToInput.value = "";
+      appliedDateFrom = DEFAULT_DATE_FROM;
+      appliedDateTo = "";
       syncStatusButtons();
       applyFilters("reset_sender_filters");
     });

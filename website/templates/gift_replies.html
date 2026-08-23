@@ -595,18 +595,36 @@
 
     @media (max-width: 720px) {
       .topbar-inner {
-        padding: 16px;
-        align-items: flex-start;
-        flex-direction: column;
+        position: relative;
+        display: block;
+        min-height: 98px;
+        padding: 12px;
       }
 
-      .page-links {
-        width: 100%;
-        justify-content: flex-start;
+      .title { min-width: 0; padding-right: 170px; }
+      .title p { display: none; }
+
+      .page-links { display: contents; }
+
+      .page-links .page-link {
+        position: absolute;
+        top: 12px;
+        min-height: 34px;
+        padding: 0 8px;
+        font-size: 12px;
       }
 
-      .mobile-filter-toggle {
+      .page-links .page-link:first-of-type { right: 94px; }
+      .page-links .page-link:last-of-type { right: 12px; }
+
+      .page-links .mobile-filter-toggle {
+        position: absolute;
+        top: 54px;
+        right: 12px;
         display: inline-flex;
+        width: auto;
+        min-width: 72px;
+        margin: 0;
       }
 
       main {
@@ -637,6 +655,7 @@
       }
 
       .update-pill {
+        top: calc(112px + env(safe-area-inset-top, 0px));
         max-width: calc(100% - 24px);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -828,7 +847,7 @@
         </div>
         <nav class="page-links" aria-label="礼物页面导航">
           <a class="page-link" href="/room/gift-senders" data-track="gift_details_to_sender_summary">综合回礼</a>
-          <a class="page-link" href="/room" data-track="gift_details_to_room">Room</a>
+          <a class="page-link" href="/room" data-track="gift_details_to_room">返回 Room</a>
           <button class="mobile-filter-toggle" id="giftFilterToggle" type="button" aria-expanded="false" aria-controls="giftFilterModal">筛选</button>
         </nav>
       </div>
@@ -942,7 +961,7 @@
           <button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button>
         </div>
       </div>
-      <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新的送礼数据，点击刷新</button>
+      <button class="update-pill" id="updatePill" type="button" aria-live="polite">跳到最新</button>
 
       <section class="table-panel" id="tablePanel">
         <div class="table-wrap" id="tableWrap">
@@ -992,6 +1011,8 @@
     var loginBusy = false;
     var loginVerified = false;
     var giftFilterPreviousFocus = null;
+    var appliedDateFrom = "";
+    var appliedDateTo = "";
 
     var loginOverlay = document.getElementById("loginOverlay");
     var loginBtn = document.getElementById("loginBtn");
@@ -1118,8 +1139,8 @@
         gift_name: giftSelect.value || "",
         has_sender_query: Boolean(senderInput.value.trim()),
         reply_type: replyTypeSelect.value || "all",
-        date_from: dateFromInput.value || "",
-        date_to: dateToInput.value || "",
+        date_from: appliedDateFrom,
+        date_to: appliedDateTo,
         page_size: pageSizeSelect.value || String(pageSize)
       };
     }
@@ -1196,8 +1217,8 @@
       params.set("gift_name", giftSelect.value || "");
       params.set("sender", senderInput.value.trim());
       params.set("reply_type", replyTypeSelect.value || "all");
-      params.set("date_from", dateFromInput.value || "");
-      params.set("date_to", dateToInput.value || "");
+      params.set("date_from", appliedDateFrom);
+      params.set("date_to", appliedDateTo);
       return params.toString();
     }
 
@@ -1429,7 +1450,7 @@
       if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
       if (senderInput.value.trim()) parts.push("用户：" + senderInput.value.trim());
       if (replyTypeSelect.value !== "all") parts.push(replyTypeSelect.options[replyTypeSelect.selectedIndex].textContent);
-      if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
+      if (appliedDateFrom || appliedDateTo) parts.push((appliedDateFrom || "开始") + " 至 " + (appliedDateTo || "结束"));
       activeFilters.textContent = parts.join(" · ");
     }
 
@@ -1448,7 +1469,12 @@
       });
     }
 
-    function applyFilters(action) {
+    function applyFilters(action, options) {
+      options = options || {};
+      if (options.commitDates) {
+        appliedDateFrom = dateFromInput.value || "";
+        appliedDateTo = dateToInput.value || "";
+      }
       page = 1;
       pageSize = Number(pageSizeSelect.value || 100);
       trackAdminEvent("admin_filter", giftRepliesFilterPayload(action || "apply_filters"));
@@ -1464,6 +1490,8 @@
       pageSizeSelect.value = "100";
       dateFromInput.value = "";
       dateToInput.value = "";
+      appliedDateFrom = "";
+      appliedDateTo = "";
       applyFilters("reset_filters");
     }
 
@@ -1515,6 +1543,10 @@
 
     async function loadLatestData() {
       if (updatePill.disabled) return;
+      if (!dataUpdateAvailable && page === 1) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       updatePill.disabled = true;
       updatePill.textContent = "正在加载最新送礼数据…";
       try {
@@ -1536,7 +1568,7 @@
     }
 
     function syncUpdatePill() {
-      updatePill.textContent = dataUpdateAvailable ? "有新的送礼数据，点击查看最新" : "跳到最新";
+      updatePill.textContent = dataUpdateAvailable ? "有新送礼数据，点击加载最新" : "跳到最新";
       updatePill.classList.toggle("show", shouldShowUpdatePill());
       updatePill.classList.toggle("has-update", dataUpdateAvailable);
     }
@@ -1584,7 +1616,7 @@
     giftSelect.addEventListener("change", function() { applyFilters("gift_filter"); });
     replyTypeSelect.addEventListener("change", function() { applyFilters("reply_type_filter"); });
     pageSizeSelect.addEventListener("change", function() { applyFilters("page_size_filter"); });
-    applyBtn.addEventListener("click", function() { applyFilters("apply_filters"); });
+    applyBtn.addEventListener("click", function() { applyFilters("apply_filters", { commitDates: true }); });
     resetBtn.addEventListener("click", resetFilters);
     statsToggle.addEventListener("click", function() {
       var visible = pageEl.classList.toggle("show-stats");
@@ -1653,8 +1685,8 @@
       });
     }
 
-    installDateInputGuard(dateFromInput, function() { applyFilters("date_filter"); });
-    installDateInputGuard(dateToInput, function() { applyFilters("date_filter"); });
+    installDateInputGuard(dateFromInput);
+    installDateInputGuard(dateToInput);
 
     prevBtn.addEventListener("click", function() {
       if (page <= 1) return;
