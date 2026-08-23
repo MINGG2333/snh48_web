@@ -178,6 +178,11 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn("setInboxListOpen(false)", template)
         self.assertIn("同一 IP 不会自动合并", template)
         self.assertIn("同名设备不会自动合并，也不是硬件指纹", template)
+        self.assertIn("档案尾码", template)
+        self.assertIn("id=\"notifNav\"", template)
+        self.assertIn("'visit-session'", template)
+        self.assertNotIn("className = 'group-users'", template)
+        self.assertNotIn("id=\"modalUsers\"", template)
 
 
 if __name__ == "__main__":

@@ -391,21 +391,6 @@
     }
 
     /* User avatars */
-    .group-users {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .user-chip {
-      background: rgba(124, 77, 255, 0.1);
-      border: 1px solid rgba(124, 77, 255, 0.2);
-      border-radius: 20px;
-      padding: 4px 14px;
-      font-size: 12px;
-      color: var(--accent);
-      font-family: monospace;
-    }
     .group-time {
       font-size: 12px;
       color: var(--text-dim);
@@ -448,7 +433,6 @@
       flex-shrink: 0;
     }
     .modal-header h2 { font-size: 16px; }
-    .modal-header .users-list { font-size: 12px; color: var(--text-dim); }
     .modal-close {
       width: 32px; height: 32px;
       border-radius: 8px;
@@ -493,7 +477,7 @@
     .visits-list { display: grid; gap: 6px; }
     .visit-row {
       display: grid;
-      grid-template-columns: minmax(118px, auto) minmax(90px, 1fr) minmax(130px, 1.2fr) minmax(105px, auto);
+      grid-template-columns: minmax(118px, auto) minmax(90px, 1fr) minmax(130px, 1.2fr) minmax(105px, auto) minmax(150px, 1.25fr);
       gap: 8px;
       align-items: center;
       border: 1px solid var(--border);
@@ -501,19 +485,40 @@
       padding: 7px 9px;
       font-size: 11px;
     }
-    .visit-time, .visit-device { color: var(--text-dim); }
+    .visit-time, .visit-device, .visit-session { color: var(--text-dim); }
     .visit-page { color: var(--accent); overflow-wrap: anywhere; }
-    .visit-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .visit-ip, .visit-session { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 
     /* ── Notification Nav ── */
-    .notif-nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
+    .notif-nav-section {
       padding: 10px 24px;
       border-bottom: 1px solid var(--border);
       background: rgba(255, 71, 87, 0.05);
       flex-shrink: 0;
+    }
+    .notif-nav-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid rgba(255, 71, 87, 0.45);
+      border-radius: 7px;
+      background: rgba(255, 71, 87, 0.08);
+      color: var(--notif);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .notif-nav-toggle:hover,
+    .notif-nav-toggle:focus-visible { background: rgba(255, 71, 87, 0.16); outline: none; }
+    .notif-nav-toggle i { transition: transform .2s ease; }
+    .notif-nav-toggle[aria-expanded="true"] i { transform: rotate(90deg); }
+    .notif-nav-wrap.collapsed { display: none; }
+    .notif-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 0 0;
       overflow-y: auto;
       max-height: 140px;
       align-content: flex-start;
@@ -615,11 +620,6 @@
       font-size: 13px;
       font-weight: 500;
     }
-    .event-item .ev-user {
-      font-size: 11px;
-      color: var(--accent);
-      font-family: monospace;
-    }
     .event-item .ev-time {
       font-size: 11px;
       color: var(--text-dim);
@@ -680,6 +680,7 @@
       .ob-action-btn { flex: 1 1 0; min-width: 0; }
       .records-toolbar { align-items: stretch; flex-direction: column; padding: 20px 20px 0; }
       .page-filter { width: 100%; }
+      .page-filter input { font-size: 16px; }
       .groups-container {
         padding: 16px 20px;
       }
@@ -736,7 +737,7 @@
 </header>
 
 <div class="ob-note" id="obNote">
-  估算口径：旧记录按会话 ID 单列，同一 IP 不会自动合并。稳定档案依据本域浏览器保存的匿名档案 ID 聚合，可跨标签页和 IP 变化延续；“iPhone · Safari”等设备名称只用于展示，同名设备不会自动合并，也不是硬件指纹。同一人使用多台设备或多个浏览器时仍可能多算，共用浏览器时可能少算。新档案可查看逐次页面、当时 IP 和粗粒度设备；旧记录无法可靠补出逐次对应关系。这里不查询城市或经纬度。
+  估算口径：旧记录按会话 ID 单列，同一 IP 不会自动合并。稳定档案依据本域浏览器保存的匿名档案 ID 聚合，可跨标签页和 IP 变化延续；卡片标题中的“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，同名设备不会自动合并，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。同一人使用多台设备或多个浏览器时仍可能多算，共用浏览器时可能少算。新档案可查看逐次页面、当时 IP、粗粒度设备和会话 ID；旧记录无法可靠补出逐次对应关系。这里不查询城市或经纬度。
 </div>
 
 <!-- ── Cross-server durable action inbox ── -->
@@ -825,11 +826,10 @@
     <div class="modal-header">
       <div>
         <h2 id="modalTitle">用户活动</h2>
-        <div class="users-list" id="modalUsers"></div>
       </div>
       <button class="modal-close" id="modalClose">✕</button>
     </div>
-    <div class="notif-nav" id="notifNav" style="display:none"></div>
+    <div class="notif-nav-section" id="notifNav" style="display:none"></div>
     <div class="modal-body" id="modalBody"></div>
   </div>
 </div>
@@ -888,7 +888,6 @@
   const pageFilterClear = document.getElementById('pageFilterClear');
   const eventModal = document.getElementById('eventModal');
   const modalTitle = document.getElementById('modalTitle');
-  const modalUsers = document.getElementById('modalUsers');
   const modalBody = document.getElementById('modalBody');
   const modalClose = document.getElementById('modalClose');
   const notifNav = document.getElementById('notifNav');
@@ -1503,8 +1502,7 @@
       const metrics = document.createElement('div');
       metrics.className = 'profile-metrics';
       metrics.textContent = (group.visits || []).length + ' 次已关联页面访问 · '
-        + (group.networks || []).length + ' 个曾用 IP · '
-        + group.users.length + ' 个会话 ID';
+        + (group.networks || []).length + ' 个曾用 IP';
       card.appendChild(metrics);
 
       const facts = document.createElement('div');
@@ -1512,17 +1510,6 @@
       appendFact(facts, '设备', (group.devices || []).map(item => item.value), false, group.is_legacy ? '旧记录未知' : '暂无');
       appendFact(facts, 'IP', (group.networks || []).map(item => item.value), true, '暂无');
       card.appendChild(facts);
-
-      // Anonymous session IDs remain visible as supporting evidence.
-      const usersDiv = document.createElement('div');
-      usersDiv.className = 'group-users';
-      group.users.forEach((uid) => {
-        const chip = document.createElement('span');
-        chip.className = 'user-chip';
-        chip.textContent = uid;
-        usersDiv.appendChild(chip);
-      });
-      card.appendChild(usersDiv);
 
       // Latest activity time
       if (group.recent_time) {
@@ -1577,12 +1564,36 @@
     });
 
     modalTitle.textContent = group.profile_label || '估算访客活动';
-    modalUsers.textContent = (group.is_legacy ? '旧会话 ID：' : '关联会话 ID：') + group.users.join(', ');
 
     // Notification navigation
     if (group.notifications.length > 0) {
-      notifNav.style.display = 'flex';
-      notifNav.innerHTML = '<span class="notif-nav-label">🔔 导航:</span>';
+      notifNav.style.display = 'block';
+      notifNav.innerHTML = '';
+
+      const navToggle = document.createElement('button');
+      navToggle.className = 'notif-nav-toggle';
+      navToggle.type = 'button';
+      navToggle.setAttribute('aria-expanded', 'false');
+      const navToggleIcon = document.createElement('i');
+      navToggleIcon.className = 'fas fa-chevron-right';
+      navToggleIcon.setAttribute('aria-hidden', 'true');
+      navToggle.appendChild(navToggleIcon);
+      const navToggleText = document.createElement('span');
+      navToggleText.textContent = '通知导航 · ' + group.notifications.length + ' 条';
+      navToggle.appendChild(navToggleText);
+      notifNav.appendChild(navToggle);
+
+      const navWrap = document.createElement('div');
+      navWrap.className = 'notif-nav-wrap collapsed';
+      const navList = document.createElement('div');
+      navList.className = 'notif-nav';
+      navWrap.appendChild(navList);
+      notifNav.appendChild(navWrap);
+      navToggle.addEventListener('click', () => {
+        const expanded = navToggle.getAttribute('aria-expanded') === 'true';
+        navToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        navWrap.classList.toggle('collapsed', expanded);
+      });
 
       // "全部已读" button
       const markAllBtn = document.createElement('button');
@@ -1592,7 +1603,7 @@
         e.stopPropagation();
         markAllRead(group);
       });
-      notifNav.appendChild(markAllBtn);
+      navList.appendChild(markAllBtn);
 
       group.notifications.forEach((notif, ni) => {
         const btn = document.createElement('button');
@@ -1600,7 +1611,7 @@
         btn.textContent = (ni + 1) + '. ' + (notif.type_label || notif.event_id);
         btn.dataset.notifIdx = ni;
         btn.addEventListener('click', () => navigateToNotif(groupId, ni));
-        notifNav.appendChild(btn);
+        navList.appendChild(btn);
       });
     } else {
       notifNav.style.display = 'none';
@@ -1669,11 +1680,6 @@
       typeSpan.className = 'ev-type';
       typeSpan.textContent = ev.type_label;
       header.appendChild(typeSpan);
-
-      const userSpan = document.createElement('span');
-      userSpan.className = 'ev-user';
-      userSpan.textContent = ev.client_id;
-      header.appendChild(userSpan);
 
       if (ev.is_notification) {
         const tag = document.createElement('span');
@@ -1770,6 +1776,7 @@
         appendVisitCell(row, 'visit-page', visit.page || '/');
         appendVisitCell(row, 'visit-device', visit.device_label || '未知设备');
         appendVisitCell(row, 'visit-ip', visit.ip || '未知 IP');
+        appendVisitCell(row, 'visit-session', '会话 ID：' + (visit.client_id || '未知'));
         list.appendChild(row);
       });
       visits.appendChild(list);

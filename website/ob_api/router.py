@@ -301,7 +301,7 @@ def _profile_label(visitor_id: str, devices: list[dict[str, Any]], is_legacy: bo
         client_id = visitor_id.removeprefix("legacy_")
         return f"旧会话 · {client_id}"
     device = devices[0]["value"] if devices else "浏览器档案"
-    return f"{device} · {visitor_id[-8:]}"
+    return f"{device} · 档案尾码 {visitor_id[-8:]}"
 
 
 def _load_activity_index(
