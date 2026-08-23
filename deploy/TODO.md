@@ -200,6 +200,8 @@ pkill -f "website.main"
 
 **方式 B：screen（适合需要交互操作的场景）**
 
+> 方式 A/B 只用于本地临时开发。生产服务器不得再以 root `nohup` 或 `screen` 运行网站，必须使用下方版本化 systemd unit。
+
 ```bash
 yum install -y screen
 mkdir -p /var/log/snh48
@@ -217,38 +219,19 @@ screen -S snh48 -X quit       # 结束会话
 tail -f /var/log/snh48/snh48_screen.log
 ```
 
-**方式 C：systemd 服务（最专业，支持开机自启 + 自动日志轮转）**
+**方式 C：systemd 服务（生产唯一支持方式）**
 
 ```bash
-cat > /etc/systemd/system/snh48.service << 'EOF'
-[Unit]
-Description=SNH48 Website Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/home/snh48_web
-EnvironmentFile=/home/snh48_web/.env
-ExecStart=/home/snh48_web/venv/bin/python -m website.main
-Restart=always
-RestartSec=10
-StandardOutput=append:/var/log/snh48/snh48.log
-StandardError=append:/var/log/snh48/snh48.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
+cd /home/snh48_web
+./deploy/harden_runtime_permissions.sh
+install -o root -g root -m 0644 deploy/systemd/snh48-web.service /etc/systemd/system/snh48-web.service
 systemctl daemon-reload
-systemctl enable snh48
-systemctl start snh48
+systemctl enable --now snh48-web.service
 
 # 常用管理命令
-systemctl status snh48              # 查看服务状态
-journalctl -u snh48 -f              # 查看实时日志
-systemctl restart snh48             # 重启服务
-systemctl stop snh48                # 停止服务
+systemctl status snh48-web.service
+journalctl -u snh48-web.service -f
+systemctl restart snh48-web.service
 ```
 
 > **systemd 优势**：自动重启崩溃的服务、开机自启、日志自动轮转不会撑爆磁盘。
@@ -893,34 +876,13 @@ grep -n "reload=False" /home/snh48_web/website/main.py
 ### 11. 配置 systemd 服务
 
 ```bash
-# 创建日志目录（必须先创建，否则 systemd 报错）
-mkdir -p /var/log/snh48
-chmod 755 /var/log/snh48
-
-cat > /etc/systemd/system/snh48-aliyun.service << 'EOF'
-[Unit]
-Description=SNH48 Website Service (Aliyun Hong Kong)
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/home/snh48_web
-EnvironmentFile=/home/snh48_web/.env
-ExecStart=/home/snh48_web/venv/bin/python -m website.main
-Restart=always
-RestartSec=10
-StandardOutput=append:/var/log/snh48/snh48_aliyun.log
-StandardError=append:/var/log/snh48/snh48_aliyun.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
+apt-get install -y acl
+cd /home/snh48_web
+./deploy/harden_aliyun_runtime_permissions.sh
+install -o root -g root -m 0644 deploy/systemd/snh48-aliyun.service /etc/systemd/system/snh48-aliyun.service
 systemctl daemon-reload
-systemctl enable snh48-aliyun
-systemctl start snh48-aliyun
-systemctl status snh48-aliyun
+systemctl enable --now snh48-aliyun.service
+systemctl status snh48-aliyun.service
 # 应显示 active (running)
 ```
 
@@ -932,12 +894,18 @@ systemctl status snh48-aliyun
 # 上传代理脚本
 scp /mnt/zhitainew/snh48/snh48-fan-hub/scripts/weibo_img_proxy.py root@8.210.188.184:/home/snh48-fan-hub/scripts/
 
-# 在阿里云 SSH 上启动
+# 上传并安装阿里云专用 unit
+scp /mnt/zhitainew/snh48/snh48-fan-hub/deploy/systemd/snh48-weibo-img-proxy-aliyun.service root@8.210.188.184:/tmp/snh48-weibo-img-proxy.service
+
+# 在阿里云 SSH 上执行
 mkdir -p /home/snh48-fan-hub/scripts
-nohup python3 /home/snh48-fan-hub/scripts/weibo_img_proxy.py 8899 > /var/log/snh48/img_proxy.log 2>&1 &
+install -o root -g root -m 0644 /tmp/snh48-weibo-img-proxy.service /etc/systemd/system/snh48-weibo-img-proxy.service
+systemctl daemon-reload
+systemctl enable --now snh48-weibo-img-proxy.service
 
 # 验证
 curl -s http://127.0.0.1:8899/health
+ss -ltnp | grep '127.0.0.1:8899'
 # 应返回 OK
 ```
 

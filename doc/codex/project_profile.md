@@ -24,6 +24,13 @@
 | 腾讯云 | `cjy.plus` | `124.222.72.203` | `systemd` 服务 `snh48-web` | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
 | 阿里云香港 | `cjy.我爱你` / `cjy.xn--6qq986b3xl` | `8.210.188.184` | `systemd` 服务 `snh48-aliyun` | `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`，来源 `deploy/nginx-aliyun.conf` |
 
+### 阿里云运行与 SSH 边界
+
+- `snh48-aliyun.service` 使用不可登录的 `snh48-web` 账号、`UMask=0077`、`NoNewPrivileges=yes` 和 systemd 文件系统/设备沙箱；版本化 unit 为 `deploy/systemd/snh48-aliyun.service`，权限入口为 `deploy/harden_aliyun_runtime_permissions.sh`。
+- FastAPI 只监听 `127.0.0.1:8000`。网站运行数据由 `snh48-web` 以目录 `0700` / 文件 `0600` 管理；`.env` 和 `/var/log/snh48` 仍由 root 以 `0600` 文件权限管理。
+- 阿里云 `snh48-weibo-img-proxy.service` 使用 systemd `DynamicUser`，只监听 `127.0.0.1:8899`；unit 源在 fan-hub 的 `deploy/systemd/snh48-weibo-img-proxy-aliyun.service`，公网只能经 Nginx `/image-proxy/` 访问。
+- 阿里云 sshd 只允许公钥认证；root 只能用公钥登录，密码、keyboard-interactive、GSSAPI 和 X11 转发均关闭。网站跨云共享状态使用 `/var/lib/snh48-web/.ssh/` 下的专用密钥，远端 `authorized_keys` 只允许 `mutate` / `inbox-put` peer 子命令，不是交互式 root 通道。root cron 的必要数据拉取使用独立运维密钥，不与网站进程共享。
+
 ### QA 节点边界
 
 - `QA_ENABLED` 控制当前节点是否注册 QA API、执行知识库归档维护和启动模型预热；默认值为 `true`。
