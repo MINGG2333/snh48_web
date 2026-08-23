@@ -94,7 +94,7 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn('new AbortController()', template)
         self.assertNotIn('window.setInterval(function() { loadSupportChatHistory(false); }, 1000)', template)
         self.assertIn('href="/complaint"', template)
-        self.assertIn('position: fixed;\n      right: 18px;\n      bottom: max(18px', template)
+        self.assertIn('position: fixed;\n      right: 18px;\n      /* Keep the entry tied to the stable layout viewport; browser address-bar changes do not move it. */\n      top: clamp(180px, 80vh, calc(100vh - 70px));\n      bottom: auto;', template)
         self.assertIn('.top-actions { display: contents; }', template)
         self.assertIn('.top-actions .nav-link.primary { right: 86px; }', template)
         self.assertIn('top: 54px;\n        right: 12px;', template)

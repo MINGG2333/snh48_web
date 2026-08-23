@@ -356,7 +356,9 @@
     .support-chat-nav {
       position: fixed;
       right: 18px;
-      bottom: max(18px, env(safe-area-inset-bottom, 0px));
+      /* Keep the entry tied to the stable layout viewport; browser address-bar changes do not move it. */
+      top: clamp(180px, 80vh, calc(100vh - 70px));
+      bottom: auto;
       z-index: 30;
       width: 52px;
       height: 52px;

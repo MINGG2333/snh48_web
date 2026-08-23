@@ -1,6 +1,6 @@
 # 网站页面清单
 
-> 最后更新：2026-08-23
+> 最后更新：2026-08-24
 
 本文记录当前网站所有前端页面入口、可见性、鉴权方式和主要代码位置。新增、删除、改名页面，或新增短入口、改变密码策略时，需要同步更新本文。
 
@@ -35,7 +35,7 @@
 |------|------|----------|------|--------------|------|
 | 首页 | `/` | 公开首页 | `website/templates/index.html` | `website/static/js/main.js`、`website/static/js/scroller.js`、`website/static/js/celebration.js`、`/api/scroller/texts`、`/api/balance` | 全屏背景和飘动文字；从出道第300天起，每逢整百天展示8天庆祝动画，已达到的整百天祝福永久进入飘屏 |
 | 关于 | `/about` | 公开导航 | `website/templates/about.html` | `website/static/js/about.js` | 站点介绍 |
-| AI 问答 | `/qa` | 公开导航 | `website/templates/qa.html` | `website/static/js/qa.js`、`/api/qa/*` | 页面可访问；问答能力需要 `SITE_PASSWORD` |
+| AI 问答 | `/qa` | 公开导航 | `website/templates/qa.html` | `website/static/js/qa.js`、`/api/qa/*` | `QA_ENABLED=true` 的节点提供问答并要求 `SITE_PASSWORD`；关闭节点返回本机 503 页面且不注册 API，不跨站跳转 |
 | 时光轴 | `/timeline` | 公开导航 | `website/templates/timeline.html` | `website/static/js/timeline.js`、`/api/timeline/*` | 行程、直播、回放、记忆和地图入口；整百天里程碑到达后自动加入并永久保留 |
 | 记忆 | `/memories` | 从时光轴进入 | `website/templates/memories.html`、`website/static/js/memories.js` | `/api/memories/data`、`/api/memories/submit`；管理模式使用 `/api/memories/manage`、`/api/memories/review` | 公开记录可直接浏览和提交（仍受提交开关、基础审核和 IP 限速约束）；应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` / `X-Memories-Fanclub-Password`，本人模式使用 `MEMORIES_IDOL_PASSWORD` / `X-Memories-Idol-Password`；不向普通访客返回平台 ID |
 | 直播回放 | `/replay/{live_id}` | 由时光轴/直播卡片进入 | `website/templates/replay.html` | 回放数据来自 `LIVE_PUSH_REPLAY_ROOT` | `live_id` 为动态参数 |
@@ -51,7 +51,7 @@
 |------|--------|--------|------|-----|-------------|----------|
 | 背景词管理 | `/scroller-admin` | 无 | `website/templates/scroller_admin.html` | `/api/scroller/*` | `SCROLLER_PASSWORD`；`X-Scroller-Password` 或登录 Cookie | `website/data/scroller_texts.json`；非 Git 版本化共享状态 |
 | 观察页 | `/ob` | 无 | `website/templates/ob.html` | `/api/ob/verify`、`/api/ob/data`、`/api/ob/mark-read`、`/api/ob/inbox/status`、`/api/feedback-chat/conversations`、`/api/feedback-chat/admin-history`、`/api/feedback-chat/admin-watch`、`/api/feedback-chat/reply` | `OB_PASSWORD`；`X-Ob-Password` | 本节点访问日志按服务器签发的第一方 HttpOnly 浏览器档案 Cookie 估算访客，同一浏览器可跨标签页和 IP 聚合；`/api/ob/data` 另返回不参与统计的 IP 关联组和 `ip_network_graph`，3D IP 球包含成员档案/旧会话，IP 对按共同成员数量计算边权；逐次页面访问显示粗粒度设备与当时 IP，不查询城市/经纬度；旧记录按会话单列并降低历史关联置信度；用户记录可按页面路径筛选；通知中心、默认折叠的双服务器可靠待处理箱和客服聊天保留来源标签；客服会话通过可恢复的长等待请求接收新消息 |
-| 房间礼物与综合回礼 | 逐条明细 `/room/gifts`；按送礼人综合回礼 `/room/gift-senders` | 无 | `website/templates/gift_replies.html`、`website/templates/gift_reply_senders.html` | `/api/gift-replies/verify`、`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`、`/api/gift-replies/sender-history`、`/api/feedback-chat/history`、`/api/feedback-chat/watch`、`/api/feedback-chat/message` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/`；综合回礼默认从 `2026-05-30` 起显示全部送礼人，可筛选“有未回复/已全部回复”；一次列出全部匹配送礼人且默认折叠，展开时按需读取个人历史；两个页面都只轮询轻量摘要，检测到数据变化后提示用户点击加载，不自动替换当前列表；无新数据时“跳到最新”只滚动，日期只在点击筛选后应用；移动端把页面互链放在右上、筛选放在右侧第二行，综合回礼页客服入口固定在右下；旧 `/gift-replies*` 和 `/gr` 已废弃并返回 404 |
+| 房间礼物与综合回礼 | 逐条明细 `/room/gifts`；按送礼人综合回礼 `/room/gift-senders` | 无 | `website/templates/gift_replies.html`、`website/templates/gift_reply_senders.html` | `/api/gift-replies/verify`、`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`、`/api/gift-replies/sender-history`、`/api/feedback-chat/history`、`/api/feedback-chat/watch`、`/api/feedback-chat/message` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/`；综合回礼默认从 `2026-05-30` 起显示全部送礼人，可筛选“有未回复/已全部回复”；一次列出全部匹配送礼人且默认折叠，展开时按需读取个人历史；两个页面都只轮询轻量摘要，检测到数据变化后提示用户点击加载，不自动替换当前列表；无新数据时“跳到最新”只滚动，日期只在点击筛选后应用；移动端把页面互链放在右上、筛选放在右侧第二行，综合回礼页客服入口固定在稳定大视口约 `80vh` 的右侧位置，不随浏览器地址栏收起而跳动；旧 `/gift-replies*` 和 `/gr` 已废弃并返回 404 |
 | 房间消息管理 | `/room-messages` | `/room` | `website/templates/room_messages.html` | `/api/room-messages/verify`、`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore` | `ROOM_MESSAGES_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Room-Messages-Password` | 消息读取路径不变；忽略状态是由腾讯云统一提交、带历史版本和 outbox 的非 Git 共享状态 |
 | 成员房间上麦回放 | `/room-voice-replays` | `/radio` | `website/templates/room_voice_replays.html` | `/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/segments/{filename}` | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；HttpOnly Cookie 或 `X-Room-Voice-Replays-Password` | `ROOM_VOICE_REPLAYS_DIR`，默认 fan-hub `room_voice_replays/`；公开房间/小房间独立会话，默认播放 AAC-LC 单声道兼容版，可切换源 AAC 原始音质版并保持时间位置；桌面端保留左侧会话列表，移动端将房间类型和会话列表放入默认收起的“筛选回放”面板，选择会话后自动收起；进度跳转和缓冲有可见状态；每场回放详情可返回 Room，并携带同期第一条消息 ID 精确定位；音频分段和同期消息用 `session_id` 归为整体；设置 `noindex,nofollow` |
 | 翻牌记录 | `/flip-cards` | `/flip` | `website/templates/flip_cards.html` | `/api/flip-cards/login`、`/accounts`、`/data?account_id=...`、账号级媒体和 `/account-management/*` | `FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；HttpOnly Cookie 或 `X-Flip-Cards-Password` | 读取 fan-hub 脱敏账号清单、schema v4 账号数据和账号级媒体；两端页面/代码一致，腾讯云允许手机号验证码登录并后台刷新，阿里云账号管理弹窗只显示当前节点不开放操作且无跳转；成员筛选默认陈嘉仪，其他成员显示完整姓名；首次渲染最新 50 条并向上渐进加载，音频不预载；账号管理与可收起的更新状态分离，底部按钮重新加载并跳到最新记录；转录、问题状态 Tag 和双向 4 秒高亮保留；设置 `noindex,nofollow` |
@@ -77,7 +77,8 @@
 ```bash
 curl -sS -D - -o /dev/null https://cjy.plus/
 curl -sS -D - -o /dev/null https://cjy.plus/about
-curl -sS -D - -o /dev/null https://cjy.plus/qa
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://cjy.plus/qa)" = 503
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://cjy.plus/api/qa/status)" = 404
 curl -sS -D - -o /dev/null https://cjy.plus/timeline
 curl -sS -D - -o /dev/null https://cjy.plus/terms
 curl -sS -D - -o /dev/null https://cjy.plus/privacy
