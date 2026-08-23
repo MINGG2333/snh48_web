@@ -1630,7 +1630,7 @@
           appendMessages(data.items || []);
           window.requestAnimationFrame(function() {
             if (!isTargetLoad && !roomPageScrollLocked && !roomScrollRestorePending) {
-              setCurrentScrollTop(currentScrollHeight());
+              scrollToLatestMessage();
             }
             syncRoomUpdatePill();
           });
@@ -2226,6 +2226,11 @@
     function syncRoomUpdatePill() {
       updatePill.textContent = hasMoreNewer ? "有新消息，点击查看最新" : "跳到最新";
       updatePill.classList.toggle("show", shouldShowRoomUpdatePill());
+    }
+
+    function scrollToLatestMessage() {
+      if (roomPageScrollLocked || roomScrollRestorePending) return;
+      setCurrentScrollTop(Math.max(0, currentScrollHeight() - currentClientHeight()));
     }
 
     function stopRefresh() {
@@ -2858,8 +2863,10 @@
       if (usesDocumentScroll()) syncRoomUpdatePill();
     }, { passive: true });
     applyBtn.addEventListener("click", function() {
-      reloadLatest("apply_filters");
       setFilterPanelOpen(false);
+      window.requestAnimationFrame(function() {
+        reloadLatest("apply_filters");
+      });
     });
     resetBtn.addEventListener("click", resetFilters);
     if (jumpDateInput) {
@@ -2869,7 +2876,15 @@
       });
     }
     updatePill.addEventListener("click", function() {
-      reloadLatest("load_newer");
+      var request = reloadLatest("load_newer");
+      if (request && typeof request.then === "function") {
+        request.then(function(data) {
+          if (!data) return;
+          window.requestAnimationFrame(function() {
+            window.requestAnimationFrame(scrollToLatestMessage);
+          });
+        });
+      }
     });
     if (unrepliedNav) {
       unrepliedNav.addEventListener("click", jumpToLatestUnrepliedGifts);
@@ -2923,8 +2938,9 @@
         reloadLatest("change_filters");
       });
     });
-    installDateInputGuard(dateFromInput, function() { reloadLatest("change_filters"); });
-    installDateInputGuard(dateToInput, function() { reloadLatest("change_filters"); });
+    // Date fields only change the pending form values. The request starts after clicking “筛选”.
+    installDateInputGuard(dateFromInput);
+    installDateInputGuard(dateToInput);
 
     [senderInput, keywordInput].forEach(function(node) {
       node.addEventListener("keydown", function(event) {

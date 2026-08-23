@@ -297,7 +297,7 @@
     .update-pill {
       position: fixed;
       left: 50%;
-      top: calc(74px + env(safe-area-inset-top, 0px));
+      top: calc(112px + env(safe-area-inset-top, 0px));
       z-index: 20;
       display: none;
       transform: translateX(-50%);
@@ -354,9 +354,9 @@
       border: 0;
     }
     .support-chat-nav {
-      position: absolute;
+      position: fixed;
       right: 18px;
-      bottom: 30px;
+      top: calc(92px + env(safe-area-inset-top, 0px));
       z-index: 30;
       width: 52px;
       height: 52px;
@@ -520,8 +520,32 @@
     @media (max-width: 820px) {
       html.gift-filters-open,
       body.gift-filters-open { overflow: hidden; }
-      .topbar-inner { align-items: flex-start; flex-direction: column; padding: 14px; }
-      .top-actions { justify-content: flex-start; }
+      .topbar-inner {
+        position: relative;
+        display: block;
+        min-height: 98px;
+        padding: 12px;
+      }
+      .title { min-width: 0; padding-right: 160px; }
+      .top-actions { display: contents; }
+      .top-actions .nav-link {
+        position: absolute;
+        top: 12px;
+        min-height: 34px;
+        padding: 0 8px;
+        font-size: 12px;
+      }
+      .top-actions .nav-link.primary { right: 86px; }
+      .top-actions .nav-link:not(.primary) { right: 12px; }
+      .top-actions .mobile-filter-toggle {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        width: auto;
+        min-width: 72px;
+        margin: 0;
+      }
+      .support-chat-nav { top: calc(104px + env(safe-area-inset-top, 0px)); }
       main { padding: 14px 12px 32px; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mobile-filter-toggle { display: inline-flex; }
