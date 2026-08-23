@@ -72,8 +72,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `282309a`。screen `3352583.snh48`、Python PID `3352588`，2026-08-23 20:31:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；上麦回放切换会话时显式重置原生播放态，顶部返回 Room 入口和移动端筛选收纳均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `282309a`。2026-08-23 20:32:34 CST 重启，PID `2466759`，active/running、`NRestarts=0`；上麦回放 iPhone 播放态修复、顶部返回 Room 入口、日期筛选、受保护页面初始鉴权、各页“跳到最新”和移动端筛选收纳均已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `5c37569`，功能代码为 `282309a`。screen `3352583.snh48`、Python PID `3352588`，2026-08-23 20:31:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；上麦回放切换会话时显式重置原生播放态，顶部返回 Room 入口和移动端筛选收纳均已生效 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `5c37569`，功能代码为 `282309a`。2026-08-23 20:32:34 CST 重启，PID `2466759`，active/running、`NRestarts=0`；上麦回放 iPhone 播放态修复、顶部返回 Room 入口、日期筛选、受保护页面初始鉴权、各页“跳到最新”和移动端筛选收纳均已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
