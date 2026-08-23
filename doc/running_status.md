@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 20:32 上麦回放 iPhone 播放态与顶部导航完成双云发布：网站提交 `3207f8c`（切换会话/分段前显式 `audio.pause()`，避免 iPhone Safari 保留旧的“正在播放”外观）和 `282309a`（移除顶部“退出”，改为 `/room` 的“返回 Room”链接）已推送。腾讯云通过阿里云既有免密链路快进并重启 screen `3352583.snh48`，Python PID `3352588`，继续覆盖 `QA_WARMUP_ON_STARTUP=false`；阿里云由 `python3 deploy/deploy.py deploy aliyun` 快进并重启 `snh48-aliyun`，PID `2466759`，`active/running`、`NRestarts=0`，20:32:34 启动。两端公网 `/radio` 返回 200、未登录 `/api/room-voice-replays/sessions` 返回 401，页面均包含 `roomPageLink` 和 `pauseBeforeMediaChange`，不再包含 `logoutBtn`；阿里云既有未跟踪运行文件保持原样。桌面端布局未改动，移动端筛选仍默认收起。
+
 2026-08-23 19:45 OB 交互式 IP 网络图完成腾讯云阶段发布：网站提交 `549acc5` 已推送并由腾讯云本机 `git pull --ff-only` 加载；现有 screen `3300763.snh48`、Python PID `3300772` 保持运行，无需重启。OB 默认显示按 IP 节点大小表达关联成员数的网络图，点击节点显示浏览器档案/旧会话人物视图，悬停成员或会话显示访问摘要；原关联组列表保留为切换视图。公网 `/ob` 返回 200，页面包含 `networkVisualization`、`ipNetworkSvg` 和会话悬浮逻辑；鉴权 `/api/ob/data` 返回 702 个原始成员、180 个 IP 关联组，统计为 99 个稳定档案、603 个旧会话和 216 条逐次访问；`/timeline` 返回 200。未加入城市、坐标、主动指纹或轨迹分析；阿里云尚未同步，等待用户确认腾讯云效果。
 
 2026-08-23 19:31 OB IP 关联组展示完成腾讯云阶段发布：网站提交 `bb6ca36` 已推送并加载到腾讯云 screen `3300763.snh48`、Python PID `3300772`，继续覆盖 `QA_WARMUP_ON_STARTUP=false`。OB 新增仅用于整理展示的 `association_groups`，按稳定浏览器档案和旧会话共享 IP 的传递关系生成组，不改变估计访客数、稳定档案数、旧会话数或逐次访问记录；旧会话使用历史 IP 参与并明确标记限制。公网 `/ob` 返回 200，鉴权 `/api/ob/data` 返回 702 个原始成员、180 个关联组，统计仍为 99 个稳定档案、603 个旧会话和 215 条逐次访问；`/timeline` 返回 200。前端已改为默认收起的关联组总览，展开后显示成员行并可进入原详情弹窗。阿里云尚未同步，等待腾讯云验收。
@@ -70,8 +72,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `bb6ca36`。screen `3300763.snh48`、Python PID `3300772`，2026-08-23 19:31 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 与 IP 关联组展示均已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `33f37be`。2026-08-23 18:41:01 CST 重启，PID `2454218`，active/running、`NRestarts=0`；日期筛选、受保护页面初始鉴权、各页“跳到最新”和上麦回放移动端筛选收纳均已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `282309a`。screen `3352583.snh48`、Python PID `3352588`，2026-08-23 20:31:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；上麦回放切换会话时显式重置原生播放态，顶部返回 Room 入口和移动端筛选收纳均已生效 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `282309a`。2026-08-23 20:32:34 CST 重启，PID `2466759`，active/running、`NRestarts=0`；上麦回放 iPhone 播放态修复、顶部返回 Room 入口、日期筛选、受保护页面初始鉴权、各页“跳到最新”和移动端筛选收纳均已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
