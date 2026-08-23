@@ -933,10 +933,31 @@
     }
 
     @media (max-width: 720px) {
+      html,
+      body {
+        height: auto;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
       html.room-filters-open,
       body.room-filters-open { overflow: hidden; }
-      body,
-      .page { height: 100dvh; }
+      .page,
+      .page.ready {
+        display: block;
+        height: auto;
+        min-height: 100dvh;
+      }
+      .topbar { position: sticky; top: 0; }
+      .chat-shell { display: block; min-height: 0; }
+      .chat-scroll {
+        display: block;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+      }
+      .update-pill,
+      .floating-actions { position: fixed; }
       .topbar { backdrop-filter: none; }
       .topline {
         align-items: flex-start;
@@ -1343,6 +1364,35 @@
       document.documentElement.style.setProperty("--visual-bottom-gap", Math.round(gap) + "px");
     }
 
+    function usesDocumentScroll() {
+      return isMobileViewport();
+    }
+
+    function currentScrollTop() {
+      return usesDocumentScroll()
+        ? (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0)
+        : chatScroll.scrollTop;
+    }
+
+    function setCurrentScrollTop(value) {
+      if (usesDocumentScroll()) {
+        window.scrollTo(0, Math.max(0, Number(value) || 0));
+      } else {
+        chatScroll.scrollTop = Math.max(0, Number(value) || 0);
+      }
+    }
+
+    function currentScrollHeight() {
+      if (usesDocumentScroll()) {
+        return Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      }
+      return chatScroll.scrollHeight;
+    }
+
+    function currentClientHeight() {
+      return usesDocumentScroll() ? window.innerHeight : chatScroll.clientHeight;
+    }
+
     function setLoginFeedback(kind, message) {
       loginError.textContent = message;
       loginError.classList.add("show");
@@ -1485,7 +1535,7 @@
           appendMessages(data.items || []);
           window.requestAnimationFrame(function() {
             if (!isTargetLoad) {
-              chatScroll.scrollTop = chatScroll.scrollHeight;
+              setCurrentScrollTop(currentScrollHeight());
             }
           });
           updatePill.classList.remove("show");
@@ -1744,8 +1794,8 @@
 
     function prependMessages(items) {
       if (items.length === 0) return;
-      var oldHeight = chatScroll.scrollHeight;
-      var oldTop = chatScroll.scrollTop;
+      var oldHeight = currentScrollHeight();
+      var oldTop = currentScrollTop();
       var frag = document.createDocumentFragment();
       items.forEach(function(item) {
         frag.appendChild(createMessageNode(item));
@@ -1753,7 +1803,7 @@
       messageList.insertBefore(frag, messageList.firstChild);
       loadedCount += items.length;
       window.requestAnimationFrame(function() {
-        chatScroll.scrollTop = chatScroll.scrollHeight - oldHeight + oldTop;
+        setCurrentScrollTop(currentScrollHeight() - oldHeight + oldTop);
       });
     }
 
@@ -2013,7 +2063,7 @@
     }
 
     function loadOlderIfNeeded() {
-      if (chatScroll.scrollTop > 160 || !hasMoreOlder || loading) return;
+      if (currentScrollTop() > 160 || !hasMoreOlder || loading) return;
       fetchChunk({ older: true });
     }
 
@@ -2030,7 +2080,7 @@
     function fillViewportIfNeeded() {
       window.requestAnimationFrame(function() {
         if (!hasMoreOlder || loading) return;
-        if (chatScroll.scrollHeight <= chatScroll.clientHeight + 120) {
+        if (currentScrollHeight() <= currentClientHeight() + 120) {
           fetchChunk({ older: true });
         }
       });
@@ -2069,7 +2119,7 @@
     }
 
     function isNearBottom() {
-      return chatScroll.scrollHeight - chatScroll.scrollTop - chatScroll.clientHeight < 180;
+      return currentScrollHeight() - currentScrollTop() - currentClientHeight() < 180;
     }
 
     function stopRefresh() {
@@ -2239,7 +2289,7 @@
         await waitForRender();
         if (jumpToken !== activeJumpToken) return;
         window.requestAnimationFrame(function() {
-          chatScroll.scrollTop = 0;
+          setCurrentScrollTop(0);
           window.requestAnimationFrame(async function() {
             if (!await scrollToMessage(targetId, jumpToken)) {
               showJumpStatus("目标消息在列表中，但没有定位到卡片");
@@ -2296,7 +2346,7 @@
       });
       if (!data || jumpToken !== activeJumpToken) return;
 
-      chatScroll.scrollTop = 0;
+      setCurrentScrollTop(0);
       await waitForStableLayout(jumpToken);
       while (!findMessageNode(startId) && hasMoreOlder && jumpToken === activeJumpToken) {
         showJumpStatus("正在加载这一批未回复礼物...");
@@ -2425,18 +2475,22 @@
     }
 
     function targetScrollTopForNode(node) {
-      var nodeTop = node.getBoundingClientRect().top - chatScroll.getBoundingClientRect().top + chatScroll.scrollTop;
+      var nodeTop = usesDocumentScroll()
+        ? node.getBoundingClientRect().top + currentScrollTop()
+        : node.getBoundingClientRect().top - chatScroll.getBoundingClientRect().top + chatScroll.scrollTop;
       return Math.max(0, Math.round(nodeTop - targetViewportOffset()));
     }
 
     function targetViewportOffset() {
-      return Math.max(80, Math.round(chatScroll.clientHeight * 0.28));
+      return Math.max(80, Math.round(currentClientHeight() * 0.28));
     }
 
     function isMessageNearTargetPosition(node) {
-      var relativeTop = node.getBoundingClientRect().top - chatScroll.getBoundingClientRect().top;
+      var relativeTop = usesDocumentScroll()
+        ? node.getBoundingClientRect().top
+        : node.getBoundingClientRect().top - chatScroll.getBoundingClientRect().top;
       var target = targetViewportOffset();
-      if (chatScroll.scrollTop <= 2) {
+      if (currentScrollTop() <= 2) {
         return relativeTop >= -8 && relativeTop <= target + 110;
       }
       return Math.abs(relativeTop - target) <= 44;
@@ -2444,14 +2498,14 @@
 
     function animateScrollTo(targetTop, jumpToken) {
       return new Promise(function(resolve) {
-        var startTop = chatScroll.scrollTop;
+        var startTop = currentScrollTop();
         var delta = targetTop - startTop;
         var distance = Math.abs(delta);
         var duration = Math.min(1400, Math.max(380, distance * 0.55));
         var startTime = null;
 
         if (distance < 2) {
-          chatScroll.scrollTop = targetTop;
+          setCurrentScrollTop(targetTop);
           resolve();
           return;
         }
@@ -2466,7 +2520,7 @@
           }
           var progress = Math.min(1, (timestamp - startTime) / duration);
           var eased = easeInOutCubic(progress);
-          chatScroll.scrollTop = startTop + delta * eased;
+          setCurrentScrollTop(startTop + delta * eased);
           if (progress < 1) {
             scrollAnimationFrame = window.requestAnimationFrame(step);
           } else {
@@ -2568,8 +2622,8 @@
 
           updateViewportInsets();
           var layout = [
-            chatScroll.scrollHeight,
-            chatScroll.clientHeight,
+            currentScrollHeight(),
+            currentClientHeight(),
             messageList.children.length
           ].join(":");
           if (layout === lastLayout) {
@@ -2682,6 +2736,9 @@
       if (event.key === "Enter") doLogin();
     });
     chatScroll.addEventListener("scroll", loadMoreIfNeeded);
+    window.addEventListener("scroll", function() {
+      if (usesDocumentScroll()) loadMoreIfNeeded();
+    }, { passive: true });
     applyBtn.addEventListener("click", function() {
       reloadLatest("apply_filters");
       setFilterPanelOpen(false);
