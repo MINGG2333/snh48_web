@@ -546,12 +546,6 @@ def _backup_log_files(transcript_dir: Path) -> None:
         transcript_dir.parent / "snh48_screen.log",
     ]
 
-    server_log_dir = Path("/var/log/snh48")
-    if server_log_dir.exists():
-        for f in server_log_dir.iterdir():
-            if f.is_file() and f.suffix in (".log", ""):
-                log_files.append(f)
-
     backup_dir = transcript_dir / "logs_backup"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
