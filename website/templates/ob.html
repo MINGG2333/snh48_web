@@ -355,7 +355,7 @@
       border-radius: 10px;
       background: rgba(19, 26, 43, .72);
     }
-    .network-canvas-wrap { position: relative; min-height: 510px; overflow: auto; }
+    .network-canvas-wrap { position: relative; min-height: 510px; overflow: hidden; }
     .network-canvas-head {
       position: sticky;
       top: 0;
@@ -370,6 +370,13 @@
     }
     .network-canvas-title { font-size: 12px; font-weight: 650; }
     .network-canvas-summary { color: var(--text-dim); font-size: 11px; }
+    .network-3d-canvas { position: relative; height: 510px; min-height: 420px; background: #0a0e17; }
+    .network-3d-canvas canvas { display: block; width: 100% !important; height: 100% !important; outline: none; }
+    .network-3d-status { position: absolute; left: 14px; bottom: 12px; z-index: 2; color: var(--text-dim); font-size: 10px; pointer-events: none; }
+    .network-3d-reset { position: absolute; right: 12px; bottom: 10px; z-index: 3; min-height: 30px; border: 1px solid var(--border); border-radius: 7px; background: rgba(10,14,23,.78); color: var(--text-dim); padding: 0 9px; cursor: pointer; font-size: 11px; }
+    .network-3d-reset:hover, .network-3d-reset:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
+    .network-3d-fallback { display: none; height: 100%; overflow: auto; }
+    .network-3d-fallback.active { display: block; }
     #ipNetworkSvg { display: block; width: 100%; min-width: 720px; }
     .ip-node { cursor: pointer; outline: none; }
     .ip-node circle { stroke: rgba(255,255,255,.32); stroke-width: 1.2; transition: filter .15s, stroke-width .15s; }
@@ -891,6 +898,7 @@
       .records-view-mode button { flex: 1; }
       .network-visualization { grid-template-columns: 1fr; min-height: 0; padding: 16px 20px 20px; }
       .network-canvas-wrap { min-height: 420px; }
+      .network-3d-canvas { height: 420px; }
       .network-detail-panel { min-height: 420px; }
       .network-detail-empty { min-height: 380px; }
       .association-group-header { grid-template-columns: auto minmax(0, 1fr); gap: 9px; padding: 12px; }
@@ -959,7 +967,7 @@
 </header>
 
 <div class="ob-note" id="obNote">
-  估算口径：估计访客数按稳定浏览器档案，旧会话单独统计；IP 关联组只用于整理展示，不改变访客数、会话数或逐次访问记录。关联组把曾经共享过 IP 的浏览器档案和旧会话放在一起，并按共享 IP 的传递关系连接；组内仍保留每个成员的原始记录。共享 IP 可能对应多个自然人，只表示曾共用同一网络出口。稳定档案依据服务器签发并校验的本域 HttpOnly 匿名 Cookie 聚合，可跨标签页和 IP 变化延续；卡片标题中的“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。旧记录只有历史 IP 集合，不能可靠补出逐次对应关系。这里不查询城市或经纬度。
+  估算口径：估计访客数按稳定浏览器档案，旧会话单独统计；IP 关联组和 3D 网络图只用于整理展示，不改变访客数、会话数或逐次访问记录。3D 图中每个 IP 球包含曾使用该 IP 的浏览器档案/旧会话，同一档案可出现在多个 IP 球；两个 IP 球的连线按共同成员数量计算，线越粗、距离越近只表示共享档案/会话更多。共享 IP 可能对应多个自然人，只表示曾共用同一网络出口。稳定档案依据服务器签发并校验的本域 HttpOnly 匿名 Cookie 聚合，可跨标签页和 IP 变化延续；“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。旧记录只有历史 IP 集合，不能可靠补出逐次对应关系；历史关联会降低置信度显示。这里不查询城市或经纬度。
 </div>
 
 <!-- ── Cross-server durable action inbox ── -->
@@ -1053,7 +1061,15 @@
         <span class="network-canvas-title">共享 IP 节点</span>
         <span class="network-canvas-summary" id="networkCanvasSummary">正在计算</span>
       </div>
-      <svg id="ipNetworkSvg" role="img" aria-label="共享 IP 节点图"></svg>
+      <div class="network-3d-canvas" id="network3dCanvas" role="img" aria-label="共享 IP 三维关系图">
+        <div class="network-3d-status" id="network3dStatus">共享成员数决定连线权重</div>
+        <button class="network-3d-reset" id="network3dReset" type="button" title="重置三维视角">
+          <i class="fas fa-arrows-to-circle" aria-hidden="true"></i> 重置视角
+        </button>
+      </div>
+      <div class="network-3d-fallback" id="network3dFallback">
+        <svg id="ipNetworkSvg" role="img" aria-label="共享 IP 节点图"></svg>
+      </div>
       <div class="network-empty" id="networkEmpty" hidden>当前筛选没有可显示的 IP 节点</div>
     </div>
     <aside class="network-detail-panel" id="networkDetailPanel" aria-live="polite">
@@ -1093,6 +1109,8 @@
 </div>
 
 <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.79.0/dist/3d-force-graph.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -1101,6 +1119,7 @@
   let obPassword = '';
   let groupsData = [];
   let associationGroupsData = [];
+  let ipNetworkGraphData = { nodes: [], links: [] };
   let inboxData = [];
   let statsData = {};
   let currentGroupId = -1;
@@ -1118,6 +1137,8 @@
   let pageFilterQuery = '';
   let viewMode = 'network';
   let selectedIpNodeId = '';
+  let network3dGraph = null;
+  let network3dGraphData = null;
   const associationOpenState = new Map();
   let obToolScrollLockY = null;
 
@@ -1152,6 +1173,10 @@
   const listViewButton = document.getElementById('listViewButton');
   const networkVisualization = document.getElementById('networkVisualization');
   const networkCanvasSummary = document.getElementById('networkCanvasSummary');
+  const network3dCanvas = document.getElementById('network3dCanvas');
+  const network3dStatus = document.getElementById('network3dStatus');
+  const network3dReset = document.getElementById('network3dReset');
+  const network3dFallback = document.getElementById('network3dFallback');
   const ipNetworkSvg = document.getElementById('ipNetworkSvg');
   const networkEmpty = document.getElementById('networkEmpty');
   const networkDetailEmpty = document.getElementById('networkDetailEmpty');
@@ -1567,6 +1592,9 @@
       associationGroupsData = Array.isArray(data.association_groups)
         ? data.association_groups
         : buildAssociationFallback();
+      ipNetworkGraphData = data.ip_network_graph && Array.isArray(data.ip_network_graph.nodes)
+        ? data.ip_network_graph
+        : buildIpNetworkFallback();
       inboxData = data.inbox || [];
       statsData = data.stats || {};
       loginOverlay.classList.add('hidden');
@@ -1762,32 +1790,57 @@
     )).join('');
   }
 
-  function buildNetworkNodes() {
-    const nodeMap = new Map();
-    filteredProfileGroups().forEach(group => {
+  function buildIpNetworkFallback() {
+    const byIp = new Map();
+    groupsData.forEach(group => {
       (group.networks || []).forEach(network => {
         const ip = String(network && network.value || '').trim();
         if (!ip || ip === '未知') return;
-        const id = networkNodeId(ip);
-        let node = nodeMap.get(ip);
-        if (!node) {
-          node = {
-            id,
-            ip,
-            memberIds: new Set(),
-            historicalOnly: true,
-          };
-          nodeMap.set(ip, node);
-        }
-        node.memberIds.add(String(group.id));
-        node.historicalOnly = node.historicalOnly && Boolean(network.historical_only);
+        if (!byIp.has(ip)) byIp.set(ip, new Set());
+        byIp.get(ip).add(String(group.id));
       });
     });
+    const ips = Array.from(byIp.keys()).sort();
+    const nodes = ips.map((ip, index) => ({
+      id: 'ip_node_' + index,
+      ip,
+      member_group_ids: Array.from(byIp.get(ip)).map(Number).sort((a, b) => a - b),
+    }));
+    const links = [];
+    for (let first = 0; first < nodes.length; first += 1) {
+      for (let second = first + 1; second < nodes.length; second += 1) {
+        const shared = nodes[first].member_group_ids.filter(groupId => (
+          nodes[second].member_group_ids.includes(groupId)
+        ));
+        if (!shared.length) continue;
+        links.push({
+          source: nodes[first].id,
+          target: nodes[second].id,
+          shared_member_ids: shared,
+          shared_member_count: shared.length,
+          historical_only: false,
+        });
+      }
+    }
+    return { nodes, links };
+  }
 
-    return Array.from(nodeMap.values()).map(node => {
-      const members = Array.from(node.memberIds)
-        .map(findGroupById)
-        .filter(Boolean);
+  function buildNetworkNodes() {
+    const visibleIds = new Set(filteredProfileGroups().map(group => String(group.id)));
+    const rawNodes = Array.isArray(ipNetworkGraphData.nodes) && ipNetworkGraphData.nodes.length
+      ? ipNetworkGraphData.nodes
+      : buildIpNetworkFallback().nodes;
+    return rawNodes.map(rawNode => {
+      const memberIds = (rawNode.member_group_ids || [])
+        .map(groupId => String(groupId))
+        .filter(groupId => visibleIds.has(groupId));
+      const members = memberIds.map(findGroupById).filter(Boolean);
+      if (!members.length) return null;
+      const node = Object.assign({}, rawNode, {
+        id: String(rawNode.id),
+        ip: String(rawNode.ip || rawNode.value || ''),
+        memberIds: new Set(memberIds),
+      });
       node.members = members;
       node.memberCount = members.length;
       node.stableProfileCount = members.filter(group => !group.is_legacy).length;
@@ -1804,10 +1857,31 @@
         '',
       );
       return node;
-    }).sort((first, second) => (
+    }).filter(Boolean).sort((first, second) => (
       second.memberCount - first.memberCount
       || second.visitCount - first.visitCount
       || first.ip.localeCompare(second.ip)
+    ));
+  }
+
+  function buildNetworkLinks(nodes) {
+    const nodeIds = new Set(nodes.map(node => node.id));
+    const visibleIds = new Set(nodes.flatMap(node => Array.from(node.memberIds)));
+    const links = Array.isArray(ipNetworkGraphData.links) ? ipNetworkGraphData.links : [];
+    return links.map(link => {
+      const shared = (link.shared_member_ids || [])
+        .map(groupId => String(groupId))
+        .filter(groupId => visibleIds.has(groupId));
+      return Object.assign({}, link, {
+        source: String(link.source),
+        target: String(link.target),
+        shared_member_ids: shared,
+        shared_member_count: shared.length,
+      });
+    }).filter(link => (
+      link.shared_member_count > 0
+      && nodeIds.has(link.source)
+      && nodeIds.has(link.target)
     ));
   }
 
@@ -1958,7 +2032,8 @@
 
   function selectIpNode(node) {
     selectedIpNodeId = node.id;
-    renderNetworkGraph();
+    const selectedNode = buildNetworkNodes().find(item => item.id === selectedIpNodeId) || node;
+    renderNetworkDetail(selectedNode);
     trackAdminEvent('network_node_select', {
       action: 'select_ob_ip_node',
       member_count: node.memberCount,
@@ -2055,19 +2130,11 @@
     });
   }
 
-  function renderNetworkGraph() {
+  function renderNetworkSvg(nodes) {
     hideNetworkTooltip();
-    const nodes = buildNetworkNodes();
-    const visibleProfiles = filteredProfileGroups().length;
-    const totalVisits = nodes.reduce((total, node) => total + node.visitCount, 0);
-    networkCanvasSummary.textContent = nodes.length + ' 个 IP 节点 · ' + visibleProfiles
-      + ' 个成员 · ' + totalVisits + ' 次页面访问';
+    network3dCanvas.style.display = 'none';
+    network3dFallback.classList.add('active');
     ipNetworkSvg.replaceChildren();
-    networkEmpty.hidden = nodes.length > 0;
-    if (!nodes.length) {
-      clearNetworkDetail();
-      return;
-    }
 
     const canvasWidth = Math.max(ipNetworkSvg.parentElement ? ipNetworkSvg.parentElement.clientWidth : 0, 720);
     const maxCount = Math.max(...nodes.map(node => node.memberCount), 1);
@@ -2145,6 +2212,198 @@
     if (selected) renderNetworkDetail(selected);
     else clearNetworkDetail();
   }
+
+  function networkMemberColor(groupId) {
+    let hash = 0;
+    String(groupId).split('').forEach(char => {
+      hash = ((hash << 5) - hash) + char.charCodeAt(0);
+      hash |= 0;
+    });
+    const hue = Math.abs(hash) % 360;
+    return 'hsl(' + hue + ' 78% 68%)';
+  }
+
+  function createThreeIpNode(node) {
+    if (!window.THREE) return null;
+    const radius = 3.8 + Math.min(8.5, Math.sqrt(node.memberCount) * 1.15);
+    const object = new window.THREE.Group();
+    const outer = new window.THREE.Mesh(
+      new window.THREE.SphereGeometry(radius, 20, 14),
+      new window.THREE.MeshBasicMaterial({
+        color: node.historicalOnly ? 0xf59e0b : 0x4f8cff,
+        transparent: true,
+        opacity: 0.24,
+        wireframe: false,
+      }),
+    );
+    object.add(outer);
+    const wire = new window.THREE.Mesh(
+      new window.THREE.SphereGeometry(radius * 1.02, 12, 8),
+      new window.THREE.MeshBasicMaterial({
+        color: node.historicalOnly ? 0xfbbf24 : 0x93c5fd,
+        transparent: true,
+        opacity: 0.42,
+        wireframe: true,
+      }),
+    );
+    object.add(wire);
+
+    const members = Array.from(node.memberIds).slice(0, 26);
+    members.forEach((memberId, index) => {
+      const ratio = (index + 0.5) / Math.max(members.length, 1);
+      const y = 1 - ratio * 2;
+      const circle = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = index * 2.399963;
+      const marker = new window.THREE.Mesh(
+        new window.THREE.SphereGeometry(Math.max(0.55, radius * 0.075), 8, 6),
+        new window.THREE.MeshBasicMaterial({
+          color: networkMemberColor(memberId),
+          transparent: true,
+          opacity: 0.95,
+        }),
+      );
+      marker.position.set(
+        Math.cos(theta) * circle * radius * 0.76,
+        y * radius * 0.76,
+        Math.sin(theta) * circle * radius * 0.76,
+      );
+      object.add(marker);
+    });
+    object.userData.obRadius = radius;
+    return object;
+  }
+
+  function graphTooltipEvent(graph, item) {
+    if (!graph || !item || !Number.isFinite(item.x)) {
+      return { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 };
+    }
+    const point = graph.graph2ScreenCoords(item.x, item.y, item.z);
+    return {
+      clientX: Number.isFinite(point.x) ? point.x : window.innerWidth / 2,
+      clientY: Number.isFinite(point.y) ? point.y : window.innerHeight / 2,
+    };
+  }
+
+  function showThreeIpTooltip(graph, node) {
+    showIpNodeTooltip(node, graphTooltipEvent(graph, node));
+  }
+
+  function showThreeLinkTooltip(graph, link, nodesById) {
+    const source = nodesById.get(String(link.source && link.source.id || link.source));
+    const target = nodesById.get(String(link.target && link.target.id || link.target));
+    if (!source || !target) return;
+    const shared = (link.shared_member_ids || []).map(findGroupById).filter(Boolean);
+    const midpoint = {
+      x: ((source.x || 0) + (target.x || 0)) / 2,
+      y: ((source.y || 0) + (target.y || 0)) / 2,
+      z: ((source.z || 0) + (target.z || 0)) / 2,
+    };
+    showNetworkTooltip(
+      '共享成员连线',
+      source.ip + ' ↔ ' + target.ip + ' · ' + shared.length + ' 个共同成员'
+        + (link.historical_only ? ' · 仅历史关联' : ''),
+      shared.slice(0, 6).map(group => ({
+        time: group.is_legacy ? '旧会话' : '档案',
+        text: group.profile_label || group.visitor_id || '匿名成员',
+      })),
+      graphTooltipEvent(graph, midpoint),
+    );
+  }
+
+  function destroyNetwork3dGraph() {
+    if (!network3dGraph) return;
+    if (typeof network3dGraph._destructor === 'function') network3dGraph._destructor();
+    else if (typeof network3dGraph.pauseAnimation === 'function') network3dGraph.pauseAnimation();
+    network3dGraph = null;
+    network3dGraphData = null;
+    network3dCanvas.querySelectorAll('canvas').forEach(canvas => canvas.remove());
+    if (!network3dCanvas.contains(network3dStatus)) network3dCanvas.appendChild(network3dStatus);
+    if (!network3dCanvas.contains(network3dReset)) network3dCanvas.appendChild(network3dReset);
+  }
+
+  function renderNetwork3d(nodes) {
+    network3dFallback.classList.remove('active');
+    network3dCanvas.style.display = 'block';
+    if (!window.ForceGraph3D || !window.THREE) {
+      renderNetworkSvg(nodes);
+      network3dStatus.textContent = '3D 引擎加载失败，已回退为二维图';
+      return;
+    }
+    destroyNetwork3dGraph();
+    const links = buildNetworkLinks(nodes);
+    const nodesById = new Map(nodes.map(node => [node.id, node]));
+    network3dGraphData = { nodes, links };
+    network3dStatus.textContent = links.length + ' 条共享成员连线 · 拖拽旋转 · 滚轮缩放';
+    network3dGraph = window.ForceGraph3D()(network3dCanvas)
+      .backgroundColor('#0a0e17')
+      .showNavInfo(false)
+      .nodeId('id')
+      .nodeVal(node => Math.max(1, node.memberCount))
+      .nodeLabel(node => (
+        '<strong>' + escHtml(node.ip) + '</strong><br>'
+          + node.memberCount + ' 个成员 · ' + node.visitCount + ' 次页面访问'
+      ))
+      .nodeThreeObject(createThreeIpNode)
+      .nodeThreeObjectExtend(false)
+      .linkWidth(link => 0.7 + Math.log2((link.shared_member_count || 0) + 1) * 1.45)
+      .linkColor(link => link.historical_only ? 'rgba(245,158,11,.55)' : 'rgba(96,165,250,.72)')
+      .linkOpacity(0.82)
+      .linkLabel(link => (
+        (link.shared_member_count || 0) + ' 个共同成员'
+          + (link.historical_only ? ' · 仅历史关联' : '')
+      ))
+      .linkDirectionalParticles(link => Math.min(4, Math.max(0, link.shared_member_count || 0)))
+      .linkDirectionalParticleWidth(1.4)
+      .onNodeClick(node => selectIpNode(node))
+      .onNodeHover(node => {
+        network3dCanvas.style.cursor = node ? 'pointer' : 'default';
+        if (node) showThreeIpTooltip(network3dGraph, node);
+        else hideNetworkTooltip();
+      })
+      .onLinkHover(link => {
+        network3dCanvas.style.cursor = link ? 'pointer' : 'default';
+        if (link) showThreeLinkTooltip(network3dGraph, link, nodesById);
+        else hideNetworkTooltip();
+      });
+
+    network3dGraph.graphData({ nodes, links });
+    const linkForce = network3dGraph.d3Force('link');
+    if (linkForce) {
+      linkForce.distance(link => Math.max(
+        42,
+        180 - Math.log2((link.shared_member_count || 0) + 1) * 44,
+      ));
+      linkForce.strength(link => Math.min(
+        0.85,
+        0.18 + Math.log2((link.shared_member_count || 0) + 1) * 0.16,
+      ));
+    }
+    network3dGraph.cameraPosition({ x: 0, y: 0, z: Math.max(260, Math.sqrt(nodes.length) * 32) });
+    renderNetworkDetail(nodes.find(node => node.id === selectedIpNodeId));
+  }
+
+  function renderNetworkGraph() {
+    const nodes = buildNetworkNodes();
+    const visibleProfiles = filteredProfileGroups().length;
+    const totalVisits = nodes.reduce((total, node) => total + node.visitCount, 0);
+    networkCanvasSummary.textContent = nodes.length + ' 个 IP 节点 · ' + visibleProfiles
+      + ' 个成员 · ' + totalVisits + ' 次页面访问';
+    networkEmpty.hidden = nodes.length > 0;
+    if (!nodes.length || viewMode !== 'network') {
+      destroyNetwork3dGraph();
+      network3dCanvas.style.display = 'none';
+      network3dFallback.classList.remove('active');
+      clearNetworkDetail();
+      return;
+    }
+    renderNetwork3d(nodes);
+  }
+
+  network3dReset.addEventListener('click', () => {
+    if (network3dGraph && typeof network3dGraph.zoomToFit === 'function') {
+      network3dGraph.zoomToFit(700, 50);
+    }
+  });
 
   function setViewMode(nextMode) {
     viewMode = nextMode === 'list' ? 'list' : 'network';

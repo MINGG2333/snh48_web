@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Collection
 
@@ -100,7 +101,7 @@ def verify_ob_login(response: Response, _=Depends(verify_ob_password)):
 
 @router.get("/data")
 def get_ob_data(response: Response, _=Depends(verify_ob_password)):
-    """Return browser/session records plus a display-only IP association layer."""
+    """Return records plus display-only IP association and graph layers."""
     response.headers["Cache-Control"] = "no-store"
     inbox = list_requests()
     ip_clients = _load_ip_clients()
@@ -184,12 +185,14 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
         group["id"] = group_id
 
     association_groups = _build_ip_association_groups(groups)
+    ip_network_graph = _build_ip_network_graph(groups)
 
     stable_profiles = sum(1 for group in groups if not group["is_legacy"])
     legacy_sessions = len(groups) - stable_profiles
     return {
         "groups": groups,
         "association_groups": association_groups,
+        "ip_network_graph": ip_network_graph,
         "stats": {
             # Legacy session IDs are deliberately excluded from the visitor
             # estimate: counting them as people was the original overcounting
@@ -416,6 +419,99 @@ def _build_ip_association_groups(groups: list[dict[str, Any]]) -> list[dict[str,
     for association_id, association in enumerate(association_specs):
         association["id"] = "ip_association_" + str(association_id)
     return association_specs
+
+
+def _build_ip_network_graph(groups: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Build IP nodes and pairwise shared-profile edges for the OB 3D view.
+
+    This is a display-only projection. A member is a stable browser profile or
+    legacy session group, never an assertion about a natural person. Edges are
+    based on set intersection: two IP nodes are connected when the same member
+    group has been observed on both IPs. Historical-only records remain marked
+    so the UI can render them as lower-confidence links.
+    """
+    if not groups:
+        return {"nodes": [], "links": []}
+
+    group_by_id = {int(group["id"]): group for group in groups}
+    ip_members: dict[str, set[int]] = defaultdict(set)
+    member_ips_by_group: dict[int, set[str]] = defaultdict(set)
+    ip_member_details: dict[tuple[str, int], list[dict[str, Any]]] = defaultdict(list)
+    for group_id, group in group_by_id.items():
+        for network in group.get("networks") or []:
+            value = str(network.get("value", "")).strip()
+            if not value or value == "未知":
+                continue
+            ip_members[value].add(group_id)
+            member_ips_by_group[group_id].add(value)
+            ip_member_details[(value, group_id)].append(network)
+
+    ordered_ips = sorted(ip_members)
+    node_id_by_ip = {
+        ip: "ip_node_" + str(index)
+        for index, ip in enumerate(ordered_ips)
+    }
+    nodes: list[dict[str, Any]] = []
+    for ip in ordered_ips:
+        member_ids = sorted(ip_members[ip])
+        member_groups = [group_by_id[group_id] for group_id in member_ids]
+        nodes.append({
+            "id": node_id_by_ip[ip],
+            "ip": ip,
+            "member_group_ids": member_ids,
+            "member_count": len(member_ids),
+            "stable_profile_count": sum(
+                1 for group in member_groups if not group["is_legacy"]
+            ),
+            "legacy_session_count": sum(
+                1 for group in member_groups if group["is_legacy"]
+            ),
+            "visit_count": sum(len(group.get("visits") or []) for group in member_groups),
+            "historical_only": all(
+                bool(network.get("historical_only"))
+                for group_id in member_ids
+                for network in ip_member_details[(ip, group_id)]
+            ),
+        })
+
+    # Build edges by walking members rather than comparing every IP pair.
+    shared_members: dict[tuple[str, str], set[int]] = defaultdict(set)
+    for group_id, member_ips_set in member_ips_by_group.items():
+        member_ips = sorted(member_ips_set)
+        for first_ip, second_ip in combinations(member_ips, 2):
+            shared_members[(first_ip, second_ip)].add(group_id)
+
+    links: list[dict[str, Any]] = []
+    for (first_ip, second_ip), member_ids in shared_members.items():
+        member_historical = {
+            group_id: all(
+                bool(network.get("historical_only"))
+                for ip in (first_ip, second_ip)
+                for network in ip_member_details[(ip, group_id)]
+            )
+            for group_id in member_ids
+        }
+        stable_shared = sum(
+            1 for group_id in member_ids if not group_by_id[group_id]["is_legacy"]
+        )
+        links.append({
+            "source": node_id_by_ip[first_ip],
+            "target": node_id_by_ip[second_ip],
+            "shared_member_ids": sorted(member_ids),
+            "shared_member_count": len(member_ids),
+            "stable_shared_count": stable_shared,
+            "legacy_shared_count": len(member_ids) - stable_shared,
+            "historical_only": all(member_historical.values()),
+        })
+
+    links.sort(
+        key=lambda link: (
+            int(link["shared_member_count"]),
+            int(link["stable_shared_count"]),
+        ),
+        reverse=True,
+    )
+    return {"nodes": nodes, "links": links}
 
 
 def _load_activity_index(

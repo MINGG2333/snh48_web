@@ -162,6 +162,12 @@ class VisitorObservationTests(unittest.TestCase):
             self.assertEqual(association["shared_ips"][0]["value"], "203.0.113.8")
             self.assertFalse(association["shared_ips"][0]["historical_only"])
 
+            graph = payload["ip_network_graph"]
+            self.assertEqual(len(graph["nodes"]), 2)
+            self.assertEqual(len(graph["links"]), 1)
+            self.assertEqual(graph["links"][0]["shared_member_count"], 1)
+            self.assertEqual(graph["links"][0]["shared_member_ids"], [stable["id"]])
+
     def test_ip_association_groups_use_transitive_links_without_changing_profiles(self) -> None:
         groups = [
             {
@@ -214,6 +220,54 @@ class VisitorObservationTests(unittest.TestCase):
         )
         singleton = next(item for item in associations if item["member_count"] == 1)
         self.assertEqual(singleton["member_group_ids"], [3])
+
+    def test_ip_network_graph_edges_count_shared_profiles_and_mark_history(self) -> None:
+        groups = [
+            {
+                "id": 0,
+                "is_legacy": False,
+                "networks": [
+                    {"value": "203.0.113.1", "historical_only": False},
+                    {"value": "198.51.100.2", "historical_only": False},
+                ],
+                "visits": [{"page": "/a"}],
+            },
+            {
+                "id": 1,
+                "is_legacy": False,
+                "networks": [
+                    {"value": "203.0.113.1", "historical_only": False},
+                    {"value": "198.51.100.2", "historical_only": True},
+                ],
+                "visits": [{"page": "/b"}],
+            },
+            {
+                "id": 2,
+                "is_legacy": True,
+                "networks": [
+                    {"value": "203.0.113.1", "historical_only": True},
+                    {"value": "198.51.100.2", "historical_only": True},
+                ],
+                "visits": [],
+            },
+            {
+                "id": 3,
+                "is_legacy": True,
+                "networks": [{"value": "192.0.2.3", "historical_only": True}],
+                "visits": [],
+            },
+        ]
+
+        graph = ob_api._build_ip_network_graph(groups)
+        self.assertEqual(len(graph["nodes"]), 3)
+        link = next(item for item in graph["links"] if item["shared_member_count"] == 3)
+        self.assertEqual(link["stable_shared_count"], 2)
+        self.assertEqual(link["legacy_shared_count"], 1)
+        self.assertFalse(link["historical_only"])
+        self.assertTrue(any(
+            item["ip"] == "192.0.2.3" and item["member_count"] == 1
+            for item in graph["nodes"]
+        ))
 
     def test_tracker_keeps_qa_session_id_separate_from_browser_profile(self) -> None:
         tracker = (
@@ -298,6 +352,11 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn("function renderNetworkGraph()", template)
         self.assertIn("function showSessionTooltip", template)
         self.assertIn("select_ob_ip_node", template)
+        self.assertIn('id="network3dCanvas"', template)
+        self.assertIn("ForceGraph3D", template)
+        self.assertIn("createThreeIpNode", template)
+        self.assertIn("shared_member_count", template)
+        self.assertIn("ip_network_graph", template)
         self.assertIn("id=\"notifNav\"", template)
         self.assertIn("'visit-session'", template)
         self.assertNotIn("className = 'group-users'", template)
