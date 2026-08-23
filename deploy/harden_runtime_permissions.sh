@@ -48,8 +48,11 @@ for path in \
     find "$path" -type f -exec chmod 0600 {} +
 done
 
-# Preserve private permissions for future files created by the application.
-setfacl -R -m u:"$SERVICE_USER":rwX "$WEB_ROOT/website/data"
-find "$WEB_ROOT/website/data" -type d -exec setfacl -m d:u:"$SERVICE_USER":rwx,d:m::rwx {} +
+# The service account owns runtime data, so no named/default ACL is needed.
+# Removing inherited ACLs keeps the visible mode bits at 0700/0600; the unit's
+# UMask=0077 protects files created after this script runs.
+setfacl -Rb "$WEB_ROOT/website/data"
+find "$WEB_ROOT/website/data" -type d -exec chmod 0700 {} +
+find "$WEB_ROOT/website/data" -type f -exec chmod 0600 {} +
 
 echo "Runtime permissions prepared for $SERVICE_USER."
