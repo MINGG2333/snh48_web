@@ -1,6 +1,8 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-08-23 CST +0800
+更新日期：2026-08-24 CST +0800
+
+2026-08-24 00:49 Room 与礼物页筛选、最新定位和移动导航完成双云无中断发布：功能提交 `311061b` 已在腾讯云和阿里云生效。Room、礼物明细和综合回礼页把日期输入值与已应用值分离，只有点击“筛选”才提交日期；无新数据时“跳到最新”只平滑滚动，有新数据时才提示并加载；Room 按钮层级高于消息卡片，两个礼物页移动端互链固定在右上、筛选位于右侧第二行，综合回礼客服入口固定右下。本地 Playwright 390×844 视口确认 Room 点击 80ms 时仍在滚动、最终精确到列表底部，礼物两页无新数据点击不发 API 请求且导航无重叠。腾讯云 checkout 为 `311061b`，screen `3479202.snh48`、Python PID `3479212` 保持运行；阿里云执行 `python3 deploy/deploy.py deploy aliyun --no-restart` 快进到 `311061b`，`snh48-aliyun` 保持 `active/running`，PID `2485782`、`NRestarts=0`。两端 `/room`、`/room/gifts`、`/room/gift-senders` 均返回 200，部署工具标准烟测全部通过；未修改 Python、环境变量、Nginx、后台服务、数据同步拓扑或健康检查范围，既有运行文件与并行中的 OB 模板编辑保持原样。
 
 2026-08-23 22:55 Room 日期筛选与移动端最新导航完成双云无中断发布：功能提交 `c9517ad` 已在腾讯云和阿里云生效。腾讯云通过阿里云既有免密链路复核时已位于目标提交，保留 screen `3352583.snh48` 与 Python PID `3352588`；阿里云执行 `python3 deploy/deploy.py deploy aliyun --no-restart` 从 `fe2d153` 快进到目标提交，`snh48-aliyun` 保持 `active/running`，PID `2468260`、`NRestarts=0`。两端公网 `/room`、`/room/gift-senders` 均返回 200，页面源码包含日期只暂存到点击“筛选”后再请求、Room 明确滚动到消息底部、送礼人页移动端顶部操作重排及固定客服入口；部署工具的首页、时间轴、礼物、上麦回放、翻牌、计分礼物、静态资源和关键 API 烟测全部通过。未修改 Python、环境变量、Nginx、后台服务、数据同步拓扑或健康检查范围；阿里云既有未跟踪运行文件保持原样。
 
@@ -80,8 +82,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `c9517ad`。screen `3352583.snh48`、Python PID `3352588`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；Room 日期只在点击“筛选”后应用，跳到最新明确定位到消息底部，送礼人页移动端顶部操作与固定客服入口已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `c9517ad`。PID `2468260`，active/running、`NRestarts=0`；Room 日期筛选、底部定位和送礼人页移动端顶部操作已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前功能 checkout 为 `311061b`。screen `3479202.snh48`、Python PID `3479212`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；Room 与礼物页日期只在点击筛选后应用，无新数据时最新按钮只滚动，移动端礼物导航和客服位置已生效 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前功能 checkout 为 `311061b`。PID `2485782`，active/running、`NRestarts=0`；Room 与礼物页筛选、最新定位、移动端导航和客服位置已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
