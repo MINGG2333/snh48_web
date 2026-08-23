@@ -1331,6 +1331,8 @@
     var ignoreActionBusy = false;
     var typeOptionsHash = "";
     var roomPageScrollLockY = null;
+    var roomPageScrollLocked = false;
+    var roomScrollRestorePending = false;
     var initialRoomQuery = new URLSearchParams(window.location.search);
     var initialTargetId = initialRoomQuery.get("message_id") || "";
     var initialTargetDate = initialRoomQuery.get("jump_date") || "";
@@ -1453,6 +1455,7 @@
     function setRoomPageScrollLocked(locked) {
       if (locked) {
         if (roomPageScrollLockY !== null) return;
+        roomPageScrollLocked = true;
         roomPageScrollLockY = currentScrollTop();
         document.body.style.position = "fixed";
         document.body.style.top = "-" + roomPageScrollLockY + "px";
@@ -1470,6 +1473,11 @@
       document.body.style.right = "";
       document.body.style.width = "";
       window.scrollTo(0, restoreY);
+      roomScrollRestorePending = true;
+      window.requestAnimationFrame(function() {
+        roomScrollRestorePending = false;
+        roomPageScrollLocked = false;
+      });
     }
 
     function setLoginFeedback(kind, message) {
@@ -2150,11 +2158,13 @@
     }
 
     function loadOlderIfNeeded() {
+      if (roomPageScrollLocked || roomScrollRestorePending) return;
       if (currentScrollTop() > 160 || !hasMoreOlder || loading) return;
       fetchChunk({ older: true });
     }
 
     function loadNewerIfNeeded() {
+      if (roomPageScrollLocked || roomScrollRestorePending) return;
       if (!hasMoreNewer || loading || !isNearBottom()) return;
       fetchChunk({ newer: true });
     }
@@ -2166,6 +2176,7 @@
 
     function fillViewportIfNeeded() {
       window.requestAnimationFrame(function() {
+        if (roomPageScrollLocked || roomScrollRestorePending) return;
         if (!hasMoreOlder || loading) return;
         if (currentScrollHeight() <= currentClientHeight() + 120) {
           fetchChunk({ older: true });
@@ -2826,7 +2837,9 @@
     });
     chatScroll.addEventListener("scroll", loadMoreIfNeeded);
     window.addEventListener("scroll", function() {
-      if (usesDocumentScroll()) loadMoreIfNeeded();
+      if (usesDocumentScroll() && !roomPageScrollLocked && !roomScrollRestorePending) {
+        loadMoreIfNeeded();
+      }
     }, { passive: true });
     applyBtn.addEventListener("click", function() {
       reloadLatest("apply_filters");
