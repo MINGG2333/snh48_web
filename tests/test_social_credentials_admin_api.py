@@ -3,10 +3,11 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from website import social_credentials_admin_api
+from website import main as website_main
 
 
 def client() -> TestClient:
@@ -49,6 +50,14 @@ class SocialCredentialsAdminApiTests(unittest.TestCase):
                 json={"platform": "weibo", "slot": "primary", "cookie": "secret-cookie-value-long-enough"},
             )
             self.assertEqual(response.status_code, 403)
+
+
+class SocialCredentialsAdminPageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_page_is_not_exposed_on_disabled_nodes(self) -> None:
+        with patch.object(website_main.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", False):
+            with self.assertRaises(HTTPException) as raised:
+                await website_main.social_credentials_admin_page(None)
+        self.assertEqual(raised.exception.status_code, 404)
 
 
 if __name__ == "__main__":

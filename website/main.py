@@ -10,7 +10,7 @@ import random
 import sys
 import time
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -250,6 +250,8 @@ async def scroller_admin_page(request: Request):
 @app.get("/social-credentials-admin", response_class=HTMLResponse)
 async def social_credentials_admin_page(request: Request):
     """Unlinked, password-protected social credential maintenance page."""
+    if not cfg.SOCIAL_CREDENTIALS_ADMIN_ENABLED:
+        raise HTTPException(status_code=404, detail="Not Found")
     return templates.TemplateResponse(
         "social_credentials_admin.html",
         {"request": request, "site_title": cfg.SITE_TITLE},
