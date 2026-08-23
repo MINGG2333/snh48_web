@@ -145,7 +145,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - 回放页固定 `hls.js@1.7.1` 并使用 SRI；微博图片代理增加并发、响应大小和图片 MIME 限制，避免被当作无界中转站。
 - 已执行 `deploy/harden_runtime_permissions.sh`，网站数据、投诉和交互日志目录收紧为服务账号可读写；今后权限变更必须重复执行该脚本并核对 ACL。
 
-本批线上验收：`/`、`/complaint` 返回 200；`/openapi.json` 返回 404；未带投诉验证码返回 422、无效挑战返回 400；未知 HTTP Host 被 Nginx 拒绝；后端 8000 只监听本机。剩余 SSH 风险是公网 22 端口仍允许密码认证，待确认笔记本、台式机及自动同步密钥均可用后再关闭。
+本批线上验收：`/`、`/complaint` 返回 200；`/openapi.json` 返回 404；未带投诉验证码返回 422、无效挑战返回 400；未知 HTTP Host 被 Nginx 拒绝；后端 8000 只监听本机。SSH 已在笔记本、台式机和阿里云自动同步密钥分别验证后切换为仅公钥认证；密码、keyboard-interactive 和 GSSAPI 认证均关闭，腾讯云控制台终端保留为带外恢复入口。
 
 ## 后续开发规则
 
@@ -190,7 +190,7 @@ git add website/static/js-dist/ website/static/css-dist/
 - Nginx 安全头目前在 server 块和多个 location 中重复声明，以规避 `add_header` 继承问题；修改 CSP/安全头时必须同步所有重复位置，长期可改为 Nginx include 片段降低维护风险。
 - 如果未来接入 CDN、CLB 或 Docker 反向代理，必须重新确认真实连接后端的代理 IP，并只把这些 IP/CIDR 加到 `TRUSTED_PROXY_PEERS`。
 - 多数滑动窗口限速为进程内存状态，服务重启会重置；IP 日配额为持久化 JSON。
-- 网站进程不再复用 root 身份运行：跨云共享状态使用 `snh48-web` 专用密钥，root 侧只保留两个 forced-style 白名单桥接脚本；fan-hub 其他采集任务仍有各自既有 root 密钥，SSH 公网入口的密码登录尚未在本次自动关闭，需先完成密钥可用性确认。
+- 网站进程不再复用 root 身份运行：跨云共享状态使用 `snh48-web` 专用密钥，root 侧只保留两个 forced-style 白名单桥接脚本；腾讯云 SSH 公网入口已关闭密码等非公钥认证，root 只允许公钥登录。
 - 状态历史使用完整 gzip 快照而不是增量 diff，恢复更直接但会持续占用磁盘；日常检查需要观察目录大小，归档或保留策略必须先确认不能破坏当前 revision 和审计需求。
 - 前端混淆不是访问控制，真正的保护仍依赖后端鉴权、限速和不泄露敏感数据。
 - 本文件不能证明线上已部署，线上状态必须按验证清单复核。
