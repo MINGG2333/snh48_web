@@ -2,7 +2,7 @@
 
 更新日期：2026-08-23 CST +0800
 
-2026-08-23 10:39 社交凭据管理完成运行复核：功能提交 `149a8ca` 已包含在当前双服务器 checkout `369e4e0` 中。腾讯云公网 `https://cjy.plus/social-credentials-admin` 返回 200，密码登录及鉴权状态接口通过，只返回微博、抖音、B站各槽位状态，不回显 Cookie；页面与 API 使用 `no-store`，页面设置 `noindex/nofollow` 且没有站内入口。严格桥接脚本只允许腾讯云主节点在验证新 Cookie 成功后原子替换；阿里云非主节点不展示页面，API 也不能读取或更新凭据。同期腾讯云 `/api/timeline/schedule` 已确认不返回 2026-08-23 错误行程。
+2026-08-23 10:48 社交凭据管理完成双服务器运行复核：功能提交 `149a8ca` 和非主节点隐藏修复 `437d0d6` 已部署。腾讯云 screen `2878064.snh48`、Python PID `2878066` 于 10:46:43 重启；公网 `https://cjy.plus/social-credentials-admin` 返回 200，密码登录及鉴权状态接口通过，只返回微博、抖音、B站各槽位状态，不回显 Cookie；页面与 API 使用 `no-store`，页面设置 `noindex/nofollow` 且没有站内入口。严格桥接脚本只允许腾讯云主节点在验证新 Cookie 成功后原子替换。阿里云 `snh48-aliyun`、PID `2407221` 于 10:47:48 重启，隐藏页面返回 404、API 返回 403，不能读取或更新凭据。两端 `/api/timeline/schedule` 均为 130 条，并确认不返回 2026-08-23 错误行程。
 
 2026-08-23 10:36 客服聊天长等待更新完成双服务器发布：网站提交 `369e4e0` 已推送，两端 Gift Senders 与 OB 客服从固定 1 秒轮询改为最多约 25 秒的可恢复长等待请求，新事件通常在服务端 200 毫秒检查周期内返回；隔离 HTTP 烟测从发消息到等待请求返回约 247 毫秒。腾讯云 screen `2867975.snh48`、Python PID `2867981` 于 10:35:40 重启；阿里云 `snh48-aliyun`、PID `2405889` 于 10:36:43 重启，均已通过 `/room`、`/room/gift-senders`、`/ob` 和新客服接口烟测。飞书反馈转发服务不受网站接口实现变化影响，保持 PID `2613036`、active/running、`NRestarts=0`，未重启。
 
@@ -50,8 +50,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `369e4e0`。screen `2867975.snh48`、Python PID `2867981`，2026-08-23 10:35:40 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `369e4e0`。2026-08-23 10:36:43 CST 启动，PID `2405889`，active/running、`NRestarts=0`；客服聊天长等待接口已生效，社交凭据路由因非主节点固定禁用写入；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `437d0d6`。screen `2878064.snh48`、Python PID `2878066`，2026-08-23 10:46:43 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `437d0d6`。2026-08-23 10:47:48 CST 启动，PID `2407221`，active/running、`NRestarts=0`；客服聊天长等待接口已生效，社交凭据页面与 API 因非主节点隐藏/禁用；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
