@@ -1421,10 +1421,14 @@
       return chatScroll.scrollHeight - chatScroll.scrollTop - chatScroll.clientHeight < 140;
     }
 
+    function shouldShowUpdatePill() {
+      return page.classList.contains("ready")
+        && (window.innerWidth <= 720 || datasetUpdateAvailable || !isNearBottom());
+    }
+
     function syncUpdatePill() {
-      const show = page.classList.contains("ready") && (datasetUpdateAvailable || !isNearBottom());
       updatePill.textContent = datasetUpdateAvailable ? "有新记录，点击查看最新" : "跳到最新";
-      updatePill.classList.toggle("show", show);
+      updatePill.classList.toggle("show", shouldShowUpdatePill());
       updatePill.classList.toggle("has-update", datasetUpdateAvailable);
     }
 
@@ -1842,6 +1846,7 @@
       syncUpdatePill();
       loadOlderRecordsIfNeeded();
     }, { passive: true });
+    window.addEventListener("resize", syncUpdatePill, { passive: true });
 
     logoutBtn.addEventListener("click", async function () {
       track("login_attempt", { action: "logout", result: "submitted" });

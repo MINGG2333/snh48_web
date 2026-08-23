@@ -64,4 +64,27 @@ assert.equal(context.loadingOlderRecords, false);
 
 assert.match(template, /audio\.preload = "none"/);
 assert.doesNotMatch(template, /audio\.preload = "metadata"/);
+
+const pillStart = template.indexOf("    function isNearBottom() {");
+const pillEnd = template.indexOf("    function stopDatasetUpdateTimer() {");
+assert.ok(pillStart >= 0 && pillEnd > pillStart, "update pill helper block should exist");
+const pillContext = {
+  window: { innerWidth: 390 },
+  page: { classList: { contains: name => name === "ready" } },
+  chatScroll: { scrollHeight: 1000, scrollTop: 700, clientHeight: 300 },
+  datasetUpdateAvailable: false
+};
+vm.createContext(pillContext);
+vm.runInContext(
+  template.slice(pillStart, pillEnd) + "\nthis.shouldShowUpdatePill = shouldShowUpdatePill;",
+  pillContext
+);
+assert.equal(pillContext.shouldShowUpdatePill(), true, "mobile pill should remain visible at the bottom");
+pillContext.window.innerWidth = 1280;
+assert.equal(pillContext.shouldShowUpdatePill(), false, "desktop pill should hide at the bottom");
+pillContext.chatScroll.scrollTop = 400;
+assert.equal(pillContext.shouldShowUpdatePill(), true, "desktop pill should show away from the bottom");
+pillContext.chatScroll.scrollTop = 700;
+pillContext.datasetUpdateAvailable = true;
+assert.equal(pillContext.shouldShowUpdatePill(), true, "new records should show the pill on every viewport");
 console.log("flip cards progressive render checks passed");
