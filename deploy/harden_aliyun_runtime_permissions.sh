@@ -65,6 +65,15 @@ for path in \
     find "$path" -type f -exec chmod 0600 {} +
 done
 
+# Host operational logs are managed by root services and may contain source
+# addresses or deployment diagnostics. The website no longer rotates them.
+if [ -d /var/log/snh48 ]; then
+    chown root:root /var/log/snh48
+    chmod 0700 /var/log/snh48
+    find /var/log/snh48 -type f -exec chown root:root {} +
+    find /var/log/snh48 -type f -exec chmod 0600 {} +
+fi
+
 # QA startup rotates qa_archive inside KB_ROOT, and shared score state uses
 # atomic replacement in SCORE_ROOT. The systemd namespace limits writes to
 # these two roots even though the service needs directory-level ACLs there.
