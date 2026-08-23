@@ -1021,6 +1021,7 @@
         display: none;
         align-items: flex-end;
         justify-content: center;
+        overscroll-behavior: contain;
       }
       .filter-modal.open { display: flex; }
       .filter-modal-backdrop {
@@ -1028,6 +1029,7 @@
         inset: 0;
         display: block;
         background: rgba(4, 8, 13, 0.72);
+        touch-action: none;
       }
       .filter-modal-card {
         position: relative;
@@ -1040,6 +1042,8 @@
         max-height: min(88dvh, 760px);
         margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
         overflow: hidden;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
         border: 1px solid var(--line);
         border-radius: 12px;
         background: var(--panel);
