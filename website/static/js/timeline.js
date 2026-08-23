@@ -30,6 +30,14 @@ function formatDate(dateInput) {
   return `${y}.${m}.${day}`;
 }
 
+function secondaryPerformanceBadge(event) {
+  if (!event || event.type === '里程碑' || event.eventType === '里程碑') return '';
+  const title = event.title || '';
+  return title.includes('助演') ? 'show|助演' :
+    title.includes('首演') ? 'milestone|首演' :
+    title.includes('巡演') ? 'tour|巡演' : '';
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  Timeline Rendering
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,12 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
           : `<div class="timeline-card-img-placeholder"><i class="fas ${iconClass}"></i></div>`;
 
         const imgClass = hasCover ? 'timeline-card-img loading' : 'timeline-card-img-placeholder';
-        // Keep the primary category badge and show performance keywords as secondary badges.
-        const title_ = ev.title || '';
-        const keywordBadge =
-          title_.includes('助演') ? 'show|助演' :
-          title_.includes('首演') ? 'milestone|首演' :
-          title_.includes('巡演') ? 'tour|巡演' : '';
+        const keywordBadge = secondaryPerformanceBadge(ev);
         cardsHtml += `
           <div class="timeline-card" data-event-id="${eventId}">
             ${hasCover ? `<img class="${imgClass}" src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
@@ -763,12 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const badgeClass = badgeClassMap[event.type] || 'event';
 
-    // Modal: keep the type badge and add performance keywords as secondary badges.
-    const title_ = event.title || '';
-    const modalKeywordBadge =
-      title_.includes('助演') ? 'show|助演' :
-      title_.includes('首演') ? 'milestone|首演' :
-      title_.includes('巡演') ? 'tour|巡演' : '';
+    const modalKeywordBadge = secondaryPerformanceBadge(event);
 
     const descHtml = escapeHtml(event.description || '').replace(/\n/g, '<br>');
 
