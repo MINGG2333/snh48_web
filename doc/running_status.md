@@ -2,6 +2,8 @@
 
 更新日期：2026-08-24 CST +0800
 
+2026-08-24 04:20 腾讯云 QA 已停用并清理本地知识库：网站 checkout `8fe2171` 通过节点级 `QA_ENABLED=false` 不再注册 `/api/qa/*`、不执行 QA 归档维护或模型预热；`/qa` 只返回本机 503 未启用页面，响应中不含阿里云域名、IP 或跳转，两个网站没有 QA 互链。腾讯云只重启 `snh48-web.service`，PID `3814128`、`active/running`、`NRestarts=0`；公网首页和 `/timeline` 为 200，`/qa` 为 503，`/api/qa/config`、`/api/qa/status` 为 404。确认阿里云 `snh48-aliyun` 仍为 `active/running`、PID `2512204`、`NRestarts=0` 且 QA 配置接口为 200 后，删除腾讯云 `chroma_db` 约 2.8G、`segment_store.json` 约 265M、`kb_description.txt` 和 root 旧嵌入模型缓存约 391M；磁盘可用空间从 2.9G 增至 6.3G。腾讯云 94 份历史问答归档约 92M 经内容清单前后校验一致，独有转录、下载记录、子项目源码和 Git 历史均保留；阿里云未重启、未删数据。目标 unittest 与编译检查通过；全量 76 项 unittest 中另有 3 项既有翻牌/礼物模板断言失败，与本次 QA 文件无关。
+
 2026-08-24 00:49 Room 与礼物页筛选、最新定位和移动导航完成双云无中断发布：功能提交 `311061b` 已在腾讯云和阿里云生效。Room、礼物明细和综合回礼页把日期输入值与已应用值分离，只有点击“筛选”才提交日期；无新数据时“跳到最新”只平滑滚动，有新数据时才提示并加载；Room 按钮层级高于消息卡片，两个礼物页移动端互链固定在右上、筛选位于右侧第二行，综合回礼客服入口固定右下。本地 Playwright 390×844 视口确认 Room 点击 80ms 时仍在滚动、最终精确到列表底部，礼物两页无新数据点击不发 API 请求且导航无重叠。腾讯云 checkout 为 `311061b`，screen `3479202.snh48`、Python PID `3479212` 保持运行；阿里云执行 `python3 deploy/deploy.py deploy aliyun --no-restart` 快进到 `311061b`，`snh48-aliyun` 保持 `active/running`，PID `2485782`、`NRestarts=0`。两端 `/room`、`/room/gifts`、`/room/gift-senders` 均返回 200，部署工具标准烟测全部通过；未修改 Python、环境变量、Nginx、后台服务、数据同步拓扑或健康检查范围，既有运行文件与并行中的 OB 模板编辑保持原样。
 
 2026-08-23 22:55 Room 日期筛选与移动端最新导航完成双云无中断发布：功能提交 `c9517ad` 已在腾讯云和阿里云生效。腾讯云通过阿里云既有免密链路复核时已位于目标提交，保留 screen `3352583.snh48` 与 Python PID `3352588`；阿里云执行 `python3 deploy/deploy.py deploy aliyun --no-restart` 从 `fe2d153` 快进到目标提交，`snh48-aliyun` 保持 `active/running`，PID `2468260`、`NRestarts=0`。两端公网 `/room`、`/room/gift-senders` 均返回 200，页面源码包含日期只暂存到点击“筛选”后再请求、Room 明确滚动到消息底部、送礼人页移动端顶部操作重排及固定客服入口；部署工具的首页、时间轴、礼物、上麦回放、翻牌、计分礼物、静态资源和关键 API 烟测全部通过。未修改 Python、环境变量、Nginx、后台服务、数据同步拓扑或健康检查范围；阿里云既有未跟踪运行文件保持原样。
@@ -82,18 +84,17 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前功能 checkout 为 `311061b`。screen `3479202.snh48`、Python PID `3479212`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；Room 与礼物页日期只在点击筛选后应用，无新数据时最新按钮只滚动，移动端礼物导航和客服位置已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前功能 checkout 为 `311061b`。PID `2485782`，active/running、`NRestarts=0`；Room 与礼物页筛选、最新定位、移动端导航和客服位置已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | `systemd` 服务 `snh48-web` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `8fe2171`。PID `3814128`，active/running、`NRestarts=0`；私有 `.env` 设置 `QA_ENABLED=false`，QA API 不注册，本机不保留知识库索引或嵌入模型缓存 |
+| 阿里云香港 `cjy.我爱你` | `systemd` 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `13d4c46`。PID `2512204`，active/running、`NRestarts=0`；QA 保持启用并独立运行，腾讯云没有到该站的 QA 跳转或互链 |
 
 ## 常用状态命令
 
 腾讯云：
 
 ```bash
-screen -ls
-ps -eo pid,ppid,lstart,cmd | grep 'python -m website.main' | grep -v grep
+systemctl status snh48-web
+journalctl -u snh48-web --no-pager -n 80
 ss -ltnp | grep ':8000'
-tail -f /var/log/snh48/snh48_screen.log
 ```
 
 阿里云：
@@ -111,7 +112,7 @@ nginx -t
 systemctl status nginx
 ```
 
-2026-07-17 本次重启发现既有 `/api/qa/status` 会在模型尚未加载时启动后台预热；模型加载线程会在当前小规格主机上短时占用 GIL，导致全站请求等待。为先恢复用户页面，本次 screen 命令临时覆盖 `QA_WARMUP_ON_STARTUP=false`，未修改 `.env`；QA 仍会在状态接口或首次使用时按既有逻辑加载。该现象不是上麦回放代码引起，后续如专项优化 QA 启动行为，应单独评估和发布。
+2026-07-17 本次重启发现既有 `/api/qa/status` 会在模型尚未加载时启动后台预热；模型加载线程会在当前小规格主机上短时占用 GIL，导致全站请求等待。当时用 `QA_WARMUP_ON_STARTUP=false` 临时规避。该问题已于 2026-08-24 通过腾讯云 `QA_ENABLED=false` 完整解决：QA 路由和预热均不加载，本地知识库与模型缓存已删除。
 
 ## 阿里云 HTTPS 证书与月度提醒
 
