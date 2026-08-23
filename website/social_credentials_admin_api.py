@@ -64,8 +64,12 @@ def _run_bridge(command: str, payload: dict) -> dict:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="凭据管理桥未就绪")
     proc = None
     try:
+        prefix = tuple(getattr(cfg, "SOCIAL_CREDENTIALS_ADMIN_COMMAND", ()))
+        command_line = [*prefix, command] if prefix else [
+            cfg.SOCIAL_CREDENTIALS_ADMIN_PYTHON, str(script), command
+        ]
         proc = subprocess.Popen(
-            [cfg.SOCIAL_CREDENTIALS_ADMIN_PYTHON, str(script), command],
+            command_line,
             cwd=script.parents[2],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

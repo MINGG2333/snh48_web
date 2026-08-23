@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+case "${1:-}" in
+  send-sms|security-answer|verify-code|job-status|latest-job)
+    exec /home/snh48-fan-hub/venv/bin/python3 \
+      /home/snh48-fan-hub/scripts/web/flip_account_admin.py "$1"
+    ;;
+  *)
+    echo "unsupported bridge command" >&2
+    exit 64
+    ;;
+esac

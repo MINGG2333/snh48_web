@@ -10,7 +10,7 @@
 - 会使用本站服务器出口或内部代理的风险点更高：DeepSeek API、`/api/timeline/danmu` 的 `danmu_url` 兜底抓取、`/image-proxy/` 图片代理。
 - 当前前端 `safeUrl()` 只允许 `http:`、`https:` 和同源相对 URL，能阻断 `javascript:`、`data:`、协议相对 URL 等直接脚本注入，但仍允许任意 HTTPS 域名作为图片、跳转或 HLS 来源。
 - 当前 CSP 为兼容外部图片与 HLS 保留了较宽策略：`img-src https:`、`connect-src https:`、`media-src https: blob:`。这属于功能兼容取舍，新增外链时必须同步复核。
-- 已核对 `snh48-fan-hub` 的图片对接说明和 `scripts/weibo_img_proxy.py`：代理不是通用 URL 代理，只拼接到 `https://wx1.sinaimg.cn`，并限制 `/orj960/`、`/orj1080/`、`/large/`、`/mw690/`、`/original/` 路径；当前生产安全组口径为只公网开放 `80/443/22`，`8899` 不公网开放，所以“公网直连图片代理端口”不是当前已成立风险；但脚本本身没有限速、共享缓存和并发保护，若未来安全组或防火墙误放行 `8899`，会绕过 Nginx 保护。
+- 已核对 `snh48-fan-hub` 的图片对接说明和 `scripts/weibo_img_proxy.py`：代理不是通用 URL 代理，只拼接到 `https://wx1.sinaimg.cn`，并限制 `/orj960/`、`/orj1080/`、`/large/`、`/mw690/`、`/original/` 路径；当前生产安全组口径为只公网开放 `80/443/22`，`8899` 不公网开放，所以“公网直连图片代理端口”不是当前已成立风险；脚本现在还有并发、20 MiB 响应大小和图片 MIME 限制，若未来安全组或防火墙误放行 `8899`，仍会绕过 Nginx 保护。
 
 ## 当前解决状态
 
@@ -25,7 +25,7 @@
 | DeepSeek QA 被刷 | 已有密码、IP/用户限速、日配额、并发限制、余额接口缓存 | 维持现有使用体验 | 按日志观察，暂不加验证码 |
 | 阿里云主动拉取腾讯云运行数据 | 已停用腾讯云侧自动推送；自动任务改为阿里云每分钟通过 SSH 检查腾讯云源数据指纹，源数据变化时才从腾讯云拉取；阿里云 IP `8.210.188.184` 已加入腾讯云主机安全登录风险白名单；翻牌页只新增应用 JSON 和音视频最小依赖 | 运行数据仍可在 1 分钟内同步；无公开用户可见影响 | 如果停用阿里云、迁移服务器或新增同步目标，必须提醒用户在腾讯云控制台删除旧白名单 IP 或新增新服务器 IP；不要恢复腾讯云高频主动出站同步；不要把翻牌完整 metadata、HTML 下载版、Token 或配置同步到阿里云 |
 | CSV 任意 HTTPS 图片/链接/HLS | 尚未强制白名单；已在文档中要求先告警后拦截 | 暂不影响旧图片、旧链接和旧回放 | 后续先统计历史域名，再按字段逐步启用白名单 |
-| CDN/外部脚本与 `hls.js@latest` | 尚未自托管，仍保留宽 CSP 兼容 | 不影响当前页面加载和回放 | 后续固定版本并自托管，再收窄 CSP |
+| CDN/外部脚本与 `hls.js` | 回放已固定 `hls.js@1.7.1`，并通过 SRI 校验；暂未自托管，CSP 仍保留兼容范围 | 不影响当前页面加载和回放 | 后续可自托管并继续收窄 CSP |
 
 ### 缓存行为说明
 
@@ -43,7 +43,7 @@
 | `cdnjs.cloudflare.com` | `website/templates/qa.html` | `html2canvas`、`qrcode-generator` JS | 访问 QA 页面 | 第三方脚本供应链；版本虽固定但未自托管/SRI | CSP 显式允许；HTTPS |
 | `fonts.googleapis.com` | `website/templates/base.html` | Google Fonts CSS | 所有使用 `base.html` 的页面加载 | 可用性、隐私/跨境访问稳定性 | CSP 显式允许；HTTPS |
 | `fonts.gstatic.com` | `website/templates/base.html` | Google Fonts 字体文件 | 字体 CSS 触发 | 可用性、隐私/跨境访问稳定性 | CSP 显式允许；HTTPS |
-| `cdn.jsdelivr.net` | `website/templates/replay.html` | `hls.js` JS | 访问回放页 | `@latest` 会随上游变化，供应链风险高于固定版本 | CSP 显式允许；HTTPS |
+| `cdn.jsdelivr.net` | `website/templates/replay.html` | `hls.js@1.7.1` JS | 访问回放页 | CDN 可用性和供应链风险；版本漂移已通过固定版本和 SRI 降低 | CSP 显式允许；HTTPS；`integrity`/`crossorigin` |
 | `beian.mps.gov.cn` | `website/templates/base.html` | 公安备案链接 | 用户点击页脚备案链接 | 低；仅跳转 | `target="_blank"` + `rel="noopener noreferrer"` |
 | `beian.miit.gov.cn` | `website/templates/base.html` | 工信部备案链接 | 用户点击页脚备案链接 | 低；仅跳转 | `target="_blank"` + `rel="noopener noreferrer"` |
 | `weibo.com`、`github.com` | `website/templates/about.html` | 致谢/来源链接 | 用户点击关于页链接 | 低；仅跳转 | `target="_blank"` + `rel="noopener noreferrer"` |

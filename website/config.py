@@ -5,6 +5,7 @@ Reads from environment variables with sensible defaults for local development.
 from __future__ import annotations
 
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -18,20 +19,25 @@ TEMPLATES_DIR = WEBSITE_DIR / "templates"
 # .env 已被 .gitignore 排除，密码写在里面不会进 Git 历史
 _env_file = PROJECT_ROOT / ".env"
 if _env_file.exists():
-    with open(_env_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            key = key.strip()
-            val = val.strip().strip("\"'")
-            # 去掉行内 # 注释（避免 "10           # 注释" 导致 int() 解析失败）
-            if "#" in val:
-                val = val.partition("#")[0].strip()
-            # 环境变量优先，.env 里的值仅当未设置环境变量时生效
-            if key not in os.environ:
-                os.environ[key] = val
+    try:
+        with open(_env_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip("\"'")
+                # 去掉行内 # 注释（避免 "10           # 注释" 导致 int() 解析失败）
+                if "#" in val:
+                    val = val.partition("#")[0].strip()
+                # 环境变量优先，.env 里的值仅当未设置环境变量时生效
+                if key not in os.environ:
+                    os.environ[key] = val
+    except PermissionError:
+        # Production systemd injects the protected .env via EnvironmentFile;
+        # the unprivileged worker must not read the file directly.
+        pass
 
 # ── Transcript Knowledge Base ──────────────────────────────────────────────
 # 数据文件/目录默认放在 transcript_analyze/ 下（与 run_kb_qa.py 同目录）
@@ -132,6 +138,7 @@ TRACK_EVENT_WINDOW_SECONDS = int(os.getenv("TRACK_EVENT_WINDOW_SECONDS", "60"))
 # 投诉提交限速（防恶意刷投诉）
 COMPLAINT_MAX_PER_WINDOW = int(os.getenv("COMPLAINT_MAX_PER_WINDOW", "3"))
 COMPLAINT_WINDOW_SECONDS = int(os.getenv("COMPLAINT_WINDOW_SECONDS", "600"))
+COMPLAINT_CAPTCHA_TTL_SECONDS = int(os.getenv("COMPLAINT_CAPTCHA_TTL_SECONDS", "600"))
 
 # 客服聊天限速（按 IP，避免公开聊天接口被刷屏）
 FEEDBACK_CHAT_MAX_PER_WINDOW = int(os.getenv("FEEDBACK_CHAT_MAX_PER_WINDOW", "30"))
@@ -158,6 +165,16 @@ TRUSTED_PROXY_PEERS = tuple(
     for item in os.getenv("TRUSTED_PROXY_PEERS", "127.0.0.1,::1").split(",")
     if item.strip()
 )
+
+TRUSTED_HOSTS = tuple(
+    item.strip()
+    for item in os.getenv(
+        "TRUSTED_HOSTS", "cjy.plus,www.cjy.plus,localhost,127.0.0.1,[::1]"
+    ).split(",")
+    if item.strip()
+)
+
+ENABLE_API_DOCS = os.getenv("ENABLE_API_DOCS", "false").lower() in ("1", "true", "yes")
 
 # ── Live Push Replays (直播汇总，含回放信息，替代旧的 room_record) ─────────
 # summary.csv 所在目录，由 live_push_replay_matcher.py 生成
@@ -265,6 +282,12 @@ SOCIAL_CREDENTIALS_ADMIN_PYTHON = os.getenv("SOCIAL_CREDENTIALS_ADMIN_PYTHON") o
 )
 SOCIAL_CREDENTIALS_ADMIN_SCRIPT = os.getenv("SOCIAL_CREDENTIALS_ADMIN_SCRIPT") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "social_credentials_admin.py"
+)
+SOCIAL_CREDENTIALS_ADMIN_COMMAND = tuple(
+    shlex.split(os.getenv("SOCIAL_CREDENTIALS_ADMIN_COMMAND", ""))
+)
+FLIP_CARDS_ACCOUNT_ADMIN_COMMAND = tuple(
+    shlex.split(os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_COMMAND", ""))
 )
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────

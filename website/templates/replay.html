@@ -528,7 +528,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.1/dist/hls.min.js"
+        integrity="sha384-X6qxWXYhVZFp6V31bNDBz4eOoPnZloPbOdTcnhnvRJY2+2pDMrO7R4/1mXfJ9VXY"
+        crossorigin="anonymous"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('replayVideo');

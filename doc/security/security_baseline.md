@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-08-16
+> 更新日期：2026-08-24
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -14,6 +14,11 @@
 | 阿里云 HTTPS 证书续期提醒 | Let's Encrypt / Certbot 自动续期；月度 cron 运行 `script/check_https_certificate.py` 并写入 `/var/log/snh48/https-cert-reminder.log` | 降低证书过期未发现导致 HTTPS 不可用的风险 | 证书仍有效且 `certbot.timer` 存在时不要手动替换；机制细节见 `doc/ops/https_certificate_reminder.md` |
 | CSP HLS 兼容 | `connect-src 'self' https:`、`media-src 'self' https: blob:`、`worker-src 'self' blob:` | 保持外部 `.m3u8` 回放和 hls.js worker 可用 | 新增 CDN、外部图片、外部 API 时必须更新 CSP |
 | 后端端口收敛 | 生产环境 `HOST=127.0.0.1`，云安全组关闭公网 `8000` | 防止用户绕过 Nginx 安全头和 HTTPS | 临时调试后必须恢复本机监听并关闭安全组 |
+| FastAPI 运行隔离 | `snh48-web.service` 使用专用不可登录 `snh48-web` 账号、systemd 沙箱和 `UMask=0077`；需要 root 能力的跨云操作只经 sudo 白名单桥接脚本 | 降低网站被攻破后读取/修改整台服务器和运行数据的影响面 | 修改服务运行目录或桥接命令时必须同步 unit、sudoers、权限脚本并只重启网站服务 |
+| 公开投诉验证码 | 投诉页使用服务端保存、10 分钟过期、一次性消费的验证码挑战；答案不写入 HTML/JS | 降低公开投诉接口被脚本批量提交的风险 | 当前挑战状态是单进程内存；扩展多 worker 前需迁移到共享存储 |
+| 可信 Host 与 API 文档 | `TrustedHostMiddleware` 限制域名；OpenAPI/Swagger 默认关闭，需显式 `ENABLE_API_DOCS=true` 开启 | 减少 Host 头滥用和接口结构暴露 | 新域名必须加入 `TRUSTED_HOSTS`，调试完成后恢复关闭文档 |
+| 依赖与外部脚本固定 | FastAPI/Starlette/Jinja2/python-multipart/OpenAI 版本已锁定兼容范围；回放使用 `hls.js@1.7.1` + SRI | 降低供应链漂移和 CDN 被替换的风险 | 定期升级时必须重新跑回归测试并更新 SRI |
+| 运行时文件权限 | 网站数据、投诉和交互日志由 `snh48-web` 管理，目录 `0700`、文件 `0600`；部署脚本会修复既有文件并为新文件设置默认 ACL | 降低同机普通账号读取投诉、会话和管理数据的风险 | 运行目录权限变化必须通过 `deploy/harden_runtime_permissions.sh`，不要手工放宽到全局可读 |
 | 图片代理端口收敛 | 生产安全组不公网放行 `8899`，公网只经 HTTPS `/image-proxy/` 到 Nginx | 防止外部绕过 Nginx 安全头、限速和缓存策略直接刷图片代理 | `/image-proxy/` 仍是公网入口，需要继续加限速和共享缓存 |
 | 图片代理缓存与温和限速 | `/image-proxy/` 使用 Nginx `proxy_cache`、缓存锁、stale 缓存、7 天浏览器缓存、`X-Cache-Status` 和温和 IP 限速 | 降低重复打新浪上游的概率，改善重复访问速度，并削弱刷量影响 | 缓存目录占用磁盘；部署时需确保 `/var/cache/nginx/snh48_image_proxy` 可写 |
 | 图片缓存预热 | `script/prewarm_image_proxy.py` 可按 `schedule.csv` 日期倒序预热最新微博图片 | 优先让最新行程图片进入 Nginx 缓存，减少用户首次遇到慢图的概率 | 预热会主动消耗少量带宽，应在数据同步后限量运行 |
@@ -48,7 +53,9 @@
 | P1 | DeepSeek QA 被刷 | 已有密码、限速、日配额、并发限制和余额缓存 | 观察日志和额度消耗；暂不加验证码 |
 | P1 | 腾讯云到阿里云运行数据同步产生高频出站特征 | 已停用腾讯云侧自动推送；阿里云 cron 每分钟运行 `sync-from-tencent-if-changed.sh`，只有腾讯云源数据变化时调用 `sync-from-tencent.sh` 主动拉取对应分组 | 腾讯云 `crontab -l` 无未注释的 `sync-to-aliyun*` 自动任务，旧推送日志不持续更新；阿里云 cron 有 `sync-from-tencent-if-changed.sh`；同步日志没有 15 秒连续触发。动态小数据持续更新时，每分钟 `source changed groups=dynamic, pulling...` 可以是正常现象，长期 `groups=core,dynamic` 需要排查 |
 | P1 | CSV 任意 HTTPS 图片/链接/HLS | 仍处于兼容模式，暂不强制白名单，避免旧内容失败 | 后续先统计历史域名，再告警，最后按字段拦截 |
-| P2 | CDN/外部脚本供应链 | 仍使用 CDN，`hls.js@latest` 尚未固定或自托管 | 后续固定版本并自托管，再收窄 CSP |
+| P2 | CDN/外部脚本供应链 | 回放已固定 `hls.js@1.7.1` 并启用 SRI；其他历史 CDN 仍按外部资源清单维护 | 后续可继续自托管并收窄 CSP |
+| P1 | 网站进程以 root 运行 | 已切换为 `snh48-web.service` 专用非 root 账号并启用 systemd 沙箱；root 操作仅通过两个固定 sudo 桥接命令 | 需要维护 ACL、服务单元和跨云专用 SSH key | 线上已生效；改服务运行方式时必须重新做文档影响检查 |
+| P1 | 投诉接口可被脚本批量写入 | 已增加服务端一次性验证码挑战，仍保留 IP 限速 | 多 worker 部署时需共享挑战存储 | 线上已生效，继续观察 400/429 比例 |
 
 ## 生产环境必需配置
 
@@ -129,6 +136,17 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - 弹幕：验证至少一个只有本地 `danmu_local_path` 的回放、一个需要远程 `danmu_url` 兜底的历史回放；远程失败时视频播放不能失败，接口应返回可解析 JSON。
 - 白名单和 CSP：先用日志或报告模式盘点真实域名，再强制拦截；强制前必须确认历史图片、回放 HLS 和弹幕源不会被误伤。
 
+## 2026-08-24 修复记录
+
+- 腾讯云网站已从 root `screen` 进程切换为 `snh48-web.service`：专用不可登录账号、systemd 沙箱、受限写目录和 `UMask=0077` 均已生效；服务监听 `127.0.0.1:8000`，公网流量只经 Nginx。
+- 网站到阿里云的共享状态连接改用 `snh48-web` 专用 ED25519 密钥；root 侧只允许社交凭据状态/更新和翻牌账号固定子命令，未把网站 `.env`、Cookie、Token 或私钥写入 Git。
+- 投诉页已改为服务端一次性验证码挑战；挑战 token 只在短期内存中保存，提交后立即消费，页面不再包含答案。
+- 腾讯云 Nginx 已升级到 `1.29.8-1.oc9.ap.2`，默认未知 Host 拒绝，关闭版本号，限制请求体大小；FastAPI API 文档默认返回 404，Trusted Host 校验已启用。
+- 回放页固定 `hls.js@1.7.1` 并使用 SRI；微博图片代理增加并发、响应大小和图片 MIME 限制，避免被当作无界中转站。
+- 已执行 `deploy/harden_runtime_permissions.sh`，网站数据、投诉和交互日志目录收紧为服务账号可读写；今后权限变更必须重复执行该脚本并核对 ACL。
+
+本批线上验收：`/`、`/complaint` 返回 200；`/openapi.json` 返回 404；未带投诉验证码返回 422、无效挑战返回 400；未知 HTTP Host 被 Nginx 拒绝；后端 8000 只监听本机。剩余 SSH 风险是公网 22 端口仍允许密码认证，待确认笔记本、台式机及自动同步密钥均可用后再关闭。
+
 ## 后续开发规则
 
 新增或修改 API：
@@ -172,7 +190,7 @@ git add website/static/js-dist/ website/static/css-dist/
 - Nginx 安全头目前在 server 块和多个 location 中重复声明，以规避 `add_header` 继承问题；修改 CSP/安全头时必须同步所有重复位置，长期可改为 Nginx include 片段降低维护风险。
 - 如果未来接入 CDN、CLB 或 Docker 反向代理，必须重新确认真实连接后端的代理 IP，并只把这些 IP/CIDR 加到 `TRUSTED_PROXY_PEERS`。
 - 多数滑动窗口限速为进程内存状态，服务重启会重置；IP 日配额为持久化 JSON。
-- 双服务器复制复用现有 root SSH 信任和 IP 白名单；应用层入口只允许受限的 state/inbox 子命令，但 SSH key 本身仍有较高权限。后续若调整服务器权限，应迁移到专用低权限账号和 forced-command，而不是扩大 root key 分发。
+- 网站进程不再复用 root 身份运行：跨云共享状态使用 `snh48-web` 专用密钥，root 侧只保留两个 forced-style 白名单桥接脚本；fan-hub 其他采集任务仍有各自既有 root 密钥，SSH 公网入口的密码登录尚未在本次自动关闭，需先完成密钥可用性确认。
 - 状态历史使用完整 gzip 快照而不是增量 diff，恢复更直接但会持续占用磁盘；日常检查需要观察目录大小，归档或保留策略必须先确认不能破坏当前 revision 和审计需求。
 - 前端混淆不是访问控制，真正的保护仍依赖后端鉴权、限速和不泄露敏感数据。
 - 本文件不能证明线上已部署，线上状态必须按验证清单复核。

@@ -150,8 +150,12 @@ def _run_account_admin(command: str, payload: dict) -> dict:
     if not script_path.is_file():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="账号管理服务未就绪")
     try:
+        prefix = tuple(getattr(cfg, "FLIP_CARDS_ACCOUNT_ADMIN_COMMAND", ()))
+        command_line = [*prefix, command] if prefix else [
+            cfg.FLIP_CARDS_ACCOUNT_ADMIN_PYTHON, str(script_path), command
+        ]
         proc = subprocess.run(
-            [cfg.FLIP_CARDS_ACCOUNT_ADMIN_PYTHON, str(script_path), command],
+            command_line,
             input=json.dumps(payload, ensure_ascii=False),
             text=True,
             stdout=subprocess.PIPE,

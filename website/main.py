@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from website import config as cfg
 from website.debut_milestones import build_homepage_context
@@ -22,7 +23,11 @@ app = FastAPI(
     title=cfg.SITE_TITLE,
     description=cfg.SITE_DESCRIPTION,
     version="0.1.0",
+    docs_url="/docs" if cfg.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if cfg.ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if cfg.ENABLE_API_DOCS else None,
 )
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(cfg.TRUSTED_HOSTS))
 
 # ── Static Files ───────────────────────────────────────────────────────────
 # Mount JS/CSS separately first (may be obfuscated/minified in production)
@@ -54,7 +59,23 @@ for _p in _covers_candidates:
 
 
 # ── Templates ──────────────────────────────────────────────────────────────
-templates = Jinja2Templates(directory=str(cfg.TEMPLATES_DIR))
+class _CompatibleTemplates(Jinja2Templates):
+    """Keep the repository's legacy ``(name, context)`` calls working."""
+
+    def TemplateResponse(self, name_or_request, context_or_name=None, context=None, **kwargs):
+        if isinstance(name_or_request, str):
+            template_name = name_or_request
+            template_context = context_or_name or {}
+            request = template_context.get("request")
+            return super().TemplateResponse(
+                request, template_name, template_context, **kwargs
+            )
+        return super().TemplateResponse(
+            name_or_request, context_or_name, context, **kwargs
+        )
+
+
+templates = _CompatibleTemplates(directory=str(cfg.TEMPLATES_DIR))
 
 
 # ── Cache Busting Helper ──────────────────────────────────────────────────
@@ -295,6 +316,8 @@ async def privacy_page(request: Request):
 async def complaint_page(request: Request):
     """Complaint & Report page."""
     captcha_question, captcha_answer = _generate_captcha()
+    from website.captcha import issue_challenge
+
     return templates.TemplateResponse(
         "complaint.html",
         {
@@ -305,7 +328,9 @@ async def complaint_page(request: Request):
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
             "captcha_question": captcha_question,
-            "captcha_answer": captcha_answer,
+            "captcha_challenge": issue_challenge(
+                captcha_answer, ttl_seconds=cfg.COMPLAINT_CAPTCHA_TTL_SECONDS
+            ),
         },
     )
 

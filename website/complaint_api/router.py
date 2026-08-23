@@ -21,6 +21,7 @@ from pydantic import BaseModel, field_validator
 
 from website.rate_limiter import check_complaint_limit, get_client_ip
 from website.action_inbox import InboxError, record_request
+from website.captcha import consume_challenge
 
 router = APIRouter(prefix="/api/complaint", tags=["投诉举报"])
 
@@ -50,6 +51,8 @@ class ComplaintRequest(BaseModel):
     type: str
     content: str
     email: str | None = None
+    captcha_challenge: str
+    captcha_answer: str
 
     @field_validator("type")
     @classmethod
@@ -94,6 +97,8 @@ def submit_complaint(req: ComplaintRequest, request: Request):
     # Rate-limit complaint submissions to prevent spam
     ip = get_client_ip(request)
     check_complaint_limit(ip)
+    if not consume_challenge(req.captcha_challenge, req.captcha_answer):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码无效或已过期")
 
     _ensure_dir()
 

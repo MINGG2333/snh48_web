@@ -71,8 +71,22 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 3. 拉取代码 → 安装依赖
 4. 上传数据文件和模型缓存
 5. 创建远端 `.env` 配置文件
-6. 配置 systemd/screen、Nginx、SSL
+6. 配置 systemd、Nginx、SSL
 7. 启动服务 → 验证
+
+### 腾讯云生产运行方式
+
+网站不应再通过 root `screen` 进程运行。首次迁移或修复权限时，在腾讯云按顺序执行：
+
+```bash
+cd /home/snh48_web
+bash deploy/harden_runtime_permissions.sh
+install -m 0644 deploy/systemd/snh48-web.service /etc/systemd/system/snh48-web.service
+systemctl daemon-reload
+systemctl enable --now snh48-web.service
+```
+
+微博图片代理由 `/home/snh48-fan-hub/deploy/systemd/snh48-weibo-img-proxy.service` 以同一专用账号运行；8899 只供 Nginx 反代，云安全组不得公网放行。网站服务需要的两个 root 能力仅通过 `deploy/privileged/` 中的固定 sudo 桥接脚本提供，修改桥接命令时必须同步 sudoers 并重新验证。
 
 ---
 

@@ -1,0 +1,37 @@
+[Unit]
+Description=SNH48 website FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=snh48-web
+Group=snh48-web
+WorkingDirectory=/home/snh48_web
+EnvironmentFile=/home/snh48_web/.env
+Environment=HOME=/var/lib/snh48-web
+Environment=PYTHONUNBUFFERED=1
+Environment="SOCIAL_CREDENTIALS_ADMIN_COMMAND=/usr/bin/sudo -n /usr/local/sbin/snh48-social-credentials-bridge"
+Environment="FLIP_CARDS_ACCOUNT_ADMIN_COMMAND=/usr/bin/sudo -n /usr/local/sbin/snh48-flip-account-bridge"
+ExecStart=/home/snh48_web/venv/bin/python -m website.main
+Restart=on-failure
+RestartSec=5
+UMask=0077
+# The two root bridges are explicitly allowlisted in sudoers.  They need a
+# controlled privilege transition; the remaining systemd sandbox stays active.
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/home/snh48_web/website/data /home/snh48_web/transcript_analyze /var/log/snh48 /var/lib/snh48-web /home/snh48-fan-hub/live_push_replays
+
+[Install]
+WantedBy=multi-user.target

@@ -156,7 +156,7 @@
                                  color:var(--text-dim);font-size:0.9rem;user-select:none;pointer-events:none;">
                         {{ captcha_question }}
                     </span>
-                    <input type="hidden" id="complaintCaptchaAnswer" value="{{ captcha_answer }}">
+                    <input type="hidden" id="complaintCaptchaChallenge" value="{{ captcha_challenge }}">
                 </div>
 
                 <div id="complaintFeedback" style="margin-bottom:16px;display:none;"></div>
@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = contentTextarea.value.trim();
         const email = document.getElementById('complaintEmail').value.trim();
         const captchaAnswer = document.getElementById('complaintCaptcha').value.trim();
-        const expectedAnswer = document.getElementById('complaintCaptchaAnswer').value;
+        const captchaChallenge = document.getElementById('complaintCaptchaChallenge').value;
 
         // Validation
         if (!type) {
@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showFeedback('投诉内容不能少于10个字', 'error');
             return;
         }
-        if (!captchaAnswer || captchaAnswer !== expectedAnswer) {
+        if (!captchaAnswer) {
             showFeedback('验证码错误，请重新计算', 'error');
             return;
         }
@@ -321,6 +321,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     type: type,
                     content: content,
                     email: email || undefined,
+                    captcha_challenge: captchaChallenge,
+                    captcha_answer: captchaAnswer,
                 }),
             });
 
