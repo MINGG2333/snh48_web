@@ -410,6 +410,10 @@
       background: var(--panel);
       box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
     }
+    .support-chat-card.setup-mode {
+      height: auto;
+      max-height: min(480px, calc(100dvh - 36px));
+    }
     .support-chat-header {
       display: flex;
       align-items: center;
@@ -434,7 +438,8 @@
     .support-chat-close:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
     .support-chat-setup,
     .support-chat-conversation { min-height: 0; flex: 1; display: flex; flex-direction: column; }
-    .support-chat-setup { justify-content: center; gap: 12px; padding: 24px; }
+    .support-chat-setup { justify-content: flex-start; gap: 12px; padding: 18px 20px 16px; }
+    .support-chat-card.setup-mode .support-chat-setup { flex: 0 1 auto; }
     .support-chat-setup.hidden,
     .support-chat-conversation.hidden { display: none; }
     .support-chat-copy { color: var(--muted); font-size: 13px; line-height: 1.6; }
@@ -618,6 +623,7 @@
       .result-actions { width: 100%; justify-content: space-between; }
       .support-chat-modal { align-items: flex-end; justify-content: center; padding: 12px; }
       .support-chat-card { height: min(680px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); }
+      .support-chat-card.setup-mode { height: auto; max-height: calc(100dvh - 24px); }
       .support-chat-composer { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -705,19 +711,19 @@
 
     <div class="support-chat-modal" id="supportChatModal" aria-hidden="true">
       <div class="support-chat-backdrop" id="supportChatBackdrop"></div>
-      <section class="support-chat-card" role="dialog" aria-modal="true" aria-labelledby="supportChatTitle">
+      <section class="support-chat-card setup-mode" id="supportChatCard" role="dialog" aria-modal="true" aria-labelledby="supportChatTitle">
         <header class="support-chat-header">
           <div class="support-chat-title" id="supportChatTitle"><i class="fas fa-headset" aria-hidden="true"></i><span>反馈</span></div>
           <button class="support-chat-close" id="supportChatClose" type="button" aria-label="关闭客服窗口">×</button>
         </header>
         <div class="support-chat-setup" id="supportChatSetup">
-          <p class="support-chat-copy">设置一个只有你知道的唯一识别码，就可以在以后查看这段聊天记录。识别码请妥善保存，忘记后无法找回原记录。</p>
+          <p class="support-chat-copy" id="supportChatSetupCopy">可以在这里反馈网站中希望改进的地方，也可以告诉我们你期待新增的功能。设置一个只有你知道的唯一识别码，以后可以用它查看反馈记录和回复。识别码请妥善保存，忘记后无法找回原记录。</p>
           <div class="support-chat-field">
             <label for="supportChatIdentifier">唯一识别码</label>
-            <input id="supportChatIdentifier" type="text" minlength="4" maxlength="64" autocomplete="off" placeholder="至少 4 个字符">
+            <input id="supportChatIdentifier" type="text" minlength="4" maxlength="64" autocomplete="off" aria-describedby="supportChatSetupCopy" placeholder="至少 4 个字符">
           </div>
           <div class="support-chat-setup-actions">
-            <button class="btn primary" id="supportChatStart" type="button">进入聊天</button>
+            <button class="btn primary" id="supportChatStart" type="button">进入反馈</button>
           </div>
           <div class="support-chat-status" id="supportChatSetupStatus" role="status" aria-live="polite"></div>
         </div>
@@ -725,7 +731,7 @@
           <div class="support-chat-messages" id="supportChatMessages" aria-live="polite"></div>
           <div class="support-chat-status" id="supportChatStatus" role="status" aria-live="polite"></div>
           <form class="support-chat-composer" id="supportChatForm">
-            <textarea id="supportChatInput" maxlength="2000" rows="2" placeholder="写下你的消息"></textarea>
+            <textarea id="supportChatInput" maxlength="2000" rows="2" placeholder="写下你的反馈"></textarea>
             <button class="btn primary support-chat-send" id="supportChatSend" type="submit"><i class="fas fa-paper-plane" aria-hidden="true"></i><span>发送</span></button>
           </form>
           <div class="support-chat-footer">
@@ -776,6 +782,7 @@
     var updatePill = document.getElementById("updatePill");
     var supportChatNav = document.getElementById("supportChatNav");
     var supportChatModal = document.getElementById("supportChatModal");
+    var supportChatCard = document.getElementById("supportChatCard");
     var supportChatBackdrop = document.getElementById("supportChatBackdrop");
     var supportChatClose = document.getElementById("supportChatClose");
     var supportChatSetup = document.getElementById("supportChatSetup");
@@ -878,6 +885,7 @@
     function setChatModalOpen(open) {
       if (!supportChatModal) return;
       if (open) {
+        supportChatCard.classList.toggle("setup-mode", !currentSupportChatIdentifier);
         supportChatPreviousFocus = document.activeElement;
         supportChatModal.classList.add("open");
         supportChatModal.setAttribute("aria-hidden", "false");
@@ -910,7 +918,7 @@
       if (!messages.length) {
         var empty = document.createElement("div");
         empty.className = "support-chat-empty";
-        empty.textContent = "还没有消息，可以先告诉我们遇到的问题。";
+        empty.textContent = "还没有反馈，可以先告诉我们希望改进或新增的内容。";
         supportChatMessages.appendChild(empty);
         return;
       }
@@ -986,7 +994,7 @@
         return;
       }
       supportChatStart.disabled = true;
-      setChatStatus(supportChatSetupStatus, "正在打开聊天…", false);
+      setChatStatus(supportChatSetupStatus, "正在打开反馈…", false);
       currentSupportChatIdentifier = identifier;
       try {
         var response = await fetch("/api/feedback-chat/history", {
@@ -996,9 +1004,10 @@
           cache: "no-store"
         });
         var data = await response.json().catch(function() { return {}; });
-        if (!response.ok) throw new Error(chatErrorMessage(data, "聊天记录加载失败"));
+        if (!response.ok) throw new Error(chatErrorMessage(data, "反馈记录加载失败"));
         supportChatSetup.classList.add("hidden");
         supportChatConversation.classList.remove("hidden");
+        supportChatCard.classList.remove("setup-mode");
         renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
         setChatStatus(supportChatSetupStatus, "", false);
         startSupportChatWatch();
@@ -1006,7 +1015,7 @@
         track("admin_update", { action: "open_feedback_chat", result: "success" });
       } catch (error) {
         currentSupportChatIdentifier = "";
-        setChatStatus(supportChatSetupStatus, error.message || "聊天记录加载失败", true);
+        setChatStatus(supportChatSetupStatus, error.message || "反馈记录加载失败", true);
         track("admin_update", { action: "open_feedback_chat", result: "failure" });
       } finally {
         supportChatStart.disabled = false;
@@ -1051,6 +1060,7 @@
       supportChatCursor = "";
       supportChatConversation.classList.add("hidden");
       supportChatSetup.classList.remove("hidden");
+      supportChatCard.classList.add("setup-mode");
       setChatStatus(supportChatStatus, "", false);
       setChatStatus(supportChatSetupStatus, "", false);
       supportChatIdentifier.focus();
