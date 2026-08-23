@@ -110,9 +110,11 @@ assert.ok(inlineScriptMatch, "room voice inline script should exist");
 assert.match(template, /<details id="filterPanel" class="filter-panel" open>/);
 assert.match(template, /filter-panel:not\(\[open\]\)/);
 assert.match(template, /filterPanel\.addEventListener\("toggle"/);
+assert.match(template, /<a id="roomPageLink" class="ghost" href="\/room"/);
+assert.doesNotMatch(template, /id="logoutBtn"/);
 
 const elementIds = [
-  "loginWrap", "app", "logoutBtn", "loginForm", "passwordInput", "loginError", "roomFilter",
+  "loginWrap", "app", "loginForm", "passwordInput", "loginError", "roomFilter",
   "filterPanel", "filterSummary", "sessionList", "detailEmpty", "detailContent", "audioPlayer", "playbackMode", "playbackModeNote",
   "playbackStatus", "playbackStatusText", "messages", "messageCount", "segmentLabel", "timelineLabel",
   "stats", "participants", "sessionHeading", "roomTag"

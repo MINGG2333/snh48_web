@@ -175,7 +175,7 @@
         <h1>房间电台回放</h1>
         <p>陈嘉仪公开房间与小房间上麦录音 · 同期消息时间轴</p>
       </div>
-      <button id="logoutBtn" class="ghost" type="button" hidden data-track="room_voice_logout">退出</button>
+      <a id="roomPageLink" class="ghost" href="/room" data-track="room_voice_room_link">返回 Room</a>
     </header>
 
     <section id="loginWrap" class="login-wrap">
@@ -252,7 +252,6 @@
     const API = "/api/room-voice-replays";
     const loginWrap = document.getElementById("loginWrap");
     const app = document.getElementById("app");
-    const logoutBtn = document.getElementById("logoutBtn");
     const loginForm = document.getElementById("loginForm");
     const passwordInput = document.getElementById("passwordInput");
     const loginError = document.getElementById("loginError");
@@ -345,7 +344,6 @@
       loginVerified = false;
       loginWrap.hidden = false;
       app.hidden = true;
-      logoutBtn.hidden = true;
       passwordInput.disabled = false;
       passwordInput.value = "";
       loginSubmit.disabled = false;
@@ -374,7 +372,6 @@
       loginVerified = true;
       loginWrap.hidden = false;
       app.hidden = true;
-      logoutBtn.hidden = true;
       setLoginFeedback("retry", message || "密码正确，但录音列表加载失败，请点击重试加载");
     }
 
@@ -382,7 +379,6 @@
       loginBusy = false;
       loginWrap.hidden = true;
       app.hidden = false;
-      logoutBtn.hidden = false;
       loginError.textContent = "";
     }
 
@@ -816,13 +812,6 @@
       }
     });
 
-    logoutBtn.addEventListener("click", async () => {
-      track("login_attempt", { action: "logout", result: "submitted" });
-      try { await api("/logout", { method: "POST" }); } catch (_) {}
-      currentSessionId = "";
-      currentSession = null;
-      showLogin("已退出。");
-    });
     roomFilter.addEventListener("change", () => {
       renderSessions();
       const visibleCount = sessions.filter(item => roomFilter.value === "all" || item.room_type === roomFilter.value).length;
