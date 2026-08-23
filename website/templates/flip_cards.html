@@ -1423,7 +1423,7 @@
 
     function shouldShowUpdatePill() {
       return page.classList.contains("ready")
-        && (window.innerWidth <= 720 || datasetUpdateAvailable || !isNearBottom());
+        && (datasetUpdateAvailable || !isNearBottom());
     }
 
     function syncUpdatePill() {
@@ -1654,7 +1654,7 @@
         await loadApp();
         track("login_attempt", { action: "reuse_cookie", result: "success" });
       } catch (error) {
-        if (error.status === 401) {
+        if (error.status === 401 || error.status === 403) {
           showLogin("");
           return;
         }

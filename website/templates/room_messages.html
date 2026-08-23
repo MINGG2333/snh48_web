@@ -1172,7 +1172,7 @@
       <p>请输入房间消息页密码</p>
       <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
       <button class="login-btn" id="loginBtn">进入</button>
-      <div class="login-error" id="loginError">密码错误</div>
+      <div class="login-error" id="loginError"></div>
     </div>
   </div>
 
@@ -1629,11 +1629,11 @@
           loadedCount = 0;
           appendMessages(data.items || []);
           window.requestAnimationFrame(function() {
-            if (!isTargetLoad) {
+            if (!isTargetLoad && !roomPageScrollLocked && !roomScrollRestorePending) {
               setCurrentScrollTop(currentScrollHeight());
             }
+            syncRoomUpdatePill();
           });
-          updatePill.classList.remove("show");
           resetRefreshTimer();
         }
 
@@ -1647,9 +1647,6 @@
         } else if (options.newer) {
           afterIndex = data.next_after_index;
           hasMoreNewer = Boolean(data.has_more_newer);
-          if (!hasMoreNewer) {
-            updatePill.classList.remove("show");
-          }
         } else {
           beforeIndex = data.next_before_index;
           afterIndex = data.next_after_index;
@@ -1663,6 +1660,7 @@
         if (!isTargetLoad) {
           fillViewportIfNeeded();
         }
+        syncRoomUpdatePill();
         return data;
       } catch (err) {
         if (options.targetId || options.targetDate) {
@@ -2207,10 +2205,9 @@
           hasMoreNewer = true;
           if (isNearBottom()) {
             reloadLatest();
-          } else {
-            updatePill.classList.add("show");
           }
         }
+        syncRoomUpdatePill();
       } catch (err) {
         return;
       }
@@ -2218,6 +2215,17 @@
 
     function isNearBottom() {
       return currentScrollHeight() - currentScrollTop() - currentClientHeight() < 180;
+    }
+
+    function shouldShowRoomUpdatePill() {
+      return pageEl.classList.contains("ready")
+        && !(filterModal && filterModal.classList.contains("open"))
+        && (hasMoreNewer || !isNearBottom());
+    }
+
+    function syncRoomUpdatePill() {
+      updatePill.textContent = hasMoreNewer ? "有新消息，点击查看最新" : "跳到最新";
+      updatePill.classList.toggle("show", shouldShowRoomUpdatePill());
     }
 
     function stopRefresh() {
@@ -2261,6 +2269,7 @@
       filterToggle.setAttribute("aria-expanded", open ? "true" : "false");
       filterToggle.textContent = open ? "收起" : "筛选";
       if (!open || !isMobile) setRoomPageScrollLocked(false);
+      syncRoomUpdatePill();
       if (open && filterModalClose) {
         window.setTimeout(function() { filterModalClose.focus(); }, 0);
       } else if (!open && isMobileViewport()) {
@@ -2809,7 +2818,10 @@
           node.dataset.autoCleared = "1";
           return;
         }
-        if (typeof onChange === "function") onChange();
+        if (typeof onChange === "function") {
+          // Let the native date picker finish closing before replacing the list.
+          window.setTimeout(onChange, 0);
+        }
       });
       node.addEventListener("blur", function() {
         var focusedEmpty = node.dataset.emptyOnFocus === "1";
@@ -2835,11 +2847,15 @@
     passwordInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") doLogin();
     });
-    chatScroll.addEventListener("scroll", loadMoreIfNeeded);
+    chatScroll.addEventListener("scroll", function() {
+      loadMoreIfNeeded();
+      syncRoomUpdatePill();
+    });
     window.addEventListener("scroll", function() {
       if (usesDocumentScroll() && !roomPageScrollLocked && !roomScrollRestorePending) {
         loadMoreIfNeeded();
       }
+      if (usesDocumentScroll()) syncRoomUpdatePill();
     }, { passive: true });
     applyBtn.addEventListener("click", function() {
       reloadLatest("apply_filters");

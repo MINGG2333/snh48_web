@@ -297,7 +297,7 @@
     .update-pill {
       position: fixed;
       left: 50%;
-      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      top: calc(74px + env(safe-area-inset-top, 0px));
       z-index: 20;
       display: none;
       transform: translateX(-50%);
@@ -645,7 +645,7 @@
       <p>请输入礼物回复页密码</p>
       <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
       <button class="login-btn" id="loginBtn" type="button">进入</button>
-      <div class="login-error" id="loginError">密码错误</div>
+      <div class="login-error" id="loginError"></div>
     </div>
   </div>
 
@@ -758,6 +758,7 @@
     var loading = false;
     var checkingUpdates = false;
     var lastDatasetSnapshot = null;
+    var dataUpdateAvailable = false;
     var loginBusy = false;
     var loginVerified = false;
     var expandedSenderKeys = new Set();
@@ -1187,7 +1188,7 @@
       var summary = data.summary || {};
       refreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || 30));
       lastDatasetSnapshot = datasetSnapshot(data);
-      updatePill.classList.remove("show");
+      dataUpdateAvailable = false;
       document.getElementById("pendingSenders").textContent = String(senderSummary.senders_with_unreplied || 0);
       document.getElementById("pendingMessages").textContent = String(summary.unreplied_gift_messages || 0);
       document.getElementById("totalSenders").textContent = String(senderSummary.total_senders || 0);
@@ -1197,6 +1198,7 @@
       document.getElementById("refreshLabel").textContent = "每 " + refreshSeconds + " 秒检查更新";
       renderSenders(data.items || []);
       resetRefreshTimer();
+      syncUpdatePill();
     }
 
     function showPageError(message) {
@@ -1479,9 +1481,8 @@
           resetRefreshTimer();
         }
         document.getElementById("refreshLabel").textContent = "每 " + refreshSeconds + " 秒检查更新";
-        if (hasDataUpdate(datasetSnapshot(data))) {
-          updatePill.classList.add("show");
-        }
+        if (hasDataUpdate(datasetSnapshot(data))) dataUpdateAvailable = true;
+        syncUpdatePill();
       } catch (error) {
         return;
       } finally {
@@ -1503,10 +1504,25 @@
       });
       try {
         await loadData(false);
+        window.scrollTo({ top: 0, behavior: "smooth" });
       } finally {
         updatePill.disabled = false;
-        updatePill.textContent = "有新的送礼数据，点击刷新";
+        syncUpdatePill();
       }
+    }
+
+    function isNearLatest() {
+      return (window.pageYOffset || document.documentElement.scrollTop || 0) < 160;
+    }
+
+    function shouldShowUpdatePill() {
+      return page.classList.contains("ready") && (dataUpdateAvailable || !isNearLatest());
+    }
+
+    function syncUpdatePill() {
+      updatePill.textContent = dataUpdateAvailable ? "有新的送礼数据，点击查看最新" : "跳到最新";
+      updatePill.classList.toggle("show", shouldShowUpdatePill());
+      updatePill.classList.toggle("has-update", dataUpdateAvailable);
     }
 
     function resetRefreshTimer() {
@@ -1566,6 +1582,7 @@
       track("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
     updatePill.addEventListener("click", loadLatestData);
+    window.addEventListener("scroll", syncUpdatePill, { passive: true });
     giftFilterToggle.addEventListener("click", function() {
       setGiftFilterModalOpen(!giftFilterModal.classList.contains("open"));
     });

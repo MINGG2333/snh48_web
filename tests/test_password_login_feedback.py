@@ -48,6 +48,23 @@ class PasswordLoginFeedbackTests(unittest.TestCase):
                 self.assertIn("重试加载", source)
                 self.assertIn("loginVerified", source)
 
+    def test_password_pages_do_not_show_initial_auth_error(self) -> None:
+        cases = (
+            "website/templates/ob.html",
+            "website/templates/flip_cards.html",
+            "website/templates/gift_replies.html",
+            "website/templates/gift_reply_senders.html",
+            "website/templates/room_messages.html",
+        )
+        for template in cases:
+            with self.subTest(template=template):
+                source = self.read(template)
+                self.assertRegex(source, r'id="loginError"[^>]*></(?:div|p)>')
+
+        flip = self.read("website/templates/flip_cards.html")
+        self.assertIn("error.status === 401 || error.status === 403", flip)
+        self.assertIn('showLogin("")', flip)
+
 
 if __name__ == "__main__":
     unittest.main()

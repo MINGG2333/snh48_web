@@ -41,6 +41,10 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn('document.body.style.position = "fixed"', template)
         self.assertIn("if (open && isMobile) setRoomPageScrollLocked(true)", template)
         self.assertIn("if (!open || !isMobile) setRoomPageScrollLocked(false)", template)
+        self.assertIn("function shouldShowRoomUpdatePill()", template)
+        self.assertIn("function syncRoomUpdatePill()", template)
+        self.assertIn('window.setTimeout(onChange, 0)', template)
+        self.assertIn('!isTargetLoad && !roomPageScrollLocked && !roomScrollRestorePending', template)
         self.assertIn('input[type="date"]::-webkit-date-and-time-value', template)
         self.assertIn('align-items: center;', template)
         self.assertNotIn('.filter-modal-scroll .field input[type="date"] {\n        display: block;', template)
@@ -79,6 +83,16 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn('new AbortController()', template)
         self.assertNotIn('window.setInterval(function() { loadSupportChatHistory(false); }, 1000)', template)
         self.assertIn('href="/complaint"', template)
+
+    def test_gift_pages_keep_update_pill_near_latest_and_defer_date_refresh(self) -> None:
+        details = (ROOT / "website/templates/gift_replies.html").read_text(encoding="utf-8")
+        senders = (ROOT / "website/templates/gift_reply_senders.html").read_text(encoding="utf-8")
+        for template in (details, senders):
+            self.assertIn('top: calc(74px + env(safe-area-inset-top, 0px));', template)
+            self.assertIn('var dataUpdateAvailable = false;', template)
+            self.assertIn('function shouldShowUpdatePill()', template)
+            self.assertIn('window.scrollTo({ top: 0, behavior: "smooth" })', template)
+        self.assertIn('window.setTimeout(onChange, 0)', details)
 
     def test_ob_tools_are_modal_and_chat_refresh_is_separate(self) -> None:
         template = (ROOT / "website/templates/ob.html").read_text(encoding="utf-8")

@@ -431,7 +431,7 @@
     .update-pill {
       position: fixed;
       left: 50%;
-      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      top: calc(74px + env(safe-area-inset-top, 0px));
       z-index: 20;
       display: none;
       transform: translateX(-50%);
@@ -815,7 +815,7 @@
       <p>请输入礼物回复页密码</p>
       <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
       <button class="login-btn" id="loginBtn">进入</button>
-      <div class="login-error" id="loginError">密码错误</div>
+      <div class="login-error" id="loginError"></div>
     </div>
   </div>
 
@@ -988,6 +988,7 @@
     var loading = false;
     var checkingUpdates = false;
     var lastDatasetSnapshot = null;
+    var dataUpdateAvailable = false;
     var loginBusy = false;
     var loginVerified = false;
     var giftFilterPreviousFocus = null;
@@ -1270,7 +1271,7 @@
       var summary = data.summary || {};
       refreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || 30));
       lastDatasetSnapshot = datasetSnapshot(data);
-      updatePill.classList.remove("show");
+      dataUpdateAvailable = false;
       refreshLabel.textContent = "每 " + refreshSeconds + " 秒检查更新";
       generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
 
@@ -1290,6 +1291,7 @@
       renderRows(data.items || []);
       renderPaging(data);
       renderFilterSummary(data);
+      syncUpdatePill();
     }
 
     function syncGiftOptions(catalog) {
@@ -1502,9 +1504,8 @@
           resetRefreshTimer();
         }
         refreshLabel.textContent = "每 " + refreshSeconds + " 秒检查更新";
-        if (hasDataUpdate(datasetSnapshot(data))) {
-          updatePill.classList.add("show");
-        }
+        if (hasDataUpdate(datasetSnapshot(data))) dataUpdateAvailable = true;
+        syncUpdatePill();
       } catch (error) {
         return;
       } finally {
@@ -1517,11 +1518,27 @@
       updatePill.disabled = true;
       updatePill.textContent = "正在加载最新送礼数据…";
       try {
+        page = 1;
         await fetchData({ resetTimer: false });
+        window.scrollTo({ top: 0, behavior: "smooth" });
       } finally {
         updatePill.disabled = false;
-        updatePill.textContent = "有新的送礼数据，点击刷新";
+        syncUpdatePill();
       }
+    }
+
+    function isNearLatest() {
+      return (window.pageYOffset || document.documentElement.scrollTop || 0) < 160;
+    }
+
+    function shouldShowUpdatePill() {
+      return pageEl.classList.contains("ready") && (dataUpdateAvailable || page > 1 || !isNearLatest());
+    }
+
+    function syncUpdatePill() {
+      updatePill.textContent = dataUpdateAvailable ? "有新的送礼数据，点击查看最新" : "跳到最新";
+      updatePill.classList.toggle("show", shouldShowUpdatePill());
+      updatePill.classList.toggle("has-update", dataUpdateAvailable);
     }
 
     function stopRefresh() {
@@ -1576,6 +1593,7 @@
       trackAdminEvent("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
     updatePill.addEventListener("click", loadLatestData);
+    window.addEventListener("scroll", syncUpdatePill, { passive: true });
     senderInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") applyFilters("sender_filter");
     });
@@ -1618,7 +1636,10 @@
           node.dataset.autoCleared = "1";
           return;
         }
-        if (typeof onChange === "function") onChange();
+        if (typeof onChange === "function") {
+          // Let the native date picker finish closing before replacing the table.
+          window.setTimeout(onChange, 0);
+        }
       });
       node.addEventListener("blur", function() {
         var focusedEmpty = node.dataset.emptyOnFocus === "1";
