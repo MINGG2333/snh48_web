@@ -1278,6 +1278,7 @@
     var latestIgnoredBatch = null;
     var ignoreActionBusy = false;
     var typeOptionsHash = "";
+    var roomPageScrollLockY = null;
 
     var loginOverlay = document.getElementById("loginOverlay");
     var passwordInput = document.getElementById("passwordInput");
@@ -1391,6 +1392,28 @@
 
     function currentClientHeight() {
       return usesDocumentScroll() ? window.innerHeight : chatScroll.clientHeight;
+    }
+
+    function setRoomPageScrollLocked(locked) {
+      if (locked) {
+        if (roomPageScrollLockY !== null) return;
+        roomPageScrollLockY = currentScrollTop();
+        document.body.style.position = "fixed";
+        document.body.style.top = "-" + roomPageScrollLockY + "px";
+        document.body.style.left = "0";
+        document.body.style.right = "0";
+        document.body.style.width = "100%";
+        return;
+      }
+      if (roomPageScrollLockY === null) return;
+      var restoreY = roomPageScrollLockY;
+      roomPageScrollLockY = null;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
+      window.scrollTo(0, restoreY);
     }
 
     function setLoginFeedback(kind, message) {
@@ -2137,6 +2160,7 @@
     function setFilterPanelOpen(open) {
       if (!filterToggle) return;
       var isMobile = isMobileViewport();
+      if (open && isMobile) setRoomPageScrollLocked(true);
       if (topbar) {
         topbar.classList.toggle("filters-open", open);
       }
@@ -2161,6 +2185,7 @@
       }
       filterToggle.setAttribute("aria-expanded", open ? "true" : "false");
       filterToggle.textContent = open ? "收起" : "筛选";
+      if (!open || !isMobile) setRoomPageScrollLocked(false);
       if (open && filterModalClose) {
         window.setTimeout(function() { filterModalClose.focus(); }, 0);
       } else if (!open && isMobileViewport()) {
