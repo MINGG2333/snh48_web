@@ -52,6 +52,16 @@
 
 {% block content %}
 <main class="qa-page">
+    {% if not qa_enabled %}
+    <div class="qa-container">
+        <div class="qa-header">
+            <h1><i class="fas fa-robot"></i> AI 智能问答</h1>
+        </div>
+        <div class="qa-status error">
+            <i class="fas fa-circle-xmark"></i> 当前服务器未启用 AI 问答服务
+        </div>
+    </div>
+    {% else %}
     <div class="qa-container">
         <div class="qa-header">
             <h1><i class="fas fa-robot"></i> AI 智能问答</h1>
@@ -159,17 +169,17 @@
             <div id="refreshResultContent" style="display:none;"></div>
         </div>
     </div>
+    {% endif %}
 </main>
 {% endblock %}
 
 {% block extra_scripts %}
+{% if qa_enabled %}
 {% if site_domain %}<script>window.SITE_DOMAIN = '{{ site_domain|safe }}';</script>
 {% endif %}<script>window.__QA_CONFIG__ = JSON.parse('{{ qa_config_json|safe }}');</script>
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="/static/js/qa.js?v={{ static_version('js/qa.js') }}"></script>
-
-
+{% endif %}
 {% endblock %}
-

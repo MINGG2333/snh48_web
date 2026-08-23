@@ -22,7 +22,7 @@
 | `/image-proxy/` 经 `443` 被刷流量 | 代码库已加入 Nginx 共享缓存、缓存锁、stale 缓存、后台更新、7 天浏览器缓存、`X-Cache-Status` 和温和 IP 限速；部署工具会准备缓存目录 | 正常用户多图加载保留 `burst=120`，重复访问同图会更快；首次访问新图仍会立即请求上游 | 部署 Nginx 配置并 reload；线上验证 `X-Cache-Status`、多图弹窗和 429 日志 |
 | 图片首次加载速度 | 新增 `script/prewarm_image_proxy.py`，可在 `schedule.csv` 同步后预热最新微博图片 | 预热后用户更少遇到第一张慢图；预热只请求有限数量图片，不会批量压用户浏览器 | 在数据同步流程中按量运行预热，例如 `--limit 120 --workers 8` |
 | `danmu_url` 服务端兜底抓取 | 代码库已加入本地 URL 缓存、内网/localhost/非 http(s)/非标准端口拦截、响应大小上限和域名白名单灰度模式 | 仍保持本地弹幕优先；远程失败时接口返回可解析 JSON，不阻断视频播放 | 部署 Python 服务；盘点历史 `danmu_url` 后再决定是否强制域名白名单 |
-| DeepSeek QA 被刷 | 已有密码、IP/用户限速、日配额、并发限制、余额接口缓存 | 维持现有使用体验 | 按日志观察，暂不加验证码 |
+| DeepSeek QA 被刷 | 启用 QA 的节点使用密码、IP/用户限速、日配额和并发限制；腾讯云通过 `QA_ENABLED=false` 不注册 QA API | 阿里云维持现有问答体验，腾讯云不产生 QA 模型或 API 调用 | 按启用节点日志观察，暂不加验证码 |
 | 阿里云主动拉取腾讯云运行数据 | 已停用腾讯云侧自动推送；自动任务改为阿里云每分钟通过 SSH 检查腾讯云源数据指纹，源数据变化时才从腾讯云拉取；阿里云 IP `8.210.188.184` 已加入腾讯云主机安全登录风险白名单；翻牌页只新增应用 JSON 和音视频最小依赖 | 运行数据仍可在 1 分钟内同步；无公开用户可见影响 | 如果停用阿里云、迁移服务器或新增同步目标，必须提醒用户在腾讯云控制台删除旧白名单 IP 或新增新服务器 IP；不要恢复腾讯云高频主动出站同步；不要把翻牌完整 metadata、HTML 下载版、Token 或配置同步到阿里云 |
 | CSV 任意 HTTPS 图片/链接/HLS | 尚未强制白名单；已在文档中要求先告警后拦截 | 暂不影响旧图片、旧链接和旧回放 | 后续先统计历史域名，再按字段逐步启用白名单 |
 | CDN/外部脚本与 `hls.js` | 回放已固定 `hls.js@1.7.1`，并通过 SRI 校验；暂未自托管，CSP 仍保留兼容范围 | 不影响当前页面加载和回放 | 后续可自托管并继续收窄 CSP |
@@ -79,7 +79,7 @@
 
 | 目标 | 代码位置 | 触发入口 | 当前控制 | 风险说明 |
 |------|----------|----------|----------|----------|
-| `https://api.deepseek.com` 或 `DEEPSEEK_BASE_URL` | `website/config.py`、`transcript_analyze/kb_qa/qa_utils.py` | QA 提问 | `SITE_PASSWORD`、QA 限速、用户冷却、日配额、并发限制 | 消耗 API 额度；被刷可能触发服务商限流或封禁 |
+| `https://api.deepseek.com` 或 `DEEPSEEK_BASE_URL` | `website/config.py`、`transcript_analyze/kb_qa/qa_utils.py` | `QA_ENABLED=true` 节点的 QA 提问 | `SITE_PASSWORD`、QA 限速、用户冷却、日配额、并发限制；腾讯云关闭 QA | 消耗 API 额度；被刷可能触发服务商限流或封禁 |
 | `https://api.deepseek.com/user/balance` | `website/balance_api/router.py` | `/api/balance` | IP 限速、成功结果缓存 | 公开状态接口会触发服务端请求；当前已有缓存和限速降低压力 |
 | `danmu_url` 任意 URL | `website/timeline_api/router.py` 的 `_read_text_url()` | `/api/timeline/danmu?live_id=...`，且本地弹幕文件缺失 | 仅能按 `live_id` 选中 CSV 行，不能由前端直接传 URL；15 秒超时 | 如果 `summary.csv` 被污染，服务器可能请求非预期 URL，存在 SSRF、出口 IP 被限流、访问内网地址等风险 |
 | `/image-proxy/` 上游代理 | `deploy/nginx.conf`、`deploy/nginx-aliyun.conf` | 浏览器访问被改写后的新浪图片路径或直接请求 `/image-proxy/...` | 生产入口经 Nginx `/image-proxy/` 反代到本机或内网 `8899`；当前安全组不公网放行 `8899`；代理写死上游为 `wx1.sinaimg.cn`；代码库 Nginx 配置已加入共享缓存、缓存锁、stale 缓存、7 天浏览器缓存、温和 IP 限速和 `X-Cache-Status` | 这是本站服务器/代理出口风险点；即使 `8899` 不公网开放，公网用户仍可经 `443` 请求 `/image-proxy/...`；代码库已通过缓存和温和限速降低刷量影响，线上需部署验证 |

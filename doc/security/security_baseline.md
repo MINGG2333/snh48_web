@@ -24,7 +24,7 @@
 | 图片缓存预热 | `script/prewarm_image_proxy.py` 可按 `schedule.csv` 日期倒序预热最新微博图片 | 优先让最新行程图片进入 Nginx 缓存，减少用户首次遇到慢图的概率 | 预热会主动消耗少量带宽，应在数据同步后限量运行 |
 | 弹幕远程兜底保护 | `danmu_local_path` 优先；远程 `danmu_url` 成功后写本地 URL 缓存；硬拦截内网/localhost/非 http(s)/非标准端口，并限制响应大小 | 降低 SSRF 和大响应拖垮风险，同时保留历史弹幕可用性 | 域名白名单默认只告警不强制，需盘点历史源后再收紧 |
 | 可信代理 IP | 后端只在请求来源命中 `TRUSTED_PROXY_PEERS` 时采信 `X-Real-IP` / `X-Forwarded-For`，默认仅信任本机 | 降低客户端或同内网机器伪造 IP 绕过限速的风险 | Nginx 统一设置 `X-Forwarded-For $remote_addr`；多层反代需显式配置真实代理 IP |
-| QA 访问控制 | 提问、异步提问、异步结果轮询均要求 `SITE_PASSWORD`；轮询还绑定 `X-Client-Id` 和一次性 `poll_token` | 防止知道 task_id 的人直接读取异步结果 | 前端自动保存并发送 `poll_token`，用户不需要记忆 |
+| QA 访问控制 | 只有 `QA_ENABLED=true` 的节点注册 QA API；提问、异步提问、异步结果轮询均要求 `SITE_PASSWORD`，轮询还绑定 `X-Client-Id` 和一次性 `poll_token` | 腾讯云可彻底停止 QA 加载；启用节点可防止知道 task_id 的人直接读取异步结果 | 腾讯云关闭 QA 后 `/qa` 本机返回 503、API 返回 404，不跨站跳转；阿里云继续执行原有密码和轮询保护 |
 | 记忆页访问控制 | `/api/memories/*` 普通访问/提交要求 `MEMORIES_VIEW_PASSWORD`；应援会模式和本人模式使用独立密码；普通数据接口不返回平台 ID | 降低小房间、半私密互动和后台身份标识误公开风险 | 真实密码只放服务器 `.env`；两端提交都由腾讯云权威节点串行提交版本 |
 | 可写运行状态防覆盖 | 首页背景词、房间忽略、计分业务核实和记忆页只向腾讯云提交操作；使用 `flock`、原子替换、幂等 operation ID、revision、不可变 gzip 快照和持久 outbox | 防止两个节点互相覆盖整份 JSON、网络超时后重复执行或旧 outbox 回滚新版本 | 当前状态、历史和 outbox 都不进 Git；恢复只能在腾讯云执行；巡检见 `doc/shared_runtime_state.md` |
 | 可靠待处理箱与客服聊天来源审计 | 投诉、QA 邮箱请求、客服聊天消息和处理状态采用一事件一文件，权限 `0600`；每条事件记录腾讯云/阿里云来源，客服识别码计算 SHA-256 内部会话编号，并在受保护事件中保存用户自定义识别码；`/ob` 需密码后展示和回复 | 避免并发 JSONL 同步丢请求，同时让管理员区分请求入口并支持双向客服消息 | 事件含邮箱、投诉、聊天正文和用户自定义识别码，不得进 Git、静态目录、公开日志或诊断输出；公开客服接口按 IP 限速，识别码是访问凭据，用户需自行保管 |
@@ -102,7 +102,7 @@ curl -s http://127.0.0.1:8000 | head -5
 
 ```bash
 curl -sS -D - -o /dev/null https://cjy.plus/
-curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://cjy.plus/api/qa/status)" = 404
 curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
 curl -sS -D - -o /dev/null https://cjy.plus/api/room-voice-replays/sessions
 curl -sS -D - -o /dev/null https://cjy.plus/flip-cards

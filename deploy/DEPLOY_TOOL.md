@@ -83,7 +83,7 @@ python3 deploy/deploy.py deploy all --check-env
 python3 deploy/deploy.py check tencent
 ```
 
-服务重启后的验证默认最多等待 3 分钟（`--verify-attempts 90 --verify-delay 2`）。腾讯云启动时会加载本地知识库和模型，冷启动可能超过 30 秒。
+服务重启后的验证默认最多等待 3 分钟（`--verify-attempts 90 --verify-delay 2`）。腾讯云设置 `QA_ENABLED=false` 后不再加载本地知识库和模型；阿里云启用 QA 时仍需为模型冷启动预留时间。
 
 先看将执行什么：
 

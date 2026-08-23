@@ -21,8 +21,15 @@
 
 | 环境 | 域名 | IP | 服务管理 | Nginx 配置 |
 |------|------|----|----------|------------|
-| 腾讯云 | `cjy.plus` | `124.222.72.203` | screen 会话 | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
+| 腾讯云 | `cjy.plus` | `124.222.72.203` | `systemd` 服务 `snh48-web` | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
 | 阿里云香港 | `cjy.我爱你` / `cjy.xn--6qq986b3xl` | `8.210.188.184` | `systemd` 服务 `snh48-aliyun` | `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`，来源 `deploy/nginx-aliyun.conf` |
+
+### QA 节点边界
+
+- `QA_ENABLED` 控制当前节点是否注册 QA API、执行知识库归档维护和启动模型预热；默认值为 `true`。
+- 腾讯云设置 `QA_ENABLED=false`，`/qa` 只返回本机 503 未启用页面，`/api/qa/*` 不注册，不保留知识库索引和嵌入模型缓存。
+- 阿里云保持 `QA_ENABLED=true` 并独立提供 QA。两个站点之间不设置 QA 跳转或互链。
+- QA 关闭不影响 `website/data/action_inbox/` 中已有邮箱请求事件，也不授权删除历史问答归档或原始转录文件。
 
 ### 阿里云 HTTPS 证书与月度提醒
 
@@ -402,7 +409,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
 curl -sS -D - -o /dev/null https://cjy.plus/radio
 curl -sS -D - -o /dev/null https://cjy.plus/memories
 curl -sS -D - -o /dev/null https://cjy.plus/memory
-curl -sS -D - -o /dev/null https://cjy.plus/api/qa/status
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://cjy.plus/qa)" = 503
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://cjy.plus/api/qa/status)" = 404
 curl -sS -D - -o /dev/null https://cjy.plus/api/timeline/schedule
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/timeline.js

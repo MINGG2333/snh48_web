@@ -177,6 +177,7 @@ async def qa_page(request: Request):
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "site_domain": cfg.SITE_DOMAIN,
             "static_version": static_version,
+            "qa_enabled": cfg.QA_ENABLED,
             # QA config injected server-side as JSON (not in static JS)
             "qa_config_json": json.dumps({
                 "timeout_seconds": cfg.QA_TIMEOUT_SECONDS,
@@ -185,6 +186,7 @@ async def qa_page(request: Request):
                 "max_question_length": 20,
             }),
         },
+        status_code=200 if cfg.QA_ENABLED else 503,
     )
 
 
@@ -491,18 +493,19 @@ async def memories_page(request: Request):
 async def startup():
     """
     On startup:
-    1. Back up old qa_archive, video_knowledge_db, transcript_analyze (if configured)
+    1. Back up old qa_archive when QA is enabled
     2. Initialize interaction log session
-    3. Try to load the QA engine (non-blocking on failure)
+    3. Try to load the QA engine on enabled nodes (non-blocking on failure)
     """
-    kb_dir = Path(cfg.KB_DIR)
-    if kb_dir.exists():
-        from website.logging_setup import backup_and_recreate_qa_archive
-        backed_up = backup_and_recreate_qa_archive(kb_dir)
-        if backed_up:
-            print(f"✓ qa_archive backed up successfully at {kb_dir}")
-    else:
-        print(f"  KB directory {kb_dir} does not exist yet, skipping qa_archive backup.")
+    if cfg.QA_ENABLED:
+        kb_dir = Path(cfg.KB_DIR)
+        if kb_dir.exists():
+            from website.logging_setup import backup_and_recreate_qa_archive
+            backed_up = backup_and_recreate_qa_archive(kb_dir)
+            if backed_up:
+                print(f"✓ qa_archive backed up successfully at {kb_dir}")
+        else:
+            print(f"  KB directory {kb_dir} does not exist yet, skipping qa_archive backup.")
 
     transcript_dir = Path(__file__).resolve().parent.parent / "transcript_analyze"
     if transcript_dir.exists():
@@ -516,7 +519,9 @@ async def startup():
     start_replication_worker()
     print(f"✓ Shared runtime-state replication worker started as {cfg.SHARED_STATE_NODE_ID}.")
 
-    if cfg.QA_WARMUP_ON_STARTUP:
+    if not cfg.QA_ENABLED:
+        print("  QA is disabled on this node; routes and warmup are not loaded.")
+    elif cfg.QA_WARMUP_ON_STARTUP:
         try:
             from website.qa_api.router import warmup_qa_engine_async
             if warmup_qa_engine_async():
@@ -563,9 +568,11 @@ def _backup_log_files(transcript_dir: Path) -> None:
                 print(f"  ! Failed to backup {log_file.name}: {e}")
 
 
-# Must be imported last to avoid circular imports
-from website.qa_api.router import router as qa_router
-app.include_router(qa_router)
+# Must be imported last to avoid circular imports. Disabled nodes deliberately
+# avoid importing transcript_analyze and do not expose any /api/qa routes.
+if cfg.QA_ENABLED:
+    from website.qa_api.router import router as qa_router
+    app.include_router(qa_router)
 
 from website.scroller_api.router import router as scroller_router
 app.include_router(scroller_router)

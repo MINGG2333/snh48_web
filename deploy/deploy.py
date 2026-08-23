@@ -61,13 +61,8 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "branch": "main",
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
-        "restart": (
-            "screen -S snh48 -X quit 2>/dev/null; "
-            "screen -S snh48 -dm bash -c "
-            "'cd /home/snh48_web && source venv/bin/activate && "
-            "python -m website.main 2>&1 | tee /var/log/snh48/snh48_screen.log'"
-        ),
-        "status": "screen -ls | grep -q '\\.snh48'",
+        "restart": "systemctl restart snh48-web",
+        "status": "systemctl is-active --quiet snh48-web",
         "local_url": "http://127.0.0.1:8000/timeline",
         "public_base_url": "https://cjy.plus",
         "public_urls": [
@@ -81,7 +76,6 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             "https://cjy.plus/static/js/main.js",
             "https://cjy.plus/static/js/timeline.js",
             "https://cjy.plus/api/timeline/schedule",
-            "https://cjy.plus/api/qa/status",
             "https://cjy.plus/image-proxy/health",
         ],
         "nginx": {
