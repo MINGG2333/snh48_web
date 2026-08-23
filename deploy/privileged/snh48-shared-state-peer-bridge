@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+WEB_ROOT=/home/snh48_web
+PYTHON=/home/snh48_web/venv/bin/python
+PEER_SCRIPT=script/shared_state_peer.py
+
+reject() {
+    echo '{"ok":false,"error":"shared-state SSH command rejected","status_code":403}' >&2
+    exit 1
+}
+
+[ "$#" -gt 0 ] || reject
+
+requested=
+for candidate in mutate install-replica inbox-put; do
+    expected="cd $WEB_ROOT && $PYTHON $PEER_SCRIPT $candidate"
+    if [ "${SSH_ORIGINAL_COMMAND:-}" = "$expected" ]; then
+        requested=$candidate
+        break
+    fi
+done
+[ -n "$requested" ] || reject
+
+allowed=false
+for candidate in "$@"; do
+    [ "$candidate" = "$requested" ] && allowed=true
+done
+[ "$allowed" = true ] || reject
+
+cd "$WEB_ROOT"
+exec "$PYTHON" "$PEER_SCRIPT" "$requested"
