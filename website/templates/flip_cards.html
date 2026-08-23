@@ -806,6 +806,8 @@
     const updateModalMinimize = document.getElementById("updateModalMinimize");
     const updateState = document.getElementById("updateState");
     const updateSummary = document.getElementById("updateSummary");
+    const INITIAL_RENDER_RECORDS = 50;
+    const RENDER_RECORD_BATCH = 50;
 
     let dataset = null;
     let records = [];
@@ -823,6 +825,8 @@
     let datasetUpdateTimer = null;
     let activeJob = null;
     let pollingJobId = "";
+    let renderedRecordLimit = INITIAL_RENDER_RECORDS;
+    let loadingOlderRecords = false;
 
     function track(eventType, data) {
       if (!window._trackEvent) return;
@@ -1057,6 +1061,31 @@
         && (typeFilter.value === "all" || record.answer_type === typeFilter.value);
     }
 
+    function matchingRecordsChronologically() {
+      return records.filter(recordMatches).slice().sort(function (a, b) {
+        const timeDifference = Number(a.qtime || 0) - Number(b.qtime || 0);
+        if (timeDifference) return timeDifference;
+        return String(a.question_id || "").localeCompare(String(b.question_id || ""));
+      });
+    }
+
+    function recordsForCurrentRender(matchingRecords) {
+      const start = Math.max(0, matchingRecords.length - renderedRecordLimit);
+      return matchingRecords.slice(start);
+    }
+
+    function setChatScrollTopImmediately(value) {
+      const previousBehavior = chatScroll.style.scrollBehavior;
+      chatScroll.style.scrollBehavior = "auto";
+      chatScroll.scrollTop = value;
+      chatScroll.style.scrollBehavior = previousBehavior;
+    }
+
+    function resetProgressiveRender() {
+      renderedRecordLimit = INITIAL_RENDER_RECORDS;
+      loadingOlderRecords = false;
+    }
+
     function filterTrackPayload(action) {
       const visibleRecords = records.filter(recordMatches);
       const visibleIds = new Set(visibleRecords.map(function (record) { return record.question_id; }));
@@ -1069,6 +1098,7 @@
         status: statusFilter.value,
         answer_type: typeFilter.value,
         visible_record_count: visibleRecords.length,
+        rendered_record_count: Math.min(renderedRecordLimit, visibleRecords.length),
         visible_event_count: visibleEventCount
       };
     }
@@ -1253,7 +1283,7 @@
         if (record.answer_type === "audio") {
           const audio = document.createElement("audio");
           audio.controls = true;
-          audio.preload = "metadata";
+          audio.preload = "none";
           audio.src = media.url;
           box.appendChild(audio);
           const transcript = createAudioTranscriptNode(record.audio_transcript);
@@ -1294,9 +1324,12 @@
       return String(value || "unknown").replace(/[^0-9A-Za-z_-]+/g, "-") || "unknown";
     }
 
-    function renderTimeline(scrollBottom) {
-      const visibleRecords = records.filter(recordMatches);
-      const visibleIds = new Set(visibleRecords.map(function (record) { return record.question_id; }));
+    function renderTimeline(scrollBottom, preserveScrollPosition) {
+      const previousScrollHeight = preserveScrollPosition ? chatScroll.scrollHeight : 0;
+      const previousScrollTop = preserveScrollPosition ? chatScroll.scrollTop : 0;
+      const matchingRecords = matchingRecordsChronologically();
+      const renderedRecords = recordsForCurrentRender(matchingRecords);
+      const visibleIds = new Set(renderedRecords.map(function (record) { return record.question_id; }));
       const events = buildEvents().filter(function (event) {
         return visibleIds.has(event.record.question_id);
       });
@@ -1324,19 +1357,40 @@
         });
         messageList.appendChild(frag);
       }
-      filterSummary.textContent = "显示 " + formatNumber(visibleRecords.length) + " / " + formatNumber(records.length) + " 条翻牌，" + formatNumber(events.length) + " 条消息";
+      filterSummary.textContent = renderedRecords.length < matchingRecords.length
+        ? "已加载最新 " + formatNumber(renderedRecords.length) + " / " + formatNumber(matchingRecords.length) + " 条翻牌"
+        : "显示 " + formatNumber(matchingRecords.length) + " / " + formatNumber(records.length) + " 条翻牌，" + formatNumber(events.length) + " 条消息";
       const selectedMember = memberFilter.options[memberFilter.selectedIndex];
       subtitle.textContent = memberFilter.value === "all"
         ? "与全部成员的对话"
         : "与 " + String((selectedMember && selectedMember.textContent) || dataset.member || "偶像").replace(/（[\d,]+）$/, "") + " 的对话";
       if (scrollBottom) {
         requestAnimationFrame(function () {
-          chatScroll.scrollTop = chatScroll.scrollHeight;
+          setChatScrollTopImmediately(chatScroll.scrollHeight);
+          syncUpdatePill();
+        });
+      } else if (preserveScrollPosition) {
+        requestAnimationFrame(function () {
+          const addedHeight = Math.max(0, chatScroll.scrollHeight - previousScrollHeight);
+          setChatScrollTopImmediately(previousScrollTop + addedHeight);
+          loadingOlderRecords = false;
           syncUpdatePill();
         });
       } else {
         syncUpdatePill();
       }
+    }
+
+    function loadOlderRecordsIfNeeded() {
+      if (loadingOlderRecords || chatScroll.scrollTop > 160) return;
+      const matchingCount = matchingRecordsChronologically().length;
+      if (renderedRecordLimit >= matchingCount) return;
+      loadingOlderRecords = true;
+      renderedRecordLimit = Math.min(matchingCount, renderedRecordLimit + RENDER_RECORD_BATCH);
+      renderTimeline(false, true);
+      track("admin_filter", Object.assign(filterTrackPayload("load_older_records"), {
+        rendered_record_count: renderedRecordLimit
+      }));
     }
 
     async function loadAccounts() {
@@ -1357,6 +1411,7 @@
       loadedDatasetVersion = status.dataset_version || "";
       datasetUpdateAvailable = false;
       updateAvailableAccountId = "";
+      resetProgressiveRender();
       renderMemberFilter(Boolean(preserveMember));
       renderStats();
       renderTimeline(scrollBottom);
@@ -1641,6 +1696,7 @@
 
     [memberFilter, statusFilter, typeFilter].forEach(function (control) {
       control.addEventListener("change", function () {
+        resetProgressiveRender();
         renderTimeline(true);
         track("admin_filter", filterTrackPayload(
           control === memberFilter
@@ -1769,6 +1825,7 @@
       renderMemberFilter(false);
       statusFilter.value = "all";
       typeFilter.value = "all";
+      resetProgressiveRender();
       renderTimeline(true);
       track("admin_filter", filterTrackPayload("reset_filters"));
     });
@@ -1781,7 +1838,10 @@
     });
 
     updatePill.addEventListener("click", handleUpdatePillClick);
-    chatScroll.addEventListener("scroll", syncUpdatePill, { passive: true });
+    chatScroll.addEventListener("scroll", function () {
+      syncUpdatePill();
+      loadOlderRecordsIfNeeded();
+    }, { passive: true });
 
     logoutBtn.addEventListener("click", async function () {
       track("login_attempt", { action: "logout", result: "submitted" });

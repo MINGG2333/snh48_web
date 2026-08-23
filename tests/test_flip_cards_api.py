@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -182,6 +183,16 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
 
 
 class FlipCardsTemplateTests(unittest.TestCase):
+    def test_progressive_render_frontend_behavior(self) -> None:
+        subprocess.run(
+            ["node", "tests/test_flip_cards_frontend.cjs"],
+            check=True,
+            cwd=Path(__file__).resolve().parents[1],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
     def test_template_renders_application_instead_of_redirecting_to_html(self) -> None:
         template = Path("website/templates/flip_cards.html").read_text(encoding="utf-8")
         self.assertIn('const API = "/api/flip-cards"', template)
@@ -206,6 +217,20 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('String(member.name || "").includes("陈嘉仪")', template)
         self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
         self.assertIn('appendText(box, "transcript-label", "转录参考")', template)
+        self.assertIn('audio.preload = "none"', template)
+        self.assertNotIn('audio.preload = "metadata"', template)
+        self.assertIn('const INITIAL_RENDER_RECORDS = 50', template)
+        self.assertIn('const RENDER_RECORD_BATCH = 50', template)
+        self.assertIn('function matchingRecordsChronologically()', template)
+        self.assertIn('function recordsForCurrentRender(matchingRecords)', template)
+        self.assertIn('function setChatScrollTopImmediately(value)', template)
+        self.assertIn('chatScroll.style.scrollBehavior = "auto"', template)
+        self.assertIn('function loadOlderRecordsIfNeeded()', template)
+        self.assertIn('renderedRecordLimit = Math.min(matchingCount, renderedRecordLimit + RENDER_RECORD_BATCH)', template)
+        self.assertIn('setChatScrollTopImmediately(previousScrollTop + addedHeight)', template)
+        self.assertIn('loadOlderRecordsIfNeeded();', template)
+        self.assertIn('"已加载最新 "', template)
+        self.assertIn('rendered_record_count: Math.min(renderedRecordLimit, visibleRecords.length)', template)
         self.assertIn('<details id="filterPanel" class="filter-panel">', template)
         self.assertNotIn('<details id="filterPanel" class="filter-panel" open>', template)
         self.assertIn('filterPanel.addEventListener("toggle"', template)
@@ -242,6 +267,7 @@ class FlipCardsTemplateTests(unittest.TestCase):
             "reset_filters",
             "load_latest",
             "jump_latest",
+            "load_older_records",
             "open_official_media",
             "jump_to_flip_question",
             "jump_to_flip_answer",
