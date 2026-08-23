@@ -29,7 +29,7 @@ LockPersonality=yes
 RestrictRealtime=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
-ReadWritePaths=/home/snh48_web/website/data /home/snh48_web/transcript_analyze/video_knowledge_db /var/lib/snh48-web /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/.danmu_url_cache
+ReadWritePaths=/home/snh48_web/website/data /home/snh48_web/transcript_analyze/logs_backup /home/snh48_web/transcript_analyze/video_knowledge_db /var/lib/snh48-web /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/.danmu_url_cache
 
 [Install]
 WantedBy=multi-user.target

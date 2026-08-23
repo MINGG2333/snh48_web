@@ -36,7 +36,8 @@ install -o root -g root -m 0755 deploy/privileged/snh48-shared-state-peer-bridge
 
 # The application may traverse only the website and the explicitly mirrored
 # data roots. Source code and generated inputs stay owned by their deployers.
-setfacl -m u:"$SERVICE_USER":x /home "$WEB_ROOT" "$FAN_ROOT"
+setfacl -m u:"$SERVICE_USER":x /home "$FAN_ROOT"
+setfacl -m u:"$SERVICE_USER":rx "$WEB_ROOT"
 setfacl -R -m u:"$SERVICE_USER":rX "$WEB_ROOT/website" "$WEB_ROOT/transcript_analyze"
 for path in \
     "$FAN_ROOT/live_push_replays" \
