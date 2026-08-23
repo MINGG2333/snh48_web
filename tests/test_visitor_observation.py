@@ -6,10 +6,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from fastapi import Response
+from fastapi import Request, Response
 
 from website import visitor_observation
 from website.ob_api import router as ob_api
+from website.track_api import router as track_api
 
 
 class VisitorObservationTests(unittest.TestCase):
@@ -156,11 +157,58 @@ class VisitorObservationTests(unittest.TestCase):
             Path(__file__).resolve().parents[1] / "website" / "static" / "js" / "tracker.js"
         ).read_text(encoding="utf-8")
         self.assertIn("sessionStorage.getItem('client_id')", tracker)
-        self.assertIn("localStorage.getItem(visitorStorageKey)", tracker)
-        self.assertIn("sessionStorage.getItem(visitorStorageKey)", tracker)
-        self.assertIn("payload.visitor_id = visitorId", tracker)
+        self.assertNotIn("localStorage", tracker)
+        self.assertNotIn("payload.visitor_id", tracker)
         self.assertNotIn("canvas", tracker.lower())
         self.assertNotIn("geolocation", tracker.lower())
+
+    def test_server_issued_device_cookie_is_signed_and_stable(self) -> None:
+        visitor_id, should_set = visitor_observation.resolve_device_cookie(None)
+        self.assertTrue(should_set)
+        self.assertTrue(visitor_observation.is_valid_visitor_id(visitor_id))
+
+        cookie = visitor_observation.make_device_cookie(visitor_id)
+        resolved, replacement_needed = visitor_observation.resolve_device_cookie(cookie)
+        self.assertEqual(resolved, visitor_id)
+        self.assertFalse(replacement_needed)
+        self.assertIsNone(visitor_observation.read_device_cookie(cookie + "tampered"))
+
+    def test_page_view_route_issues_cookie_and_records_server_profile(self) -> None:
+        request = Request(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "POST",
+                "scheme": "https",
+                "path": "/api/track/event",
+                "raw_path": b"/api/track/event",
+                "query_string": b"",
+                "headers": [(b"user-agent", b"Mozilla/5.0 (iPhone) Safari/604.1")],
+                "client": ("203.0.113.9", 443),
+                "server": ("testserver", 443),
+            }
+        )
+        response = Response()
+        req = track_api.TrackEventRequest(
+            client_id="user_cookie_12345678",
+            event_type="page_view",
+            data={"page": "/room"},
+        )
+
+        with (
+            mock.patch.object(track_api, "get_session_dir", return_value=Path("/tmp")),
+            mock.patch.object(track_api, "_track_ip_to_client"),
+            mock.patch.object(track_api, "check_track_event_limit"),
+            mock.patch.object(track_api, "record_user_event"),
+            mock.patch.object(track_api, "record_page_view") as record,
+        ):
+            result = track_api.track_event(req, request, response)
+
+        self.assertEqual(result, {"success": True})
+        self.assertIn("ob_device_profile=", response.headers["set-cookie"])
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
+        record.assert_called_once()
+        self.assertTrue(record.call_args.kwargs["visitor_id"].startswith("visitor_"))
 
     def test_ob_template_explains_identity_and_filters_profiles_by_page(self) -> None:
         template = (

@@ -8,7 +8,7 @@ Events are recorded to:
   - user_{client_id}_events.md (human-readable, per user)
   - notification_center.md (for important events)
   - ip_clients.json (IP→client_id mapping, for admin observation page)
-  - visitor_page_views.jsonl (page-view browser profile, coarse device, and IP)
+  - visitor_page_views.jsonl (server-issued browser profile, coarse device, and IP)
 """
 from __future__ import annotations
 
@@ -17,13 +17,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
+from website import config as cfg
 from website.logging_setup import get_session_dir
 from website.rate_limiter import check_track_event_limit, get_client_ip
 from website.user_events import record_user_event
-from website.visitor_observation import record_page_view
+from website.visitor_observation import (
+    DEVICE_COOKIE_MAX_AGE,
+    DEVICE_COOKIE_NAME,
+    make_device_cookie,
+    record_page_view,
+    resolve_device_cookie,
+)
 
 router = APIRouter(prefix="/api/track", tags=["用户行为追踪"])
 
@@ -54,6 +61,8 @@ def _track_ip_to_client(ip: str, client_id: str):
 
 class TrackEventRequest(BaseModel):
     client_id: str
+    # Kept temporarily so older cached trackers remain accepted. New trackers
+    # no longer submit a browser profile ID; the server cookie is authoritative.
     visitor_id: str | None = None
     event_type: str
     data: dict[str, Any] = {}
@@ -75,6 +84,7 @@ NOTIFICATION_EVENTS = {
 def track_event(
     req: TrackEventRequest,
     request: Request,
+    response: Response,
 ):
     """
     Record a user behavior event sent from the frontend tracker.
@@ -115,13 +125,26 @@ def track_event(
         push_to_notification=push_to_notification,
     )
 
-    # OB visitor grouping is deliberately limited to page views.  It records
-    # the request IP and a coarse label from the existing User-Agent header;
-    # no GeoIP/city lookup or active device fingerprinting is performed.
-    if req.event_type == "page_view" and req.visitor_id:
+    # OB visitor grouping is deliberately limited to page views. The server
+    # cookie is authoritative; a request body visitor_id is ignored so a
+    # client cannot select or merge itself into another profile.
+    if req.event_type == "page_view":
+        visitor_id, should_set_cookie = resolve_device_cookie(
+            request.cookies.get(DEVICE_COOKIE_NAME)
+        )
+        if should_set_cookie:
+            response.set_cookie(
+                key=DEVICE_COOKIE_NAME,
+                value=make_device_cookie(visitor_id),
+                max_age=DEVICE_COOKIE_MAX_AGE,
+                httponly=True,
+                secure=cfg.SECURE_COOKIES,
+                samesite="lax",
+                path="/",
+            )
         record_page_view(
             session_dir,
-            visitor_id=req.visitor_id,
+            visitor_id=visitor_id,
             client_id=client_id,
             ip=ip,
             user_agent=request.headers.get("user-agent", ""),

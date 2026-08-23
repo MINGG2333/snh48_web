@@ -27,33 +27,6 @@
     sessionStorage.setItem('client_id', clientId);
   }
 
-  // Browser profile ID: stable across tabs and IP changes for this origin.
-  // This is an opaque first-party identifier, not a physical-device
-  // fingerprint and not proof of a natural person's identity.
-  const visitorStorageKey = 'ob_visitor_id';
-  let visitorId = '';
-  try {
-    visitorId = localStorage.getItem(visitorStorageKey) || '';
-  } catch (_) {}
-  if (!/^visitor_[A-Za-z0-9_-]{8,96}$/.test(visitorId)) {
-    try {
-      visitorId = sessionStorage.getItem(visitorStorageKey) || '';
-    } catch (_) {}
-  }
-  if (!/^visitor_[A-Za-z0-9_-]{8,96}$/.test(visitorId)) {
-    const randomPart = (window.crypto && typeof window.crypto.randomUUID === 'function')
-      ? window.crypto.randomUUID().replace(/-/g, '')
-      : Math.random().toString(36).substring(2, 14) + Math.random().toString(36).substring(2, 14);
-    visitorId = 'visitor_' + randomPart + '_' + Date.now().toString(36);
-    try {
-      localStorage.setItem(visitorStorageKey, visitorId);
-    } catch (_) {
-      // Storage-disabled browsers remain session-scoped instead of using
-      // invasive fingerprinting as a fallback.
-      try { sessionStorage.setItem(visitorStorageKey, visitorId); } catch (_) {}
-    }
-  }
-
   // ── Current page info ─────────────────────────────────────────────────
   const currentPage = window.location.pathname;
 
@@ -64,10 +37,6 @@
       event_type: eventType,
       data: Object.assign({ page: currentPage }, eventData),
     };
-    if (eventType === 'page_view') {
-      payload.visitor_id = visitorId;
-    }
-
     // Use sendBeacon for reliability (works during page unload)
     try {
       const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });

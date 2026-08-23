@@ -1,23 +1,29 @@
 """Privacy-limited visitor observation helpers for the password-protected OB page.
 
-The browser supplies a first-party ``visitor_id`` that represents one browser
-profile.  It is not treated as a verified natural-person identity.  For page
-views only, the server records the current IP address and a coarse device label
-derived from the already-present User-Agent request header.  No city,
-coordinates, GeoIP lookup, canvas data, fonts, GPU data, or other active device
-fingerprinting is collected here.
+The server issues a signed first-party cookie that represents one browser
+profile. It is not treated as a verified natural-person or physical-device
+identity. For page views only, the server records the current IP address and a
+coarse device label derived from the already-present User-Agent request header.
+No city, coordinates, GeoIP lookup, canvas data, fonts, GPU data, or other
+active device fingerprinting is collected here.
 """
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import re
 import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 
 PAGE_VIEWS_FILENAME = "visitor_page_views.jsonl"
+DEVICE_COOKIE_NAME = "ob_device_profile"
+DEVICE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+_DEVICE_COOKIE_CONTEXT = b"snh48-web-ob-device-profile-v1"
 
 _VISITOR_ID_RE = re.compile(r"^visitor_[A-Za-z0-9_-]{8,96}$")
 _CLIENT_ID_RE = re.compile(r"^user_[A-Za-z0-9_-]{4,96}$")
@@ -25,13 +31,60 @@ _WRITE_LOCK = threading.Lock()
 
 
 def is_valid_visitor_id(value: Any) -> bool:
-    """Return whether a client-supplied browser profile ID is safe to store."""
+    """Return whether an opaque browser profile ID is safe to store."""
     return isinstance(value, str) and bool(_VISITOR_ID_RE.fullmatch(value))
 
 
 def is_valid_client_id(value: Any) -> bool:
     """Return whether an anonymous session ID is safe for filename lookup."""
     return isinstance(value, str) and bool(_CLIENT_ID_RE.fullmatch(value))
+
+
+def _device_cookie_secret() -> bytes:
+    """Derive a stable server-only signing key without adding a new env secret."""
+    from website import config as cfg
+
+    configured = cfg.OB_PASSWORD or cfg.SITE_PASSWORD
+    return hashlib.sha256(_DEVICE_COOKIE_CONTEXT + configured.encode("utf-8")).digest()
+
+
+def _device_cookie_signature(visitor_id: str) -> str:
+    return hmac.new(
+        _device_cookie_secret(), visitor_id.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+
+
+def make_device_cookie(visitor_id: str) -> str:
+    """Create a signed opaque cookie value for a server-issued browser profile."""
+    if not is_valid_visitor_id(visitor_id):
+        raise ValueError("invalid visitor id")
+    return f"{visitor_id}.{_device_cookie_signature(visitor_id)}"
+
+
+def read_device_cookie(value: Any) -> str | None:
+    """Return the profile ID only when a device cookie has a valid signature."""
+    if not isinstance(value, str):
+        return None
+    visitor_id, separator, signature = value.partition(".")
+    if not separator or not is_valid_visitor_id(visitor_id):
+        return None
+    expected = _device_cookie_signature(visitor_id)
+    if not hmac.compare_digest(expected, signature):
+        return None
+    return visitor_id
+
+
+def new_visitor_id() -> str:
+    """Generate a server-side opaque profile ID."""
+    return f"visitor_{uuid.uuid4().hex}_{uuid.uuid4().hex[:12]}"
+
+
+def resolve_device_cookie(value: Any) -> tuple[str, bool]:
+    """Resolve a cookie to a profile ID and say whether a replacement is needed."""
+    visitor_id = read_device_cookie(value)
+    if visitor_id:
+        return visitor_id, False
+    return new_visitor_id(), True
 
 
 def describe_user_agent(user_agent: str) -> dict[str, str]:
