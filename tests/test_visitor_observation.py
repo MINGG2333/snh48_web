@@ -162,6 +162,23 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertNotIn("canvas", tracker.lower())
         self.assertNotIn("geolocation", tracker.lower())
 
+    def test_ob_template_explains_identity_and_filters_profiles_by_page(self) -> None:
+        template = (
+            Path(__file__).resolve().parents[1] / "website" / "templates" / "ob.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('id="recordsTitle">用户记录</h2>', template)
+        self.assertIn('id="pageFilterInput"', template)
+        self.assertIn('id="pageFilterOptions"', template)
+        self.assertIn("function normalizePagePath(value)", template)
+        self.assertIn("function groupPagePaths(group)", template)
+        self.assertIn("filter_ob_users_by_page", template)
+        self.assertIn('id="inboxListToggle"', template)
+        self.assertIn('id="inboxListWrap"', template)
+        self.assertIn("setInboxListOpen(false)", template)
+        self.assertIn("同一 IP 不会自动合并", template)
+        self.assertIn("同名设备不会自动合并，也不是硬件指纹", template)
+
 
 if __name__ == "__main__":
     unittest.main()
