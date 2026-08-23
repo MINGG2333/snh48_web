@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 17:19 修复 Room 页面移动端顶部栏消失：网站提交 `e1ebd96` 已部署到阿里云并重启 `snh48-aliyun`。移动端改为仅由 `html` 承担文档滚动，`body` 保持 `overflow: visible`，避免 `sticky` 顶部栏绑定到不实际滚动的 body 容器；390×844 移动视口登录后页面滚到底部时，顶部栏实际 `y=0`、`position: sticky`，线上截图和 DOM 计算样式复核通过。阿里云 PID `2444525`，`active/running`、`NRestarts=0`；腾讯云未重启。
+
 2026-08-23 16:55 阿里云完成网站导航、移动端固定顶部栏、筛选弹窗和公开记忆页改造部署：网站提交 `ed020aa` 已由 `python3 deploy/deploy.py deploy aliyun` 快进并重启 `snh48-aliyun`。阿里云主 PID `2441690`，`active/running`、`NRestarts=0`；首页、`/timeline`、`/room/gifts`、`/room/gift-senders`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、静态资源、时间轴/QA/图片代理接口均通过部署烟测，公开 `/memories` 与 `/api/memories/data` 返回 200，公开记录不包含内部审核字段或 `platform_id`。阿里云既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样；本次未同步 `snh48-fan-hub` 数据、Cookie、Token、`.env` 或其他密钥。腾讯云未重启，继续运行其现有 screen 进程。
 
 2026-08-23 16:44 观察页设备识别改为服务器签发档案 Cookie 并完成双服务器发布：网站提交 `9c3afec` 已推送。tracker 不再从浏览器存储生成或提交 `visitor_id`；首次 `page_view` 由服务端签发 HMAC 校验的 `ob_device_profile` HttpOnly Cookie，后续由服务端读取，仍只记录页面、当时 IP 和粗粒度 User-Agent 设备标签，不加入主动指纹、城市或经纬度。腾讯云因本机回连公网 SSH 无可用密钥，按既有方式确认本地 checkout 为 `9c3afec` 后重启 screen `3152206.snh48`、Python PID `3152211`，公网 `/ob`、`/timeline` 和事件接口通过；阿里云由部署工具拉取同一提交并重启 `snh48-aliyun`，PID `2440328`、active/running。两端首次事件均返回带 `HttpOnly`、`Secure` 的 `ob_device_profile`，带回同一 Cookie 的第二次事件不重新签发；两端 `/ob` 均为 200，静态 tracker 均不含 `localStorage`。
@@ -55,7 +57,7 @@
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
 | 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `9c3afec`。screen `3152206.snh48`、Python PID `3152211`，2026-08-23 16:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `ed020aa`。2026-08-23 16:54:51 CST 重启，PID `2441690`，active/running、`NRestarts=0`；本次网站改动已生效，公开记忆页和 API 已验证；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `e1ebd96`。2026-08-23 17:18:19 CST 重启，PID `2444525`，active/running、`NRestarts=0`；Room 移动端顶部栏已修复并完成 390×844 线上复核；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
