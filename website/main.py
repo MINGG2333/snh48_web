@@ -445,7 +445,7 @@ async def pk_score_page(request: Request):
 @app.get("/memory", response_class=HTMLResponse)
 @app.get("/memories", response_class=HTMLResponse)
 async def memories_page(request: Request):
-    """Password-protected page for fan and Chen Jiayi memories."""
+    """Public memory page with password-protected confirmation modes."""
     return templates.TemplateResponse(
         "memories.html",
         {

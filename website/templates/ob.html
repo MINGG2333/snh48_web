@@ -95,6 +95,7 @@
       font-size: 12px;
       white-space: nowrap;
     }
+    a.ob-action-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
     .ob-action-btn:hover,
     .ob-action-btn:focus-visible { border-color: var(--accent); outline: none; }
     .ob-action-btn.has-pending { border-color: rgba(255, 165, 2, .65); color: var(--gold); }
@@ -726,6 +727,12 @@
       <span id="inboxPendingCount">0</span> 条待处理请求
     </div>
     <nav class="ob-actions" aria-label="管理工具">
+      <a class="ob-action-btn" href="/social-credentials-admin" data-track="ob_nav_social_credentials">
+        <i class="fas fa-key" aria-hidden="true"></i> 社交平台管理
+      </a>
+      <a class="ob-action-btn" href="/scroller-admin" data-track="ob_nav_scroller">
+        <i class="fas fa-scroll" aria-hidden="true"></i> 背景词管理
+      </a>
       <button class="ob-action-btn" id="inboxOpenBtn" type="button" aria-haspopup="dialog" aria-expanded="false">
         <i class="fas fa-inbox" aria-hidden="true"></i> 处理箱 <span class="ob-action-count" id="inboxActionCount">0</span>
       </button>

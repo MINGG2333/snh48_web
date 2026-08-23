@@ -134,6 +134,10 @@
 
     .refresh strong { color: var(--teal); font-weight: 740; }
 
+    .score-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 9px; }
+    .score-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); text-decoration: none; font-size: 12px; }
+    .score-nav a:hover, .score-nav a:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+
     main {
       width: min(1500px, 100%);
       margin: 0 auto;
@@ -829,6 +833,9 @@
         <div class="refresh">
           <div>每 <strong id="refreshSeconds">30</strong> 秒检查更新</div>
           <div id="generatedAt">生成时间：-</div>
+          <nav class="score-nav" aria-label="计分页面导航">
+            <a href="/score-pk" data-track="score_nav_pk">计分 PK</a>
+          </nav>
         </div>
       </div>
     </header>

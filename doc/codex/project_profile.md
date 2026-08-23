@@ -118,7 +118,7 @@ node script/obfuscate_js.cjs
 
 ## 功能维护备注
 
-密码保护页的登录反馈分为“正在验证密码”和“密码正确，正在加载数据”两阶段。礼物、房间消息、计分礼物、观察页和记忆页通过轻量 `/verify` 接口先确认密码；翻牌、上麦回放和隐藏社交凭据页使用 `/login` 写入路径限定 Cookie。密码已确认后若完整数据读取失败，前端保留登录状态并提供免重输密码的重试按钮。
+密码保护页的登录反馈分为“正在验证密码”和“密码正确，正在加载数据”两阶段。礼物、房间消息、计分礼物和观察页通过轻量 `/verify` 接口先确认密码；记忆页公开数据无需登录，只有应援会/本人管理模式需要独立密码；翻牌、上麦回放和隐藏社交凭据页使用 `/login` 写入路径限定 Cookie。密码已确认后若完整数据读取失败，前端保留登录状态并提供免重输密码的重试按钮。
 
 ### 社交 Cookie 隐藏管理页
 
@@ -247,7 +247,7 @@ node script/obfuscate_js.cjs
 - 页面入口：`/memories`，短入口：`/memory`
 - API：`/api/memories/verify`、`/api/memories/data`、`/api/memories/submit`、`/api/memories/manage`、`/api/memories/review`
 - 数据源：`MEMORIES_DATA_PATH`，默认 `/home/snh48_web/website/data/memories/memories.json`
-- 鉴权：普通访问/提交使用 `MEMORIES_VIEW_PASSWORD` 和请求头 `X-Memories-Password`；应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` 和 `X-Memories-Fanclub-Password`；本人模式使用 `MEMORIES_IDOL_PASSWORD` 和 `X-Memories-Idol-Password`
+- 鉴权：公开浏览和提交不需要访问密码，但提交受 `MEMORIES_SUBMIT_ENABLED`、基础审核和 IP 限速约束；应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` 和 `X-Memories-Fanclub-Password`；本人模式使用 `MEMORIES_IDOL_PASSWORD` 和 `X-Memories-Idol-Password`；`/api/memories/verify` 保留为历史管理入口，不是公开浏览前置步骤
 - 产品说明：`doc/memories.md`
 
 维护边界：
@@ -256,7 +256,7 @@ node script/obfuscate_js.cjs
 - 普通 API 不返回平台 ID；后台数据保留平台 ID 用于去重和核对。
 - `memories.json` 是运行数据，不由 Git 跟踪；仓库只保留 `website/data/memories/memories.example.json`。
 - 初始数据可由 `python3 script/build_memories_seed.py` 从 fan-hub 的礼物回复、直播计分礼物和时光轴行程生成。
-- 两个域名都开放提交和审核。阿里云把操作转发给腾讯云统一串行提交，随后接收相同 revision；普通 `core` 拉取明确不包含此文件。种子脚本也通过同一锁内合并入口写入，不能直接覆盖文件。
+- 两个域名都开放公开提交；公开提交只进入基础审核通过或待人工审核状态，确认和隐藏仍由应援会/本人管理模式完成。阿里云把写操作转发给腾讯云统一串行提交，随后接收相同 revision；普通 `core` 拉取明确不包含此文件。种子脚本也通过同一锁内合并入口写入，不能直接覆盖文件。
 
 ### 双服务器版本化状态与可靠待处理箱
 

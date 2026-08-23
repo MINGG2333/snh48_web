@@ -90,6 +90,7 @@
     .hero { padding: 22px; border-bottom: 1px solid var(--line); }
     .hero-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
     .hero h2 { margin: 0; font-size: 24px; }
+    .hero-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
     .stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
     .stat { padding: 8px 11px; background: #faf6f9; border-radius: 10px; font-size: 13px; }
     .warning { color: var(--warn); }
@@ -190,6 +191,9 @@
             <div class="hero-line">
               <h2 id="sessionHeading"></h2>
               <span id="roomTag" class="tag"></span>
+              <div class="hero-actions">
+                <a id="roomMessagesLink" class="ghost" href="/room-messages">返回 Room</a>
+              </div>
             </div>
             <div id="stats" class="stats"></div>
             <div class="player-box">
@@ -244,6 +248,7 @@
     const playbackStatus = document.getElementById("playbackStatus");
     const playbackStatusText = document.getElementById("playbackStatusText");
     const messagesBox = document.getElementById("messages");
+    const roomMessagesLink = document.getElementById("roomMessagesLink");
 
     let sessions = [];
     let currentSessionId = "";
@@ -550,6 +555,7 @@
       document.getElementById("participants").textContent = names.length
         ? "麦上参与者记录：" + names.join("、")
         : "接口未返回可识别的麦上参与者；已保留房间混音流。";
+      updateRoomMessagesLink();
       renderMessages();
       updatePlaybackModeControl();
       if ((currentSession.segments || []).length) loadSegment(0, false, 0);
@@ -558,6 +564,18 @@
         hidePlaybackStatus();
         document.getElementById("segmentLabel").textContent = "没有可播放音频";
       }
+    }
+
+    function updateRoomMessagesLink() {
+      if (!roomMessagesLink) return;
+      const first = currentMessages.find(item => item && (item.message_id || item.id || item.msg_id));
+      const targetId = first ? String(first.message_id || first.id || first.msg_id || "") : "";
+      const params = new URLSearchParams();
+      if (targetId) params.set("message_id", targetId);
+      const targetDate = String(first && (first.bj_time || first.created_at || first.timestamp || "") || "").slice(0, 10);
+      if (!targetId && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) params.set("jump_date", targetDate);
+      roomMessagesLink.href = "/room-messages" + (params.toString() ? "?" + params.toString() : "");
+      roomMessagesLink.dataset.targetId = targetId;
     }
 
     async function loadSession(sessionId, source, options) {

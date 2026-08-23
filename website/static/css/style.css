@@ -253,7 +253,7 @@ body {
 .circular-menu-item:nth-child(2) { transition-delay: 0.1s; }
 .circular-menu-item:nth-child(3) { transition-delay: 0.15s; }
 
-/* ── Three items: 6:10 / 7:30 / 8:50, spread closer to ring edge ── */
+/* ── Four items: public pages spread closer to ring edge ── */
 
 /* 时光轴 at 6:10 (95°, near bottom) */
 .circular-menu-item.item-timeline {
@@ -262,6 +262,16 @@ body {
   transform: scale(0.3);
 }
 .circular-menu.open .circular-menu-item.item-timeline {
+  transform: scale(1);
+}
+
+/* 记忆 at 5:50 (near bottom-right) */
+.circular-menu-item.item-memories {
+  bottom: 15px;
+  left: 170px;
+  transform: scale(0.3);
+}
+.circular-menu.open .circular-menu-item.item-memories {
   transform: scale(1);
 }
 

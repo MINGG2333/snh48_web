@@ -171,6 +171,29 @@
       outline: none;
     }
 
+    .voice-replay-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      border: 1px solid rgba(98, 168, 255, 0.58);
+      border-radius: 8px;
+      background: rgba(98, 168, 255, 0.12);
+      color: #a9ceff;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .voice-replay-link:hover,
+    .voice-replay-link:focus-visible {
+      border-color: var(--blue);
+      color: var(--blue);
+      outline: none;
+    }
+
     .mobile-filter-toggle {
       display: none;
       min-height: 34px;
@@ -948,7 +971,14 @@
         height: auto;
         min-height: 100dvh;
       }
-      .topbar { position: sticky; top: 0; }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 12;
+        display: block;
+        width: 100%;
+        visibility: visible;
+      }
       .chat-shell { display: block; min-height: 0; }
       .chat-scroll {
         display: block;
@@ -1137,6 +1167,7 @@
         <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
         <div class="stats">
           <a class="combined-reply-link" id="combinedReplyLink" href="/room/gift-senders">综合回礼</a>
+          <a class="voice-replay-link" id="voiceReplayLink" href="/room-voice-replays">上麦回放</a>
           <span>总数 <strong id="totalMessages">0</strong></span>
           <span id="latestTime">更新时间：-</span>
         </div>
@@ -1279,6 +1310,9 @@
     var ignoreActionBusy = false;
     var typeOptionsHash = "";
     var roomPageScrollLockY = null;
+    var initialRoomQuery = new URLSearchParams(window.location.search);
+    var initialTargetId = initialRoomQuery.get("message_id") || "";
+    var initialTargetDate = initialRoomQuery.get("jump_date") || "";
 
     var loginOverlay = document.getElementById("loginOverlay");
     var passwordInput = document.getElementById("passwordInput");
@@ -1319,6 +1353,7 @@
     var ignoreBatchBtn = document.getElementById("ignoreBatchBtn");
     var undoIgnoreBtn = document.getElementById("undoIgnoreBtn");
     var combinedReplyLink = document.getElementById("combinedReplyLink");
+    var voiceReplayLink = document.getElementById("voiceReplayLink");
 
     function trackAdminEvent(eventType, data) {
       if (!window._trackEvent) return;
@@ -1476,6 +1511,14 @@
       }
       setLoginFeedback("loading", "密码正确，正在加载房间消息…");
       await reloadLatest("", { loginAttempt: true });
+      if (initialTargetId) {
+        await jumpToMessage(initialTargetId, "", {
+          forceReload: true,
+          statusText: "正在定位上麦期间的第一条房间消息..."
+        });
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(initialTargetDate)) {
+        await jumpToDate(initialTargetDate);
+      }
     }
 
     function queryBase(limitOverride) {
@@ -2789,6 +2832,11 @@
     }
     if (filterToggle) {
       filterToggle.addEventListener("click", toggleFilterPanel);
+    }
+    if (voiceReplayLink) {
+      voiceReplayLink.addEventListener("click", function() {
+        trackAdminEvent("click", { action: "open_room_voice_replays" });
+      });
     }
     if (filterModalClose) {
       filterModalClose.addEventListener("click", function() {

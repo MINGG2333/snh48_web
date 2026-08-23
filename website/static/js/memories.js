@@ -22,11 +22,13 @@
   function init() {
     bindElements();
     bindEvents();
-    state.password = localStorage.getItem(storageKey) || '';
-    if (state.password) {
-      els.password.value = state.password;
-      attemptLogin(true);
-    }
+    state.password = '';
+    state.loginVerified = true;
+    showApp();
+    renderMode();
+    loadMemories().catch((error) => {
+      setListLoading(error.message || '记忆加载失败，请稍后刷新');
+    });
   }
 
   function bindElements() {
@@ -160,7 +162,6 @@
   }
 
   async function loadMemories() {
-    if (!state.password && !state.mode) return;
     setListLoading('正在读取记忆...');
     const params = new URLSearchParams({
       page: String(state.page),

@@ -1,9 +1,9 @@
 """
 Memories API router.
 
-Stores and serves "memory" records about Chen Jiayi and fans. The page is
-password-protected, avoids ranking fans, and keeps platform IDs in backend data
-instead of exposing them to normal visitors.
+Stores and serves public "memory" records about Chen Jiayi and fans. Public
+records are readable without a password; fanclub and idol management modes keep
+separate passwords and platform IDs remain private to manager responses.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from website import config as cfg
@@ -224,15 +224,7 @@ def get_memories_data(
     confirmation_status: str = Query("all"),
     q: str = Query(""),
 ):
-    """Return public memory records after view-password verification."""
-    _verify_password_value(
-        request=request,
-        expected=cfg.MEMORIES_VIEW_PASSWORD,
-        provided=request.headers.get("X-Memories-Password"),
-        disabled_detail="记忆页未启用",
-        missing_detail="需要记忆页密码",
-        wrong_detail="记忆页密码错误",
-    )
+    """Return public memory records for visitors and managers."""
     response.headers["Cache-Control"] = "no-store"
     records = _filter_records(
         _load_items(),
@@ -242,7 +234,7 @@ def get_memories_data(
         confirmation_status=confirmation_status,
         q=q,
     )
-    return _page_response(records, page, page_size, include_private_id=False)
+    return _page_response(records, page, page_size, include_private_id=False, include_internal=False)
 
 
 @router.get("/manage")
@@ -282,24 +274,15 @@ def get_memories_manage_data(
         confirmation_status=confirmation_status,
         q=q,
     )
-    return _page_response(filtered, page, page_size, include_private_id=(mode == "fanclub"))
+    return _page_response(filtered, page, page_size, include_private_id=(mode == "fanclub"), include_internal=True)
 
 
 @router.post("/submit")
 def submit_memory(
     req: MemorySubmitRequest,
     request: Request,
-    x_memories_password: str = Header(None, alias="X-Memories-Password"),
 ):
     """Submit a new memory for basic review and display/queueing."""
-    _verify_password_value(
-        request=request,
-        expected=cfg.MEMORIES_VIEW_PASSWORD,
-        provided=x_memories_password,
-        disabled_detail="记忆页未启用",
-        missing_detail="需要记忆页密码",
-        wrong_detail="记忆页密码错误",
-    )
     if not cfg.MEMORIES_SUBMIT_ENABLED:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前服务器暂不开放记忆提交")
 
@@ -319,7 +302,7 @@ def submit_memory(
 
     return {
         "success": True,
-        "item": _public_record(saved_record, include_private_id=False),
+        "item": _public_record(saved_record, include_private_id=False, include_internal=False),
         "message": "记忆已记录。通过基础审核的内容会先展示为待确认；需要人工审核的内容会先隐藏。",
     }
 
@@ -351,7 +334,7 @@ def review_memory(req: MemoryReviewRequest, request: Request):
     item = result.get("record") if isinstance(result.get("record"), dict) else None
     if item is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="记忆审核结果缺失")
-    updated = _public_record(item, include_private_id=(actor == "fanclub"))
+    updated = _public_record(item, include_private_id=(actor == "fanclub"), include_internal=True)
     return {"success": True, "item": updated}
 
 
@@ -582,12 +565,16 @@ def _page_response(
     page_size: int,
     *,
     include_private_id: bool,
+    include_internal: bool,
 ) -> dict[str, Any]:
     total = len(records)
     total_pages = max(1, ceil(total / page_size))
     start = (page - 1) * page_size
     end = start + page_size
-    public_records = [_public_record(item, include_private_id=include_private_id) for item in records]
+    public_records = [
+        _public_record(item, include_private_id=include_private_id, include_internal=include_internal)
+        for item in records
+    ]
     all_public = [item for item in _load_items() if _is_public_item(item)]
     return {
         "items": public_records[start:end],
@@ -606,7 +593,9 @@ def _page_response(
     }
 
 
-def _public_record(item: dict[str, Any], *, include_private_id: bool) -> dict[str, Any]:
+def _public_record(
+    item: dict[str, Any], *, include_private_id: bool, include_internal: bool = True
+) -> dict[str, Any]:
     actor = item.get("actor") if isinstance(item.get("actor"), dict) else {}
     source = item.get("source") if isinstance(item.get("source"), dict) else {}
     media = item.get("media") if isinstance(item.get("media"), dict) else {}
@@ -617,7 +606,7 @@ def _public_record(item: dict[str, Any], *, include_private_id: bool) -> dict[st
     }
     if include_private_id:
         public_actor["platform_id"] = str(actor.get("platform_id", ""))
-    return {
+    record = {
         "id": str(item.get("id", "")),
         "memory_type": str(item.get("memory_type", "")),
         "memory_type_label": MEMORY_TYPES.get(str(item.get("memory_type", "")), str(item.get("memory_type", ""))),
@@ -638,21 +627,25 @@ def _public_record(item: dict[str, Any], *, include_private_id: bool) -> dict[st
         "privacy_level": str(item.get("privacy_level", "public")),
         "evidence_public": bool(item.get("evidence_public", False)),
         "tags": [str(tag) for tag in item.get("tags", []) if str(tag).strip()][:8],
-        "audit_status": str(item.get("audit_status", "pending_manual")),
-        "audit_status_label": AUDIT_STATUSES.get(str(item.get("audit_status", "")), str(item.get("audit_status", ""))),
-        "audit_reason": str(item.get("audit_reason", "")),
-        "visibility": str(item.get("visibility", "pending")),
         "confirmation_status": str(item.get("confirmation_status", "unconfirmed")),
         "confirmation_status_label": CONFIRMATION_STATUSES.get(
             str(item.get("confirmation_status", "unconfirmed")),
             str(item.get("confirmation_status", "unconfirmed")),
         ),
-        "confirmed_by": str(item.get("confirmed_by", "")),
-        "confirmed_at": str(item.get("confirmed_at", "")),
-        "created_by": str(item.get("created_by", "")),
-        "created_at": str(item.get("created_at", "")),
-        "updated_at": str(item.get("updated_at", "")),
     }
+    if include_internal:
+        record.update({
+            "audit_status": str(item.get("audit_status", "pending_manual")),
+            "audit_status_label": AUDIT_STATUSES.get(str(item.get("audit_status", "")), str(item.get("audit_status", ""))),
+            "audit_reason": str(item.get("audit_reason", "")),
+            "visibility": str(item.get("visibility", "pending")),
+            "confirmed_by": str(item.get("confirmed_by", "")),
+            "confirmed_at": str(item.get("confirmed_at", "")),
+            "created_by": str(item.get("created_by", "")),
+            "created_at": str(item.get("created_at", "")),
+            "updated_at": str(item.get("updated_at", "")),
+        })
+    return record
 
 
 def _summary(records: list[dict[str, Any]]) -> dict[str, Any]:

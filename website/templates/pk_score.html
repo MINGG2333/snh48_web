@@ -59,6 +59,9 @@
     .topbar h1 { margin: 5px 0 5px; font-size: clamp(26px, 5vw, 43px); letter-spacing: -.045em; }
     .topbar p { margin: 0; color: var(--muted); font-size: 14px; }
     .live-state { text-align: right; color: var(--muted); font-size: 12px; line-height: 1.7; white-space: nowrap; }
+    .score-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    .score-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: rgba(255,255,255,.7); text-decoration: none; font-size: 12px; }
+    .score-nav a:hover, .score-nav a:focus-visible { border-color: var(--blue); color: var(--blue); outline: none; }
     .live-line { color: var(--green); font-weight: 750; }
     .live-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(60, 141, 106, .12); }
     .leader-card {
@@ -150,6 +153,9 @@
         <div class="live-state">
           <div class="live-line"><span class="live-dot"></span>自动更新中</div>
           <div id="generatedText">等待数据</div>
+          <nav class="score-nav" aria-label="计分页面导航">
+            <a href="/score-gifts" data-track="score_nav_gifts">计分礼物</a>
+          </nav>
         </div>
       </header>
 

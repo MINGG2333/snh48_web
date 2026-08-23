@@ -22,23 +22,23 @@
 {% endblock %}
 
 {% block content %}
-<div class="memories-login" id="memoriesLogin">
+<div class="memories-login" id="memoriesLogin" hidden>
     <form class="memories-login-box" id="memoriesLoginForm">
         <div class="login-mark"><i class="fas fa-book-open"></i></div>
         <h1>记忆</h1>
-        <p>输入访问密码后查看和登记粉丝与陈嘉仪之间的记忆。</p>
+        <p>公开记忆无需密码；管理模式仍需要单独的管理密码。</p>
         <input id="memoriesPassword" type="password" autocomplete="current-password" placeholder="访问密码">
         <button id="memoriesLoginSubmit" type="submit"><i class="fas fa-unlock-keyhole"></i> 进入</button>
         <div class="login-error" id="memoriesLoginError"></div>
     </form>
 </div>
 
-<main class="memories-page" id="memoriesApp" hidden>
+<main class="memories-page" id="memoriesApp">
     <section class="memories-hero">
         <div class="hero-copy">
             <p class="eyebrow">Memories</p>
             <h1>记忆</h1>
-            <p class="hero-text">这个网站记录“被喜欢过的证据”，不是记录“谁更喜欢她”。它记录的不是“谁更爱她”，而是“这些喜欢曾经真实存在过”。</p>
+            <p class="hero-text">这个网站记录“被喜欢过的证据”，不是记录“谁更喜欢她”。公开记忆人人可读，也欢迎提交新的记忆；应援会和本人确认仍在管理模式中完成。</p>
         </div>
         <div class="hero-principles" aria-label="页面原则">
             <span><i class="fas fa-scale-balanced"></i> 人人平等</span>

@@ -210,7 +210,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/balance` | 余额查询 | 无（IP 限速 + 成功结果缓存） |
 | `/api/ob/data` | 观察页数据 | `OB_PASSWORD`（失败尝试 IP 限速） |
 | `/api/ob/mark-read` | 标记已读 | `OB_PASSWORD`（失败尝试 IP 限速） |
-| `/api/ob/verify`、`/api/gift-replies/verify`、`/api/room-messages/verify`、`/api/score-gifts/verify`、`/api/memories/verify` | 只验证对应管理页密码，不读取完整业务数据 | 各页原有密码与请求头（失败尝试 IP 限速） |
+| `/api/ob/verify`、`/api/gift-replies/verify`、`/api/room-messages/verify`、`/api/score-gifts/verify`、`/api/memories/verify` | 只验证对应管理页密码，不读取完整业务数据；记忆页公开浏览不调用该接口 | 各页原有密码与请求头（失败尝试 IP 限速） |
+| `/api/memories/data`、`/api/memories/submit` | 公开记忆读取和提交；提交受开关、基础审核和 IP 限速约束，不返回平台 ID | 无密码；管理确认仍使用应援会/本人模式密码 |
 | `/api/gift-replies/data` | 礼物回复分页列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/gift-replies/summary` | 礼物回复统计和礼物种类 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/gift-replies/senders` | 日期范围内按送礼人聚合的摘要列表 | `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
@@ -259,6 +260,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/room-voice-replays` / `/radio` | 成员房间上麦回放页 | ❌ 仅 URL 访问（需密码、禁止索引） |
 | `/flip-cards` / `/flip` | 翻牌记录页 | ❌ 仅 URL 访问（需密码、禁止索引） |
 | `/score-gifts` / `/score` | 计分礼物管理页 | ❌ 仅 URL 访问（需密码） |
+| `/score-pk` | 房间计分 PK 页 | ❌ 仅 URL 访问（需密码） |
+| `/memories` / `/memory` | 公开记忆页；管理模式另需密码 | ✅ 从时光轴进入 |
 
 ### 时光轴地图功能
 
