@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 16:55 阿里云完成网站导航、移动端固定顶部栏、筛选弹窗和公开记忆页改造部署：网站提交 `ed020aa` 已由 `python3 deploy/deploy.py deploy aliyun` 快进并重启 `snh48-aliyun`。阿里云主 PID `2441690`，`active/running`、`NRestarts=0`；首页、`/timeline`、`/room/gifts`、`/room/gift-senders`、`/room-voice-replays`、`/flip-cards`、`/score-gifts`、静态资源、时间轴/QA/图片代理接口均通过部署烟测，公开 `/memories` 与 `/api/memories/data` 返回 200，公开记录不包含内部审核字段或 `platform_id`。阿里云既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样；本次未同步 `snh48-fan-hub` 数据、Cookie、Token、`.env` 或其他密钥。腾讯云未重启，继续运行其现有 screen 进程。
+
 2026-08-23 16:44 观察页设备识别改为服务器签发档案 Cookie 并完成双服务器发布：网站提交 `9c3afec` 已推送。tracker 不再从浏览器存储生成或提交 `visitor_id`；首次 `page_view` 由服务端签发 HMAC 校验的 `ob_device_profile` HttpOnly Cookie，后续由服务端读取，仍只记录页面、当时 IP 和粗粒度 User-Agent 设备标签，不加入主动指纹、城市或经纬度。腾讯云因本机回连公网 SSH 无可用密钥，按既有方式确认本地 checkout 为 `9c3afec` 后重启 screen `3152206.snh48`、Python PID `3152211`，公网 `/ob`、`/timeline` 和事件接口通过；阿里云由部署工具拉取同一提交并重启 `snh48-aliyun`，PID `2440328`、active/running。两端首次事件均返回带 `HttpOnly`、`Secure` 的 `ob_device_profile`，带回同一 Cookie 的第二次事件不重新签发；两端 `/ob` 均为 200，静态 tracker 均不含 `localStorage`。
 
 2026-08-23 10:48 社交凭据管理完成双服务器运行复核：功能提交 `149a8ca` 和非主节点隐藏修复 `437d0d6` 已部署。腾讯云 screen `2878064.snh48`、Python PID `2878066` 于 10:46:43 重启；公网 `https://cjy.plus/social-credentials-admin` 返回 200，密码登录及鉴权状态接口通过，只返回微博、抖音、B站各槽位状态，不回显 Cookie；页面与 API 使用 `no-store`，页面设置 `noindex/nofollow` 且没有站内入口。严格桥接脚本只允许腾讯云主节点在验证新 Cookie 成功后原子替换。阿里云 `snh48-aliyun`、PID `2407221` 于 10:47:48 重启，隐藏页面返回 404、API 返回 403，不能读取或更新凭据。两端 `/api/timeline/schedule` 均为 130 条，并确认不返回 2026-08-23 错误行程。
@@ -53,7 +55,7 @@
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
 | 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `9c3afec`。screen `3152206.snh48`、Python PID `3152211`，2026-08-23 16:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `9c3afec`。2026-08-23 16:43 CST 启动，PID `2440328`，active/running、`NRestarts=0`；观察页服务器签发浏览器档案 Cookie 已生效，客服聊天长等待接口已生效，社交凭据页面与 API 因非主节点隐藏/禁用；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `ed020aa`。2026-08-23 16:54:51 CST 重启，PID `2441690`，active/running、`NRestarts=0`；本次网站改动已生效，公开记忆页和 API 已验证；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
