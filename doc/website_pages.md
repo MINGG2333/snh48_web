@@ -18,8 +18,16 @@
 ### 移动端筛选弹窗标准
 
 - 日期筛选输入默认保持空值；不要在 HTML 或初始化脚本中预选“今天”。针对 iOS/Safari 打开空日期控件时短暂写入今天的行为，统一使用 `currentBeijingDate()` + `installDateInputGuard()` 清除合成值，只有用户实际选择日期才触发筛选。
+- 日期控件的 `change` 回调必须通过一个 macrotask（例如 `setTimeout(onChange, 0)`）延后执行，避免原生日期选择器尚未关闭时同步重绘列表导致页面卡死。弹窗打开期间不得执行背景列表的滚动定位、前后页补载或“填满视口”任务。
 - 弹窗外层使用固定视口和遮罩，卡片宽度使用 `min(460px, calc(100vw - 24px))`，内部滚动区使用 `minmax(0, 1fr)`、`min-width: 0` 和 `max-width: 100%`；日期控件固定高度、`overflow: hidden`，并通过 `::-webkit-date-and-time-value` 左对齐，避免内容撑出卡片。
 - 页面内容采用文档滚动，顶栏用 `position: sticky; top: 0`；只有弹窗打开时锁定 `html/body` 滚动。这样手机地址栏收起时，页面仍能下滑并保持顶栏和内容关系稳定。
+- “跳到最新”按钮只在当前内容不在最新位置时显示：翻牌页以记录列表底部为最新，Room 页以消息列表底部为最新，礼物明细和送礼人页以第 1 页且文档滚动位置接近顶部为最新。检测到新数据时按钮改为“有新记录/数据，点击查看最新”；礼物页按钮固定在粘性顶部栏下方，点击后回到第 1 页并滚到顶部。
+
+### 带密码页面的初始鉴权状态
+
+- 登录遮罩初始错误区域必须为空且隐藏，不能在 HTML 中预填“密码错误”。页面加载时不得因为复用 Cookie、状态探测或空密码请求直接展示密码错误。
+- 使用 Cookie 或旧会话自动尝试加载时，`401/403` 只负责恢复登录表单并清除错误文案；只有用户实际提交密码，或此前已验证的会话后来失效，才显示“密码错误/密码已失效”。
+- 验证成功后的数据请求失败应显示可重试的“密码正确，但数据加载失败”，不得把普通网络、数据或服务端错误转换为密码错误。
 
 ## 公开页面
 
@@ -45,7 +53,7 @@
 | 观察页 | `/ob` | 无 | `website/templates/ob.html` | `/api/ob/verify`、`/api/ob/data`、`/api/ob/mark-read`、`/api/ob/inbox/status`、`/api/feedback-chat/conversations`、`/api/feedback-chat/admin-history`、`/api/feedback-chat/admin-watch`、`/api/feedback-chat/reply` | `OB_PASSWORD`；`X-Ob-Password` | 本节点访问日志按服务器签发的第一方 HttpOnly 浏览器档案 Cookie 估算访客，同一浏览器可跨标签页和 IP 聚合；逐次页面访问显示粗粒度设备与当时 IP，不查询城市/经纬度；旧记录按会话单列；用户记录可按页面路径筛选；通知中心、默认折叠的双服务器可靠待处理箱和客服聊天保留来源标签；客服会话通过可恢复的长等待请求接收新消息 |
 | 房间礼物与综合回礼 | 逐条明细 `/room/gifts`；按送礼人综合回礼 `/room/gift-senders` | 无 | `website/templates/gift_replies.html`、`website/templates/gift_reply_senders.html` | `/api/gift-replies/verify`、`/api/gift-replies/data`、`/api/gift-replies/summary`、`/api/gift-replies/senders`、`/api/gift-replies/sender-history`、`/api/feedback-chat/history`、`/api/feedback-chat/watch`、`/api/feedback-chat/message` | `GIFT_REPLIES_PASSWORD`；`X-Gift-Replies-Password` | `GIFT_REPLIES_DIR`，默认 fan-hub `gift_replies/`；综合回礼默认从 `2026-05-30` 起显示全部送礼人，可筛选“有未回复/已全部回复”；一次列出全部匹配送礼人且默认折叠，展开时按需读取个人历史；两个页面都只轮询轻量摘要，检测到数据变化后提示用户点击刷新，不自动替换当前列表；逐条明细页现在可返回综合回礼页或 Room，三页形成互链；页面右下角客服按钮打开按用户识别码保存历史的聊天框，识别码以 SHA-256 生成内部会话编号，同时仅在受保护的管理员事件中保存并展示用户自定义识别码；聊天框通过可恢复的长等待请求接收新消息；旧 `/gift-replies*` 和 `/gr` 已废弃并返回 404 |
 | 房间消息管理 | `/room-messages` | `/room` | `website/templates/room_messages.html` | `/api/room-messages/verify`、`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore` | `ROOM_MESSAGES_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Room-Messages-Password` | 消息读取路径不变；忽略状态是由腾讯云统一提交、带历史版本和 outbox 的非 Git 共享状态 |
-| 成员房间上麦回放 | `/room-voice-replays` | `/radio` | `website/templates/room_voice_replays.html` | `/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/segments/{filename}` | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；HttpOnly Cookie 或 `X-Room-Voice-Replays-Password` | `ROOM_VOICE_REPLAYS_DIR`，默认 fan-hub `room_voice_replays/`；公开房间/小房间独立会话，默认播放 AAC-LC 单声道兼容版，可切换源 AAC 原始音质版并保持时间位置；进度跳转和缓冲有可见状态；每场回放详情可返回 Room，并携带同期第一条消息 ID 精确定位；音频分段和同期消息用 `session_id` 归为整体；设置 `noindex,nofollow` |
+| 成员房间上麦回放 | `/room-voice-replays` | `/radio` | `website/templates/room_voice_replays.html` | `/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/segments/{filename}` | `ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；HttpOnly Cookie 或 `X-Room-Voice-Replays-Password` | `ROOM_VOICE_REPLAYS_DIR`，默认 fan-hub `room_voice_replays/`；公开房间/小房间独立会话，默认播放 AAC-LC 单声道兼容版，可切换源 AAC 原始音质版并保持时间位置；桌面端保留左侧会话列表，移动端将房间类型和会话列表放入默认收起的“筛选回放”面板，选择会话后自动收起；进度跳转和缓冲有可见状态；每场回放详情可返回 Room，并携带同期第一条消息 ID 精确定位；音频分段和同期消息用 `session_id` 归为整体；设置 `noindex,nofollow` |
 | 翻牌记录 | `/flip-cards` | `/flip` | `website/templates/flip_cards.html` | `/api/flip-cards/login`、`/accounts`、`/data?account_id=...`、账号级媒体和 `/account-management/*` | `FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；HttpOnly Cookie 或 `X-Flip-Cards-Password` | 读取 fan-hub 脱敏账号清单、schema v4 账号数据和账号级媒体；两端页面/代码一致，腾讯云允许手机号验证码登录并后台刷新，阿里云账号管理弹窗只显示当前节点不开放操作且无跳转；成员筛选默认陈嘉仪，其他成员显示完整姓名；首次渲染最新 50 条并向上渐进加载，音频不预载；账号管理与可收起的更新状态分离，底部按钮重新加载并跳到最新记录；转录、问题状态 Tag 和双向 4 秒高亮保留；设置 `noindex,nofollow` |
 | 社交凭据管理 | `/social-credentials-admin` | 无 | `website/templates/social_credentials_admin.html` | `/api/social-credentials/login`、`/status`、`/update`、`/logout` | `SOCIAL_CREDENTIALS_ADMIN_PASSWORD`，迁移期留空复用 `OB_PASSWORD`；短时路径限定 HttpOnly Cookie；更新 POST 必须同源 | 不读取或返回原 Cookie；微博/抖音显示主备槽位，B站显示主槽位，新值由 fan-hub 严格桥实时验证成功后原子替换。只允许腾讯云主节点写入，阿里云硬禁用；不进入导航并设置 `noindex,nofollow` |
 | 计分礼物管理 | `/score-gifts` | `/score` | `website/templates/score_gifts.html` | `/api/score-gifts/verify`、`/api/score-gifts/data`、`/api/score-gifts/summary`、`/api/score-gifts/export.xlsx`、`/api/score-gifts/sender-export.xlsx`、`/api/score-gifts/business-review` | `SCORE_GIFTS_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Score-Gifts-Password`；页面可跳转计分 PK | `score_gifts.json` 为派生展示数据；送礼用户导出包含用户汇总与逐笔投分明细；`live_business_fulfillments.json` 为版本化共享业务状态；`/score` 继续保留为兼容入口 |

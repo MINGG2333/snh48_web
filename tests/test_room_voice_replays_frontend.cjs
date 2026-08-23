@@ -107,15 +107,19 @@ const templatePath = path.join(__dirname, "..", "website", "templates", "room_vo
 const template = fs.readFileSync(templatePath, "utf8");
 const inlineScriptMatch = template.match(/\n  <script>\n([\s\S]*?)\n  <\/script>/);
 assert.ok(inlineScriptMatch, "room voice inline script should exist");
+assert.match(template, /<details id="filterPanel" class="filter-panel" open>/);
+assert.match(template, /filter-panel:not\(\[open\]\)/);
+assert.match(template, /filterPanel\.addEventListener\("toggle"/);
 
 const elementIds = [
   "loginWrap", "app", "logoutBtn", "loginForm", "passwordInput", "loginError", "roomFilter",
-  "sessionList", "detailEmpty", "detailContent", "audioPlayer", "playbackMode", "playbackModeNote",
+  "filterPanel", "filterSummary", "sessionList", "detailEmpty", "detailContent", "audioPlayer", "playbackMode", "playbackModeNote",
   "playbackStatus", "playbackStatusText", "messages", "messageCount", "segmentLabel", "timelineLabel",
   "stats", "participants", "sessionHeading", "roomTag"
 ];
 const elements = Object.fromEntries(elementIds.map(id => [id, new FakeElement("div", id)]));
 elements.roomFilter.value = "all";
+elements.filterPanel.open = true;
 const timers = new Map();
 let nextTimerId = 1;
 let selection = { isCollapsed: true, toString: () => "", anchorNode: null, focusNode: null };
@@ -130,6 +134,7 @@ const context = {
     createElement: tagName => new FakeElement(tagName)
   },
   fetch: async () => ({ ok: true, json: async () => ({ sessions: [] }) }),
+  matchMedia: () => ({ matches: false }),
   setTimeout: callback => {
     const id = nextTimerId++;
     timers.set(id, callback);
@@ -141,6 +146,10 @@ const context = {
 context.window = context;
 vm.createContext(context);
 vm.runInContext(inlineScriptMatch[1], context);
+
+context.matchMedia = () => ({ matches: true });
+vm.runInContext("syncFilterPanelViewport()", context);
+assert.equal(elements.filterPanel.open, false, "mobile filter panel should start collapsed");
 
 vm.runInContext(`
   currentSession = {
