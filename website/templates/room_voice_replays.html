@@ -579,6 +579,16 @@
         : "这场旧回放暂时只有兼容播放版本";
     }
 
+    function pauseBeforeMediaChange() {
+      const wasPlaying = !audioPlayer.paused && !audioPlayer.ended;
+      audioPlayer.pause();
+      if (wasPlaying) suppressPauseTrackingUntil = Date.now() + 1000;
+      pendingPlaySource = "";
+      pendingSeekWallSeconds = null;
+      pendingSeekSource = "";
+      seekFromWallSeconds = null;
+    }
+
     function renderDetail() {
       detailEmpty.hidden = true;
       detailContent.hidden = false;
@@ -624,6 +634,8 @@
 
     async function loadSession(sessionId, source, options) {
       options = options || {};
+      pauseBeforeMediaChange();
+      segmentLoadToken += 1;
       currentSessionId = sessionId;
       renderSessions();
       try {
@@ -660,6 +672,7 @@
     function loadSegment(index, autoplay, seekSeconds, statusMessage, autoplaySource) {
       const segments = currentSession && Array.isArray(currentSession.segments) ? currentSession.segments : [];
       if (index < 0 || index >= segments.length) return;
+      pauseBeforeMediaChange();
       currentSegmentIndex = index;
       const segment = segments[index];
       const variant = segmentVariant(segment, playbackMode) || segmentVariant(segment, "compatible");
@@ -675,7 +688,6 @@
         "loading",
         pendingSeekWallSeconds == null ? "加载时间较长，请继续等待…" : "跳转加载时间较长，请继续等待…"
       );
-      if (!audioPlayer.paused && !audioPlayer.ended) suppressPauseTrackingUntil = Date.now() + 1000;
       audioPlayer.src = variant.media_url;
       document.getElementById("segmentLabel").textContent = "音频分段 " + (index + 1) + " / "
         + segments.length + " · " + (variant.label || (playbackMode === "original" ? "原始音质" : "兼容播放"));

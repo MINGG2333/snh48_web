@@ -180,6 +180,10 @@ assert.match(gapRow.className, /\bgap\b/);
 assert.equal(gapRow.listeners.has("click"), false);
 
 const audio = elements.audioPlayer;
+audio.paused = false;
+audio.ended = false;
+vm.runInContext("loadSegment(0, false, 0)", context);
+assert.equal(audio.paused, true, "switching media must explicitly reset the native play state");
 audio.readyState = 1;
 audio.setAttribute("src", "/audio/segment_000001.m4a");
 audio.currentTime = 2;
