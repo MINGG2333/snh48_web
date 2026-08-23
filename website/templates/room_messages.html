@@ -136,6 +136,13 @@
       margin-top: 2px;
     }
 
+    .room-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
     .stats {
       display: flex;
       align-items: center;
@@ -1003,6 +1010,10 @@
       .title { flex: 1 1 160px; min-width: 0; }
       .title h1 { font-size: 18px; }
       .title p { display: none; }
+      .room-nav-actions {
+        flex: 0 0 auto;
+        margin-left: 0;
+      }
       .mobile-filter-toggle { display: inline-flex; align-items: center; justify-content: center; }
       .topbar.filters-open .mobile-filter-toggle {
         border-color: var(--teal);
@@ -1172,10 +1183,12 @@
           <h1>房间消息</h1>
           <p>完整房间消息记录</p>
         </div>
-        <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
-        <div class="stats">
+        <div class="room-nav-actions">
           <a class="combined-reply-link" id="combinedReplyLink" href="/room/gift-senders">综合回礼</a>
           <a class="voice-replay-link" id="voiceReplayLink" href="/room-voice-replays">上麦回放</a>
+        </div>
+        <div class="stats">
+          <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
           <span>总数 <strong id="totalMessages">0</strong></span>
           <span id="latestTime">更新时间：-</span>
         </div>
