@@ -38,6 +38,7 @@
 - tracker 不再自行生成或提交 `visitor_id`；服务器在首次 `page_view` 时签发带签名的 `HttpOnly` 第一方 `ob_device_profile` Cookie，后续由服务器读取，避免客户端选择或伪造另一个档案。Cookie 只代表浏览器档案，不是硬件或自然人 ID；同一浏览器可跨标签页和 IP 聚合，但换浏览器、无痕模式、清除站点数据、禁用 Cookie 或多设备仍会产生多个档案，共用浏览器则可能少算。
 - 每个 `page_view` 在当前服务器会话目录的 `visitor_page_views.jsonl` 记录当时页面、真实 IP 和由请求 User-Agent 归一化的粗粒度设备标签。不得加入城市、经纬度、Canvas、字体、GPU、音频等主动指纹字段，也不得把完整 User-Agent 复制进该文件。
 - `website/data/ip_clients.json` 仅供旧记录兼容；它只表示某会话 ID 曾经使用过哪些 IP，没有逐次时间关联，不能据此把同 IP 下的多个会话自动认定为同一个人。
+- OB API 另返回仅用于管理页整理的 `association_groups`：以稳定浏览器档案和旧会话为节点，按曾共享的精确 IP 做传递关联，并保留触发连接的 IP。该层不改变 `estimated_visitors`、稳定档案数、旧会话数或逐次访问记录；共享 IP 只表示网络出口关联，不能解释为自然人合并。旧会话的关联 IP 只能标记为历史集合，不得伪造成逐次对应。
 
 ## 新页面开发检查清单
 

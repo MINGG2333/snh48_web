@@ -152,6 +152,69 @@ class VisitorObservationTests(unittest.TestCase):
             self.assertEqual(legacy["visits"], [])
             self.assertEqual(legacy["networks"][0]["value"], "203.0.113.8")
 
+            associations = payload["association_groups"]
+            self.assertEqual(len(associations), 1)
+            association = associations[0]
+            self.assertEqual(
+                set(association["member_group_ids"]),
+                {stable["id"], legacy["id"]},
+            )
+            self.assertEqual(association["shared_ips"][0]["value"], "203.0.113.8")
+            self.assertFalse(association["shared_ips"][0]["historical_only"])
+
+    def test_ip_association_groups_use_transitive_links_without_changing_profiles(self) -> None:
+        groups = [
+            {
+                "id": 0,
+                "is_legacy": False,
+                "networks": [{"value": "203.0.113.1", "historical_only": False}],
+                "visits": [{"page": "/a"}],
+                "notification_count": 0,
+                "recent_time": "2026-08-16 12:00:00",
+            },
+            {
+                "id": 1,
+                "is_legacy": False,
+                "networks": [
+                    {"value": "203.0.113.1", "historical_only": False},
+                    {"value": "198.51.100.2", "historical_only": True},
+                ],
+                "visits": [{"page": "/b"}],
+                "notification_count": 0,
+                "recent_time": "2026-08-16 12:01:00",
+            },
+            {
+                "id": 2,
+                "is_legacy": True,
+                "networks": [{"value": "198.51.100.2", "historical_only": True}],
+                "visits": [],
+                "notification_count": 0,
+                "recent_time": "2026-08-16 12:02:00",
+            },
+            {
+                "id": 3,
+                "is_legacy": True,
+                "networks": [{"value": "192.0.2.3", "historical_only": True}],
+                "visits": [],
+                "notification_count": 0,
+                "recent_time": "2026-08-16 12:03:00",
+            },
+        ]
+
+        associations = ob_api._build_ip_association_groups(groups)
+        self.assertEqual(len(associations), 2)
+        linked = next(item for item in associations if item["member_count"] == 3)
+        self.assertEqual(set(linked["member_group_ids"]), {0, 1, 2})
+        self.assertEqual(
+            {item["value"] for item in linked["shared_ips"]},
+            {"203.0.113.1", "198.51.100.2"},
+        )
+        self.assertTrue(
+            next(item for item in linked["shared_ips"] if item["value"] == "198.51.100.2")["historical_only"]
+        )
+        singleton = next(item for item in associations if item["member_count"] == 1)
+        self.assertEqual(singleton["member_group_ids"], [3])
+
     def test_tracker_keeps_qa_session_id_separate_from_browser_profile(self) -> None:
         tracker = (
             Path(__file__).resolve().parents[1] / "website" / "static" / "js" / "tracker.js"
@@ -224,8 +287,10 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn('id="inboxListToggle"', template)
         self.assertIn('id="inboxListWrap"', template)
         self.assertIn("setInboxListOpen(false)", template)
-        self.assertIn("同一 IP 不会自动合并", template)
-        self.assertIn("同名设备不会自动合并，也不是硬件指纹", template)
+        self.assertIn("IP 关联组", template)
+        self.assertIn("共享 IP 可能对应多个自然人", template)
+        self.assertIn("不是硬件指纹", template)
+        self.assertIn("association-group-header", template)
         self.assertIn("档案尾码", template)
         self.assertIn("id=\"notifNav\"", template)
         self.assertIn("'visit-session'", template)

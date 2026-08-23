@@ -1,11 +1,13 @@
 """
 Observation (OB) API Router
 
-Provides data for the password-protected admin observation page.  New records
+Provides data for the password-protected admin observation page. New records
 are grouped by a stable first-party browser profile ID so IP changes do not
-split one browser into multiple cards.  Legacy records remain separate session
-cards because their physical device or natural-person identity cannot be
-reliably reconstructed.
+split one browser into multiple members. Legacy records remain separate
+session members because their physical device or natural-person identity
+cannot be reliably reconstructed. A separate IP association layer groups
+profile/session members for display convenience only; it never changes visitor
+or session estimates.
 """
 from __future__ import annotations
 
@@ -98,7 +100,7 @@ def verify_ob_login(response: Response, _=Depends(verify_ob_password)):
 
 @router.get("/data")
 def get_ob_data(response: Response, _=Depends(verify_ob_password)):
-    """Return activity grouped by estimated browser visitor, not by IP."""
+    """Return browser/session records plus a display-only IP association layer."""
     response.headers["Cache-Control"] = "no-store"
     inbox = list_requests()
     ip_clients = _load_ip_clients()
@@ -181,10 +183,13 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
     for group_id, group in enumerate(groups):
         group["id"] = group_id
 
+    association_groups = _build_ip_association_groups(groups)
+
     stable_profiles = sum(1 for group in groups if not group["is_legacy"])
     legacy_sessions = len(groups) - stable_profiles
     return {
         "groups": groups,
+        "association_groups": association_groups,
         "stats": {
             # Legacy session IDs are deliberately excluded from the visitor
             # estimate: counting them as people was the original overcounting
@@ -302,6 +307,115 @@ def _profile_label(visitor_id: str, devices: list[dict[str, Any]], is_legacy: bo
         return f"旧会话 · {client_id}"
     device = devices[0]["value"] if devices else "浏览器档案"
     return f"{device} · 档案尾码 {visitor_id[-8:]}"
+
+
+def _build_ip_association_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build display-only connected components from exact shared IP values.
+
+    Nodes are the existing browser-profile or legacy-session groups. An edge
+    means two nodes have observed the same IP; this layer does not alter the
+    underlying groups or any visitor/session statistics. ``historical_only``
+    is retained so old-session links cannot be mistaken for per-visit data.
+    """
+    if not groups:
+        return []
+
+    group_by_id = {int(group["id"]): group for group in groups}
+    parent = {group_id: group_id for group_id in group_by_id}
+
+    def find(group_id: int) -> int:
+        root = group_id
+        while parent[root] != root:
+            root = parent[root]
+        while parent[group_id] != group_id:
+            next_id = parent[group_id]
+            parent[group_id] = root
+            group_id = next_id
+        return root
+
+    def union(first: int, second: int) -> None:
+        first_root = find(first)
+        second_root = find(second)
+        if first_root != second_root:
+            parent[second_root] = first_root
+
+    ip_members: dict[str, set[int]] = defaultdict(set)
+    ip_details: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
+    for group_id, group in group_by_id.items():
+        for network in group.get("networks") or []:
+            value = str(network.get("value", "")).strip()
+            if not value or value == "未知":
+                continue
+            ip_members[value].add(group_id)
+            ip_details[(group_id, value)].append(network)
+
+    for member_ids in ip_members.values():
+        ordered = sorted(member_ids)
+        for member_id in ordered[1:]:
+            union(ordered[0], member_id)
+
+    components: dict[int, set[int]] = defaultdict(set)
+    for group_id in group_by_id:
+        components[find(group_id)].add(group_id)
+
+    association_specs: list[dict[str, Any]] = []
+    for member_ids in components.values():
+        ordered_members = sorted(
+            member_ids,
+            key=lambda group_id: str(group_by_id[group_id].get("recent_time", "")),
+            reverse=True,
+        )
+        shared_ips = []
+        for ip, linked_members in ip_members.items():
+            component_members = linked_members & member_ids
+            if len(component_members) < 2:
+                continue
+            details = [
+                item
+                for group_id in component_members
+                for item in ip_details.get((group_id, ip), [])
+            ]
+            shared_ips.append({
+                "value": ip,
+                "member_ids": sorted(component_members),
+                "historical_only": bool(details) and all(
+                    bool(item.get("historical_only")) for item in details
+                ),
+            })
+        shared_ips.sort(key=lambda item: str(item["value"]))
+
+        member_groups = [group_by_id[group_id] for group_id in ordered_members]
+        association_specs.append({
+            "id": "ip_association_" + str(len(association_specs)),
+            "member_group_ids": ordered_members,
+            "shared_ips": shared_ips,
+            "member_count": len(member_groups),
+            "stable_profile_count": sum(
+                1 for group in member_groups if not group["is_legacy"]
+            ),
+            "legacy_session_count": sum(
+                1 for group in member_groups if group["is_legacy"]
+            ),
+            "visit_count": sum(len(group.get("visits") or []) for group in member_groups),
+            "notification_count": sum(
+                int(group.get("notification_count") or 0) for group in member_groups
+            ),
+            "recent_time": max(
+                (str(group.get("recent_time", "")) for group in member_groups),
+                default="",
+            ),
+        })
+
+    association_specs.sort(
+        key=lambda item: (
+            str(item.get("recent_time", "")),
+            len(item.get("shared_ips") or []),
+        ),
+        reverse=True,
+    )
+    for association_id, association in enumerate(association_specs):
+        association["id"] = "ip_association_" + str(association_id)
+    return association_specs
 
 
 def _load_activity_index(

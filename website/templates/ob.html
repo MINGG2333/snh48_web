@@ -307,9 +307,8 @@
     .page-filter-clear:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
     .page-filter-clear:disabled { cursor: default; opacity: .4; }
     .groups-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
+      display: grid;
+      gap: 10px;
       padding: 24px 32px;
       flex: 1;
       align-content: flex-start;
@@ -319,6 +318,82 @@
       color: var(--text-dim); font-size: 15px;
     }
     .groups-container.empty::before { content: attr(data-empty-message); }
+
+    /* ── IP association overview ── */
+    .association-group {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .association-group:hover { border-color: rgba(124, 77, 255, .55); }
+    .association-group-header {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 16px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+    .association-group-header:hover,
+    .association-group-header:focus-visible { background: var(--surface-hover); outline: none; }
+    .association-group-chevron {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--accent);
+      transition: transform .2s ease;
+    }
+    .association-group-header[aria-expanded="true"] .association-group-chevron { transform: rotate(90deg); }
+    .association-group-title { font-size: 14px; font-weight: 650; word-break: break-word; }
+    .association-group-meta { margin-top: 4px; color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+    .association-group-summary { min-width: 0; }
+    .association-group-network-list { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+    .association-network-chip {
+      max-width: 240px;
+      border: 1px solid rgba(124, 77, 255, .35);
+      border-radius: 6px;
+      padding: 3px 7px;
+      color: var(--text-dim);
+      background: rgba(124, 77, 255, .08);
+      font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-wrap: anywhere;
+    }
+    .association-network-chip.historical { border-style: dashed; color: var(--gold); }
+    .association-group-body { border-top: 1px solid var(--border); padding: 0 12px 8px; }
+    .association-group-body.collapsed { display: none; }
+    .association-group-link-note { padding: 10px 4px 4px; color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+    .association-members { display: grid; gap: 2px; }
+    .association-member-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(150px, 1fr) minmax(125px, .85fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 4px;
+      border: 0;
+      border-top: 1px solid rgba(30, 45, 74, .7);
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+    .association-member-row:hover,
+    .association-member-row:focus-visible { background: rgba(255, 255, 255, .03); outline: none; }
+    .association-member-name { min-width: 0; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+    .association-member-kind { margin-top: 3px; color: var(--text-dim); font-size: 10px; }
+    .association-member-info { min-width: 0; color: var(--text-dim); font-size: 11px; overflow-wrap: anywhere; }
+    .association-member-info strong { color: var(--text); font-weight: 500; }
+    .association-member-open { color: var(--accent); font-size: 11px; white-space: nowrap; }
+    .association-no-network { color: var(--text-dim); font-size: 11px; }
 
     .group-card {
       background: var(--surface);
@@ -685,6 +760,13 @@
       .groups-container {
         padding: 16px 20px;
       }
+      .association-group-header { grid-template-columns: auto minmax(0, 1fr); gap: 9px; padding: 12px; }
+      .association-group-network-list { grid-column: 2; justify-content: flex-start; }
+      .association-network-chip { max-width: 100%; }
+      .association-group-body { padding: 0 10px 6px; }
+      .association-member-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; padding: 10px 2px; }
+      .association-member-info { grid-column: 1 / -1; }
+      .association-member-open { grid-column: 2; grid-row: 1; }
       .ob-tool-modal { padding: max(14px, 5dvh) 12px 12px; }
       .ob-tool-card { max-height: calc(100dvh - max(14px, 5dvh) - 12px); }
       .ob-tool-card .inbox-list { max-height: calc(100dvh - 190px); }
@@ -744,7 +826,7 @@
 </header>
 
 <div class="ob-note" id="obNote">
-  估算口径：旧记录按会话 ID 单列，同一 IP 不会自动合并。稳定档案依据服务器签发并校验的本域 HttpOnly 匿名 Cookie 聚合，可跨标签页和 IP 变化延续；卡片标题中的“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，同名设备不会自动合并，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。同一人使用多台设备、多个浏览器、无痕模式或清除 Cookie 时仍可能多算，共用浏览器则可能少算。新档案可查看逐次页面、当时 IP、粗粒度设备和会话 ID；旧记录无法可靠补出逐次对应关系。这里不查询城市或经纬度。
+  估算口径：估计访客数按稳定浏览器档案，旧会话单独统计；IP 关联组只用于整理展示，不改变访客数、会话数或逐次访问记录。关联组把曾经共享过 IP 的浏览器档案和旧会话放在一起，并按共享 IP 的传递关系连接；组内仍保留每个成员的原始记录。共享 IP 可能对应多个自然人，只表示曾共用同一网络出口。稳定档案依据服务器签发并校验的本域 HttpOnly 匿名 Cookie 聚合，可跨标签页和 IP 变化延续；卡片标题中的“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。旧记录只有历史 IP 集合，不能可靠补出逐次对应关系。这里不查询城市或经纬度。
 </div>
 
 <!-- ── Cross-server durable action inbox ── -->
@@ -849,6 +931,7 @@
   // ── State ──
   let obPassword = '';
   let groupsData = [];
+  let associationGroupsData = [];
   let inboxData = [];
   let statsData = {};
   let currentGroupId = -1;
@@ -864,6 +947,7 @@
   let chatConversationListOpen = false;
   let inboxListOpen = false;
   let pageFilterQuery = '';
+  const associationOpenState = new Map();
   let obToolScrollLockY = null;
 
   // ── DOM refs ──
@@ -1296,6 +1380,9 @@
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const data = await resp.json();
       groupsData = data.groups || [];
+      associationGroupsData = Array.isArray(data.association_groups)
+        ? data.association_groups
+        : buildAssociationFallback();
       inboxData = data.inbox || [];
       statsData = data.stats || {};
       loginOverlay.classList.add('hidden');
@@ -1428,9 +1515,48 @@
     });
   }
 
-  function filteredGroups() {
-    if (!pageFilterQuery) return groupsData;
-    return groupsData.filter(group => groupPagePaths(group).some(page => (
+  function buildAssociationFallback() {
+    return groupsData.map(group => ({
+      id: 'ip_association_' + group.id,
+      member_group_ids: [group.id],
+      shared_ips: [],
+      member_count: 1,
+      stable_profile_count: group.is_legacy ? 0 : 1,
+      legacy_session_count: group.is_legacy ? 1 : 0,
+      visit_count: (group.visits || []).length,
+      notification_count: group.notification_count || 0,
+      recent_time: group.recent_time || '',
+    }));
+  }
+
+  function associationMembers(association) {
+    const memberIds = association && Array.isArray(association.member_group_ids)
+      ? association.member_group_ids
+      : [];
+    return memberIds
+      .map(groupId => groupsData.find(group => group.id === groupId))
+      .filter(Boolean);
+  }
+
+  function associationPagePaths(association) {
+    const pages = new Set();
+    associationMembers(association).forEach(group => {
+      groupPagePaths(group).forEach(page => pages.add(page));
+    });
+    return Array.from(pages);
+  }
+
+  function visibleAssociationMembers(association) {
+    const members = associationMembers(association);
+    if (!pageFilterQuery) return members;
+    return members.filter(group => groupPagePaths(group).some(page => (
+      page.toLocaleLowerCase().includes(pageFilterQuery)
+    )));
+  }
+
+  function filteredAssociationGroups() {
+    if (!pageFilterQuery) return associationGroupsData;
+    return associationGroupsData.filter(association => associationPagePaths(association).some(page => (
       page.toLocaleLowerCase().includes(pageFilterQuery)
     )));
   }
@@ -1444,7 +1570,7 @@
     trackAdminEvent('admin_filter', {
       action: 'filter_ob_users_by_page',
       active: Boolean(pageFilterQuery),
-      result_count: filteredGroups().length
+      result_count: filteredAssociationGroups().length
     });
   });
   pageFilterClear.addEventListener('click', () => {
@@ -1456,7 +1582,7 @@
     trackAdminEvent('admin_filter', {
       action: 'clear_ob_page_filter',
       active: false,
-      result_count: groupsData.length
+      result_count: associationGroupsData.length
     });
   });
 
@@ -1469,68 +1595,148 @@
     groupsData.forEach(g => totalN += g.notification_count);
     totalNotifs.textContent = totalN;
 
-    const visibleGroups = filteredGroups();
+    const visibleAssociations = filteredAssociationGroups();
+    const visibleMemberCount = visibleAssociations.reduce(
+      (total, association) => total + visibleAssociationMembers(association).length,
+      0,
+    );
     recordsResultCount.textContent = pageFilterQuery
-      ? '显示 ' + visibleGroups.length + ' / ' + groupsData.length + ' 个记录'
-      : '共 ' + groupsData.length + ' 个记录';
+      ? '显示 ' + visibleAssociations.length + ' / ' + associationGroupsData.length
+        + ' 个关联组 · ' + visibleMemberCount + ' 个成员'
+      : '共 ' + associationGroupsData.length + ' 个关联组 · ' + groupsData.length + ' 个成员';
 
-    if (visibleGroups.length === 0) {
+    if (visibleAssociations.length === 0) {
       groupsContainer.dataset.emptyMessage = groupsData.length === 0
         ? '暂无用户记录'
-        : '没有用户记录涉及该页面';
+        : '没有关联组涉及该页面';
       groupsContainer.classList.add('empty');
       return;
     }
     groupsContainer.classList.remove('empty');
 
-    visibleGroups.forEach((group) => {
-      const card = document.createElement('div');
-      card.className = 'group-card';
-      card.classList.toggle('legacy', Boolean(group.is_legacy));
-      card.dataset.groupId = group.id;
+    visibleAssociations.forEach((association, associationIndex) => {
+      const members = visibleAssociationMembers(association);
+      const section = document.createElement('section');
+      section.className = 'association-group';
 
-      // Notification badge
-      if (group.notification_count > 0) {
-        const badge = document.createElement('div');
-        badge.className = 'notif-badge';
-        badge.textContent = group.notification_count > 99 ? '99+' : group.notification_count;
-        card.appendChild(badge);
-      }
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.className = 'association-group-header';
+      const bodyId = 'association-body-' + String(association.id).replace(/[^A-Za-z0-9_-]/g, '_');
+      const isOpen = associationOpenState.get(association.id) === true;
+      header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      header.setAttribute('aria-controls', bodyId);
 
-      const profileHead = document.createElement('div');
-      profileHead.className = 'profile-head';
+      const chevron = document.createElement('span');
+      chevron.className = 'association-group-chevron';
+      const chevronIcon = document.createElement('i');
+      chevronIcon.className = 'fas fa-chevron-right';
+      chevronIcon.setAttribute('aria-hidden', 'true');
+      chevron.appendChild(chevronIcon);
+      header.appendChild(chevron);
+
+      const summary = document.createElement('div');
+      summary.className = 'association-group-summary';
       const title = document.createElement('div');
-      title.className = 'profile-title';
-      title.textContent = group.profile_label || group.visitor_id;
-      profileHead.appendChild(title);
-      const kind = document.createElement('span');
-      kind.className = 'profile-kind' + (group.is_legacy ? ' legacy' : '');
-      kind.textContent = group.is_legacy ? '旧会话' : '稳定档案';
-      profileHead.appendChild(kind);
-      card.appendChild(profileHead);
+      title.className = 'association-group-title';
+      title.textContent = association.shared_ips && association.shared_ips.length
+        ? 'IP 关联组 ' + String(associationIndex + 1).padStart(2, '0')
+        : '独立记录组 ' + String(associationIndex + 1).padStart(2, '0');
+      summary.appendChild(title);
+      const meta = document.createElement('div');
+      meta.className = 'association-group-meta';
+      meta.textContent = (association.stable_profile_count || 0) + ' 个浏览器档案 · '
+        + (association.legacy_session_count || 0) + ' 个旧会话 · '
+        + (association.visit_count || 0) + ' 次页面访问 · '
+        + (association.notification_count || 0) + ' 条通知'
+        + (association.recent_time ? ' · 最近 ' + association.recent_time : '');
+      summary.appendChild(meta);
+      header.appendChild(summary);
 
-      const metrics = document.createElement('div');
-      metrics.className = 'profile-metrics';
-      metrics.textContent = (group.visits || []).length + ' 次已关联页面访问 · '
-        + (group.networks || []).length + ' 个曾用 IP';
-      card.appendChild(metrics);
-
-      const facts = document.createElement('div');
-      facts.className = 'profile-facts';
-      appendFact(facts, '设备', (group.devices || []).map(item => item.value), false, group.is_legacy ? '旧记录未知' : '暂无');
-      appendFact(facts, 'IP', (group.networks || []).map(item => item.value), true, '暂无');
-      card.appendChild(facts);
-
-      // Latest activity time
-      if (group.recent_time) {
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'group-time';
-        timeDiv.textContent = '最近活动: ' + group.recent_time;
-        card.appendChild(timeDiv);
+      const ipList = document.createElement('div');
+      ipList.className = 'association-group-network-list';
+      const sharedIps = association.shared_ips || [];
+      if (sharedIps.length === 0) {
+        const noIp = document.createElement('span');
+        noIp.className = 'association-no-network';
+        noIp.textContent = '暂无共享 IP';
+        ipList.appendChild(noIp);
+      } else {
+        sharedIps.slice(0, 3).forEach(ip => {
+          const chip = document.createElement('span');
+          chip.className = 'association-network-chip' + (ip.historical_only ? ' historical' : '');
+          chip.textContent = ip.value + (ip.historical_only ? ' · 历史' : '');
+          ipList.appendChild(chip);
+        });
+        if (sharedIps.length > 3) {
+          const more = document.createElement('span');
+          more.className = 'association-network-chip';
+          more.textContent = '+' + (sharedIps.length - 3) + ' 个 IP';
+          ipList.appendChild(more);
+        }
       }
+      header.appendChild(ipList);
+      section.appendChild(header);
 
-      card.addEventListener('click', () => openModal(group.id));
-      groupsContainer.appendChild(card);
+      const body = document.createElement('div');
+      body.className = 'association-group-body' + (isOpen ? '' : ' collapsed');
+      body.id = bodyId;
+      const linkNote = document.createElement('div');
+      linkNote.className = 'association-group-link-note';
+      linkNote.textContent = sharedIps.length
+        ? (pageFilterQuery
+          ? '当前只显示涉及筛选页面的成员；组内成员通过共享 IP 连接，这只是网络环境关联，不代表同一自然人。'
+          : '组内成员通过共享 IP 连接；这只是网络环境关联，不代表同一自然人。点击成员查看完整访问记录。')
+        : '该组没有发现可用于关联的共享 IP，成员保持独立。';
+      body.appendChild(linkNote);
+
+      const memberList = document.createElement('div');
+      memberList.className = 'association-members';
+      members.forEach(group => {
+        const member = document.createElement('button');
+        member.type = 'button';
+        member.className = 'association-member-row';
+
+        const memberName = document.createElement('div');
+        memberName.className = 'association-member-name';
+        memberName.textContent = group.profile_label || group.visitor_id || '匿名成员';
+        const memberKind = document.createElement('div');
+        memberKind.className = 'association-member-kind';
+        memberKind.textContent = group.is_legacy ? '旧会话 · IP 历史记录' : '稳定浏览器档案';
+        memberName.appendChild(memberKind);
+        member.appendChild(memberName);
+
+        const memberInfo = document.createElement('div');
+        memberInfo.className = 'association-member-info';
+        const devices = (group.devices || []).map(item => item.value).slice(0, 2).join('、') || '设备未知';
+        memberInfo.innerHTML = '<strong>' + escHtml(devices) + '</strong> · '
+          + (group.visits || []).length + ' 次访问 · '
+          + (group.networks || []).length + ' 个 IP';
+        member.appendChild(memberInfo);
+
+        const memberTime = document.createElement('div');
+        memberTime.className = 'association-member-info';
+        memberTime.textContent = group.recent_time ? '最近 ' + group.recent_time : '暂无时间';
+        member.appendChild(memberTime);
+
+        const openLabel = document.createElement('span');
+        openLabel.className = 'association-member-open';
+        openLabel.innerHTML = '查看 <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>';
+        member.appendChild(openLabel);
+
+        member.addEventListener('click', () => openModal(group.id));
+        memberList.appendChild(member);
+      });
+      body.appendChild(memberList);
+      section.appendChild(body);
+
+      header.addEventListener('click', () => {
+        const nextOpen = header.getAttribute('aria-expanded') !== 'true';
+        header.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+        body.classList.toggle('collapsed', !nextOpen);
+        associationOpenState.set(association.id, nextOpen);
+      });
+      groupsContainer.appendChild(section);
     });
   }
 
@@ -1853,6 +2059,12 @@
         if (ev.is_notification && ev.status === '⏳ 待处理') count++;
       });
       g.notification_count = count;
+    });
+    associationGroupsData.forEach(association => {
+      association.notification_count = associationMembers(association).reduce(
+        (total, group) => total + Number(group.notification_count || 0),
+        0,
+      );
     });
     // Update header
     let totalN = 0;
