@@ -956,12 +956,16 @@
     }
 
     @media (max-width: 720px) {
-      html,
-      body {
+      html {
         height: auto;
         min-height: 100%;
         overflow-x: hidden;
         overflow-y: auto;
+      }
+      body {
+        height: auto;
+        min-height: 100%;
+        overflow: visible;
       }
       html.room-filters-open,
       body.room-filters-open { overflow: hidden; }

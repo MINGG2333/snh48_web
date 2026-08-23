@@ -20,6 +20,7 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn("room-filters-open", template)
         self.assertIn("overflow-y: auto;", template)
         self.assertIn(".page.ready {\n        display: block;", template)
+        self.assertIn("      body {\n        height: auto;\n        min-height: 100%;\n        overflow: visible;", template)
         self.assertIn(".chat-scroll {\n        display: block;", template)
         self.assertIn("position: sticky;", template)
         self.assertIn("top: 0;", template)
