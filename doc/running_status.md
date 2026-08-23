@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 22:55 Room 日期筛选与移动端最新导航完成双云无中断发布：功能提交 `c9517ad` 已在腾讯云和阿里云生效。腾讯云通过阿里云既有免密链路复核时已位于目标提交，保留 screen `3352583.snh48` 与 Python PID `3352588`；阿里云执行 `python3 deploy/deploy.py deploy aliyun --no-restart` 从 `fe2d153` 快进到目标提交，`snh48-aliyun` 保持 `active/running`，PID `2468260`、`NRestarts=0`。两端公网 `/room`、`/room/gift-senders` 均返回 200，页面源码包含日期只暂存到点击“筛选”后再请求、Room 明确滚动到消息底部、送礼人页移动端顶部操作重排及固定客服入口；部署工具的首页、时间轴、礼物、上麦回放、翻牌、计分礼物、静态资源和关键 API 烟测全部通过。未修改 Python、环境变量、Nginx、后台服务、数据同步拓扑或健康检查范围；阿里云既有未跟踪运行文件保持原样。
+
 2026-08-23 20:36 OB 交互式 IP 网络图完成阿里云部署：用户确认腾讯云验收后，`python3 deploy/deploy.py deploy aliyun` 已将网站同步到提交 `5c37569`，重启 `snh48-aliyun`，远端主 PID `2468260`、状态 `active`。公网页面 `/ob` 返回 200，包含网络图节点、人物成员视图和会话悬浮逻辑；鉴权 `/api/ob/data` 返回 1302 个原始成员、542 个 IP 关联组，统计为 35 个稳定档案、1267 个旧会话和 164 条逐次访问。首页、时间轴、Room、礼物、上麦回放、翻牌、计分礼物、静态资源及关键 API 均通过部署工具烟测。证书公网检查为 OK，证书至 2026-11-01 有效，未修改证书或 Nginx；阿里云既有未跟踪运行文件保持原样。
 
 2026-08-23 20:32 上麦回放 iPhone 播放态与顶部导航完成双云发布：网站提交 `3207f8c`（切换会话/分段前显式 `audio.pause()`，避免 iPhone Safari 保留旧的“正在播放”外观）和 `282309a`（移除顶部“退出”，改为 `/room` 的“返回 Room”链接）已推送。腾讯云通过阿里云既有免密链路快进并重启 screen `3352583.snh48`，Python PID `3352588`，继续覆盖 `QA_WARMUP_ON_STARTUP=false`；阿里云由 `python3 deploy/deploy.py deploy aliyun` 快进并重启 `snh48-aliyun`，PID `2466759`，`active/running`、`NRestarts=0`，20:32:34 启动。两端公网 `/radio` 返回 200、未登录 `/api/room-voice-replays/sessions` 返回 401，页面均包含 `roomPageLink` 和 `pauseBeforeMediaChange`，不再包含 `logoutBtn`；阿里云既有未跟踪运行文件保持原样。桌面端布局未改动，移动端筛选仍默认收起。
@@ -74,8 +76,8 @@
 
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
-| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `5c37569`，功能代码为 `282309a`。screen `3352583.snh48`、Python PID `3352588`，2026-08-23 20:31:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；上麦回放切换会话时显式重置原生播放态，顶部返回 Room 入口和移动端筛选收纳均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `5c37569`，功能代码为 `282309a`。2026-08-23 20:32:34 CST 重启，PID `2466759`，active/running、`NRestarts=0`；上麦回放 iPhone 播放态修复、顶部返回 Room 入口、日期筛选、受保护页面初始鉴权、各页“跳到最新”和移动端筛选收纳均已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `c9517ad`。screen `3352583.snh48`、Python PID `3352588`，继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；Room 日期只在点击“筛选”后应用，跳到最新明确定位到消息底部，送礼人页移动端顶部操作与固定客服入口已生效 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前 checkout 为 `c9517ad`。PID `2468260`，active/running、`NRestarts=0`；Room 日期筛选、底部定位和送礼人页移动端顶部操作已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
