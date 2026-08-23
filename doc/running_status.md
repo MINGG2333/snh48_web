@@ -2,6 +2,8 @@
 
 更新日期：2026-08-23 CST +0800
 
+2026-08-23 18:39:59 阿里云部署网站提交 `778161a`：修复移动端日期筛选首次选择卡死风险，统一受保护页面的初始鉴权错误状态，并为 Room、礼物明细、送礼人和翻牌页调整“跳到最新”显示逻辑。`python3 deploy/deploy.py deploy aliyun` 已完成 Git 快进、`snh48-aliyun` 重启和首页、时间轴、礼物、上麦、翻牌、静态资源及关键 API 烟测；阿里云 PID `2453662`，`active/running`，`NRestarts=0`。远端既有未跟踪的 `website/data/manual_events.csv`、`website/data/runtime_backups/`、`website/static/js/timeline.js.bak` 保持原样；腾讯云未重启。
+
 2026-08-23 18:11:33 腾讯云阶段发布上麦回放移动端筛选收纳：网站提交 `6e0cfaf` 已加载并重启 screen `3233514.snh48`，Python PID `3233519`；腾讯云 `/radio` 返回 200，未登录 `/api/room-voice-replays/sessions` 返回 401，页面已包含移动端默认关闭的 `filterPanel`。桌面端仍保留左侧会话列表；阿里云尚未同步，等待腾讯云验收。
 
 2026-08-23 17:49 修复 Room 筛选弹窗打开后背景消息持续上滑：网站提交 `8957188` 已部署到阿里云并重启 `snh48-aliyun`。筛选锁定期间暂停全局滚动触发的前后页加载和填充视口任务，关闭弹窗恢复滚动位置期间抑制一帧误触发；线上 390×844 移动视口打开弹窗等待 2 秒，消息数保持 100，新增数据请求为 0，关闭后滚动位置从 0 恢复到原位置 5000。阿里云 PID `2448602`，`active/running`、`NRestarts=0`；腾讯云未重启。
@@ -63,7 +65,7 @@
 | 环境 | 网站服务 | 监听 | 说明 |
 |------|----------|------|------|
 | 腾讯云 `cjy.plus` | screen 会话运行 `python -m website.main` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `9c3afec`。screen `3152206.snh48`、Python PID `3152211`，2026-08-23 16:44 重启并继续临时覆盖 `QA_WARMUP_ON_STARTUP=false`；观察页服务器签发浏览器档案 Cookie 已生效，客服聊天长等待和仅腾讯云可写的隐藏社交凭据管理均已生效 |
-| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `8957188`。2026-08-23 17:47:55 CST 重启，PID `2448602`，active/running、`NRestarts=0`；Room 移动端顶部栏、导航位置、筛选弹窗触摸边界和背景分页锁定均已复核；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
+| 阿里云香港 `cjy.我爱你` | systemd 服务 `snh48-aliyun` | `127.0.0.1:8000`，公网由 Nginx 代理 | 当前运行代码为 `778161a`。2026-08-23 18:39:15 CST 重启，PID `2453662`，active/running、`NRestarts=0`；日期筛选、受保护页面初始鉴权和各页“跳到最新”行为已部署；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/` 与 `website/static/js/timeline.js.bak` 保持原样 |
 
 ## 常用状态命令
 
