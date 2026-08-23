@@ -236,10 +236,14 @@
       padding-bottom: 0;
     }
     .field input[type="date"]::-webkit-date-and-time-value {
+      display: flex;
+      align-items: center;
+      height: 100%;
       min-width: 0;
-      text-align: left;
-      line-height: 1.2;
+      margin: 0;
       padding: 0;
+      line-height: normal;
+      text-align: left;
     }
 
     .field input[type="date"]::-webkit-calendar-picker-indicator {
@@ -1033,7 +1037,6 @@
       .filter-modal-scroll .field input,
       .filter-modal-scroll .field select { font-size: 16px; }
       .filter-modal-scroll .field input[type="date"] {
-        display: block;
         width: 100%;
         min-width: 0 !important;
         max-width: 100%;
@@ -1048,12 +1051,6 @@
         padding-bottom: 0;
         overflow: hidden;
         text-overflow: ellipsis;
-      }
-      .filter-modal-scroll .field input[type="date"]::-webkit-date-and-time-value {
-        min-width: 0;
-        text-align: left;
-        line-height: 1.2;
-        padding: 0;
       }
       .actions .btn { flex: 1; }
       .chat-scroll {
