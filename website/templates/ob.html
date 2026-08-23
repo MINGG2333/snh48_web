@@ -851,7 +851,9 @@
   let chatConversations = [];
   let selectedChatId = '';
   let chatRefreshBusy = false;
-  let chatHistoryBusy = false;
+  let chatHistoryController = null;
+  let chatWatchController = null;
+  let chatRevision = '';
   let chatConversationListOpen = false;
   let inboxListOpen = false;
   let pageFilterQuery = '';
@@ -1003,6 +1005,10 @@
   }
 
   function resetLoginForPassword(message) {
+    stopAdminChatWatch();
+    if (chatHistoryController) chatHistoryController.abort();
+    chatHistoryController = null;
+    chatRevision = '';
     loginBusy = false;
     loginVerified = false;
     obPassword = '';
@@ -1087,26 +1093,31 @@
   }
 
   async function loadChatHistory(conversationId) {
-    if (!conversationId || chatHistoryBusy) return;
-    chatHistoryBusy = true;
+    if (!conversationId) return;
+    if (chatHistoryController) chatHistoryController.abort();
+    const controller = new AbortController();
+    chatHistoryController = controller;
     try {
       const resp = await fetch('/api/feedback-chat/admin-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
         body: JSON.stringify({ conversation_id: conversationId }),
         cache: 'no-store',
+        signal: controller.signal,
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.detail || '聊天记录加载失败');
+      if (selectedChatId !== conversationId || chatHistoryController !== controller) return;
       renderChatMessages(data.messages || []);
       const item = chatConversations.find((entry) => entry.conversation_id === conversationId);
       chatAdminDetailHead.textContent = item
         ? '会话标识：' + (item.user_identifier || '未记录识别码') + ' · ' + item.message_count + ' 条消息'
         : '客服聊天';
     } catch (error) {
+      if (error && error.name === 'AbortError') return;
       chatAdminDetailHead.textContent = error.message || '聊天记录加载失败';
     } finally {
-      chatHistoryBusy = false;
+      if (chatHistoryController === controller) chatHistoryController = null;
     }
   }
 
@@ -1147,7 +1158,6 @@
         selectedChatId = conversation.conversation_id;
         setChatConversationListOpen(false);
         renderChatConversations();
-        loadChatHistory(selectedChatId);
       });
       chatAdminList.appendChild(button);
     });
@@ -1166,12 +1176,64 @@
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.detail || '客服会话加载失败');
       chatConversations = data.conversations || [];
+      chatRevision = data.revision || '';
       renderChatConversations();
+      startAdminChatWatch();
     } catch (error) {
       chatActionCount.textContent = '0';
     } finally {
       chatRefreshBusy = false;
     }
+  }
+
+  function stopAdminChatWatch() {
+    if (chatWatchController) chatWatchController.abort();
+    chatWatchController = null;
+  }
+
+  function waitBeforeAdminChatReconnect() {
+    return new Promise((resolve) => window.setTimeout(resolve, 1000));
+  }
+
+  async function runAdminChatWatch(controller) {
+    while (
+      chatWatchController === controller &&
+      !controller.signal.aborted &&
+      loginVerified &&
+      obPassword &&
+      loginOverlay.classList.contains('hidden')
+    ) {
+      try {
+        const resp = await fetch('/api/feedback-chat/admin-watch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Ob-Password': obPassword },
+          body: JSON.stringify({ revision: chatRevision }),
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (resp.status === 401 || resp.status === 403) {
+          stopAdminChatWatch();
+          return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.detail || '客服实时连接失败');
+        chatRevision = data.revision || chatRevision;
+        if (data.changed) {
+          chatConversations = data.conversations || [];
+          renderChatConversations();
+        }
+      } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        await waitBeforeAdminChatReconnect();
+      }
+    }
+  }
+
+  function startAdminChatWatch() {
+    stopAdminChatWatch();
+    if (!loginVerified || !obPassword || !loginOverlay.classList.contains('hidden')) return;
+    chatWatchController = new AbortController();
+    runAdminChatWatch(chatWatchController);
   }
 
   async function sendChatReply(event) {
@@ -1189,7 +1251,6 @@
       if (!resp.ok) throw new Error(data.detail || '回复失败');
       chatAdminInput.value = '';
       renderChatMessages(data.messages || []);
-      await fetchChatConversations();
     } catch (error) {
       chatAdminDetailHead.textContent = error.message || '回复失败';
     } finally {
@@ -1233,7 +1294,7 @@
       updatePageFilterOptions();
       renderGroups();
       renderInbox();
-      await fetchChatConversations();
+      if (!chatWatchController) await fetchChatConversations();
     } catch (err) {
       if (options.loginAttempt && wasLoginVisible) {
         showLoginLoadRetry('密码正确，但观察数据加载失败，请点击重试加载');
@@ -1863,12 +1924,6 @@
 
   // ── Auto-refresh every 10s ──
   setInterval(fetchData, 10000);
-  // 客服会话独立高频刷新，避免等待整页观察数据更新。
-  setInterval(() => {
-    if (loginVerified && obPassword && loginOverlay.classList.contains('hidden')) {
-      fetchChatConversations();
-    }
-  }, 1000);
 
   // ── Focus password input ──
   passwordInput.focus();

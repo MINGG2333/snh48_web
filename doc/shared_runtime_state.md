@@ -64,6 +64,7 @@ website/data/action_inbox/events/<event_id>.json
 - 任一服务器收到请求或状态事件后立即复制到对端；失败时进入 `website/data/shared_state_outbox/inbox/` 重试。
 - `website/data/complaints/` 与会话目录中的邮箱 Markdown/JSONL 继续作为本节点兼容日志，但不再是跨服务器权威待办。
 - 客服聊天事件类型为 `feedback_message` / `feedback_reply`，按用户输入的识别码计算 SHA-256 内部会话编号；为便于管理员在 `/ob` 和飞书通知中识别会话，事件同时保存用户自定义识别码。识别码只在密码保护的管理员接口和通知中展示，公开端点仍不回显并按 IP 限速。
+- Gift Senders 聊天框通过 `/api/feedback-chat/watch`，OB 管理端通过 `/api/feedback-chat/admin-watch` 保持最多约 25 秒的长等待请求；服务端每 200 毫秒检查本地不可变事件目录，发现本机写入或对端复制的新消息后立即返回并由浏览器续接。断线时前端退避重连，固定 1 秒历史轮询不再使用。
 - 待处理箱含邮箱、投诉正文和客服聊天正文等个人信息，目录文件权限为 `0600`，不得提交 Git、放入静态目录或在诊断输出中打印正文。
 
 导入两台服务器既有记录时分别运行；命令只打印数量：

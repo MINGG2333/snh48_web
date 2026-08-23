@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 import unittest
@@ -11,7 +12,7 @@ from website import action_inbox
 from website import feedback_chat_api as chat_api
 
 
-class FeedbackChatApiTests(unittest.TestCase):
+class FeedbackChatApiTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -78,6 +79,69 @@ class FeedbackChatApiTests(unittest.TestCase):
             chat_api.ChatMessageRequest(identifier="valid-code", content=" ")
         with self.assertRaises(ValueError):
             chat_api.AdminConversationRequest(conversation_id="not-a-hash")
+        with self.assertRaises(ValueError):
+            chat_api.AdminWatchRequest(revision="not-a-revision")
+
+    async def test_visitor_watch_returns_as_soon_as_reply_arrives(self) -> None:
+        identifier = "visitor-watch-2026"
+        sent = chat_api.send_message(
+            chat_api.ChatMessageRequest(identifier=identifier, content="第一条消息"),
+            self.request,
+            chat_api.Response(),
+        )
+        conversation_id = sent["conversation_id"]
+        cursor = sent["messages"][-1]["message_id"]
+
+        async def add_reply() -> None:
+            await asyncio.sleep(0.02)
+            chat_api.reply_message(
+                chat_api.AdminReplyRequest(conversation_id=conversation_id, content="即时回复"),
+                chat_api.Response(),
+                True,
+            )
+
+        task = asyncio.create_task(add_reply())
+        with (
+            mock.patch.object(chat_api, "_WATCH_TIMEOUT_SECONDS", 0.5),
+            mock.patch.object(chat_api, "_WATCH_POLL_SECONDS", 0.005),
+        ):
+            watched = await chat_api.watch_history(
+                chat_api.ChatWatchRequest(identifier=identifier, after_message_id=cursor),
+                self.request,
+                chat_api.Response(),
+            )
+        await task
+
+        self.assertTrue(watched["changed"])
+        self.assertEqual(watched["messages"][-1]["content"], "即时回复")
+
+    async def test_admin_watch_returns_updated_conversation_revision(self) -> None:
+        initial = chat_api.list_conversations(chat_api.Response(), True)
+        identifier = "admin-watch-2026"
+
+        async def add_message() -> None:
+            await asyncio.sleep(0.02)
+            chat_api.send_message(
+                chat_api.ChatMessageRequest(identifier=identifier, content="需要立即看到"),
+                self.request,
+                chat_api.Response(),
+            )
+
+        task = asyncio.create_task(add_message())
+        with (
+            mock.patch.object(chat_api, "_WATCH_TIMEOUT_SECONDS", 0.5),
+            mock.patch.object(chat_api, "_WATCH_POLL_SECONDS", 0.005),
+        ):
+            watched = await chat_api.watch_conversations(
+                chat_api.AdminWatchRequest(revision=initial["revision"]),
+                chat_api.Response(),
+                True,
+            )
+        await task
+
+        self.assertTrue(watched["changed"])
+        self.assertNotEqual(watched["revision"], initial["revision"])
+        self.assertEqual(watched["conversations"][0]["user_identifier"], identifier)
 
 
 if __name__ == "__main__":

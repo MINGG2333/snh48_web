@@ -781,8 +781,8 @@
     var supportChatInput = document.getElementById("supportChatInput");
     var supportChatSend = document.getElementById("supportChatSend");
     var supportChatChange = document.getElementById("supportChatChange");
-    var supportChatPollTimer = null;
-    var supportChatHistoryBusy = false;
+    var supportChatWatchController = null;
+    var supportChatCursor = "";
     var currentSupportChatIdentifier = "";
     var supportChatPreviousFocus = null;
     var pageScrollLockY = null;
@@ -875,6 +875,7 @@
         supportChatModal.setAttribute("aria-hidden", "false");
         supportChatNav.setAttribute("aria-expanded", "true");
         setPageScrollLocked(true);
+        if (currentSupportChatIdentifier) startSupportChatWatch();
         window.setTimeout(function() {
           if (currentSupportChatIdentifier) {
             if (supportChatInput) supportChatInput.focus();
@@ -889,10 +890,7 @@
       supportChatModal.setAttribute("aria-hidden", "true");
       supportChatNav.setAttribute("aria-expanded", "false");
       setPageScrollLocked(false);
-      if (supportChatPollTimer) {
-        window.clearInterval(supportChatPollTimer);
-        supportChatPollTimer = null;
-      }
+      stopSupportChatWatch();
       if (supportChatPreviousFocus && typeof supportChatPreviousFocus.focus === "function") supportChatPreviousFocus.focus();
       supportChatPreviousFocus = null;
       track("admin_modal", { modal: "feedback_chat", action: "close" });
@@ -900,6 +898,7 @@
 
     function renderSupportChatMessages(messages) {
       supportChatMessages.replaceChildren();
+      supportChatCursor = messages.length ? (messages[messages.length - 1].message_id || "") : "";
       if (!messages.length) {
         var empty = document.createElement("div");
         empty.className = "support-chat-empty";
@@ -923,26 +922,52 @@
       supportChatMessages.scrollTop = supportChatMessages.scrollHeight;
     }
 
-    async function loadSupportChatHistory(showLoading) {
-      if (!currentSupportChatIdentifier || supportChatHistoryBusy) return;
-      supportChatHistoryBusy = true;
-      if (showLoading) setChatStatus(supportChatStatus, "正在加载聊天记录…", false);
-      try {
-        var response = await fetch("/api/feedback-chat/history", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier: currentSupportChatIdentifier }),
-          cache: "no-store"
-        });
-        var data = await response.json().catch(function() { return {}; });
-        if (!response.ok) throw new Error(chatErrorMessage(data, "聊天记录加载失败"));
-        renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
-        setChatStatus(supportChatStatus, "", false);
-      } catch (error) {
-        setChatStatus(supportChatStatus, error.message || "聊天记录加载失败", true);
-      } finally {
-        supportChatHistoryBusy = false;
+    function stopSupportChatWatch() {
+      if (supportChatWatchController) supportChatWatchController.abort();
+      supportChatWatchController = null;
+    }
+
+    function waitBeforeChatReconnect() {
+      return new Promise(function(resolve) { window.setTimeout(resolve, 1000); });
+    }
+
+    async function runSupportChatWatch(controller) {
+      while (
+        supportChatWatchController === controller &&
+        !controller.signal.aborted &&
+        currentSupportChatIdentifier &&
+        supportChatModal.classList.contains("open")
+      ) {
+        try {
+          var response = await fetch("/api/feedback-chat/watch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              identifier: currentSupportChatIdentifier,
+              after_message_id: supportChatCursor
+            }),
+            cache: "no-store",
+            signal: controller.signal
+          });
+          var data = await response.json().catch(function() { return {}; });
+          if (!response.ok) throw new Error(chatErrorMessage(data, "实时消息连接失败"));
+          if (data.changed) {
+            renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
+            setChatStatus(supportChatStatus, "", false);
+          }
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          setChatStatus(supportChatStatus, "实时连接中断，正在重连…", true);
+          await waitBeforeChatReconnect();
+        }
       }
+    }
+
+    function startSupportChatWatch() {
+      stopSupportChatWatch();
+      if (!currentSupportChatIdentifier || !supportChatModal.classList.contains("open")) return;
+      supportChatWatchController = new AbortController();
+      runSupportChatWatch(supportChatWatchController);
     }
 
     async function enterSupportChat() {
@@ -968,7 +993,7 @@
         supportChatConversation.classList.remove("hidden");
         renderSupportChatMessages(Array.isArray(data.messages) ? data.messages : []);
         setChatStatus(supportChatSetupStatus, "", false);
-        supportChatPollTimer = window.setInterval(function() { loadSupportChatHistory(false); }, 1000);
+        startSupportChatWatch();
         if (supportChatInput) supportChatInput.focus();
         track("admin_update", { action: "open_feedback_chat", result: "success" });
       } catch (error) {
@@ -1013,11 +1038,9 @@
     }
 
     function changeSupportChatIdentifier() {
+      stopSupportChatWatch();
       currentSupportChatIdentifier = "";
-      if (supportChatPollTimer) {
-        window.clearInterval(supportChatPollTimer);
-        supportChatPollTimer = null;
-      }
+      supportChatCursor = "";
       supportChatConversation.classList.add("hidden");
       supportChatSetup.classList.remove("hidden");
       setChatStatus(supportChatStatus, "", false);

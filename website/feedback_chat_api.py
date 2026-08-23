@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 import uuid
@@ -21,6 +22,9 @@ _IDENTIFIER_MIN = 4
 _IDENTIFIER_MAX = 64
 _CONTENT_MAX = 2000
 _CONVERSATION_ID_RE = re.compile(r"^[a-f0-9]{64}$")
+_REVISION_RE = re.compile(r"^[a-f0-9]{64}$")
+_WATCH_TIMEOUT_SECONDS = 25.0
+_WATCH_POLL_SECONDS = 0.2
 
 
 def _now() -> str:
@@ -64,6 +68,18 @@ class ChatMessageRequest(ChatIdentifierRequest):
         return value
 
 
+class ChatWatchRequest(ChatIdentifierRequest):
+    after_message_id: str = ""
+
+    @field_validator("after_message_id")
+    @classmethod
+    def validate_after_message_id(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) > 128 or any(ord(char) < 32 for char in value):
+            raise ValueError("无效的消息游标")
+        return value
+
+
 class AdminConversationRequest(BaseModel):
     conversation_id: str
 
@@ -87,6 +103,18 @@ class AdminReplyRequest(AdminConversationRequest):
             raise ValueError("回复内容不能为空")
         if len(value) > _CONTENT_MAX:
             raise ValueError(f"回复不能超过 {_CONTENT_MAX} 个字")
+        return value
+
+
+class AdminWatchRequest(BaseModel):
+    revision: str = ""
+
+    @field_validator("revision")
+    @classmethod
+    def validate_revision(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value and not _REVISION_RE.fullmatch(value):
+            raise ValueError("无效的会话版本")
         return value
 
 
@@ -120,6 +148,47 @@ def _user_identifier(conversation_id: str) -> str:
     return _user_identifier_from_events(list_chat_events(conversation_id))
 
 
+def _conversations() -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for event in list_chat_events():
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        conversation_id = str(payload.get("conversation_id") or "")
+        if _CONVERSATION_ID_RE.fullmatch(conversation_id):
+            grouped.setdefault(conversation_id, []).append(event)
+
+    conversations = []
+    for conversation_id, events in grouped.items():
+        messages = [_message_from_event(event) for event in events]
+        conversations.append({
+            "conversation_id": conversation_id,
+            "user_identifier": _user_identifier_from_events(events),
+            "message_count": len(messages),
+            "latest_at": messages[-1]["created_at"],
+            "latest_sender": messages[-1]["sender"],
+            "latest_message_id": messages[-1]["message_id"],
+            "pending_reply": messages[-1]["sender"] == "visitor",
+        })
+    conversations.sort(key=lambda item: (item["latest_at"], item["conversation_id"]), reverse=True)
+    return conversations
+
+
+def _conversation_revision(conversations: list[dict[str, Any]]) -> str:
+    state = "\n".join(
+        f"{item['conversation_id']}:{item['message_count']}:{item['latest_message_id']}"
+        for item in conversations
+    )
+    return hashlib.sha256(state.encode("utf-8")).hexdigest()
+
+
+def _conversation_response(response: Response, conversations: list[dict[str, Any]]) -> dict[str, Any]:
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "success": True,
+        "revision": _conversation_revision(conversations),
+        "conversations": conversations,
+    }
+
+
 def _chat_response(
     response: Response,
     conversation_id: str,
@@ -143,6 +212,28 @@ def get_history(req: ChatIdentifierRequest, request: Request, response: Response
     check_feedback_chat_history_limit(get_client_ip(request))
     conversation_id = _conversation_id(req.identifier)
     return _chat_response(response, conversation_id, _history(conversation_id))
+
+
+@router.post("/watch")
+async def watch_history(req: ChatWatchRequest, request: Request, response: Response):
+    """Wait until a conversation changes, avoiding fixed-interval browser polling."""
+    check_feedback_chat_history_limit(get_client_ip(request))
+    conversation_id = _conversation_id(req.identifier)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _WATCH_TIMEOUT_SECONDS
+    while True:
+        messages = _history(conversation_id)
+        latest_message_id = messages[-1]["message_id"] if messages else ""
+        if latest_message_id != req.after_message_id:
+            body = _chat_response(response, conversation_id, messages)
+            body["changed"] = True
+            return body
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            body = _chat_response(response, conversation_id, messages)
+            body["changed"] = False
+            return body
+        await asyncio.sleep(min(_WATCH_POLL_SECONDS, remaining))
 
 
 @router.post("/message")
@@ -175,26 +266,31 @@ def send_message(req: ChatMessageRequest, request: Request, response: Response):
 
 @router.get("/conversations")
 def list_conversations(response: Response, _=Depends(verify_ob_password)):
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for event in list_chat_events():
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-        conversation_id = str(payload.get("conversation_id") or "")
-        if _CONVERSATION_ID_RE.fullmatch(conversation_id):
-            grouped.setdefault(conversation_id, []).append(event)
-    conversations = []
-    for conversation_id, events in grouped.items():
-        messages = [_message_from_event(event) for event in events]
-        conversations.append({
-            "conversation_id": conversation_id,
-            "user_identifier": _user_identifier_from_events(events),
-            "message_count": len(messages),
-            "latest_at": messages[-1]["created_at"],
-            "latest_sender": messages[-1]["sender"],
-            "pending_reply": messages[-1]["sender"] == "visitor",
-        })
-    conversations.sort(key=lambda item: (item["latest_at"], item["conversation_id"]), reverse=True)
-    response.headers["Cache-Control"] = "no-store"
-    return {"success": True, "conversations": conversations}
+    return _conversation_response(response, _conversations())
+
+
+@router.post("/admin-watch")
+async def watch_conversations(
+    req: AdminWatchRequest,
+    response: Response,
+    _=Depends(verify_ob_password),
+):
+    """Wait until any support conversation changes."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _WATCH_TIMEOUT_SECONDS
+    while True:
+        conversations = _conversations()
+        revision = _conversation_revision(conversations)
+        if revision != req.revision:
+            body = _conversation_response(response, conversations)
+            body["changed"] = True
+            return body
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            body = _conversation_response(response, conversations)
+            body["changed"] = False
+            return body
+        await asyncio.sleep(min(_WATCH_POLL_SECONDS, remaining))
 
 
 @router.post("/admin-history")

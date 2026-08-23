@@ -39,6 +39,9 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertNotIn('localStorage.setItem("snh48_feedback_chat_id"', template)
         self.assertIn('fetch("/api/feedback-chat/history"', template)
         self.assertIn('fetch("/api/feedback-chat/message"', template)
+        self.assertIn('fetch("/api/feedback-chat/watch"', template)
+        self.assertIn('new AbortController()', template)
+        self.assertNotIn('window.setInterval(function() { loadSupportChatHistory(false); }, 1000)', template)
         self.assertIn('href="/complaint"', template)
 
     def test_ob_tools_are_modal_and_chat_refresh_is_separate(self) -> None:
@@ -47,7 +50,9 @@ class RoomMessagesTemplateTests(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', template)
         self.assertIn("setObToolScrollLocked", template)
         self.assertIn("body.style.position = 'fixed'", template)
-        self.assertIn("}, 1000);", template)
+        self.assertIn("fetch('/api/feedback-chat/admin-watch'", template)
+        self.assertIn('new AbortController()', template)
+        self.assertNotIn('客服会话独立高频刷新', template)
         self.assertIn("chatRefreshBusy", template)
 
 
