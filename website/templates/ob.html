@@ -340,6 +340,30 @@
     .records-view-mode button:hover,
     .records-view-mode button:focus-visible { color: var(--text); outline: none; }
     .records-view-mode button.active { background: rgba(124, 77, 255, .18); color: var(--text); }
+    .records-refresh-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+    .records-refresh-controls button {
+      min-height: 30px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      padding: 0 9px;
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .records-refresh-controls button:hover,
+    .records-refresh-controls button:focus-visible { color: var(--text); outline: none; }
+    .records-refresh-controls button[aria-pressed="false"] { color: var(--gold); background: rgba(255, 165, 2, .1); }
+    .records-refresh-controls button:disabled { cursor: wait; opacity: .55; }
 
     .network-visualization {
       display: grid;
@@ -372,8 +396,9 @@
     .network-canvas-summary { color: var(--text-dim); font-size: 11px; }
     .network-3d-canvas { position: relative; height: 510px; min-height: 420px; background: #0a0e17; }
     .network-3d-canvas canvas { display: block; width: 100% !important; height: 100% !important; outline: none; }
-    .network-3d-status { position: absolute; left: 14px; bottom: 12px; z-index: 2; color: var(--text-dim); font-size: 10px; pointer-events: none; }
-    .network-3d-reset { position: absolute; right: 12px; bottom: 10px; z-index: 3; min-height: 30px; border: 1px solid var(--border); border-radius: 7px; background: rgba(10,14,23,.78); color: var(--text-dim); padding: 0 9px; cursor: pointer; font-size: 11px; }
+    .network-3d-overlay { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: rgba(10,14,23,.9); pointer-events: none; }
+    .network-3d-status { min-width: 0; color: var(--text-dim); font-size: 10px; pointer-events: none; }
+    .network-3d-reset { flex-shrink: 0; min-height: 30px; border: 1px solid var(--border); border-radius: 7px; background: rgba(10,14,23,.78); color: var(--text-dim); padding: 0 9px; cursor: pointer; font-size: 11px; pointer-events: auto; }
     .network-3d-reset:hover, .network-3d-reset:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
     .network-3d-fallback { display: none; height: 100%; overflow: auto; }
     .network-3d-fallback.active { display: block; }
@@ -896,6 +921,8 @@
       }
       .records-view-mode { width: 100%; }
       .records-view-mode button { flex: 1; }
+      .records-refresh-controls { width: 100%; }
+      .records-refresh-controls button { flex: 1; }
       .network-visualization { grid-template-columns: 1fr; min-height: 0; padding: 16px 20px 20px; }
       .network-canvas-wrap { min-height: 420px; }
       .network-3d-canvas { height: 420px; }
@@ -1041,6 +1068,16 @@
         <i class="fas fa-list" aria-hidden="true"></i> 关联组列表
       </button>
     </div>
+    <div class="records-refresh-controls" aria-label="用户记录更新">
+      <button id="obLiveToggle" type="button" aria-pressed="true" title="暂停用户记录自动更新">
+        <i id="obLiveToggleIcon" class="fas fa-pause" aria-hidden="true"></i>
+        <span id="obLiveToggleLabel">实时更新</span>
+      </button>
+      <button id="obRefreshNow" type="button" title="立即刷新用户记录">
+        <i class="fas fa-rotate" aria-hidden="true"></i>
+        <span>立即刷新</span>
+      </button>
+    </div>
     <div class="page-filter">
       <label for="pageFilterInput">按访问页面筛选</label>
       <div class="page-filter-control">
@@ -1061,7 +1098,8 @@
         <span class="network-canvas-title">共享 IP 节点</span>
         <span class="network-canvas-summary" id="networkCanvasSummary">正在计算</span>
       </div>
-      <div class="network-3d-canvas" id="network3dCanvas" role="img" aria-label="共享 IP 三维关系图">
+      <div class="network-3d-canvas" id="network3dCanvas" role="img" aria-label="共享 IP 三维关系图"></div>
+      <div class="network-3d-overlay" id="network3dOverlay">
         <div class="network-3d-status" id="network3dStatus">共享成员数决定连线权重</div>
         <button class="network-3d-reset" id="network3dReset" type="button" title="重置三维视角">
           <i class="fas fa-arrows-to-circle" aria-hidden="true"></i> 重置视角
@@ -1139,6 +1177,13 @@
   let selectedIpNodeId = '';
   let network3dGraph = null;
   let network3dGraphData = null;
+  let network3dNodesById = new Map();
+  let network3dInteractionActive = false;
+  let network3dHovering = false;
+  let network3dRenderPending = false;
+  let autoRefreshEnabled = true;
+  let obDataRefreshBusy = false;
+  let obDataRefreshQueued = false;
   const associationOpenState = new Map();
   let obToolScrollLockY = null;
 
@@ -1171,9 +1216,14 @@
   const recordsResultCount = document.getElementById('recordsResultCount');
   const networkViewButton = document.getElementById('networkViewButton');
   const listViewButton = document.getElementById('listViewButton');
+  const obLiveToggle = document.getElementById('obLiveToggle');
+  const obLiveToggleIcon = document.getElementById('obLiveToggleIcon');
+  const obLiveToggleLabel = document.getElementById('obLiveToggleLabel');
+  const obRefreshNow = document.getElementById('obRefreshNow');
   const networkVisualization = document.getElementById('networkVisualization');
   const networkCanvasSummary = document.getElementById('networkCanvasSummary');
   const network3dCanvas = document.getElementById('network3dCanvas');
+  const network3dOverlay = document.getElementById('network3dOverlay');
   const network3dStatus = document.getElementById('network3dStatus');
   const network3dReset = document.getElementById('network3dReset');
   const network3dFallback = document.getElementById('network3dFallback');
@@ -1563,12 +1613,42 @@
   chatAdminForm.addEventListener('submit', sendChatReply);
 
   // ── Fetch Data ──
+  function updateRefreshControls() {
+    const liveLabel = autoRefreshEnabled ? '实时更新' : '已暂停';
+    obLiveToggle.setAttribute('aria-pressed', autoRefreshEnabled ? 'true' : 'false');
+    obLiveToggle.title = autoRefreshEnabled ? '暂停用户记录自动更新' : '恢复用户记录自动更新';
+    obLiveToggleLabel.textContent = liveLabel;
+    obLiveToggleIcon.className = autoRefreshEnabled ? 'fas fa-pause' : 'fas fa-play';
+    obRefreshNow.disabled = obDataRefreshBusy;
+    obRefreshNow.title = obDataRefreshBusy ? '正在刷新用户记录' : '立即刷新用户记录';
+  }
+
+  function queueObDataRefresh() {
+    if (obDataRefreshQueued || !loginVerified || !obPassword || !loginOverlay.classList.contains('hidden')) return;
+    obDataRefreshQueued = true;
+    window.setTimeout(() => {
+      obDataRefreshQueued = false;
+      fetchData({ manual: true });
+    }, 0);
+  }
+
   async function fetchData(options) {
     options = options || {};
     if (
       !options.loginAttempt &&
+      !options.manual &&
+      !autoRefreshEnabled
+    ) return;
+    if (
+      !options.loginAttempt &&
       (!loginVerified || !obPassword || !loginOverlay.classList.contains('hidden'))
     ) return;
+    if (obDataRefreshBusy) {
+      if (options.manual || options.loginAttempt) queueObDataRefresh();
+      return;
+    }
+    obDataRefreshBusy = true;
+    updateRefreshControls();
     const requestPassword = obPassword;
     const wasLoginVisible = !loginOverlay.classList.contains('hidden');
     const attemptedLogin = wasLoginVisible && Boolean(requestPassword);
@@ -1615,6 +1695,13 @@
       } else {
         loginError.textContent = '加载失败: ' + err.message;
         loginError.classList.add('show');
+      }
+    } finally {
+      obDataRefreshBusy = false;
+      updateRefreshControls();
+      if (obDataRefreshQueued) {
+        obDataRefreshQueued = false;
+        window.setTimeout(() => fetchData({ manual: true }), 0);
       }
     }
   }
@@ -1692,7 +1779,7 @@
       });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       trackAdminEvent('admin_update', { action: 'inbox_status', result: 'success', event_id: eventId, status: nextStatus });
-      await fetchData();
+      await fetchData({ manual: true });
     } catch (err) {
       trackAdminEvent('admin_update', { action: 'inbox_status', result: 'failure', event_id: eventId, status: nextStatus });
     }
@@ -2133,6 +2220,7 @@
   function renderNetworkSvg(nodes) {
     hideNetworkTooltip();
     network3dCanvas.style.display = 'none';
+    network3dOverlay.style.display = 'none';
     network3dFallback.classList.add('active');
     ipNetworkSvg.replaceChildren();
 
@@ -2310,30 +2398,136 @@
     );
   }
 
+  function finiteVector(value) {
+    if (!value || !Number.isFinite(Number(value.x)) || !Number.isFinite(Number(value.y)) || !Number.isFinite(Number(value.z))) {
+      return null;
+    }
+    return { x: Number(value.x), y: Number(value.y), z: Number(value.z) };
+  }
+
+  function captureNetwork3dView() {
+    if (!network3dGraph) return null;
+    let position = null;
+    let lookAt = null;
+    try {
+      position = finiteVector(network3dGraph.cameraPosition());
+      const controls = typeof network3dGraph.controls === 'function'
+        ? network3dGraph.controls()
+        : null;
+      lookAt = finiteVector(controls && controls.target);
+    } catch (error) {
+      return position ? { position, lookAt } : null;
+    }
+    return position ? { position, lookAt } : null;
+  }
+
+  function restoreNetwork3dView(view) {
+    if (!network3dGraph || !view || !view.position) return;
+    try {
+      network3dGraph.cameraPosition(view.position, view.lookAt || undefined, 0);
+    } catch (error) {
+      try {
+        network3dGraph.cameraPosition(view.position);
+      } catch (ignored) {
+        // The graph library may not expose a camera getter in older CDN builds.
+      }
+    }
+  }
+
+  function networkGraphSignature(nodes, links) {
+    const nodeParts = nodes.map(node => JSON.stringify([
+      node.id,
+      node.memberCount,
+      node.visitCount,
+      node.notificationCount,
+      node.recentTime,
+      Boolean(node.historicalOnly),
+      Array.from(node.memberIds).sort(),
+      node.members.map(group => [
+        String(group.id),
+        String(group.recent_time || ''),
+        (group.visits || []).map(visit => [
+          String(visit.timestamp || visit.time_str || ''),
+          String(visit.page || ''),
+          String(visit.ip || ''),
+        ]),
+      ]).sort((first, second) => first[0].localeCompare(second[0])),
+    ])).sort();
+    const linkParts = links.map(link => JSON.stringify([
+      String(link.source),
+      String(link.target),
+      link.shared_member_count,
+      Boolean(link.historical_only),
+      (link.shared_member_ids || []).map(String).sort(),
+    ])).sort();
+    return nodeParts.join('|') + '||' + linkParts.join('|');
+  }
+
+  function copyNetwork3dNodePositions(nodes) {
+    if (!network3dGraphData || !Array.isArray(network3dGraphData.nodes)) return;
+    const previousById = new Map(network3dGraphData.nodes.map(node => [String(node.id), node]));
+    nodes.forEach(node => {
+      const previous = previousById.get(String(node.id));
+      if (!previous) return;
+      ['x', 'y', 'z', 'vx', 'vy', 'vz', 'fx', 'fy', 'fz'].forEach(key => {
+        if (Number.isFinite(Number(previous[key]))) node[key] = Number(previous[key]);
+      });
+    });
+  }
+
+  function setNetwork3dStatus(linkCount, suffix) {
+    network3dStatus.textContent = linkCount + ' 条共享成员连线 · 拖拽旋转 · 滚轮缩放 · '
+      + (autoRefreshEnabled ? '实时更新' : '实时更新已暂停')
+      + (suffix || '');
+  }
+
   function destroyNetwork3dGraph() {
     if (!network3dGraph) return;
     if (typeof network3dGraph._destructor === 'function') network3dGraph._destructor();
     else if (typeof network3dGraph.pauseAnimation === 'function') network3dGraph.pauseAnimation();
     network3dGraph = null;
     network3dGraphData = null;
+    network3dNodesById = new Map();
+    network3dHovering = false;
+    network3dRenderPending = false;
     network3dCanvas.querySelectorAll('canvas').forEach(canvas => canvas.remove());
-    if (!network3dCanvas.contains(network3dStatus)) network3dCanvas.appendChild(network3dStatus);
-    if (!network3dCanvas.contains(network3dReset)) network3dCanvas.appendChild(network3dReset);
   }
 
   function renderNetwork3d(nodes) {
     network3dFallback.classList.remove('active');
     network3dCanvas.style.display = 'block';
+    network3dOverlay.style.display = 'flex';
     if (!window.ForceGraph3D || !window.THREE) {
+      destroyNetwork3dGraph();
       renderNetworkSvg(nodes);
       network3dStatus.textContent = '3D 引擎加载失败，已回退为二维图';
       return;
     }
-    destroyNetwork3dGraph();
     const links = buildNetworkLinks(nodes);
-    const nodesById = new Map(nodes.map(node => [node.id, node]));
-    network3dGraphData = { nodes, links };
-    network3dStatus.textContent = links.length + ' 条共享成员连线 · 拖拽旋转 · 滚轮缩放';
+    const signature = networkGraphSignature(nodes, links);
+    if (network3dGraph && network3dGraphData) {
+      if (network3dGraphData.signature === signature) {
+        renderNetworkDetail(nodes.find(node => node.id === selectedIpNodeId));
+        setNetwork3dStatus(links.length);
+        return;
+      }
+      const view = captureNetwork3dView();
+      copyNetwork3dNodePositions(nodes);
+      network3dNodesById = new Map(nodes.map(node => [node.id, node]));
+      network3dGraph.graphData({ nodes, links });
+      network3dGraph.nodeThreeObject(createThreeIpNode).nodeThreeObjectExtend(false);
+      network3dGraphData = { nodes, links, signature };
+      if (typeof network3dGraph.d3ReheatSimulation === 'function') {
+        network3dGraph.d3ReheatSimulation();
+      }
+      restoreNetwork3dView(view);
+      renderNetworkDetail(nodes.find(node => node.id === selectedIpNodeId));
+      setNetwork3dStatus(links.length);
+      return;
+    }
+    network3dNodesById = new Map(nodes.map(node => [node.id, node]));
+    network3dGraphData = { nodes, links, signature };
+    setNetwork3dStatus(links.length);
     network3dGraph = window.ForceGraph3D()(network3dCanvas)
       .backgroundColor('#0a0e17')
       .showNavInfo(false)
@@ -2356,14 +2550,18 @@
       .linkDirectionalParticleWidth(1.4)
       .onNodeClick(node => selectIpNode(node))
       .onNodeHover(node => {
+        network3dHovering = Boolean(node);
         network3dCanvas.style.cursor = node ? 'pointer' : 'default';
         if (node) showThreeIpTooltip(network3dGraph, node);
         else hideNetworkTooltip();
+        if (!node) applyPendingNetwork3dRender();
       })
       .onLinkHover(link => {
+        network3dHovering = Boolean(link);
         network3dCanvas.style.cursor = link ? 'pointer' : 'default';
-        if (link) showThreeLinkTooltip(network3dGraph, link, nodesById);
+        if (link) showThreeLinkTooltip(network3dGraph, link, network3dNodesById);
         else hideNetworkTooltip();
+        if (!link) applyPendingNetwork3dRender();
       });
 
     network3dGraph.graphData({ nodes, links });
@@ -2389,9 +2587,21 @@
     networkCanvasSummary.textContent = nodes.length + ' 个 IP 节点 · ' + visibleProfiles
       + ' 个成员 · ' + totalVisits + ' 次页面访问';
     networkEmpty.hidden = nodes.length > 0;
+    if (network3dGraph && (network3dInteractionActive || network3dHovering)) {
+      network3dRenderPending = true;
+      setNetwork3dStatus(
+        network3dGraphData && Array.isArray(network3dGraphData.links)
+          ? network3dGraphData.links.length
+          : 0,
+        ' · 发现新数据，结束当前操作后更新',
+      );
+      return;
+    }
+    network3dRenderPending = false;
     if (!nodes.length || viewMode !== 'network') {
       destroyNetwork3dGraph();
       network3dCanvas.style.display = 'none';
+      network3dOverlay.style.display = 'none';
       network3dFallback.classList.remove('active');
       clearNetworkDetail();
       return;
@@ -2403,6 +2613,41 @@
     if (network3dGraph && typeof network3dGraph.zoomToFit === 'function') {
       network3dGraph.zoomToFit(700, 50);
     }
+  });
+
+  function applyPendingNetwork3dRender() {
+    if (!network3dInteractionActive && !network3dHovering && network3dRenderPending) {
+      renderNetworkGraph();
+    }
+  }
+
+  function finishNetwork3dInteraction() {
+    network3dInteractionActive = false;
+    applyPendingNetwork3dRender();
+  }
+
+  network3dCanvas.addEventListener('pointerdown', () => {
+    network3dInteractionActive = true;
+  });
+  network3dCanvas.addEventListener('pointercancel', finishNetwork3dInteraction);
+  window.addEventListener('pointerup', finishNetwork3dInteraction);
+
+  obLiveToggle.addEventListener('click', () => {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    updateRefreshControls();
+    if (autoRefreshEnabled) fetchData({ manual: true });
+    if (network3dGraphData) setNetwork3dStatus(network3dGraphData.links.length);
+    trackAdminEvent('admin_refresh_control', {
+      action: 'toggle_ob_auto_refresh',
+      enabled: autoRefreshEnabled,
+    });
+  });
+  obRefreshNow.addEventListener('click', () => {
+    fetchData({ manual: true });
+    trackAdminEvent('admin_refresh_control', {
+      action: 'manual_refresh_ob_data',
+      enabled: autoRefreshEnabled,
+    });
   });
 
   function setViewMode(nextMode) {
@@ -2965,7 +3210,7 @@
         event_id: eventId
       });
       // Immediately refresh data from server after successful mark
-      fetchData();
+      fetchData({ manual: true });
     } catch (_) {
       trackAdminEvent('admin_update', {
         action: 'ob_mark_read',
@@ -3025,6 +3270,7 @@
   }, 10000);
 
   // ── Focus password input ──
+  updateRefreshControls();
   passwordInput.focus();
 
 })();
