@@ -117,25 +117,45 @@ def lookup_ip_locations(
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Resolve public IPs locally and return labels plus non-sensitive status."""
     path = Path(database_path)
+    observed_values: list[str] = []
+    observed_set: set[str] = set()
+    for raw_value in ip_values:
+        value = str(raw_value).strip()
+        if value and value not in observed_set:
+            observed_set.add(value)
+            observed_values.append(value)
+
+    public_ips: list[str] = []
+    valid_ip_count = 0
+    non_global_ip_count = 0
+    invalid_ip_count = 0
+    for value in observed_values:
+        try:
+            address = ipaddress.ip_address(value)
+        except ValueError:
+            invalid_ip_count += 1
+            continue
+        valid_ip_count += 1
+        if address.is_global:
+            public_ips.append(value)
+        else:
+            non_global_ip_count += 1
+
     status: dict[str, Any] = {
         "available": False,
         "source": SOURCE_NAME,
         "database_build_date": "",
+        "observed_ip_count": len(observed_values),
+        "valid_ip_count": valid_ip_count,
+        "eligible_ip_count": len(public_ips),
         "located_ip_count": 0,
+        "unresolved_ip_count": len(public_ips),
+        "non_global_ip_count": non_global_ip_count,
+        "invalid_ip_count": invalid_ip_count,
     }
     if not path.is_file():
         status["status"] = "database_missing"
         return {}, status
-
-    public_ips: list[str] = []
-    for raw_value in ip_values:
-        value = str(raw_value).strip()
-        try:
-            address = ipaddress.ip_address(value)
-        except ValueError:
-            continue
-        if address.is_global and value not in public_ips:
-            public_ips.append(value)
 
     try:
         with _READER_LOCK:
@@ -150,6 +170,7 @@ def lookup_ip_locations(
                 "status": "ready",
                 "database_build_date": _build_date(reader),
                 "located_ip_count": len(locations),
+                "unresolved_ip_count": len(public_ips) - len(locations),
             })
             return locations, status
     except (ImportError, OSError, RuntimeError, ValueError):

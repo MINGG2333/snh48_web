@@ -206,7 +206,7 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
         self.assertIn('/api/gift-replies/summary', template)
         self.assertIn('window.setInterval(checkUpdates', template)
         self.assertIn('updatePill.addEventListener("click", loadLatestData)', template)
-        self.assertIn('有新的送礼数据，点击刷新', template)
+        self.assertIn('有新送礼数据，点击加载最新', template)
         self.assertNotIn('window.setInterval(function() { loadData(false); }', template)
         self.assertIn('收起该送礼人', template)
         self.assertIn('房间内回礼情况', template)
@@ -243,7 +243,7 @@ class GiftReplySendersTemplateTests(unittest.TestCase):
         self.assertIn('/api/gift-replies/summary', template)
         self.assertIn('window.setInterval(checkUpdates', template)
         self.assertIn('updatePill.addEventListener("click", loadLatestData)', template)
-        self.assertIn('有新的送礼数据，点击刷新', template)
+        self.assertIn('有新送礼数据，点击加载最新', template)
         self.assertNotIn('window.setInterval(function() {\n        fetchData({ resetTimer: false });', template)
 
         main = Path("website/main.py").read_text(encoding="utf-8")

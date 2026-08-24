@@ -148,7 +148,13 @@ class VisitorObservationTests(unittest.TestCase):
                             "available": True,
                             "source": "DB-IP Lite",
                             "database_build_date": "2026-08-01",
+                            "observed_ip_count": 2,
+                            "valid_ip_count": 2,
+                            "eligible_ip_count": 2,
                             "located_ip_count": 1,
+                            "unresolved_ip_count": 1,
+                            "non_global_ip_count": 0,
+                            "invalid_ip_count": 0,
                             "status": "ready",
                         },
                     ),
@@ -197,6 +203,8 @@ class VisitorObservationTests(unittest.TestCase):
             self.assertEqual(graph["links"][0]["shared_member_ids"], [stable["id"]])
             self.assertEqual(payload["ip_locations"]["203.0.113.8"]["city"], "深圳")
             self.assertTrue(payload["geoip"]["available"])
+            self.assertEqual(payload["geoip"]["eligible_ip_count"], 2)
+            self.assertEqual(payload["geoip"]["unresolved_ip_count"], 1)
 
     def test_ip_location_uses_region_names_without_coordinates(self) -> None:
         record = {
@@ -225,12 +233,31 @@ class VisitorObservationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             locations, status = ip_geolocation.lookup_ip_locations(
                 ["120.229.72.69", "127.0.0.1"],
+                Path(tmp) / "not-an-ip",
+            )
+
+        self.assertEqual(locations, {})
+        self.assertFalse(status["available"])
+        self.assertEqual(status["status"], "database_missing")
+        self.assertEqual(status["observed_ip_count"], 2)
+        self.assertEqual(status["eligible_ip_count"], 1)
+        self.assertEqual(status["located_ip_count"], 0)
+        self.assertEqual(status["unresolved_ip_count"], 1)
+        self.assertEqual(status["non_global_ip_count"], 1)
+
+    def test_ip_location_status_counts_invalid_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            locations, status = ip_geolocation.lookup_ip_locations(
+                ["120.229.72.69", "127.0.0.1", "未知"],
                 Path(tmp) / "missing.mmdb",
             )
 
         self.assertEqual(locations, {})
         self.assertFalse(status["available"])
         self.assertEqual(status["status"], "database_missing")
+        self.assertEqual(status["observed_ip_count"], 3)
+        self.assertEqual(status["eligible_ip_count"], 1)
+        self.assertEqual(status["invalid_ip_count"], 1)
 
     def test_ip_location_invalid_database_is_a_safe_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -434,6 +461,7 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn("function visitMatchesFilters(visit)", template)
         self.assertIn("function ipLocationSearchText(ip)", template)
         self.assertIn("function updateRegionFilterOptions()", template)
+        self.assertIn("eligible_ip_count", template)
         self.assertIn("function hasActiveFilters()", template)
         self.assertIn("filter_ob_user_records", template)
         self.assertIn('id="inboxListToggle"', template)

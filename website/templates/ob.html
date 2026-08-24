@@ -2019,8 +2019,18 @@
       recordFilters.region = '';
     }
     const buildDate = String(geoipData.database_build_date || '').trim();
+    const locatedCount = Number(geoipData.located_ip_count || 0);
+    const eligibleCount = Number(geoipData.eligible_ip_count || 0);
+    const unresolvedCount = Number(geoipData.unresolved_ip_count || 0);
+    const skippedCount = Number(geoipData.non_global_ip_count || 0)
+      + Number(geoipData.invalid_ip_count || 0);
+    const coverageText = available
+      ? '已识别 ' + locatedCount + ' / ' + eligibleCount + ' 个公网 IP'
+        + (unresolvedCount ? ' · 未命中 ' + unresolvedCount : '')
+        + (skippedCount ? ' · 跳过 ' + skippedCount + ' 个非公网/无效值' : '')
+      : '';
     geoipStatus.textContent = available
-      ? '本地地区库' + (buildDate ? ' · ' + buildDate : '')
+      ? '本地地区库' + (buildDate ? ' · ' + buildDate : '') + (coverageText ? ' · ' + coverageText : '')
       : unavailableText;
   }
 
