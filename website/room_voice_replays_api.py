@@ -81,6 +81,9 @@ def _read_jsonl(path: Path) -> list[dict]:
 async def verify_room_voice_replays_auth(
     request: Request,
     x_room_voice_replays_password: str = Header(None, alias="X-Room-Voice-Replays-Password"),
+    x_room_voice_replays_monitor_token: str = Header(
+        None, alias="X-Room-Voice-Replays-Monitor-Token"
+    ),
     room_voice_replays_auth: str = Cookie(None, alias=AUTH_COOKIE),
 ):
     expected = cfg.ROOM_VOICE_REPLAYS_PASSWORD
@@ -94,7 +97,18 @@ async def verify_room_voice_replays_auth(
         x_room_voice_replays_password, expected
     ):
         return True
-    if not room_voice_replays_auth and not x_room_voice_replays_password:
+    monitor_token = cfg.ROOM_VOICE_REPLAYS_MONITOR_TOKEN
+    if (
+        monitor_token
+        and x_room_voice_replays_monitor_token
+        and hmac.compare_digest(x_room_voice_replays_monitor_token, monitor_token)
+    ):
+        return True
+    if (
+        not room_voice_replays_auth
+        and not x_room_voice_replays_password
+        and not x_room_voice_replays_monitor_token
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
     check_admin_login_limit(
         get_client_ip(request), "房间上麦回放密码尝试过于频繁，请稍后再试"

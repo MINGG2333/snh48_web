@@ -52,11 +52,12 @@
 
 | 项 | 腾讯云当前口径 | 迁移注意 |
 |----|----------------|----------|
-| 网站服务 | screen 会话运行 `python -m website.main` | 可改为 systemd，但要保持 `HOST=127.0.0.1` 由 Nginx 代理 |
+| 网站服务 | `snh48-web.service` 以不可登录 `snh48-web` 账号运行；公开副本使用 `snh48-aliyun.service` | 从仓库安装对应 unit 和权限脚本，保持 `HOST=127.0.0.1`、`UMask=0077` 和 systemd 沙箱，不恢复 root/screen/nohup 生产方式 |
 | Nginx | `/etc/nginx/conf.d/snh48.conf`，仓库来源 `deploy/nginx.conf` | 迁移后运行 `nginx -t`；证书和域名按新服务器重配 |
 | HTTPS 证书 | 系统证书目录 | 不在 Git；迁移或重新签发 |
 | 阿里云拉取 cron | 阿里云 root crontab 每分钟运行 `deploy/sync-from-tencent-if-changed.sh` | 新目标如果继续拉取腾讯云，更新 `TENCENT`、SSH key、白名单和文档 |
-| 日志 | `/var/log/snh48/`、`kb_qa.log`、各类 screen/systemd 日志 | 只在需要保留排障历史时迁移 |
+| 跨云回放监控 Token | 阿里云网站 `.env` 与腾讯云 `/etc/snh48/room-voice-cross-cloud-health.env` 各保存同一高熵值 | 使用 `deploy/set_env_secret.py` 从 stdin 写入；保持 root `0600`，不输出、不进 Git；不能用页面密码替代长期监控 Token |
+| 日志 | `/var/log/snh48/`、`kb_qa.log` 和各 systemd journal | 只在需要保留排障历史时迁移；不恢复旧 screen/nohup 启动方式 |
 
 ## 迁移后核对
 
@@ -66,3 +67,4 @@
 4. 核对统一事件/行程 CSV、四类当前共享状态、`shared_state_history/`、`shared_state_outbox/` 和 `action_inbox/` 存在且不是空目录覆盖。
 5. 在新的腾讯云权威节点运行 `script/shared_state_history.py list <resource>`，确认当前 revision 可在历史中找到；在 `/ob` 核对待处理箱来源标签。
 6. 如果新服务器接替阿里云公开站，确认数据拉取 cron、日志和腾讯云白名单都已更新。
+7. 按 `doc/security/server_hardening_migration_runbook.md` 执行 SSH、非 root 服务、Nginx、跨云密钥和回滚核对；运行 `deploy/verify_server_security_baseline.sh`，再从独立网络验证公网不能直连 8000/8899。

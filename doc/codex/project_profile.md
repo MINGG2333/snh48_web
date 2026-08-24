@@ -185,7 +185,7 @@ node script/obfuscate_js.cjs
 - 页面入口：`/room-voice-replays`，短入口：`/radio`
 - API：`/api/room-voice-replays/login`、`/sessions`、`/sessions/{session_id}`、`/sessions/{session_id}/segments/{filename}`
 - 数据源：`ROOM_VOICE_REPLAYS_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/`
-- 鉴权：`ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Room-Voice-Replays-Password`
+- 鉴权：`ROOM_VOICE_REPLAYS_PASSWORD`，默认复用 `ROOM_MESSAGES_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Room-Voice-Replays-Password`。跨云完整性检查使用独立 `ROOM_VOICE_REPLAYS_MONITOR_TOKEN` 和 `X-Room-Voice-Replays-Monitor-Token`，只允许 GET 元数据和音频 Range，不能调用 `/login` 或签发 Cookie
 - 数据契约：`/home/snh48-fan-hub/doc/room_voice_replay_data_contract.md`
 
 维护边界：
@@ -387,6 +387,7 @@ FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 FLIP_CARDS_ACCOUNT_ADMIN_ENABLED=腾讯云 true；阿里云 false（默认跟随 SHARED_STATE_IS_PRIMARY）
 GIFT_REPLIES_PASSWORD=独立礼物回复页密码
 ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码
+ROOM_VOICE_REPLAYS_MONITOR_TOKEN=仅被检查目标设置的高熵只读监控 Token
 MEMORIES_VIEW_PASSWORD=记忆页访问密码
 MEMORIES_FANCLUB_PASSWORD=记忆页应援会模式密码
 MEMORIES_IDOL_PASSWORD=记忆页本人模式密码
@@ -453,7 +454,7 @@ curl -I --connect-timeout 5 http://8.210.188.184:8000
 
 ## 远端运行时文件
 
-完整迁移清单见 `doc/runtime_migration.md`。
+完整迁移清单见 `doc/runtime_migration.md`；从空白主机开始的安全实施顺序、回滚和验收见 `doc/security/server_hardening_migration_runbook.md`。主机内部可运行只读的 `deploy/verify_server_security_baseline.sh`，云安全组仍需从独立网络验证。
 
 这些文件可能出现在服务器 `git status --short` 中，通常是运行期数据，不要作为代码冲突处理：
 

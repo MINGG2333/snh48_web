@@ -68,6 +68,10 @@ class RoomVoiceReplaysApiTests(unittest.IsolatedAsyncioTestCase):
         self.patches = [
             mock.patch("website.room_voice_replays_api.cfg.ROOM_VOICE_REPLAYS_DIR", str(self.root)),
             mock.patch("website.room_voice_replays_api.cfg.ROOM_VOICE_REPLAYS_PASSWORD", "test-password"),
+            mock.patch(
+                "website.room_voice_replays_api.cfg.ROOM_VOICE_REPLAYS_MONITOR_TOKEN",
+                "test-monitor-token",
+            ),
             mock.patch("website.room_voice_replays_api.cfg.SECURE_COOKIES", False),
         ]
         for patcher in self.patches:
@@ -124,6 +128,35 @@ class RoomVoiceReplaysApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(original.status_code, 206)
         self.assertEqual(original.content, b"bcd")
+
+    async def test_monitor_token_is_read_only_and_does_not_log_in(self) -> None:
+        headers = {"X-Room-Voice-Replays-Monitor-Token": "test-monitor-token"}
+        sessions = await self.client.get(
+            "/api/room-voice-replays/sessions", headers=headers
+        )
+        self.assertEqual(sessions.status_code, 200)
+
+        media = await self.client.get(
+            (
+                f"/api/room-voice-replays/sessions/{self.session_id}/segments/"
+                "segment_000001.m4a"
+            ),
+            headers={**headers, "Range": "bytes=0-0"},
+        )
+        self.assertEqual(media.status_code, 206)
+        self.assertEqual(media.content, b"0")
+
+        wrong = await self.client.get(
+            "/api/room-voice-replays/sessions",
+            headers={"X-Room-Voice-Replays-Monitor-Token": "wrong-token"},
+        )
+        self.assertEqual(wrong.status_code, 403)
+
+        login = await self.client.post(
+            "/api/room-voice-replays/login",
+            json={"password": "test-monitor-token"},
+        )
+        self.assertEqual(login.status_code, 403)
 
     async def test_legacy_single_asset_session_falls_back_to_compatible_mode(self) -> None:
         session_path = self.root / "sessions" / self.session_id / "session.json"

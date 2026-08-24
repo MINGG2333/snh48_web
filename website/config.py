@@ -258,6 +258,8 @@ ROOM_MESSAGES_REFRESH_INTERVAL_SECONDS = int(os.getenv("ROOM_MESSAGES_REFRESH_IN
 # ── Room Voice Replays (成员房间上麦录音与同期消息) ───────────────────────
 # 默认复用房间消息页密码；音频只能通过鉴权 API 读取，不做静态目录挂载。
 ROOM_VOICE_REPLAYS_PASSWORD = os.getenv("ROOM_VOICE_REPLAYS_PASSWORD") or ROOM_MESSAGES_PASSWORD
+# 跨云健康检查使用独立只读 Token，不复用或改变浏览器登录密码。
+ROOM_VOICE_REPLAYS_MONITOR_TOKEN = os.getenv("ROOM_VOICE_REPLAYS_MONITOR_TOKEN", "")
 ROOM_VOICE_REPLAYS_DIR = os.getenv("ROOM_VOICE_REPLAYS_DIR") or str(
     PROJECT_ROOT.parent
     / "snh48-fan-hub"

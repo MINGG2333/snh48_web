@@ -839,31 +839,24 @@ scp /mnt/zhitainew/snh48/download_records.json root@8.210.188.184:/home/snh48_we
 
 ```bash
 cd /home/snh48_web
+if [ ! -e .env ]; then
+  install -o root -g root -m 0600 /dev/null .env
+fi
 
-cat > .env << 'EOF'
-# 网站密码（AI 问答必须）
-SITE_PASSWORD=your-site-password
+# 用编辑器只填写非敏感配置；键清单以 .env.example 为准：
+# HOST=127.0.0.1
+# SECURE_COOKIES=true
+# USE_OBFUSCATED_JS=true
+# SITE_TITLE=心上珍藏集
 
-# DeepSeek API Key（问答系统必须）
-DEEPSEEK_API_KEY=your-deepseek-api-key
-
-# 网站标题
-SITE_TITLE=心上珍藏集
-
-# JS/CSS 混淆压缩（生产环境必须开启）
-USE_OBFUSCATED_JS=true
-
-# 生产环境只监听本机，由 Nginx 反向代理
-HOST=127.0.0.1
-
-# 生产 HTTPS 环境默认启用安全 Cookie
-SECURE_COOKIES=true
-
-# ⚠️ 香港服务器无需 ICP 备案，留空即可
-EOF
-
-chmod 600 .env
+# 密码、API Key 和 Token 从 stdin 原子写入，不放在命令行参数或 shell history。
+read -rsp 'SITE_PASSWORD: ' snh48_site_password
+printf '%s' "$snh48_site_password" | python3 deploy/set_env_secret.py \
+  --file .env --key SITE_PASSWORD
+unset snh48_site_password
 ```
+
+其他秘密重复使用同一工具。公开副本的跨云回放监控 Token 与腾讯云 root 专用监控配置必须使用相同随机值，具体命令和回滚见 `doc/security/server_hardening_migration_runbook.md`。
 
 ### 10. 确认开发模式 reload 已关闭
 

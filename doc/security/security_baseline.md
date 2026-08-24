@@ -30,7 +30,7 @@
 | 可写运行状态防覆盖 | 首页背景词、房间忽略、计分业务核实和记忆页只向腾讯云提交操作；使用 `flock`、原子替换、幂等 operation ID、revision、不可变 gzip 快照和持久 outbox | 防止两个节点互相覆盖整份 JSON、网络超时后重复执行或旧 outbox 回滚新版本 | 当前状态、历史和 outbox 都不进 Git；恢复只能在腾讯云执行；巡检见 `doc/shared_runtime_state.md` |
 | 可靠待处理箱与客服聊天来源审计 | 投诉、QA 邮箱请求、客服聊天消息和处理状态采用一事件一文件，权限 `0600`；每条事件记录腾讯云/阿里云来源，客服识别码计算 SHA-256 内部会话编号，并在受保护事件中保存用户自定义识别码；`/ob` 需密码后展示和回复 | 避免并发 JSONL 同步丢请求，同时让管理员区分请求入口并支持双向客服消息 | 事件含邮箱、投诉、聊天正文和用户自定义识别码，不得进 Git、静态目录、公开日志或诊断输出；公开客服接口按 IP 限速，识别码是访问凭据，用户需自行保管 |
 | 观察页访客估算最小化 | tracker 保留 QA 的 `sessionStorage` 会话 ID，但不再自行生成 `visitor_id`；服务器仅在 `page_view` 时签发带 HMAC 校验的 `HttpOnly` 第一方 `ob_device_profile` Cookie，并把页面、请求 IP 和粗粒度设备标签写入本机 `interaction_logs/session_*/visitor_page_views.jsonl`；`/ob` 密码验证后才返回逐次 IP；API 返回只用于展示整理的 `association_groups` 和 `ip_network_graph`，后者按 IP 节点共同档案/旧会话的集合交集生成边权 | 同一浏览器跨标签页和 IP 变化仍归为一个估算访客；IP 关联组和 3D 图可减少管理页首层条目并帮助查看共用网络环境的档案，但不改变访客/会话估计，不把共享 IP 解释为同一自然人 | Cookie 只是浏览器档案，不等于实名自然人、物理设备或硬件指纹；共享 IP 关联可能包含多个自然人，组内必须保留成员和连接 IP；不得加入 GeoIP、城市、经纬度、完整 User-Agent、Canvas、字体、GPU、音频等主动指纹；3D 图只做静态关系汇总，不做 IP 时间轨迹或位置分析；该日志保持节点本地，不进入 Git 或双服务器业务状态复制；旧记录无法可靠倒推逐次设备/IP，历史关联不得伪造成逐次访问 |
-| 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取 | 页面设置 `noindex,nofollow`，但安全边界仍是服务端鉴权；只接受 `segment_000001.m4a` / `segment_000001_original.m4a` 形式，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`，真实密码只放 `.env` |
+| 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；跨云检查另用独立只读 Token；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取，同时避免两台服务器复用用户密码 | Token 只允许 GET 和 Range，不能调用 `/login` 或签发 Cookie；页面仍设置 `noindex,nofollow`，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`；真实密码和 Token 只放 root `0600` 配置 |
 | 翻牌记录与账号管理访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD` 和路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；账号管理 POST 还校验同源，仅腾讯云权威节点启用。手机号只写腾讯云本机短期 `0600` 会话，验证码不落盘，Token 只写私有账号库；短信有冷却/小时限额，验证码最多尝试 5 次 | 避免个人翻牌、媒体和口袋48登录凭据被公开、跨站触发或同步到阿里云 | 两端页面和代码一致；阿里云同一弹窗只返回当前节点不开放操作且无跳转。媒体按清单允许的账号 ID、固定文件名和 Range API 提供；不得把 `flip_data/` 挂到 `/static` |
 | 社交 Cookie 隐藏管理 | `/api/social-credentials/*` 要求独立密码或迁移期复用 `OB_PASSWORD`，使用 30 分钟、路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；更新 POST 校验同源并受 `SHARED_STATE_IS_PRIMARY` 硬门禁 | 避免微博/抖音/B站 Cookie 被公开、跨站替换或进入阿里云 | Cookie 只经 HTTPS 请求体和 stdin-only 短进程传递；响应、状态和日志不得回显；严格桥先验证再原子保存，失败保留旧配置；页面不进导航并设置 `noindex,nofollow` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
@@ -77,6 +77,7 @@ SHARED_STATE_NODE_ID=本机 tencent 或 aliyun
 SHARED_STATE_IS_PRIMARY=仅腾讯云 true
 SHARED_STATE_PEER=root@另一台服务器IP
 ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码
+ROOM_VOICE_REPLAYS_MONITOR_TOKEN=仅被检查目标设置的高熵只读监控 Token
 FLIP_CARDS_PASSWORD=独立翻牌页密码或留空复用 OB_PASSWORD
 FLIP_CARDS_DATASET_PATH=/home/snh48-fan-hub/flip_data/web/flip_cards.json
 FLIP_CARDS_ACCOUNTS_PATH=/home/snh48-fan-hub/flip_data/web/accounts.json
@@ -149,6 +150,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - 阿里云已使用 `deploy/harden_aliyun_runtime_permissions.sh` 切换到 `snh48-web`、systemd 沙箱和私密运行数据权限；图片代理改为 `DynamicUser` 并只监听回环地址。
 - 阿里云 Nginx 1.18 使用兼容的默认 443 虚拟主机返回 444，已隐藏版本、限制请求体并验证裸域名与 `www`；Python 依赖已对齐仓库锁定版本并通过 `pip check`。
 - 两台主机 SSH 均已关闭密码、keyboard-interactive 和 GSSAPI，root 只允许公钥；阿里云网站专用密钥在腾讯云只能执行共享状态协议子命令。
+- 跨云上麦回放完整性检查使用独立只读 Token，不再要求腾讯云和阿里云复用页面密码；迁移实施顺序、回滚和自动验收见 `doc/security/server_hardening_migration_runbook.md` 与 `deploy/verify_server_security_baseline.sh`。
 
 本批线上验收：`/`、`/complaint` 返回 200；`/openapi.json` 返回 404；未带投诉验证码返回 422、无效挑战返回 400；未知 HTTP Host 被 Nginx 拒绝；后端 8000 只监听本机。SSH 已在笔记本、台式机和阿里云自动同步密钥分别验证后切换为仅公钥认证；密码、keyboard-interactive 和 GSSAPI 认证均关闭，腾讯云控制台终端保留为带外恢复入口。
 
