@@ -60,6 +60,7 @@ find "$WEB_ROOT/website/data" -type d -exec chmod 0700 {} +
 find "$WEB_ROOT/website/data" -type f -exec chmod 0600 {} +
 
 install -d -o root -g root -m 0700 "$FAN_ROOT/notifications/flip_web_admin"
+install -d -o root -g root -m 0700 "$FAN_ROOT/notifications/flip_web_admin/tmp"
 if [ ! -e "$FAN_ROOT/flip_chat.html" ]; then
     install -o root -g root -m 0600 /dev/null "$FAN_ROOT/flip_chat.html"
 fi

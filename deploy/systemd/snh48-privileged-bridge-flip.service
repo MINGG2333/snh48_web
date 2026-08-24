@@ -12,6 +12,7 @@ RuntimeDirectoryMode=0750
 Environment=TRANSFORMERS_OFFLINE=1
 Environment=HF_HUB_OFFLINE=1
 Environment=TOKENIZERS_PARALLELISM=false
+Environment=TMPDIR=/home/snh48-fan-hub/notifications/flip_web_admin/tmp
 ExecStart=/usr/local/libexec/snh48-privileged-bridge-server flip
 Restart=on-failure
 RestartSec=3
