@@ -11,14 +11,15 @@ WorkingDirectory=/home/snh48_web
 EnvironmentFile=/home/snh48_web/.env
 Environment=HOME=/var/lib/snh48-web
 Environment=PYTHONUNBUFFERED=1
-Environment="SOCIAL_CREDENTIALS_ADMIN_COMMAND=/usr/bin/sudo -n /usr/local/sbin/snh48-social-credentials-bridge"
-Environment="FLIP_CARDS_ACCOUNT_ADMIN_COMMAND=/usr/bin/sudo -n /usr/local/sbin/snh48-flip-account-bridge"
+Environment="SOCIAL_CREDENTIALS_ADMIN_COMMAND=/usr/local/bin/snh48-privileged-bridge-client social"
+Environment="FLIP_CARDS_ACCOUNT_ADMIN_COMMAND=/usr/local/bin/snh48-privileged-bridge-client flip"
 ExecStart=/home/snh48_web/venv/bin/python -m website.main
 Restart=on-failure
 RestartSec=5
 UMask=0077
-# The two root bridges are explicitly allowlisted in sudoers.  They need a
-# controlled privilege transition; the remaining systemd sandbox stays active.
+# Sensitive account operations use separate root services over credential-checked
+# Unix sockets. The public web process retains no privilege-transition ability.
+NoNewPrivileges=yes
 PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=read-only

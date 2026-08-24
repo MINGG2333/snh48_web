@@ -84,7 +84,7 @@ ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no root@新�
 2. 确认 `snh48-web` 是不可登录系统账号。
 3. 安装对应 systemd unit，运行 `systemd-analyze verify` 后 `daemon-reload`。
 4. 网站必须只监听 `127.0.0.1:8000`，运行文件目录为 `0700`、文件为 `0600`。
-5. 数据生成主机需要固定 sudo 桥时，只安装仓库白名单脚本和 sudoers；公开副本不得因此获得通用 sudo。
+5. 数据生成主机的翻牌账号与社交 Cookie 操作使用独立 root systemd 服务；网站只连接 UID 校验的本机 Unix Socket，不授予网站账号 sudo、fan-hub 写权限或额外 capability。公开副本不启动这些桥服务。
 
 ```bash
 systemctl enable --now snh48-aliyun.service
@@ -147,9 +147,9 @@ PUBLIC_BASE_URL=https://新域名 \
 ```bash
 cd /home/snh48_web
 WEB_SERVICE=snh48-web.service \
-WEB_EXPECT_NO_NEW_PRIVILEGES=skip \
 IMAGE_PROXY_EXPECT_DYNAMIC_USER=no \
 IMAGE_PROXY_EXPECT_LOOPBACK=no \
+PRIVILEGED_BRIDGE_SERVICES=snh48-privileged-bridge-flip.service,snh48-privileged-bridge-social.service \
 ALLOWED_NETWORK_PORTS=22,80,443,8899 \
 PUBLIC_BASE_URL=https://新域名 \
   bash deploy/verify_server_security_baseline.sh

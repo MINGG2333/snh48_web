@@ -1,0 +1,36 @@
+[Unit]
+Description=SNH48 flip account privileged bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=snh48-web
+RuntimeDirectory=snh48-privileged-bridge-flip
+RuntimeDirectoryMode=0750
+ExecStart=/usr/local/libexec/snh48-privileged-bridge-server flip
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/home/snh48-fan-hub/config
+ReadWritePaths=/home/snh48-fan-hub/notifications/flip_web_admin
+ReadWritePaths=/home/snh48-fan-hub/flip_data
+ReadWritePaths=/home/snh48-fan-hub/flip_chat.html
+
+[Install]
+WantedBy=multi-user.target

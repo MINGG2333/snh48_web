@@ -85,12 +85,10 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 ```bash
 cd /home/snh48_web
 bash deploy/harden_runtime_permissions.sh
-install -m 0644 deploy/systemd/snh48-web.service /etc/systemd/system/snh48-web.service
-systemctl daemon-reload
 systemctl enable --now snh48-web.service
 ```
 
-微博图片代理由 `/home/snh48-fan-hub/deploy/systemd/snh48-weibo-img-proxy.service` 以同一专用账号运行；8899 只供 Nginx 反代，云安全组不得公网放行。网站服务需要的两个 root 能力仅通过 `deploy/privileged/` 中的固定 sudo 桥接脚本提供，修改桥接命令时必须同步 sudoers 并重新验证。
+微博图片代理由 `/home/snh48-fan-hub/deploy/systemd/snh48-weibo-img-proxy.service` 以同一专用账号运行；8899 只供 Nginx 反代，云安全组不得公网放行。翻牌账号管理和微博/抖音/B站 Cookie 更新分别由 `snh48-privileged-bridge-flip.service`、`snh48-privileged-bridge-social.service` 执行；网站进程只经校验对端 UID 的 Unix Socket 提交固定命令，不持有 sudo 权限、fan-hub 写权限或额外 capability。`deploy/harden_runtime_permissions.sh` 会安装并启动桥服务、切换网站 unit，成功后删除旧 sudoers 和包装器。
 
 ---
 

@@ -1,6 +1,6 @@
 # 网站安全基线
 
-> 更新日期：2026-08-24
+> 更新日期：2026-08-25
 >
 > 适用范围：代码库中的 `deploy/nginx.conf`、`deploy/nginx-aliyun.conf`、FastAPI 后端、静态前端资源和部署维护流程。
 >
@@ -14,7 +14,7 @@
 | 阿里云 HTTPS 证书续期提醒 | Let's Encrypt / Certbot 自动续期；月度 cron 运行 `script/check_https_certificate.py` 并写入 `/var/log/snh48/https-cert-reminder.log` | 降低证书过期未发现导致 HTTPS 不可用的风险 | 证书仍有效且 `certbot.timer` 存在时不要手动替换；机制细节见 `doc/ops/https_certificate_reminder.md` |
 | CSP HLS 兼容 | `connect-src 'self' https:`、`media-src 'self' https: blob:`、`worker-src 'self' blob:` | 保持外部 `.m3u8` 回放和 hls.js worker 可用 | 新增 CDN、外部图片、外部 API 时必须更新 CSP |
 | 后端端口收敛 | 生产环境 `HOST=127.0.0.1`，云安全组关闭公网 `8000` | 防止用户绕过 Nginx 安全头和 HTTPS | 临时调试后必须恢复本机监听并关闭安全组 |
-| FastAPI 运行隔离 | 腾讯云 `snh48-web.service` 和阿里云 `snh48-aliyun.service` 都使用专用不可登录 `snh48-web` 账号、systemd 沙箱和 `UMask=0077`；阿里云跨云密钥只能调用固定 shared-state peer 命令 | 降低网站被攻破后读取/修改整台服务器和运行数据的影响面 | 修改服务运行目录或桥接命令时必须同步 unit、权限脚本和远端 `authorized_keys` 强制命令 |
+| FastAPI 运行隔离 | 腾讯云 `snh48-web.service` 和阿里云 `snh48-aliyun.service` 都使用专用不可登录 `snh48-web` 账号、systemd 沙箱和 `UMask=0077`；腾讯云敏感账号操作由两个独立 root 服务通过 UID 校验的 Unix Socket 接收固定命令，网页进程无 sudo、fan-hub 写权限和额外 capability；阿里云跨云密钥只能调用固定 shared-state peer 命令 | 降低网站被攻破后读取/修改整台服务器和运行数据的影响面 | 修改服务运行目录或桥接命令时必须同步 unit、权限脚本和远端 `authorized_keys` 强制命令 |
 | SSH 强认证 | 腾讯云和阿里云均使用 `AuthenticationMethods publickey`；root 只允许公钥，密码、keyboard-interactive、GSSAPI 和 X11 转发关闭 | 阻断公网密码爆破直接变成账号入侵 | 先分别验证笔记本、台式机和自动化密钥；保留云控制台终端作为带外恢复入口 |
 | 公开投诉验证码 | 投诉页使用服务端保存、10 分钟过期、一次性消费的验证码挑战；答案不写入 HTML/JS | 降低公开投诉接口被脚本批量提交的风险 | 当前挑战状态是单进程内存；扩展多 worker 前需迁移到共享存储 |
 | 可信 Host 与 API 文档 | `TrustedHostMiddleware` 限制域名；OpenAPI/Swagger 默认关闭，需显式 `ENABLE_API_DOCS=true` 开启 | 减少 Host 头滥用和接口结构暴露 | 新域名必须加入 `TRUSTED_HOSTS`，调试完成后恢复关闭文档 |
@@ -31,8 +31,8 @@
 | 可靠待处理箱与客服聊天来源审计 | 投诉、QA 邮箱请求、客服聊天消息和处理状态采用一事件一文件，权限 `0600`；每条事件记录腾讯云/阿里云来源，客服识别码计算 SHA-256 内部会话编号，并在受保护事件中保存用户自定义识别码；`/ob` 需密码后展示和回复 | 避免并发 JSONL 同步丢请求，同时让管理员区分请求入口并支持双向客服消息 | 事件含邮箱、投诉、聊天正文和用户自定义识别码，不得进 Git、静态目录、公开日志或诊断输出；公开客服接口按 IP 限速，识别码是访问凭据，用户需自行保管 |
 | 观察页访客估算最小化 | tracker 保留 QA 的 `sessionStorage` 会话 ID，但不再自行生成 `visitor_id`；服务器仅在 `page_view` 时签发带 HMAC 校验的 `HttpOnly` 第一方 `ob_device_profile` Cookie，并把页面、请求 IP 和粗粒度设备标签写入本机 `interaction_logs/session_*/visitor_page_views.jsonl`；`/ob` 密码验证后才返回逐次 IP；API 返回只用于展示整理的 `association_groups` 和 `ip_network_graph`，后者按 IP 节点共同档案/旧会话的集合交集生成边权 | 同一浏览器跨标签页和 IP 变化仍归为一个估算访客；IP 关联组和 3D 图可减少管理页首层条目并帮助查看共用网络环境的档案，但不改变访客/会话估计，不把共享 IP 解释为同一自然人 | Cookie 只是浏览器档案，不等于实名自然人、物理设备或硬件指纹；共享 IP 关联可能包含多个自然人，组内必须保留成员和连接 IP；不得加入 GeoIP、城市、经纬度、完整 User-Agent、Canvas、字体、GPU、音频等主动指纹；3D 图只做静态关系汇总，不做 IP 时间轨迹或位置分析；该日志保持节点本地，不进入 Git 或双服务器业务状态复制；旧记录无法可靠倒推逐次设备/IP，历史关联不得伪造成逐次访问 |
 | 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；跨云检查另用独立只读 Token；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取，同时避免两台服务器复用用户密码 | Token 只允许 GET 和 Range，不能调用 `/login` 或签发 Cookie；页面仍设置 `noindex,nofollow`，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`；真实密码和 Token 只放 root `0600` 配置 |
-| 翻牌记录与账号管理访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD` 和路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；账号管理 POST 还校验同源，仅腾讯云权威节点启用。手机号只写腾讯云本机短期 `0600` 会话，验证码不落盘，Token 只写私有账号库；短信有冷却/小时限额，验证码最多尝试 5 次 | 避免个人翻牌、媒体和口袋48登录凭据被公开、跨站触发或同步到阿里云 | 两端页面和代码一致；阿里云同一弹窗只返回当前节点不开放操作且无跳转。媒体按清单允许的账号 ID、固定文件名和 Range API 提供；不得把 `flip_data/` 挂到 `/static` |
-| 社交 Cookie 隐藏管理 | `/api/social-credentials/*` 要求独立密码或迁移期复用 `OB_PASSWORD`，使用 30 分钟、路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；更新 POST 校验同源并受 `SHARED_STATE_IS_PRIMARY` 硬门禁 | 避免微博/抖音/B站 Cookie 被公开、跨站替换或进入阿里云 | Cookie 只经 HTTPS 请求体和 stdin-only 短进程传递；响应、状态和日志不得回显；严格桥先验证再原子保存，失败保留旧配置；页面不进导航并设置 `noindex,nofollow` |
+| 翻牌记录与账号管理访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD` 和路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；账号管理 POST 还校验同源，仅腾讯云权威节点启用。手机号和验证码经本机 Socket 请求体交给独立受限服务，手机号只写腾讯云本机短期 `0600` 会话，验证码不落盘，Token 只写私有账号库；短信有冷却/小时限额，验证码最多尝试 5 次 | 避免个人翻牌、媒体和口袋48登录凭据被公开、跨站触发或同步到阿里云 | 两端页面和代码一致；阿里云同一弹窗只返回当前节点不开放操作且无跳转。网页进程无 sudo 和 fan-hub 写权限；媒体按清单允许的账号 ID、固定文件名和 Range API 提供；不得把 `flip_data/` 挂到 `/static` |
+| 社交 Cookie 隐藏管理 | `/api/social-credentials/*` 要求独立密码或迁移期复用 `OB_PASSWORD`，使用 30 分钟、路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；更新 POST 校验同源并受 `SHARED_STATE_IS_PRIMARY` 硬门禁；固定命令由独立受限服务执行 | 避免微博/抖音/B站 Cookie 被公开、跨站替换或进入阿里云，同时避免网页进程直接获得 root 或凭据目录写权限 | Cookie 只经 HTTPS、Unix Socket 请求体和 stdin-only 短进程传递；响应、状态、命令行和日志不得回显；严格桥先验证再原子保存，失败保留旧配置；页面不进导航并设置 `noindex,nofollow` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |

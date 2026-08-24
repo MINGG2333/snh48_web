@@ -79,7 +79,7 @@ vm.runInContext(
   template.slice(pillStart, pillEnd) + "\nthis.shouldShowUpdatePill = shouldShowUpdatePill;",
   pillContext
 );
-assert.equal(pillContext.shouldShowUpdatePill(), false, "mobile pill should hide at the bottom");
+assert.equal(pillContext.shouldShowUpdatePill(), true, "mobile pill should stay visible at the bottom");
 pillContext.window.innerWidth = 1280;
 assert.equal(pillContext.shouldShowUpdatePill(), false, "desktop pill should hide at the bottom");
 pillContext.chatScroll.scrollTop = 400;

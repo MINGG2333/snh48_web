@@ -1423,7 +1423,7 @@
 
     function shouldShowUpdatePill() {
       return page.classList.contains("ready")
-        && (datasetUpdateAvailable || !isNearBottom());
+        && (window.innerWidth <= 720 || datasetUpdateAvailable || !isNearBottom());
     }
 
     function syncUpdatePill() {

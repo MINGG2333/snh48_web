@@ -15,6 +15,7 @@ WEB_PORT="${WEB_PORT:-8000}"
 IMAGE_PROXY_PORT="${IMAGE_PROXY_PORT:-8899}"
 ALLOWED_NETWORK_PORTS="${ALLOWED_NETWORK_PORTS:-22,80,443}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
+PRIVILEGED_BRIDGE_SERVICES="${PRIVILEGED_BRIDGE_SERVICES:-}"
 
 failures=0
 
@@ -125,6 +126,49 @@ if [ "$WEB_EXPECT_NO_NEW_PRIVILEGES" != "skip" ]; then
         pass "$WEB_SERVICE NoNewPrivileges=$WEB_EXPECT_NO_NEW_PRIVILEGES"
     else
         fail "$WEB_SERVICE expected NoNewPrivileges=$WEB_EXPECT_NO_NEW_PRIVILEGES, got ${web_nnp:-missing}"
+    fi
+fi
+
+if [ -n "$PRIVILEGED_BRIDGE_SERVICES" ]; then
+    old_ifs="$IFS"
+    IFS=','
+    for bridge_service in $PRIVILEGED_BRIDGE_SERVICES; do
+        IFS="$old_ifs"
+        check_service "$bridge_service"
+        bridge_user="$(systemctl show "$bridge_service" --property=User --value)"
+        bridge_group="$(systemctl show "$bridge_service" --property=Group --value)"
+        bridge_nnp="$(systemctl show "$bridge_service" --property=NoNewPrivileges --value)"
+        bridge_caps="$(systemctl show "$bridge_service" --property=CapabilityBoundingSet --value)"
+        if [ "$bridge_user:$bridge_group" = "root:$WEB_EXPECTED_USER" ]; then
+            pass "$bridge_service uses root:$WEB_EXPECTED_USER"
+        else
+            fail "$bridge_service expected root:$WEB_EXPECTED_USER, got ${bridge_user:-missing}:${bridge_group:-missing}"
+        fi
+        if [ "$bridge_nnp" = "yes" ] && [ -z "$bridge_caps" ]; then
+            pass "$bridge_service has no-new-privileges and an empty capability bound"
+        else
+            fail "$bridge_service privilege sandbox differs from the baseline"
+        fi
+        bridge_runtime="${bridge_service%.service}"
+        bridge_socket="/run/$bridge_runtime/bridge.sock"
+        if [ -S "$bridge_socket" ]; then
+            socket_mode="$(stat -c '%a' "$bridge_socket")"
+            socket_owner="$(stat -c '%U:%G' "$bridge_socket")"
+            if [ "$socket_mode" = "660" ] && [ "$socket_owner" = "root:$WEB_EXPECTED_USER" ]; then
+                pass "$bridge_socket is root:$WEB_EXPECTED_USER 0660"
+            else
+                fail "$bridge_socket expected root:$WEB_EXPECTED_USER 0660, got $socket_owner $socket_mode"
+            fi
+        else
+            fail "missing bridge socket: $bridge_socket"
+        fi
+        IFS=','
+    done
+    IFS="$old_ifs"
+    if [ -e /etc/sudoers.d/snh48-web ]; then
+        fail "obsolete website sudoers file still exists"
+    else
+        pass "website account has no bridge sudoers file"
     fi
 fi
 

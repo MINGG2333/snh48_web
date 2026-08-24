@@ -139,7 +139,7 @@ node script/obfuscate_js.cjs
 
 - 页面 `/social-credentials-admin` 不进入任何公开导航并设置 `noindex,nofollow`；API 前缀 `/api/social-credentials`。
 - 只在腾讯云主节点启用更新；`SHARED_STATE_IS_PRIMARY=false` 时无论环境开关如何均返回 403。阿里云不保存 Cookie，也不需要 fan-hub 采集脚本或桥。
-- 新 Cookie 只经 HTTPS 请求体传给 fan-hub 的 `scripts/web/social_credentials_admin.py` stdin；桥先实时验证，成功后原子替换微博/抖音对应主备槽位或 B站主槽位，响应和状态不含 Cookie。
+- 新 Cookie 只经 HTTPS 请求体和本机 Unix Socket 请求体传给独立的 `snh48-privileged-bridge-social.service`，再通过 stdin 交给 fan-hub 的 `scripts/web/social_credentials_admin.py`；固定命令桥先实时验证，成功后原子替换微博/抖音对应主备槽位或 B站主槽位，响应、进程参数和日志不含 Cookie。网站服务本身没有 sudo 或 fan-hub 写权限。
 - 生产应设置独立 `SOCIAL_CREDENTIALS_ADMIN_PASSWORD`；迁移期留空复用现有 `OB_PASSWORD`。相关边界见 fan-hub `doc/social_credentials_admin.md`。
 
 ### 礼物回复管理页
@@ -216,7 +216,7 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航并设置 `noindex,nofollow`；登录页、应用数据和本地 MP3/MP4 都必须先鉴权。
 - 后端只按脱敏清单允许的稳定口袋号读取账号 JSON 和账号子目录媒体；不得把 `flip_data/` 挂到 `/static`。schema v4 逐条包含回复成员身份，语音记录可带转录参考，缺失时隐藏。
 - 腾讯云、阿里云使用同一页面和代码。`FLIP_CARDS_ACCOUNT_ADMIN_ENABLED` 默认跟随 `SHARED_STATE_IS_PRIMARY`：腾讯云可在同一弹窗发送短信、验证码登录并启动后台刷新；阿里云弹窗只显示当前节点不开放账号操作，不提供腾讯云跳转。
-- 网页账号管理继续受翻牌密码 Cookie 保护，POST 还要求同源；手机号只进入 fan-hub 本机短期 `0600` 会话，验证码不落盘，Token 只进入 `config/accounts.json`。阿里云只同步脱敏 `web/`、账号级音频和视频，不同步 `metadata/`、`transcripts/`、登录会话或任务日志。
+- 网页账号管理继续受翻牌密码 Cookie 保护，POST 还要求同源；手机号和验证码只经本机 Unix Socket 请求体进入独立的 `snh48-privileged-bridge-flip.service`，手机号只进入 fan-hub 本机短期 `0600` 会话，验证码不落盘，Token 只进入 `config/accounts.json`。网站服务本身没有 sudo 或 fan-hub 写权限。阿里云只同步脱敏 `web/`、账号级音频和视频，不同步 `metadata/`、`transcripts/`、登录会话或任务日志。
 - 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录仍在 fan-hub 数据生成阶段完成，网站不对转录正文调用 Codex 或其他外部润色模型。页面采用浅色聊天消息流，引用提问使用灰色摘要，转录参考使用语音条下方的分隔文本区。顶部筛选默认收起且默认选择陈嘉仪，其他回复成员可单独筛选；陈嘉仪头像显示“嘉仪”，其他成员显示完整姓名。账号登录和更新状态入口分离，状态弹窗可收起并恢复；首次只渲染筛选结果中最新 50 条翻牌，向上滚动每次补入 50 条并保持阅读位置，音频使用 `preload=none`，避免 iPhone Safari 登录后同时初始化全部媒体。底部“跳到最新”只滚动当前数据，检测到新版本后显示“有新记录，点击查看最新”，此时才重新加载并跳到底部。问题状态 Tag、双向跳转和 4 秒高对比高亮保持不变。
 
 ### 计分礼物管理页

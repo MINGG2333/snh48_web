@@ -1,2 +1,0 @@
-Cmnd_Alias SNH48_WEB_PRIVILEGED_BRIDGES = /usr/local/sbin/snh48-social-credentials-bridge, /usr/local/sbin/snh48-flip-account-bridge
-snh48-web ALL=(root) NOPASSWD: SNH48_WEB_PRIVILEGED_BRIDGES
