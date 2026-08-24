@@ -2,6 +2,8 @@
 
 更新日期：2026-08-25 CST +0800
 
+2026-08-25 00:40 腾讯云修复翻牌网页发送验证码返回 `操作失败（OSError）`：根因为 `snh48-privileged-bridge-flip.service` 的 `ProtectSystem=strict` 令 `/tmp` 只读，而短信限速和后台刷新仍需打开 fan-hub 的两个宿主机共享锁。提交 `aa6ac92` 在加固脚本中预创建并收紧 `/tmp/snh48-fan-hub-flip-web-rate.lock`、`/tmp/snh48-fan-hub-flip-update.lock` 为 `root:root 0600`，服务单元仅把这两个文件精确挂载为可写，没有开放整个 `/tmp`，网站进程的挂载仍为只读。两个锁在翻牌桥命名空间内均通过与生产脚本相同的 `open("a+")` 和 `flock` 验证；三个服务均 enabled、active/running、`NRestarts=0` 且重启后 warning..emerg 日志为空。公网翻牌登录、账号管理状态、最近任务接口分别为 200、200/enabled、200/completed；未重复触发真实短信。Python 12 项、前端 1 项专项测试、shell/systemd 语法和腾讯云主机安全基线全部通过。阿里云未同步，继续等待腾讯云用户验收。
+
 2026-08-25 00:11 腾讯云翻牌账号与社交 Cookie 管理桥完成安全隔离修复：提交 `7197232` 将原先从 `snh48-web.service` 内调用的两个 sudo 包装器替换为 `snh48-privileged-bridge-flip.service` 和 `snh48-privileged-bridge-social.service`。两个 root 服务只通过 `root:snh48-web 0660` Unix Socket 接受固定命令并校验对端 UID；网页进程恢复 `NoNewPrivileges=yes`、空 capability、`ProtectHome=read-only`，在实际 mount namespace 中看到 fan-hub `config/` 和 `flip_data/` 为只读，只有对应桥服务看到明确列出的运行目录为可写。新桥启动并切换网站成功后，生产 `/etc/sudoers.d/snh48-web` 和旧包装器已删除，旧配置仅保存在 root `0700` 的 `/var/lib/snh48-web/bridge-migration-backup-20260825/` 供紧急回滚。
 
 同轮线上验收中，三个服务均为 enabled、active/running、`NRestarts=0`，启动后 warning..emerg 日志为空；腾讯云翻牌管理能力为 true，最近任务从原先 503 恢复为 200/completed，账号 `172884074` 仍为 365 条记录；社交凭据状态从 503 恢复为 200，返回微博、抖音、B站配置槽位且不含 Cookie。真实 Cookie 替换和短信发送未用伪值触发，避免改变外部账号状态；固定命令、敏感值不进入 argv/响应、Socket 端到端传输和两个 API 的 14 项专项测试全部通过。全量 85 项测试通过 83 项，剩余 2 项为主分支既有礼物页模板文案/结构断言不一致，本次未修改对应文件。手机端翻牌“跳到最新”常驻条件同时恢复并通过前端测试。主机安全基线全部通过；阿里云尚未同步，等待腾讯云用户验收。
