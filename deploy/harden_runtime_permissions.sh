@@ -64,6 +64,20 @@ if [ ! -e "$FAN_ROOT/flip_chat.html" ]; then
     install -o root -g root -m 0600 /dev/null "$FAN_ROOT/flip_chat.html"
 fi
 
+# The flip bridge shares these locks with fan-hub maintenance commands. Keep
+# the surrounding /tmp read-only inside the service and expose only the two
+# pre-created, root-only lock files through its systemd unit.
+for lock_path in \
+    /tmp/snh48-fan-hub-flip-web-rate.lock \
+    /tmp/snh48-fan-hub-flip-update.lock; do
+    if [ ! -e "$lock_path" ]; then
+        install -o root -g root -m 0600 /dev/null "$lock_path"
+    else
+        chown root:root "$lock_path"
+        chmod 0600 "$lock_path"
+    fi
+done
+
 systemctl daemon-reload
 systemctl enable snh48-privileged-bridge-flip.service snh48-privileged-bridge-social.service
 systemctl restart snh48-privileged-bridge-flip.service snh48-privileged-bridge-social.service

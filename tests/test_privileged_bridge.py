@@ -144,6 +144,14 @@ class PrivilegedBridgeTests(unittest.TestCase):
             self.assertIn("ProtectHome=read-only", unit)
         self.assertIn("/notifications/flip_web_admin", flip_unit)
         self.assertNotIn("ReadWritePaths=/home/snh48-fan-hub/notifications\n", flip_unit)
+        for lock_path in (
+            "/tmp/snh48-fan-hub-flip-web-rate.lock",
+            "/tmp/snh48-fan-hub-flip-update.lock",
+        ):
+            self.assertIn(f"ReadWritePaths={lock_path}", flip_unit)
+            self.assertIn(lock_path, hardening)
+        self.assertNotIn("ReadWritePaths=/tmp\n", flip_unit)
+        self.assertIn("chmod 0600 \"$lock_path\"", hardening)
         self.assertIn("rm -f /etc/sudoers.d/snh48-web", hardening)
         self.assertFalse((ROOT / "deploy/privileged/snh48-web.sudoers").exists())
 
