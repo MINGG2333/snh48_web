@@ -46,6 +46,8 @@
 | `/home/snh48-fan-hub/flip_data/web/flip_cards.json` | 密码保护的翻牌记录应用数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |
 
+上述阿里云只读副本由 root 同步，但必须以 `root:snh48-web`、目录 `0750`、文件 `0640` 落盘。`deploy/sync-from-tencent.sh` 和手动兜底 `deploy/sync-to-aliyun.sh` 已在每个 rsync 接收操作中固化该规则；迁移时不得只运行一次 ACL 后继续使用会恢复源端 `root:root` 权限的旧同步脚本。
+
 如果新服务器要接替腾讯云成为数据生成源，还必须迁移 fan-hub 的代码、虚拟环境、采集配置、Cookie/Token、systemd/cron/screen 任务和历史原始数据；这些不属于网站仓库，不要从 `/home/snh48_web` 覆盖。
 
 ## 服务与系统配置

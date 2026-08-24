@@ -10,6 +10,7 @@ IMAGE_PROXY_EXPECT_DYNAMIC_USER="${IMAGE_PROXY_EXPECT_DYNAMIC_USER:-yes}"
 IMAGE_PROXY_EXPECT_LOOPBACK="${IMAGE_PROXY_EXPECT_LOOPBACK:-yes}"
 ENV_FILE="${ENV_FILE:-/home/snh48_web/.env}"
 PRIVATE_RUNTIME_ROOT="${PRIVATE_RUNTIME_ROOT:-/home/snh48_web/website/data}"
+READ_ONLY_DATA_PROBE="${READ_ONLY_DATA_PROBE:-/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/manifest.json}"
 WEB_PORT="${WEB_PORT:-8000}"
 IMAGE_PROXY_PORT="${IMAGE_PROXY_PORT:-8899}"
 ALLOWED_NETWORK_PORTS="${ALLOWED_NETWORK_PORTS:-22,80,443}"
@@ -88,7 +89,7 @@ check_listener_present() {
     fi
 }
 
-for command_name in sshd systemctl ss nginx stat find awk curl grep; do
+for command_name in sshd systemctl ss nginx stat find awk curl grep runuser; do
     require_command "$command_name"
 done
 
@@ -193,6 +194,16 @@ if [ -d "$PRIVATE_RUNTIME_ROOT" ]; then
     fi
 else
     fail "missing runtime directory: $PRIVATE_RUNTIME_ROOT"
+fi
+
+if [ -f "$READ_ONLY_DATA_PROBE" ]; then
+    if runuser -u "$WEB_EXPECTED_USER" -- test -r "$READ_ONLY_DATA_PROBE"; then
+        pass "$WEB_EXPECTED_USER can read $READ_ONLY_DATA_PROBE"
+    else
+        fail "$WEB_EXPECTED_USER cannot read $READ_ONLY_DATA_PROBE"
+    fi
+else
+    fail "missing read-only data probe: $READ_ONLY_DATA_PROBE"
 fi
 
 set +e

@@ -19,7 +19,7 @@
 | 公开投诉验证码 | 投诉页使用服务端保存、10 分钟过期、一次性消费的验证码挑战；答案不写入 HTML/JS | 降低公开投诉接口被脚本批量提交的风险 | 当前挑战状态是单进程内存；扩展多 worker 前需迁移到共享存储 |
 | 可信 Host 与 API 文档 | `TrustedHostMiddleware` 限制域名；OpenAPI/Swagger 默认关闭，需显式 `ENABLE_API_DOCS=true` 开启 | 减少 Host 头滥用和接口结构暴露 | 新域名必须加入 `TRUSTED_HOSTS`，调试完成后恢复关闭文档 |
 | 依赖与外部脚本固定 | FastAPI/Starlette/Jinja2/python-multipart/OpenAI 版本已锁定兼容范围；回放使用 `hls.js@1.7.1` + SRI | 降低供应链漂移和 CDN 被替换的风险 | 定期升级时必须重新跑回归测试并更新 SRI |
-| 运行时文件权限 | 网站数据、投诉和交互日志由 `snh48-web` 管理，目录 `0700`、文件 `0600`；`.env` 和主机运维日志保持 root `0600` | 降低同机普通账号读取投诉、会话、管理数据或运维细节的风险 | 腾讯云使用 `deploy/harden_runtime_permissions.sh`，阿里云使用 `deploy/harden_aliyun_runtime_permissions.sh`；不要手工放宽到全局可读 |
+| 运行时文件权限 | 网站可写数据、投诉和交互日志由 `snh48-web` 管理，目录 `0700`、文件 `0600`；阿里云只读 fan-hub 副本由 root 同步为 `root:snh48-web`、目录 `0750`、文件 `0640`；`.env` 和主机运维日志保持 root `0600` | 降低同机普通账号读取投诉、会话、管理数据或运维细节的风险，同时允许非 root 网站进程只读派生数据 | 腾讯云使用 `deploy/harden_runtime_permissions.sh`，阿里云使用 `deploy/harden_aliyun_runtime_permissions.sh`；拉取和手动推送脚本必须保留 `--chown=root:snh48-web --chmod=D750,F640`，不要手工放宽到全局可读 |
 | 图片代理端口收敛 | 生产安全组不公网放行 `8899`，公网只经 HTTPS `/image-proxy/` 到 Nginx；阿里云代理还以 systemd `DynamicUser` 只监听 `127.0.0.1:8899` | 防止外部绕过 Nginx 安全头、限速和缓存策略直接刷图片代理 | `/image-proxy/` 仍是公网入口，需要继续保留限速和共享缓存 |
 | 图片代理缓存与温和限速 | `/image-proxy/` 使用 Nginx `proxy_cache`、缓存锁、stale 缓存、7 天浏览器缓存、`X-Cache-Status` 和温和 IP 限速 | 降低重复打新浪上游的概率，改善重复访问速度，并削弱刷量影响 | 缓存目录占用磁盘；部署时需确保 `/var/cache/nginx/snh48_image_proxy` 可写 |
 | 图片缓存预热 | `script/prewarm_image_proxy.py` 可按 `schedule.csv` 日期倒序预热最新微博图片 | 优先让最新行程图片进入 Nginx 缓存，减少用户首次遇到慢图的概率 | 预热会主动消耗少量带宽，应在数据同步后限量运行 |
@@ -36,7 +36,7 @@
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
-| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才拉取。上麦回放以 manifest 原子提交；翻牌多账号先同步脱敏账号 JSON 和媒体，再原子提交 `web/accounts.json` | 保留只读派生数据约 1 分钟同步延迟，同时避免读到半个上麦或翻牌发布包 | 不要恢复腾讯云侧常驻推送；翻牌同步只允许 `web/`、`audio/`、`video/`，不得加入 `metadata/`、`transcripts/`、手机号、Token、登录会话或任务日志；其他既有排除规则不变 |
+| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才拉取。上麦回放以 manifest 原子提交；翻牌多账号先同步脱敏账号 JSON 和媒体，再原子提交 `web/accounts.json`；所有接收文件强制为网站组只读 | 保留只读派生数据约 1 分钟同步延迟，同时避免读到半个发布包或因原子替换丢失网站读取权限 | 不要恢复腾讯云侧常驻推送；翻牌同步只允许 `web/`、`audio/`、`video/`，不得加入 `metadata/`、`transcripts/`、手机号、Token、登录会话或任务日志；不得移除同步脚本的接收端属组和权限参数；其他既有排除规则不变 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |

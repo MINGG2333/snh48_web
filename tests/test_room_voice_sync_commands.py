@@ -15,6 +15,20 @@ SPEC.loader.exec_module(deploy)
 
 
 class RoomVoiceSyncCommandTests(unittest.TestCase):
+    def test_shell_syncs_enforce_web_read_permissions_on_every_transfer(self) -> None:
+        deploy_root = MODULE_PATH.parent
+        for filename in ("sync-from-tencent.sh", "sync-to-aliyun.sh"):
+            script = (deploy_root / filename).read_text(encoding="utf-8")
+            self.assertIn("RSYNC_WEB_READ_OPTS=(--chown=root:snh48-web --chmod=D750,F640)", script)
+            transfers = [
+                line.strip()
+                for line in script.splitlines()
+                if line.strip().startswith("rsync ")
+            ]
+            self.assertTrue(transfers, filename)
+            for transfer in transfers:
+                self.assertIn('"${RSYNC_WEB_READ_OPTS[@]}"', transfer, filename)
+
     def test_pull_and_fallback_push_commit_manifest_last(self) -> None:
         deploy_root = MODULE_PATH.parent
         for filename in ("sync-from-tencent.sh", "sync-to-aliyun.sh"):

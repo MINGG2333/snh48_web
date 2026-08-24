@@ -106,6 +106,7 @@ systemctl show snh48-aliyun.service \
 - 网站共享状态密钥在权威主机 `authorized_keys` 中绑定 `restrict,command=...` 强制命令。
 - 用合法协议请求验证成功，再用 `id` 等交互命令验证被拒绝。
 - 公开副本只拉取 `core` / `dynamic` 网站必要数据；不得加入 Cookie、Token、完整原始房间数据或采集配置。
+- 拉取和手动推送脚本必须让接收端以 `root:snh48-web`、目录 `0750`、文件 `0640` 保存只读副本。原子替换 manifest/accounts 文件也必须经过同一规则；不能依赖只执行一次、随后会被 rsync 覆盖的 ACL。
 - 更新服务器 IP 后同步更新云控制台登录白名单；停用旧服务器后删除旧 IP。
 
 ## 10. 跨云回放健康检查 Token
@@ -154,7 +155,7 @@ PUBLIC_BASE_URL=https://新域名 \
   bash deploy/verify_server_security_baseline.sh
 ```
 
-脚本只读，不修改配置。它验证 sshd、systemd、监听端口、Nginx、安全头和文件权限，但不能读取云厂商安全组规则。
+脚本只读，不修改配置。它验证 sshd、systemd、监听端口、Nginx、安全头、私有运行目录权限，并以网站账号直接读取上麦回放 manifest，避免只读副本的属组/ACL 漂移漏检；它不能读取云厂商安全组规则。
 
 ## 12. 独立网络验收
 
