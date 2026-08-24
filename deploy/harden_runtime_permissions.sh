@@ -71,7 +71,8 @@ fi
 for lock_path in \
     /tmp/snh48-fan-hub-flip-web-rate.lock \
     /tmp/snh48-fan-hub-flip-update.lock \
-    /tmp/snh48-fan-hub-transcription.lock; do
+    /tmp/snh48-fan-hub-transcription.lock \
+    /tmp/snh48-fan-hub-flip-accounts-manifest.lock; do
     if [ ! -e "$lock_path" ]; then
         install -o root -g root -m 0600 /dev/null "$lock_path"
     else
