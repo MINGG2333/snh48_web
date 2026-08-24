@@ -144,6 +144,8 @@ class PrivilegedBridgeTests(unittest.TestCase):
             self.assertIn("ProtectHome=read-only", unit)
         self.assertIn("/notifications/flip_web_admin", flip_unit)
         self.assertNotIn("ReadWritePaths=/home/snh48-fan-hub/notifications\n", flip_unit)
+        self.assertIn("Environment=TRANSFORMERS_OFFLINE=1", flip_unit)
+        self.assertIn("Environment=HF_HUB_OFFLINE=1", flip_unit)
         for lock_path in (
             "/tmp/snh48-fan-hub-flip-web-rate.lock",
             "/tmp/snh48-fan-hub-flip-update.lock",

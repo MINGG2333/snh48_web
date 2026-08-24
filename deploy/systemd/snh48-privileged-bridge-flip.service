@@ -9,6 +9,9 @@ User=root
 Group=snh48-web
 RuntimeDirectory=snh48-privileged-bridge-flip
 RuntimeDirectoryMode=0750
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HUB_OFFLINE=1
+Environment=TOKENIZERS_PARALLELISM=false
 ExecStart=/usr/local/libexec/snh48-privileged-bridge-server flip
 Restart=on-failure
 RestartSec=3
