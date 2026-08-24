@@ -2,6 +2,10 @@
 
 更新日期：2026-08-24 CST +0800
 
+2026-08-24 18:39 跨云回放安全遗留项完成：网站提交 `ce5fbf1` 增加独立只读监控 Token、stdin-only 原子密钥写入工具、双服务器迁移加固手册和只读基线验证器；提交 `5b8756c` 进一步修复阿里云同步后只读副本的权限漂移。Token 只保存在阿里云 `/home/snh48_web/.env` 与腾讯云 `/etc/snh48/room-voice-cross-cloud-health.env`，均为 root `0600`，没有写入 Git、日志或文档；页面密码仍可各自独立，监控 Token 不能登录或签发 Cookie。阿里云只为加载新环境变量重启 `snh48-aliyun.service`，当前 PID `2588462`、`2026-08-24 18:28:50` 启动、`NRestarts=0`；图片代理 PID `2523186` 保持不变。部署同步脚本和权限修复时没有再次重启网站或其他服务，没有重启整机，也没有订阅 Ubuntu Pro。
+
+同轮确认旧版 root rsync 原子替换会把 `room_voice_replays/manifest.json` 恢复为网站账号不可读的 `root:root 0640`，这是认证修复后跨云检查一度报告“阿里云尚未出现最新会话”的原因。拉取与手动推送脚本现对每个接收操作强制 `root:snh48-web`、目录 `0750`、文件 `0640`；执行一次现有树修复后，18:39 的自动 cron 再次完整拉取 `core,dynamic`，清单仍为 `root:snh48-web 0640` 且 `snh48-web` 可读。跨云检查返回 `ok=true`，最新会话 `rv_20260821_235512_main_36376935_f22821` 的消息、兼容版和原始音质版均通过鉴权与 1-byte Range 校验；腾讯云总健康检查返回 `ok=true`、`missing=[]`。双服务器只读基线验证器均通过；从腾讯云独立探测阿里云 8000/8899 均超时，密码专用 SSH 仍被 `Permission denied (publickey)` 拒绝。
+
 2026-08-24 06:07 最终复核：`snh48-aliyun.service` 当前 PID `2526577`、05:48:12 启动、`NRestarts=0`；journal 显示前一进程正常完成 application shutdown，新进程启动后标准页面/API 烟测通过，无崩溃重启。图片代理 PID 仍为 `2523186`、`NRestarts=0`。`sshd -T` 再次确认仅公钥认证；未知 HTTP/HTTPS Host 均为空响应，公网直连 8000/8899 均超时。最终文档快进到阿里云时未重启任何服务。
 
 2026-08-24 05:38:42 阿里云安全整改完成：安全代码基线 `c066bc0`，既有未跟踪运行文件 `website/data/manual_events.csv`、`website/data/runtime_backups/`、`website/static/js/timeline.js.bak` 均保留。`snh48-aliyun.service` enabled、active/running，PID `2523593`，05:24:49 启动，实际以 `snh48-web` UID/GID `998` 运行，`NoNewPrivs=1`、`UMask=0077`，FastAPI 只监听 `127.0.0.1:8000`；`snh48-weibo-img-proxy.service` enabled、active/running，PID `2523186`，05:22:26 启动，使用 systemd `DynamicUser`、`NoNewPrivs=1`，只监听 `127.0.0.1:8899`。运行数据目录/文件全部通过 0700/0600 检查，`.env` 为 root 0600，`/var/log/snh48` 为 root 0700 且内部文件均 0600。共享状态 outbox 为 0，action inbox 为 13 个已有事件。
