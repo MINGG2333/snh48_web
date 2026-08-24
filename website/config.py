@@ -80,6 +80,10 @@ SCROLLER_TEXTS_PATH = os.getenv(
 # 观察页用于管理员查看估算访客、设备与访问时 IP（按浏览器档案分组）
 # 留空则观察页功能将被禁用
 OB_PASSWORD = os.getenv("OB_PASSWORD", "")
+OB_GEOIP_DATABASE_PATH = os.getenv(
+    "OB_GEOIP_DATABASE_PATH",
+    str(PROJECT_ROOT / "website" / "data" / "geoip" / "dbip-city-lite.mmdb"),
+)
 
 # 翻牌记录页密码。默认复用 OB_PASSWORD；如需单独管理可设置 FLIP_CARDS_PASSWORD。
 # 翻牌记录和媒体都只能通过鉴权 API 读取，不做静态目录挂载。

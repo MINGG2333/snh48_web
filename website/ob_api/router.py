@@ -24,6 +24,7 @@ from website import config as cfg
 from website.logging_setup import LOG_ROOT
 from website.rate_limiter import check_ob_login_limit, get_client_ip
 from website.action_inbox import InboxError, list_requests, record_status
+from website.ip_geolocation import lookup_ip_locations
 from website.visitor_observation import is_valid_client_id, load_page_views
 
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
@@ -184,6 +185,16 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
     for group_id, group in enumerate(groups):
         group["id"] = group_id
 
+    observed_ips = {
+        str(network.get("value", "")).strip()
+        for group in groups
+        for network in group.get("networks") or []
+        if str(network.get("value", "")).strip()
+    }
+    ip_locations, geoip_status = lookup_ip_locations(
+        observed_ips,
+        cfg.OB_GEOIP_DATABASE_PATH,
+    )
     association_groups = _build_ip_association_groups(groups)
     ip_network_graph = _build_ip_network_graph(groups)
 
@@ -193,6 +204,8 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
         "groups": groups,
         "association_groups": association_groups,
         "ip_network_graph": ip_network_graph,
+        "ip_locations": ip_locations,
+        "geoip": geoip_status,
         "stats": {
             # Legacy session IDs are deliberately excluded from the visitor
             # estimate: counting them as people was the original overcounting

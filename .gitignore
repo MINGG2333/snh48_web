@@ -31,6 +31,7 @@ website/data/ip_clients.json
 website/data/ip_daily_quota.json
 website/data/read_notifications.json
 website/data/ops_reminders/
+website/data/geoip/
 website/data/memories/*.json
 !website/data/memories/*.example.json
 

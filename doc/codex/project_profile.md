@@ -374,6 +374,7 @@ SECURE_COOKIES=true
 USE_OBFUSCATED_JS=true
 TRUSTED_PROXY_PEERS=127.0.0.1,::1
 OB_PASSWORD=观察页密码；翻牌页未单独设置时复用
+OB_GEOIP_DATABASE_PATH=/home/snh48_web/website/data/geoip/dbip-city-lite.mmdb
 SHARED_STATE_SYNC_ENABLED=true
 SHARED_STATE_NODE_ID=tencent 或 aliyun
 SHARED_STATE_IS_PRIMARY=腾讯云 true、阿里云 false
@@ -395,6 +396,8 @@ MEMORIES_IDOL_PASSWORD=记忆页本人模式密码
 ```
 
 如需新增或修改 `.env` 项，先更新根目录 `.env.example`，再提醒用户同步服务器真实 `.env`。
+
+OB 地区筛选使用每台服务器本地的 DB-IP City Lite MMDB，不属于腾讯云到阿里云的运行数据同步内容。安装、月度更新、文件权限与验收命令见 `doc/ops/geoip_database.md`；数据库缺失时地区筛选会禁用，其他 OB 功能保持可用。
 
 部署前可只检查远端 `.env` 键名，不输出真实值：
 

@@ -276,6 +276,7 @@
     .record-filter-field { flex: 1 1 140px; min-width: 0; }
     .record-filter-field.page { flex: 2 1 260px; }
     .record-filter-field.date { flex: 1.7 1 260px; }
+    .record-filter-field.region { flex: 1.4 1 190px; }
     .record-filter-field.ip { flex: 1.4 1 190px; }
     .record-filter-field label,
     .record-filter-label {
@@ -337,6 +338,13 @@
     .record-filter-clear:hover,
     .record-filter-clear:focus-visible { border-color: var(--accent); color: var(--text); outline: none; }
     .record-filter-clear:disabled { cursor: default; opacity: .4; }
+    .records-filter-attribution {
+      flex: 1 0 100%;
+      color: var(--text-dim);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    .records-filter-attribution a { color: var(--accent); }
     .groups-container {
       display: grid;
       gap: 10px;
@@ -953,6 +961,7 @@
       .record-filter-field { width: 100%; }
       .record-filter-field.page,
       .record-filter-field.date,
+      .record-filter-field.region,
       .record-filter-field.ip,
       .record-filter-clear { grid-column: 1 / -1; }
       .record-filter-field input,
@@ -1036,7 +1045,7 @@
 </header>
 
 <div class="ob-note" id="obNote">
-  估算口径：估计访客数按稳定浏览器档案，旧会话单独统计；IP 关联组和 3D 网络图只用于整理展示，不改变访客数、会话数或逐次访问记录。3D 图中每个 IP 球包含曾使用该 IP 的浏览器档案/旧会话，同一档案可出现在多个 IP 球；两个 IP 球的连线按共同成员数量计算，线越粗、距离越近只表示共享档案/会话更多。共享 IP 可能对应多个自然人，只表示曾共用同一网络出口。稳定档案依据服务器签发并校验的本域 HttpOnly 匿名 Cookie 聚合，可跨标签页和 IP 变化延续；“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。旧记录只有历史 IP 集合，不能可靠补出逐次对应关系；历史关联会降低置信度显示。这里不查询城市或经纬度。
+  估算口径：估计访客数按稳定浏览器档案，旧会话单独统计；IP 关联组和 3D 网络图只用于整理展示，不改变访客数、会话数或逐次访问记录。3D 图中每个 IP 球包含曾使用该 IP 的浏览器档案/旧会话，同一档案可出现在多个 IP 球；两个 IP 球的连线按共同成员数量计算，线越粗、距离越近只表示共享档案/会话更多。共享 IP 可能对应多个自然人，只表示曾共用同一网络出口。稳定档案依据服务器签发并校验的本域 HttpOnly 匿名 Cookie 聚合，可跨标签页和 IP 变化延续；“档案尾码”只是随机匿名档案 ID 的末尾字符，不能唯一确定自然人、物理设备或浏览器，也不是硬件指纹。“iPhone · Safari”等设备名称只用于展示。旧记录只有历史 IP 集合，不能可靠补出逐次对应关系；历史关联会降低置信度显示。地区标签由服务器本地数据库按 IP 临时计算，只表示网络出口的粗略国家、省级地区或城市，不包含经纬度，也不生成地区变化时间线。
 </div>
 
 <!-- ── Cross-server durable action inbox ── -->
@@ -1182,6 +1191,14 @@
         <option value="legacy">旧会话</option>
       </select>
     </div>
+    <div class="record-filter-field region">
+      <label for="regionFilterInput">地区</label>
+      <div class="record-filter-input-wrap">
+        <i class="fas fa-location-dot" aria-hidden="true"></i>
+        <input id="regionFilterInput" type="search" list="regionFilterOptions" placeholder="国家、省份或城市" autocomplete="off">
+        <datalist id="regionFilterOptions"></datalist>
+      </div>
+    </div>
     <div class="record-filter-field ip">
       <label for="ipFilterInput">历史 IP</label>
       <div class="record-filter-input-wrap">
@@ -1193,6 +1210,10 @@
       <i class="fas fa-filter-circle-xmark" aria-hidden="true"></i>
       <span>清除全部</span>
     </button>
+    <div class="records-filter-attribution">
+      <span id="geoipStatus">地区数据库状态未知</span>
+      · <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a>
+    </div>
   </div>
   <section class="network-visualization" id="networkVisualization" aria-label="IP 网络关联图">
     <div class="network-canvas-wrap">
@@ -1260,6 +1281,8 @@
   let groupsData = [];
   let associationGroupsData = [];
   let ipNetworkGraphData = { nodes: [], links: [] };
+  let ipLocationsData = {};
+  let geoipData = {};
   let inboxData = [];
   let statsData = {};
   let currentGroupId = -1;
@@ -1282,6 +1305,7 @@
     deviceOs: '',
     browser: '',
     profileType: '',
+    region: '',
     ip: '',
   };
   let viewMode = 'network';
@@ -1355,6 +1379,9 @@
   const deviceOsFilter = document.getElementById('deviceOsFilter');
   const browserFilter = document.getElementById('browserFilter');
   const profileTypeFilter = document.getElementById('profileTypeFilter');
+  const regionFilterInput = document.getElementById('regionFilterInput');
+  const regionFilterOptions = document.getElementById('regionFilterOptions');
+  const geoipStatus = document.getElementById('geoipStatus');
   const ipFilterInput = document.getElementById('ipFilterInput');
   const clearAllFilters = document.getElementById('clearAllFilters');
   const eventModal = document.getElementById('eventModal');
@@ -1793,6 +1820,10 @@
       ipNetworkGraphData = data.ip_network_graph && Array.isArray(data.ip_network_graph.nodes)
         ? data.ip_network_graph
         : buildIpNetworkFallback();
+      ipLocationsData = data.ip_locations && typeof data.ip_locations === 'object'
+        ? data.ip_locations
+        : {};
+      geoipData = data.geoip && typeof data.geoip === 'object' ? data.geoip : {};
       inboxData = data.inbox || [];
       statsData = data.stats || {};
       loginOverlay.classList.add('hidden');
@@ -1804,6 +1835,7 @@
         trackAdminEvent('login_attempt', { action: 'ob_login', result: 'success' });
       }
       updatePageFilterOptions();
+      updateRegionFilterOptions();
       renderGroups();
       renderInbox();
       if (!chatWatchController) await fetchChatConversations();
@@ -1932,6 +1964,66 @@
     });
   }
 
+  function ipLocation(ip) {
+    const value = String(ip || '').trim();
+    const location = ipLocationsData[value];
+    return location && typeof location === 'object' ? location : null;
+  }
+
+  function ipLocationLabel(ip) {
+    const location = ipLocation(ip);
+    return location ? String(location.label || '').trim() : '';
+  }
+
+  function ipLocationSearchText(ip) {
+    const location = ipLocation(ip);
+    if (!location) return '';
+    const values = [
+      location.label,
+      location.country,
+      location.country_code,
+      location.region,
+      location.region_code,
+      location.city,
+      ...(Array.isArray(location.search_terms) ? location.search_terms : []),
+    ];
+    return values.map(value => String(value || '').trim()).filter(Boolean).join(' ').toLocaleLowerCase();
+  }
+
+  function formatIpWithLocation(ip) {
+    const value = String(ip || '').trim();
+    const label = ipLocationLabel(value);
+    return value + (label ? ' · ' + label : '');
+  }
+
+  function updateRegionFilterOptions() {
+    const available = geoipData.available === true;
+    const labels = new Set();
+    Object.values(ipLocationsData).forEach(location => {
+      const label = location && String(location.label || '').trim();
+      if (label) labels.add(label);
+    });
+    regionFilterOptions.replaceChildren();
+    Array.from(labels).sort((first, second) => first.localeCompare(second, 'zh-CN')).forEach(label => {
+      const option = document.createElement('option');
+      option.value = label;
+      regionFilterOptions.appendChild(option);
+    });
+    const unavailableText = geoipData.status === 'database_missing'
+      ? '地区数据库未安装'
+      : '地区数据库不可用';
+    regionFilterInput.disabled = !available;
+    regionFilterInput.placeholder = available ? '国家、省份或城市' : unavailableText;
+    if (!available && regionFilterInput.value) {
+      regionFilterInput.value = '';
+      recordFilters.region = '';
+    }
+    const buildDate = String(geoipData.database_build_date || '').trim();
+    geoipStatus.textContent = available
+      ? '本地地区库' + (buildDate ? ' · ' + buildDate : '')
+      : unavailableText;
+  }
+
   function hasActiveFilters() {
     return Object.values(recordFilters).some(Boolean);
   }
@@ -2000,6 +2092,12 @@
         String(network && network.value || '').toLocaleLowerCase().includes(recordFilters.ip)
       ));
       if (!hasIp) return false;
+    }
+    if (recordFilters.region) {
+      const hasRegion = (group.networks || []).some(network => (
+        ipLocationSearchText(network && network.value).includes(recordFilters.region)
+      ));
+      if (!hasRegion) return false;
     }
 
     const hasActivityFilter = Boolean(
@@ -2129,6 +2227,7 @@
           : latest,
         '',
       );
+      node.locationLabel = ipLocationLabel(node.ip);
       return node;
     }).filter(Boolean).sort((first, second) => (
       second.memberCount - first.memberCount
@@ -2250,6 +2349,7 @@
       'IP 节点 · ' + node.ip,
       node.memberCount + ' 个成员 · ' + node.stableProfileCount + ' 个稳定档案 · '
         + node.legacySessionCount + ' 个旧会话 · ' + node.visitCount + ' 次页面访问'
+        + (node.locationLabel ? ' · ' + node.locationLabel : '')
         + (node.historicalOnly ? ' · 仅历史 IP 关联' : ''),
       node.members.slice(0, 5).map(group => ({
         time: group.is_legacy ? '旧会话' : '档案',
@@ -2268,18 +2368,19 @@
     ));
     const devices = (group.devices || []).map(item => item.value).filter(Boolean).slice(0, 3);
     const networks = (group.networks || []).map(item => item.value).filter(Boolean).slice(0, 4);
+    const networkLabels = networks.map(formatIpWithLocation);
     const rows = visits.slice(0, 6).map(visit => ({
       time: visit.time_str || '',
       text: [visit.page || '/', visit.device_label || '未知设备', visit.ip || '未知 IP'].join(' · '),
     }));
     if (!rows.length && group.is_legacy) {
-      networks.forEach(ip => rows.push({ time: '历史 IP', text: ip }));
+      networkLabels.forEach(ip => rows.push({ time: '历史 IP', text: ip }));
     }
     showNetworkTooltip(
       group.profile_label || group.visitor_id || '匿名成员',
       (group.is_legacy ? '旧会话' : '稳定浏览器档案') + ' · ' + visits.length + ' 次页面访问'
         + (devices.length ? ' · ' + devices.join('、') : '')
-        + (networks.length ? ' · IP ' + networks.join('、') : ''),
+        + (networkLabels.length ? ' · IP ' + networkLabels.join('、') : ''),
       rows,
       event,
     );
@@ -2332,7 +2433,8 @@
       + ' 个稳定浏览器档案 · ' + node.legacySessionCount + ' 个旧会话 · '
       + node.visitCount + ' 次页面访问 · ' + node.notificationCount + ' 条通知'
       + (node.recentTime ? ' · 最近 ' + node.recentTime : '');
-    networkDetailIp.textContent = node.ip + (node.historicalOnly ? ' · 仅历史关联' : '');
+    networkDetailIp.textContent = formatIpWithLocation(node.ip)
+      + (node.historicalOnly ? ' · 仅历史关联' : '');
     networkMemberGrid.replaceChildren();
 
     node.members.slice().sort((first, second) => (
@@ -2574,7 +2676,8 @@
     };
     showNetworkTooltip(
       '共享成员连线',
-      source.ip + ' ↔ ' + target.ip + ' · ' + shared.length + ' 个共同成员'
+      formatIpWithLocation(source.ip) + ' ↔ ' + formatIpWithLocation(target.ip)
+        + ' · ' + shared.length + ' 个共同成员'
         + (link.historical_only ? ' · 仅历史关联' : ''),
       shared.slice(0, 6).map(group => ({
         time: group.is_legacy ? '旧会话' : '档案',
@@ -2627,6 +2730,7 @@
       node.visitCount,
       node.notificationCount,
       node.recentTime,
+      node.locationLabel,
       Boolean(node.historicalOnly),
       Array.from(node.memberIds).sort(),
       node.members.map(group => [
@@ -2721,6 +2825,7 @@
       .nodeVal(node => Math.max(1, node.memberCount))
       .nodeLabel(node => (
         '<strong>' + escHtml(node.ip) + '</strong><br>'
+          + (node.locationLabel ? escHtml(node.locationLabel) + '<br>' : '')
           + node.memberCount + ' 个成员 · ' + node.visitCount + ' 次页面访问'
       ))
       .nodeThreeObject(createThreeIpNode)
@@ -2857,6 +2962,7 @@
     recordFilters.deviceOs = deviceOsFilter.value;
     recordFilters.browser = browserFilter.value;
     recordFilters.profileType = profileTypeFilter.value;
+    recordFilters.region = regionFilterInput.value.trim().toLocaleLowerCase();
     recordFilters.ip = ipFilterInput.value.trim().toLocaleLowerCase();
   }
 
@@ -2882,7 +2988,7 @@
     }
   }
 
-  [pageFilterInput, ipFilterInput].forEach(input => {
+  [pageFilterInput, regionFilterInput, ipFilterInput].forEach(input => {
     input.addEventListener('input', () => applyRecordFilters());
     input.addEventListener('change', () => applyRecordFilters({ track: true }));
   });
@@ -2897,7 +3003,7 @@
   });
   clearAllFilters.addEventListener('click', () => {
     [pageFilterInput, filterStartDate, filterEndDate, deviceTypeFilter, deviceOsFilter,
-      browserFilter, profileTypeFilter, ipFilterInput].forEach(control => {
+      browserFilter, profileTypeFilter, regionFilterInput, ipFilterInput].forEach(control => {
       control.value = '';
     });
     syncDateFilterBounds();
@@ -2987,7 +3093,7 @@
         sharedIps.slice(0, 3).forEach(ip => {
           const chip = document.createElement('span');
           chip.className = 'association-network-chip' + (ip.historical_only ? ' historical' : '');
-          chip.textContent = ip.value + (ip.historical_only ? ' · 历史' : '');
+          chip.textContent = formatIpWithLocation(ip.value) + (ip.historical_only ? ' · 历史' : '');
           ipList.appendChild(chip);
         });
         if (sharedIps.length > 3) {
@@ -3290,7 +3396,7 @@
     appendSummaryTitle(networks, '曾用 IP');
     appendSummaryChips(networks, (group.networks || []).map(item => {
       const count = item.visit_count == null ? ' · 旧记录，具体访问未知' : ' · ' + item.visit_count + ' 次';
-      return item.value + count;
+      return formatIpWithLocation(item.value) + count;
     }), true, '暂无 IP 记录');
     summary.appendChild(networks);
 

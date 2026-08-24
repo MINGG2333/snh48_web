@@ -9,6 +9,7 @@ from unittest import mock
 from fastapi import Request, Response
 
 from website import visitor_observation
+from website import ip_geolocation
 from website.ob_api import router as ob_api
 from website.track_api import router as track_api
 
@@ -128,6 +129,30 @@ class VisitorObservationTests(unittest.TestCase):
                 mock.patch.object(ob_api, "READ_NOTIFS_FILE", root / "read_notifications.json"),
                 mock.patch.object(ob_api, "LOG_ROOT", log_root),
                 mock.patch.object(ob_api, "list_requests", return_value=[]),
+                mock.patch.object(
+                    ob_api,
+                    "lookup_ip_locations",
+                    return_value=(
+                        {
+                            "203.0.113.8": {
+                                "country": "中国",
+                                "country_code": "CN",
+                                "region": "广东",
+                                "region_code": "GD",
+                                "city": "深圳",
+                                "label": "中国 · 广东 · 深圳",
+                                "search_terms": ["中国", "China", "广东", "Guangdong", "深圳", "Shenzhen"],
+                            }
+                        },
+                        {
+                            "available": True,
+                            "source": "DB-IP Lite",
+                            "database_build_date": "2026-08-01",
+                            "located_ip_count": 1,
+                            "status": "ready",
+                        },
+                    ),
+                ),
             ):
                 response = Response()
                 payload = ob_api.get_ob_data(response, _=True)
@@ -170,6 +195,60 @@ class VisitorObservationTests(unittest.TestCase):
             self.assertEqual(len(graph["links"]), 1)
             self.assertEqual(graph["links"][0]["shared_member_count"], 1)
             self.assertEqual(graph["links"][0]["shared_member_ids"], [stable["id"]])
+            self.assertEqual(payload["ip_locations"]["203.0.113.8"]["city"], "深圳")
+            self.assertTrue(payload["geoip"]["available"])
+
+    def test_ip_location_uses_region_names_without_coordinates(self) -> None:
+        record = {
+            "country": {
+                "iso_code": "CN",
+                "names": {"zh-CN": "中国", "en": "China"},
+            },
+            "subdivisions": [{
+                "iso_code": "GD",
+                "names": {"zh-CN": "广东", "en": "Guangdong"},
+            }],
+            "city": {"names": {"zh-CN": "深圳", "en": "Shenzhen"}},
+            "location": {"latitude": 22.54, "longitude": 114.06},
+        }
+
+        location = ip_geolocation._location_from_record(record)
+
+        self.assertIsNotNone(location)
+        assert location is not None
+        self.assertEqual(location["label"], "中国 · 广东 · 深圳")
+        self.assertIn("Shenzhen", location["search_terms"])
+        self.assertNotIn("latitude", location)
+        self.assertNotIn("longitude", location)
+
+    def test_ip_location_database_missing_is_a_safe_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            locations, status = ip_geolocation.lookup_ip_locations(
+                ["120.229.72.69", "127.0.0.1"],
+                Path(tmp) / "missing.mmdb",
+            )
+
+        self.assertEqual(locations, {})
+        self.assertFalse(status["available"])
+        self.assertEqual(status["status"], "database_missing")
+
+    def test_ip_location_invalid_database_is_a_safe_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database = Path(tmp) / "broken.mmdb"
+            database.write_bytes(b"not an mmdb")
+            with mock.patch.object(
+                ip_geolocation,
+                "_open_database",
+                side_effect=RuntimeError("invalid database"),
+            ):
+                locations, status = ip_geolocation.lookup_ip_locations(
+                    ["120.229.72.69"],
+                    database,
+                )
+
+        self.assertEqual(locations, {})
+        self.assertFalse(status["available"])
+        self.assertEqual(status["status"], "reader_unavailable")
 
     def test_ip_association_groups_use_transitive_links_without_changing_profiles(self) -> None:
         groups = [
@@ -344,12 +423,17 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn('id="deviceOsFilter"', template)
         self.assertIn('id="browserFilter"', template)
         self.assertIn('id="profileTypeFilter"', template)
+        self.assertIn('id="regionFilterInput"', template)
+        self.assertIn('id="regionFilterOptions"', template)
+        self.assertIn('id="geoipStatus"', template)
         self.assertIn('id="ipFilterInput"', template)
         self.assertIn('id="clearAllFilters"', template)
         self.assertIn("function normalizePagePath(value)", template)
         self.assertIn("function groupPagePaths(group)", template)
         self.assertIn("function groupMatchesFilters(group)", template)
         self.assertIn("function visitMatchesFilters(visit)", template)
+        self.assertIn("function ipLocationSearchText(ip)", template)
+        self.assertIn("function updateRegionFilterOptions()", template)
         self.assertIn("function hasActiveFilters()", template)
         self.assertIn("filter_ob_user_records", template)
         self.assertIn('id="inboxListToggle"', template)
@@ -378,11 +462,21 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn("ForceGraph3D", template)
         self.assertIn("createThreeIpNode", template)
         self.assertIn("shared_member_count", template)
+        self.assertIn("IP Geolocation by DB-IP", template)
         self.assertIn("ip_network_graph", template)
         self.assertIn("id=\"notifNav\"", template)
         self.assertIn("'visit-session'", template)
         self.assertNotIn("className = 'group-users'", template)
         self.assertNotIn("id=\"modalUsers\"", template)
+
+    def test_privacy_template_names_precise_location_boundaries(self) -> None:
+        template = (
+            Path(__file__).resolve().parents[1] / "website" / "templates" / "privacy.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("通讯录、GPS 精确定位、经纬度或连续位置轨迹", template)
+        self.assertNotIn("会根据 IP 推断粗略地区", template)
+        self.assertIn("最后更新日期：2026年8月", template)
 
 
 if __name__ == "__main__":

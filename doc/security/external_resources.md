@@ -1,6 +1,6 @@
 # 外部资源与出站请求清单
 
-> 更新日期：2026-07-20
+> 更新日期：2026-08-25
 >
 > 适用范围：网站运行时会让浏览器或服务器访问站外资源的代码路径。`package-lock.json`、GitHub 仓库地址、npm/pip 下载地址等构建或部署供应链不计入网站运行时外链。
 
@@ -84,6 +84,7 @@
 | `danmu_url` 任意 URL | `website/timeline_api/router.py` 的 `_read_text_url()` | `/api/timeline/danmu?live_id=...`，且本地弹幕文件缺失 | 仅能按 `live_id` 选中 CSV 行，不能由前端直接传 URL；15 秒超时 | 如果 `summary.csv` 被污染，服务器可能请求非预期 URL，存在 SSRF、出口 IP 被限流、访问内网地址等风险 |
 | `/image-proxy/` 上游代理 | `deploy/nginx.conf`、`deploy/nginx-aliyun.conf` | 浏览器访问被改写后的新浪图片路径或直接请求 `/image-proxy/...` | 生产入口经 Nginx `/image-proxy/` 反代到本机或内网 `8899`；当前安全组不公网放行 `8899`；代理写死上游为 `wx1.sinaimg.cn`；代码库 Nginx 配置已加入共享缓存、缓存锁、stale 缓存、7 天浏览器缓存、温和 IP 限速和 `X-Cache-Status` | 这是本站服务器/代理出口风险点；即使 `8899` 不公网开放，公网用户仍可经 `443` 请求 `/image-proxy/...`；代码库已通过缓存和温和限速降低刷量影响，线上需部署验证 |
 | 阿里云 `ssh/rsync` 到腾讯云 `124.222.72.203:22` | `deploy/sync-from-tencent-if-changed.sh`、`deploy/sync-from-tencent.sh`、阿里云 root crontab | 阿里云主动拉取网站必要运行数据 | 阿里云 cron 每分钟通过 SSH 检查腾讯云源数据指纹；源数据变化时才执行拉取；`sync-from-tencent.sh` 在一次同步内复用同一条 SSH 连接；脚本有 flock 防重入；腾讯云主机安全已对白名单 IP `8.210.188.184` 降噪；翻牌页只拉取 `flip_data/web/flip_cards.json` 和 `flip_data/audio|video` | 连接由阿里云主动发起，降低腾讯云主动对外 SSH/rsync 被风控误判的概率；腾讯云仍会作为 SSH 服务端发送数据；白名单只适用于当前阿里云 IP；不要扩大到 `flip_chat.html`、`flip_data/metadata/`、Token 或配置 |
+| `https://download.db-ip.com/free/` | `script/update_geoip_database.py`、服务器月度维护任务 | 下载当月 DB-IP City Lite MMDB | 只在管理员安装或月度更新数据库时访问固定 HTTPS 下载前缀；下载后校验 MMDB 类型和固定公网 IP 查询结果，再原子替换；运行时查询完全在本机完成 | 不会向 DB-IP 提交访客 IP；数据库约占 125 MiB，每台服务器独立下载并按 DB-IP Lite 许可在 OB 页显示署名链接；不得把下载 URL 改成由前端控制 |
 
 ## `snh48-fan-hub` 图片代理核对
 
