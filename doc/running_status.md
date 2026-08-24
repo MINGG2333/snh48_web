@@ -1,6 +1,10 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-08-24 CST +0800
+更新日期：2026-08-25 CST +0800
+
+2026-08-25 00:11 腾讯云翻牌账号与社交 Cookie 管理桥完成安全隔离修复：提交 `7197232` 将原先从 `snh48-web.service` 内调用的两个 sudo 包装器替换为 `snh48-privileged-bridge-flip.service` 和 `snh48-privileged-bridge-social.service`。两个 root 服务只通过 `root:snh48-web 0660` Unix Socket 接受固定命令并校验对端 UID；网页进程恢复 `NoNewPrivileges=yes`、空 capability、`ProtectHome=read-only`，在实际 mount namespace 中看到 fan-hub `config/` 和 `flip_data/` 为只读，只有对应桥服务看到明确列出的运行目录为可写。新桥启动并切换网站成功后，生产 `/etc/sudoers.d/snh48-web` 和旧包装器已删除，旧配置仅保存在 root `0700` 的 `/var/lib/snh48-web/bridge-migration-backup-20260825/` 供紧急回滚。
+
+同轮线上验收中，三个服务均为 enabled、active/running、`NRestarts=0`，启动后 warning..emerg 日志为空；腾讯云翻牌管理能力为 true，最近任务从原先 503 恢复为 200/completed，账号 `172884074` 仍为 365 条记录；社交凭据状态从 503 恢复为 200，返回微博、抖音、B站配置槽位且不含 Cookie。真实 Cookie 替换和短信发送未用伪值触发，避免改变外部账号状态；固定命令、敏感值不进入 argv/响应、Socket 端到端传输和两个 API 的 14 项专项测试全部通过。全量 85 项测试通过 83 项，剩余 2 项为主分支既有礼物页模板文案/结构断言不一致，本次未修改对应文件。手机端翻牌“跳到最新”常驻条件同时恢复并通过前端测试。主机安全基线全部通过；阿里云尚未同步，等待腾讯云用户验收。
 
 2026-08-24 19:37 腾讯云网站完成无 QA 运行时精简：提交 `9d9bd33` 将 `website/requirements.txt` 收敛为基础网站依赖，并让部署目标通过 `qa_enabled` 决定是否克隆知识库和安装 QA 依赖；腾讯云 systemd 写路径不再引用 `transcript_analyze/`，阿里云配置和运行环境未改。61 MiB 精简 venv 先在独立 18080 端口验证，再于最终 `/home/snh48_web/venv` 路径重建并只重启 `snh48-web.service`；当前 PID `257039`、`NRestarts=0`，`pip` 解释器路径与依赖完整性检查通过。本机和公网首页、`/timeline` 为 200，`/qa` 为本机 503，`/api/qa/status` 为 404，QA 页面不含阿里云域名或 IP；进程未加载 Torch、ChromaDB、sentence-transformers 或知识库模块。确认阿里云 QA 状态接口仍为 200 后，腾讯云删除 5.3 GiB 旧 venv 和 2.1 GiB `transcript_analyze/`，保留空 gitlink 目录以维持主仓库状态干净；全量 81 项 unittest 中 78 项通过，3 项为既有翻牌/礼物模板断言不一致。
 
