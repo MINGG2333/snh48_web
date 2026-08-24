@@ -69,7 +69,8 @@ fi
 # pre-created, root-only lock files through its systemd unit.
 for lock_path in \
     /tmp/snh48-fan-hub-flip-web-rate.lock \
-    /tmp/snh48-fan-hub-flip-update.lock; do
+    /tmp/snh48-fan-hub-flip-update.lock \
+    /tmp/snh48-fan-hub-transcription.lock; do
     if [ ! -e "$lock_path" ]; then
         install -o root -g root -m 0600 /dev/null "$lock_path"
     else

@@ -33,6 +33,7 @@ ReadWritePaths=/home/snh48-fan-hub/flip_data
 ReadWritePaths=/home/snh48-fan-hub/flip_chat.html
 ReadWritePaths=/tmp/snh48-fan-hub-flip-web-rate.lock
 ReadWritePaths=/tmp/snh48-fan-hub-flip-update.lock
+ReadWritePaths=/tmp/snh48-fan-hub-transcription.lock
 
 [Install]
 WantedBy=multi-user.target

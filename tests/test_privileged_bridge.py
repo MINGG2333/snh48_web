@@ -147,6 +147,7 @@ class PrivilegedBridgeTests(unittest.TestCase):
         for lock_path in (
             "/tmp/snh48-fan-hub-flip-web-rate.lock",
             "/tmp/snh48-fan-hub-flip-update.lock",
+            "/tmp/snh48-fan-hub-transcription.lock",
         ):
             self.assertIn(f"ReadWritePaths={lock_path}", flip_unit)
             self.assertIn(lock_path, hardening)
