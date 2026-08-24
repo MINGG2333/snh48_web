@@ -7,6 +7,7 @@
       "branch": "main",
       "repo_url": "git@github.com:MINGG2333/snh48_web.git",
       "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
+      "qa_enabled": true,
       "service_name": "snh48-huawei",
       "restart": "systemctl restart snh48-huawei",
       "status": "systemctl is-active --quiet snh48-huawei",

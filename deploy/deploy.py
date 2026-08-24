@@ -61,6 +61,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "branch": "main",
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
+        "qa_enabled": False,
         "restart": "systemctl restart snh48-web",
         "status": "systemctl is-active --quiet snh48-web",
         "local_url": "http://127.0.0.1:8000/timeline",
@@ -165,6 +166,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "branch": "main",
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
+        "qa_enabled": True,
         "restart": "systemctl restart snh48-aliyun",
         "status": "systemctl is-active --quiet snh48-aliyun",
         "local_url": "http://127.0.0.1:8000/timeline",
@@ -682,6 +684,19 @@ def bootstrap_ubuntu(name: str, target: Dict[str, Any], args: argparse.Namespace
         target.get("transcript_repo_url")
         or "git@github.com:MINGG2333/transcript_analyze.git"
     )
+    qa_enabled = bool(target.get("qa_enabled", True))
+    qa_setup = ""
+    if qa_enabled:
+        qa_setup = f"""if [ ! -d transcript_analyze/.git ]; then
+  rm -rf transcript_analyze
+  git clone {quote(transcript_repo_url)} transcript_analyze
+else
+  cd transcript_analyze && git pull --ff-only && cd ..
+fi
+if [ -f transcript_analyze/requirements_kb_qa.txt ]; then
+  venv/bin/pip install -r transcript_analyze/requirements_kb_qa.txt
+fi
+"""
     unit = systemd_unit({**target, "service_name": service_name})
     start_cmd = f"systemctl restart {quote(service_name)}" if args.start else (
         f"echo 'systemd unit installed. Fill {site}/.env, then run: systemctl restart {service_name}'"
@@ -698,19 +713,10 @@ fi
 cd {quote(site)}
 git checkout {quote(branch(target))}
 git pull --ff-only origin {quote(branch(target))}
-if [ ! -d transcript_analyze/.git ]; then
-  rm -rf transcript_analyze
-  git clone {quote(transcript_repo_url)} transcript_analyze
-else
-  cd transcript_analyze && git pull --ff-only && cd ..
-fi
 python3 -m venv venv
 venv/bin/python -m pip install --upgrade pip
 venv/bin/pip install -r website/requirements.txt
-if [ -f transcript_analyze/requirements_kb_qa.txt ]; then
-  venv/bin/pip install -r transcript_analyze/requirements_kb_qa.txt
-fi
-mkdir -p /var/log/snh48
+{qa_setup}mkdir -p /var/log/snh48
 mkdir -p /home/snh48-fan-hub/schedule_record
 mkdir -p /home/snh48-fan-hub/live_push_replays
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers

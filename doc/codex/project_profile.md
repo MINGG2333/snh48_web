@@ -36,6 +36,7 @@
 - `QA_ENABLED` 控制当前节点是否注册 QA API、执行知识库归档维护和启动模型预热；默认值为 `true`。
 - 腾讯云设置 `QA_ENABLED=false`，`/qa` 只返回本机 503 未启用页面，`/api/qa/*` 不注册，不保留知识库索引和嵌入模型缓存。
 - 阿里云保持 `QA_ENABLED=true` 并独立提供 QA。两个站点之间不设置 QA 跳转或互链。
+- `website/requirements.txt` 只包含所有节点共用的基础网站依赖；只有 QA 节点另外安装 `transcript_analyze/requirements_kb_qa.txt`。部署目标的 `qa_enabled` 决定全新引导时是否克隆知识库子项目并安装其依赖。
 - QA 关闭不影响 `website/data/action_inbox/` 中已有邮箱请求事件，也不授权删除历史问答归档或原始转录文件。
 
 ### 阿里云 HTTPS 证书与月度提醒

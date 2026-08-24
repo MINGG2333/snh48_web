@@ -65,6 +65,10 @@ python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 
 完整的首次部署/迁移步骤仍请参照 **[deploy/TODO.md](TODO.md)**，按顺序执行。
 
+腾讯云设置 `QA_ENABLED=false`，只安装 `website/requirements.txt`，不需要
+`transcript_analyze/`。阿里云设置 `QA_ENABLED=true`，另外保留知识库子项目并安装
+`transcript_analyze/requirements_kb_qa.txt`。两个节点之间不设置 QA 跳转或互链。
+
 主要流程：
 1. 云服务器安全组放行 80/443，后端 8000 只监听本机
 2. SSH 登录 → 安装基础软件 → 配置 GitHub
@@ -101,8 +105,10 @@ systemctl enable --now snh48-web.service
 ```bash
 cd /mnt/zhitainew/snh48_web
 
-# 安装依赖
+# 安装基础网站依赖（所有节点）
 pip install -r website/requirements.txt
+
+# 仅 QA_ENABLED=true 的节点安装问答依赖
 pip install -r transcript_analyze/requirements_kb_qa.txt
 
 # 启动开发服务器

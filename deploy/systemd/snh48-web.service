@@ -31,7 +31,7 @@ LockPersonality=yes
 RestrictRealtime=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
-ReadWritePaths=/home/snh48_web/website/data /home/snh48_web/transcript_analyze /var/log/snh48 /var/lib/snh48-web /home/snh48-fan-hub/live_push_replays
+ReadWritePaths=/home/snh48_web/website/data /var/log/snh48 /var/lib/snh48-web /home/snh48-fan-hub/live_push_replays
 
 [Install]
 WantedBy=multi-user.target

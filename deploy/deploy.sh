@@ -69,8 +69,9 @@ source venv/bin/activate
 # Install website dependencies
 pip install -r website/requirements.txt
 
-# Install QA dependencies
-if [ -f "transcript_analyze/requirements_kb_qa.txt" ]; then
+# Install QA dependencies only on nodes where QA is explicitly enabled.
+QA_ENABLED_VALUE=$(sed -n 's/^[[:space:]]*QA_ENABLED[[:space:]]*=[[:space:]]*//p' .env 2>/dev/null | tail -n 1 | tr '[:upper:]' '[:lower:]')
+if [[ "$QA_ENABLED_VALUE" =~ ^(1|true|yes)$ ]] && [ -f "transcript_analyze/requirements_kb_qa.txt" ]; then
     pip install -r transcript_analyze/requirements_kb_qa.txt
 fi
 
@@ -81,7 +82,9 @@ echo ""
 echo "[4/6] 创建必要的目录..."
 
 mkdir -p /var/log/$SERVICE_NAME
-mkdir -p $PROJECT_DIR/transcript_analyze/video_knowledge_db
+if [[ "$QA_ENABLED_VALUE" =~ ^(1|true|yes)$ ]]; then
+    mkdir -p $PROJECT_DIR/transcript_analyze/video_knowledge_db
+fi
 
 echo "✓ 目录创建完成"
 
