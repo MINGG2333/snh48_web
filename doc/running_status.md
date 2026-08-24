@@ -2,6 +2,8 @@
 
 更新日期：2026-08-25 CST +0800
 
+2026-08-25 01:42 用户确认腾讯云后，阿里云网站通过 GitHub 从 `1dae795` 快进部署到 `358a65b`，重启 `snh48-aliyun.service` 后 PID `2625375`、active/running、`NRestarts=0`，01:41:27 启动，warning..emerg 日志为空；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/`、`website/static/js/timeline.js.bak` 原样保留。部署工具的首页、时间轴、Room 礼物、综合回礼、上麦回放、翻牌、计分礼物、静态资源、时间轴 API、QA 和图片代理烟测全部通过。阿里云翻牌账号管理仍为 200/disabled，没有安装腾讯云专用账号桥、转录 venv 或敏感凭据；鉴权后账号 `172884074` 返回 373 条记录、341 条转录，媒体 1-byte Range 为 206，腾讯云与阿里云 `accounts.json` 和账号 JSON SHA-256 分别一致。阿里云安全基线全部通过。公网和本机 Certbot 证书均有效至 2026-11-01，约剩 68 天，`certbot.timer` 与月度提醒 cron 正常，本轮未修改证书或 Nginx。
+
 2026-08-25 01:27 腾讯云修复网页验证码登录后的翻牌刷新失败，并完成用户本次账号任务。根因不是登录或 Token：任务已成功拉取 373 条记录和 10 个新语音，随后因 2026-08-24 网站虚拟环境精简后不再含 PyTorch 而在转录阶段退出；隔离桥又先后暴露出系统 `/tmp` 只读下 PyTorch 临时目录和账号清单提交锁未放行。fan-hub 提交 `892210b5`、`cae965c8`、`d12f0937`、`5c3be361` 建立 `/home/snh48-fan-hub/venv-transcription` 专用 CPU 转录环境，将翻牌和房间语音任务从网站 venv 解耦，通过 root-only 共享锁串行加载本地 `whisper-base`，并让失败提示包含具体阶段、重试时清除旧错误。网站提交 `2466aaf`、`d9d2a32`、`eaa2c62`、`6eff9c5` 保持桥服务系统 `/tmp` 只读，只精确放行短信限速、翻牌更新、转录串行化和账号清单提交四个 `root:root 0600` 锁，并把 PyTorch 临时文件限定到 `notifications/flip_web_admin/tmp` 私有目录；Hugging Face 强制离线，不上传音频或下载模型。
 
 同轮重跑任务 `afe1f1bf1177067f575f0c80638de0a3` 最终为 200/completed：账号 `172884074` 更新为总计 373、已回复 347、待回复 7、退款 19，新增 10 条语音全部转录成功，语音转录达到 341/341；`accounts.json`、账号 JSON 和兼容副本于 01:23 同批提交。公网登录、最新任务和数据接口均为 200。受同一依赖漂移影响的 `room-audio-transcripts.timer` 已切到专用环境并恢复 active/waiting，积压 7/7 条补齐，最近 oneshot 为 success。fan-hub 15 项、网站 Python 12 项和前端 1 项专项测试通过；三个网站/桥服务 active、`NRestarts=0`、warning..emerg 日志为空，社交凭据桥仍返回微博/抖音/B站已配置状态且不含 Cookie，腾讯云安全基线全通过。阿里云代码未部署，本轮未手动触发跨云数据同步，等待腾讯云用户验收。
