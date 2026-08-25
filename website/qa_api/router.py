@@ -102,20 +102,20 @@ def _build_qa_engine() -> Any:
     # root-only, so import it from the service-owned home directory instead.
     with _qa_import_context():
         from kb_qa.qa import VideoKnowledgeQA
-    from loguru import logger
+        from loguru import logger
 
-    _set_qa_engine_load_stage("constructing_qa_engine")
-    print("[QA] loading engine: constructing VideoKnowledgeQA", flush=True)
-    return VideoKnowledgeQA(
-        records_path=records_path,
-        subtitle_root=subtitle_root,
-        kb_dir=kb_dir,
-        embedding_model=cfg.EMBEDDING_MODEL,
-        llm_model=cfg.LLM_MODEL,
-        api_base=cfg.LLM_API_BASE,
-        api_key=cfg.LLM_API_KEY,
-        logger=logger,
-    )
+        _set_qa_engine_load_stage("constructing_qa_engine")
+        print("[QA] loading engine: constructing VideoKnowledgeQA", flush=True)
+        return VideoKnowledgeQA(
+            records_path=records_path,
+            subtitle_root=subtitle_root,
+            kb_dir=kb_dir,
+            embedding_model=cfg.EMBEDDING_MODEL,
+            llm_model=cfg.LLM_MODEL,
+            api_base=cfg.LLM_API_BASE,
+            api_key=cfg.LLM_API_KEY,
+            logger=logger,
+        )
 
 
 def _set_load_error(message: str, *, retryable: bool = True) -> None:
