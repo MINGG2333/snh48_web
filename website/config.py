@@ -128,6 +128,8 @@ QA_POLL_INTERVAL_MS = int(os.getenv("QA_POLL_INTERVAL_MS", "3000"))
 QA_WARN_SECONDS = int(os.getenv("QA_WARN_SECONDS", "240"))
 # 是否在启用 QA 的节点启动时后台预热知识库。
 QA_WARMUP_ON_STARTUP = os.getenv("QA_WARMUP_ON_STARTUP", "true").lower() in ("1", "true", "yes")
+# 知识库后台加载最长等待时间；超时后对外报告可重试的失败状态，避免永久 loading。
+QA_ENGINE_LOAD_TIMEOUT_SECONDS = int(os.getenv("QA_ENGINE_LOAD_TIMEOUT_SECONDS", "300"))
 
 # ── 通用公开端点限速（防滥用）────────────────────────────────────────────────
 # Scroller 登录限速（防暴力破解）

@@ -12,6 +12,7 @@ import re
 import secrets
 import sys
 import threading
+import time
 import traceback
 import uuid
 from datetime import datetime
@@ -51,82 +52,150 @@ _qa_engine: Optional[Any] = None
 _qa_engine_loading = False
 _qa_engine_lock = threading.Lock()
 _qa_status: Dict[str, Any] = {"ready": False, "message": "未初始化", "stats": {}}
+_qa_engine_load_thread: Optional[threading.Thread] = None
+_qa_engine_load_timer: Optional[threading.Timer] = None
+_qa_engine_load_generation = 0
 
 
-def _get_qa_engine():
-    """Lazy-load the QA engine, returning None if unavailable."""
-    global _qa_engine, _qa_status
-    if _qa_engine is not None:
-        return _qa_engine
+def _build_qa_engine() -> Any:
+    """Build the engine without holding the state lock.
 
+    Loading the segment store, Chroma index and embedding model can take
+    minutes on the small production host. Keeping this work outside the lock
+    lets health requests continue to respond and lets the watchdog publish a
+    useful timeout instead of leaving the API in an eternal loading state.
+    """
+    records_path = Path(cfg.RECORDS_PATH)
+    subtitle_root = Path(cfg.SUBTITLE_ROOT)
+    kb_dir = Path(cfg.KB_DIR)
+
+    if not records_path.exists():
+        raise FileNotFoundError(f"记录文件不存在: {records_path}")
+    if not kb_dir.exists() or not (kb_dir / "segment_store.json").exists():
+        raise FileNotFoundError("知识库未构建，请先运行 `python run_kb_qa.py build`")
+
+    from kb_qa.qa import VideoKnowledgeQA
+    from loguru import logger
+
+    return VideoKnowledgeQA(
+        records_path=records_path,
+        subtitle_root=subtitle_root,
+        kb_dir=kb_dir,
+        embedding_model=cfg.EMBEDDING_MODEL,
+        llm_model=cfg.LLM_MODEL,
+        api_base=cfg.LLM_API_BASE,
+        api_key=cfg.LLM_API_KEY,
+        logger=logger,
+    )
+
+
+def _set_load_error(message: str, *, retryable: bool = True) -> None:
+    global _qa_status
+    _qa_status = {
+        "ready": False,
+        "message": message,
+        "stats": {},
+        "retryable": retryable,
+    }
+
+
+def _finish_qa_engine_load(generation: int, engine: Any = None, error: Optional[Exception] = None) -> None:
+    """Publish a load result only if it belongs to the current attempt."""
+    global _qa_engine, _qa_engine_loading, _qa_engine_load_thread, _qa_engine_load_timer
+    global _qa_status
+
+    timer: Optional[threading.Timer] = None
     with _qa_engine_lock:
-        if _qa_engine is not None:
-            return _qa_engine
+        if generation != _qa_engine_load_generation:
+            return
 
-        records_path = Path(cfg.RECORDS_PATH)
-        subtitle_root = Path(cfg.SUBTITLE_ROOT)
-        kb_dir = Path(cfg.KB_DIR)
-
-        # Check if data exists
-        if not records_path.exists():
-            _qa_status = {"ready": False, "message": f"记录文件不存在: {records_path}"}
-            return None
-        if not kb_dir.exists() or not (kb_dir / "segment_store.json").exists():
-            _qa_status = {
-                "ready": False,
-                "message": "知识库未构建，请先运行 `python run_kb_qa.py build`",
-            }
-            return None
-
-        try:
-            from kb_qa.qa import VideoKnowledgeQA
-            from loguru import logger
-
-            _qa_engine = VideoKnowledgeQA(
-                records_path=records_path,
-                subtitle_root=subtitle_root,
-                kb_dir=kb_dir,
-                embedding_model=cfg.EMBEDDING_MODEL,
-                llm_model=cfg.LLM_MODEL,
-                api_base=cfg.LLM_API_BASE,
-                api_key=cfg.LLM_API_KEY,
-                logger=logger,
-            )
+        if engine is not None:
+            _qa_engine = engine
             _qa_status = {
                 "ready": True,
                 "message": "知识库已加载",
                 "stats": {
-                    "segment_count": len(_qa_engine.store.segments),
-                    "kb_dir": str(kb_dir),
+                    "segment_count": len(engine.store.segments),
+                    "kb_dir": str(cfg.KB_DIR),
                 },
+                "retryable": False,
             }
-            return _qa_engine
-        except Exception as e:
-            _qa_status = {"ready": False, "message": f"加载失败: {e}"}
-            return None
+        elif error is not None:
+            _set_load_error(f"加载失败: {error}")
+
+        _qa_engine_loading = False
+        if _qa_engine_load_thread is threading.current_thread():
+            _qa_engine_load_thread = None
+        timer = _qa_engine_load_timer
+        _qa_engine_load_timer = None
+
+    if timer is not None:
+        timer.cancel()
 
 
-def warmup_qa_engine_async() -> bool:
-    """Start QA engine warmup in a daemon thread without blocking app startup."""
-    global _qa_engine_loading, _qa_status
-    if _qa_engine is not None or _qa_engine_loading:
-        return False
+def _mark_qa_engine_load_timeout(generation: int) -> None:
+    """Make a stuck background load observable without killing its thread."""
+    global _qa_engine_loading
+    with _qa_engine_lock:
+        if generation != _qa_engine_load_generation or not _qa_engine_loading:
+            return
+        _qa_engine_loading = False
+        _set_load_error(
+            f"知识库加载超时（超过 {cfg.QA_ENGINE_LOAD_TIMEOUT_SECONDS} 秒），请稍后重试",
+        )
+
+
+def _start_qa_engine_load() -> bool:
+    """Start one guarded background load attempt."""
+    global _qa_engine_loading, _qa_engine_load_thread
+    global _qa_engine_load_generation, _qa_engine_load_timer, _qa_status
 
     with _qa_engine_lock:
         if _qa_engine is not None or _qa_engine_loading:
             return False
+        if _qa_engine_load_thread is not None and _qa_engine_load_thread.is_alive():
+            return False
+
+        _qa_engine_load_generation += 1
+        generation = _qa_engine_load_generation
         _qa_engine_loading = True
-        _qa_status = {"ready": False, "message": "知识库正在后台加载", "stats": {}}
+        _qa_status = {
+            "ready": False,
+            "message": "知识库正在后台加载",
+            "stats": {},
+            "retryable": False,
+            "started_at": time.time(),
+        }
 
-    def _worker() -> None:
-        global _qa_engine_loading
-        try:
-            _get_qa_engine()
-        finally:
-            _qa_engine_loading = False
+        def _worker() -> None:
+            try:
+                _finish_qa_engine_load(generation, engine=_build_qa_engine())
+            except Exception as exc:
+                _finish_qa_engine_load(generation, error=exc)
 
-    threading.Thread(target=_worker, name="qa-engine-warmup", daemon=True).start()
+        thread = threading.Thread(target=_worker, name="qa-engine-warmup", daemon=True)
+        _qa_engine_load_thread = thread
+        timeout = max(1, int(cfg.QA_ENGINE_LOAD_TIMEOUT_SECONDS))
+        timer = threading.Timer(timeout, _mark_qa_engine_load_timeout, args=(generation,))
+        timer.daemon = True
+        _qa_engine_load_timer = timer
+
+    timer.start()
+    thread.start()
     return True
+
+
+def _get_qa_engine():
+    """Return the ready engine, or start a non-blocking load attempt."""
+    if _qa_engine is not None:
+        return _qa_engine
+    _start_qa_engine_load()
+    return None
+
+
+def warmup_qa_engine_async() -> bool:
+    """Start QA engine warmup without blocking application requests."""
+    return _start_qa_engine_load()
 
 
 # ── Question validation ────────────────────────────────────────────────────
@@ -248,10 +317,14 @@ _tasks: Dict[str, AsyncTask] = {}
 @router.get("/status")
 def get_status():
     """Check if the knowledge base is ready."""
+    global _qa_status
     if _qa_engine is None and not _qa_engine_loading:
         warmup_qa_engine_async()
-    status_payload = dict(_qa_status)
-    status_payload["loading"] = _qa_engine_loading
+    with _qa_engine_lock:
+        status_payload = dict(_qa_status)
+        status_payload["loading"] = _qa_engine_loading
+        status_payload.setdefault("retryable", False)
+        status_payload.pop("started_at", None)
     return status_payload
 
 
@@ -268,6 +341,7 @@ def get_qa_config():
         "timeout_seconds": cfg.QA_TIMEOUT_SECONDS,
         "poll_interval_ms": cfg.QA_POLL_INTERVAL_MS,
         "warn_seconds": cfg.QA_WARN_SECONDS,
+        "engine_load_timeout_seconds": cfg.QA_ENGINE_LOAD_TIMEOUT_SECONDS,
     }
 
 
@@ -788,19 +862,31 @@ def build_knowledge_base(background_tasks: BackgroundTasks, _=Depends(verify_pas
         )
         stats = engine.build_or_update()
 
-        # Reset engine so next ask uses the new data
-        global _qa_engine, _qa_status
-        _qa_engine = engine
-        _qa_status = {
-            "ready": True,
-            "message": "知识库构建完成",
-            "stats": {
-                "segment_count": len(engine.store.segments),
-                "parsed_segments": stats["parsed_segments"],
-                "updated_segments": stats["updated_segments"],
-                "total_segments": stats["total_segments"],
-            },
-        }
+        # Reset engine so next ask uses the new data. Invalidate an older
+        # background load so it cannot replace this freshly built engine.
+        global _qa_engine, _qa_status, _qa_engine_loading
+        global _qa_engine_load_generation, _qa_engine_load_thread, _qa_engine_load_timer
+        timer: Optional[threading.Timer] = None
+        with _qa_engine_lock:
+            _qa_engine_load_generation += 1
+            _qa_engine_loading = False
+            _qa_engine_load_thread = None
+            timer = _qa_engine_load_timer
+            _qa_engine_load_timer = None
+            _qa_engine = engine
+            _qa_status = {
+                "ready": True,
+                "message": "知识库构建完成",
+                "stats": {
+                    "segment_count": len(engine.store.segments),
+                    "parsed_segments": stats["parsed_segments"],
+                    "updated_segments": stats["updated_segments"],
+                    "total_segments": stats["total_segments"],
+                },
+                "retryable": False,
+            }
+        if timer is not None:
+            timer.cancel()
 
         return {"success": True, **stats}
     except Exception as e:

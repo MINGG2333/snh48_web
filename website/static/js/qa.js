@@ -29,6 +29,7 @@
   let currentPollToken = null;
   let timerInterval = null;
   let pollInterval = null;
+  let kbStatusTimer = null;
   let startTime = null;
 
   // ── Character validators ──────────────────────────────────────────────
@@ -159,12 +160,28 @@
   }
 
   // ── Check KB Status on Load ───────────────────────────────────────────
+  function stopKbStatusPolling() {
+    if (kbStatusTimer) {
+      clearTimeout(kbStatusTimer);
+      kbStatusTimer = null;
+    }
+  }
+
+  function scheduleKbStatusCheck(delay = POLL_INTERVAL_MS) {
+    stopKbStatusPolling();
+    kbStatusTimer = setTimeout(() => {
+      kbStatusTimer = null;
+      checkStatus();
+    }, delay);
+  }
+
   async function checkStatus() {
     try {
       const resp = await fetch('/api/qa/status');
       const data = await resp.json();
 
       if (data.ready) {
+        stopKbStatusPolling();
         kbReady = true;
         statusEl.className = 'qa-status ready';
         statusEl.innerHTML = `<i class="fas fa-check-circle"></i> 知识库已就绪
@@ -181,14 +198,36 @@
           submitEl.disabled = false;
           inputEl.placeholder = '为什么房间名叫葬爱家族？';
         }
-      } else {
+      } else if (data.loading) {
         kbReady = false;
-        statusEl.className = 'qa-status not-ready';
-        statusEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
-          知识库未就绪：${escapeHtml(data.message || '请先构建知识库')}
-          <br><small>请先在终端运行 <code>python run_kb_qa.py build</code> 构建知识库</small>`;
+        statusEl.className = 'qa-status';
+        statusEl.innerHTML = `<i class="fas fa-spinner fa-pulse"></i>
+          知识库正在加载，请稍候...`;
         inputEl.disabled = true;
         submitEl.disabled = true;
+        scheduleKbStatusCheck();
+      } else {
+        stopKbStatusPolling();
+        kbReady = false;
+        statusEl.className = data.retryable ? 'qa-status error' : 'qa-status not-ready';
+        const retryHtml = data.retryable
+          ? `<button id="qaStatusRetry" class="btn" style="margin-left:12px;padding:4px 12px;font-size:0.8rem">
+              <i class="fas fa-sync"></i> 重试
+            </button>`
+          : '';
+        statusEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+          知识库未就绪：${escapeHtml(data.message || '请先构建知识库')}
+          ${retryHtml}
+          ${data.retryable ? '' : '<br><small>请先在终端运行 <code>python run_kb_qa.py build</code> 构建知识库</small>'}`;
+        inputEl.disabled = true;
+        submitEl.disabled = true;
+        const retryBtn = document.getElementById('qaStatusRetry');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            retryBtn.disabled = true;
+            checkStatus();
+          });
+        }
       }
     } catch (err) {
       statusEl.className = 'qa-status error';
@@ -196,6 +235,7 @@
         无法连接到服务器 (${escapeHtml(err.message)})`;
       inputEl.disabled = true;
       submitEl.disabled = true;
+      scheduleKbStatusCheck(5000);
     }
   }
 
