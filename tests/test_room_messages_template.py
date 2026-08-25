@@ -132,7 +132,8 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn("const requestPassword = obPassword", template)
         self.assertIn("requestPassword !== obPassword", template)
         self.assertNotIn("setInterval(fetchData, 10000)", template)
-        self.assertIn("loginVerified && obPassword && loginOverlay.classList.contains('hidden')", template)
+        self.assertIn("function checkObUpdates()", template)
+        self.assertIn("obUpdateCheckTimer = window.setInterval(checkObUpdates, 10000)", template)
 
 
 if __name__ == "__main__":

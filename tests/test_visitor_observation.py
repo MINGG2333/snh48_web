@@ -205,6 +205,29 @@ class VisitorObservationTests(unittest.TestCase):
             self.assertTrue(payload["geoip"]["available"])
             self.assertEqual(payload["geoip"]["eligible_ip_count"], 2)
             self.assertEqual(payload["geoip"]["unresolved_ip_count"], 1)
+            self.assertTrue(payload["revision"])
+
+    def test_ob_summary_revision_changes_when_observation_source_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log_root = root / "interaction_logs"
+            log_root.mkdir()
+            ip_clients = root / "ip_clients.json"
+            read_notifs = root / "read_notifications.json"
+            inbox_root = root / "action_inbox"
+            inbox_root.mkdir()
+
+            with (
+                mock.patch.object(ob_api, "LOG_ROOT", log_root),
+                mock.patch.object(ob_api, "IP_CLIENTS_FILE", ip_clients),
+                mock.patch.object(ob_api, "READ_NOTIFS_FILE", read_notifs),
+                mock.patch.object(ob_api.cfg, "ACTION_INBOX_ROOT", str(inbox_root)),
+            ):
+                first = ob_api.get_ob_summary(Response(), _=True)
+                (log_root / "new-event.md").write_text("new", encoding="utf-8")
+                second = ob_api.get_ob_summary(Response(), _=True)
+
+            self.assertNotEqual(first["revision"], second["revision"])
 
     def test_ip_location_uses_region_names_without_coordinates(self) -> None:
         record = {
@@ -481,6 +504,11 @@ class VisitorObservationTests(unittest.TestCase):
         self.assertIn('id="network3dCanvas"', template)
         self.assertIn('id="obLiveToggle"', template)
         self.assertIn('id="obRefreshNow"', template)
+        self.assertIn('/api/ob/summary', template)
+        self.assertIn('dataUpdateAvailable', template)
+        self.assertIn('function checkObUpdates()', template)
+        self.assertIn('自动检查新数据，不会替换当前记录', template)
+        self.assertNotIn('setInterval(() => {', template)
         self.assertIn("networkGraphSignature", template)
         self.assertIn("captureNetwork3dView", template)
         self.assertIn("copyNetwork3dNodePositions", template)

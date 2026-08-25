@@ -401,7 +401,7 @@
     }
     .records-refresh-controls button:hover,
     .records-refresh-controls button:focus-visible { color: var(--text); outline: none; }
-    .records-refresh-controls button[aria-pressed="false"] { color: var(--gold); background: rgba(255, 165, 2, .1); }
+    .records-refresh-controls button.has-update { color: var(--gold); background: rgba(255, 165, 2, .1); }
     .records-refresh-controls button:disabled { cursor: wait; opacity: .55; }
 
     .network-visualization {
@@ -1120,13 +1120,13 @@
       </button>
     </div>
     <div class="records-refresh-controls" aria-label="用户记录更新">
-      <button id="obLiveToggle" type="button" aria-pressed="true" title="暂停用户记录自动更新">
-        <i id="obLiveToggleIcon" class="fas fa-pause" aria-hidden="true"></i>
-        <span id="obLiveToggleLabel">实时更新</span>
+      <button id="obLiveToggle" type="button" aria-pressed="false" title="自动检查新数据，不会替换当前记录" aria-live="polite">
+        <i id="obLiveToggleIcon" class="fas fa-clock" aria-hidden="true"></i>
+        <span id="obLiveToggleLabel">自动检查</span>
       </button>
-      <button id="obRefreshNow" type="button" title="立即刷新用户记录">
+      <button id="obRefreshNow" type="button" title="加载最新用户记录">
         <i class="fas fa-rotate" aria-hidden="true"></i>
-        <span>立即刷新</span>
+        <span>加载最新</span>
       </button>
     </div>
   </div>
@@ -1316,9 +1316,12 @@
   let network3dInteractionActive = false;
   let network3dHovering = false;
   let network3dRenderPending = false;
-  let autoRefreshEnabled = true;
   let obDataRefreshBusy = false;
   let obDataRefreshQueued = false;
+  let obDataRevision = '';
+  let dataUpdateAvailable = false;
+  let obUpdateCheckBusy = false;
+  let obUpdateCheckTimer = null;
   const associationOpenState = new Map();
   let obToolScrollLockY = null;
 
@@ -1503,12 +1506,15 @@
 
   function resetLoginForPassword(message) {
     stopAdminChatWatch();
+    stopObUpdateChecks();
     if (chatHistoryController) chatHistoryController.abort();
     chatHistoryController = null;
     chatRevision = '';
     loginBusy = false;
     loginVerified = false;
     obPassword = '';
+    obDataRevision = '';
+    dataUpdateAvailable = false;
     passwordInput.disabled = false;
     passwordInput.value = '';
     loginBtn.disabled = false;
@@ -1759,13 +1765,65 @@
 
   // ── Fetch Data ──
   function updateRefreshControls() {
-    const liveLabel = autoRefreshEnabled ? '实时更新' : '已暂停';
-    obLiveToggle.setAttribute('aria-pressed', autoRefreshEnabled ? 'true' : 'false');
-    obLiveToggle.title = autoRefreshEnabled ? '暂停用户记录自动更新' : '恢复用户记录自动更新';
-    obLiveToggleLabel.textContent = liveLabel;
-    obLiveToggleIcon.className = autoRefreshEnabled ? 'fas fa-pause' : 'fas fa-play';
+    const hasUpdate = dataUpdateAvailable;
+    obLiveToggle.setAttribute('aria-pressed', hasUpdate ? 'true' : 'false');
+    obLiveToggle.classList.toggle('has-update', hasUpdate);
+    obLiveToggle.title = hasUpdate
+      ? '检测到新用户记录，点击加载最新'
+      : '自动检查新数据，不会替换当前记录';
+    obLiveToggleLabel.textContent = hasUpdate ? '有新数据' : (obUpdateCheckBusy ? '检查中' : '自动检查');
+    obLiveToggleIcon.className = hasUpdate ? 'fas fa-bell' : 'fas fa-clock';
     obRefreshNow.disabled = obDataRefreshBusy;
-    obRefreshNow.title = obDataRefreshBusy ? '正在刷新用户记录' : '立即刷新用户记录';
+    obRefreshNow.title = obDataRefreshBusy ? '正在加载用户记录' : '加载最新用户记录';
+  }
+
+  function stopObUpdateChecks() {
+    if (obUpdateCheckTimer !== null) {
+      window.clearInterval(obUpdateCheckTimer);
+      obUpdateCheckTimer = null;
+    }
+    obUpdateCheckBusy = false;
+  }
+
+  async function checkObUpdates() {
+    if (
+      obUpdateCheckBusy ||
+      obDataRefreshBusy ||
+      !loginVerified ||
+      !obPassword ||
+      !loginOverlay.classList.contains('hidden')
+    ) return;
+    obUpdateCheckBusy = true;
+    updateRefreshControls();
+    try {
+      const resp = await fetch('/api/ob/summary', {
+        headers: { 'X-Ob-Password': obPassword },
+        cache: 'no-store',
+      });
+      if (resp.status === 401 || resp.status === 403) {
+        resetLoginForPassword('观察页密码已失效，请重新登录');
+        return;
+      }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const summary = await resp.json();
+      const nextRevision = String(summary.revision || '');
+      if (nextRevision && obDataRevision && nextRevision !== obDataRevision) {
+        dataUpdateAvailable = true;
+      }
+      if (!obDataRevision && nextRevision) obDataRevision = nextRevision;
+    } catch (_) {
+      // A failed lightweight check must not disturb the current records.
+    } finally {
+      obUpdateCheckBusy = false;
+      updateRefreshControls();
+    }
+  }
+
+  function startObUpdateChecks() {
+    stopObUpdateChecks();
+    if (!loginVerified || !obPassword || !loginOverlay.classList.contains('hidden')) return;
+    obUpdateCheckTimer = window.setInterval(checkObUpdates, 10000);
+    checkObUpdates();
   }
 
   function queueObDataRefresh() {
@@ -1779,11 +1837,7 @@
 
   async function fetchData(options) {
     options = options || {};
-    if (
-      !options.loginAttempt &&
-      !options.manual &&
-      !autoRefreshEnabled
-    ) return;
+    if (!options.loginAttempt && !options.manual) return;
     if (
       !options.loginAttempt &&
       (!loginVerified || !obPassword || !loginOverlay.classList.contains('hidden'))
@@ -1813,6 +1867,8 @@
       }
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const data = await resp.json();
+      obDataRevision = String(data.revision || obDataRevision || '');
+      dataUpdateAvailable = false;
       groupsData = data.groups || [];
       associationGroupsData = Array.isArray(data.association_groups)
         ? data.association_groups
@@ -1838,6 +1894,7 @@
       updateRegionFilterOptions();
       renderGroups();
       renderInbox();
+      startObUpdateChecks();
       if (!chatWatchController) await fetchChatConversations();
     } catch (err) {
       if (options.loginAttempt && wasLoginVisible) {
@@ -2777,7 +2834,7 @@
 
   function setNetwork3dStatus(linkCount, suffix) {
     network3dStatus.textContent = linkCount + ' 条共享成员连线 · 拖拽旋转 · 滚轮缩放 · '
-      + (autoRefreshEnabled ? '实时更新' : '实时更新已暂停')
+      + (obUpdateCheckTimer !== null ? '自动检查中' : '自动检查已停止')
       + (suffix || '');
   }
 
@@ -2934,20 +2991,19 @@
   window.addEventListener('pointerup', finishNetwork3dInteraction);
 
   obLiveToggle.addEventListener('click', () => {
-    autoRefreshEnabled = !autoRefreshEnabled;
-    updateRefreshControls();
-    if (autoRefreshEnabled) fetchData({ manual: true });
-    if (network3dGraphData) setNetwork3dStatus(network3dGraphData.links.length);
+    if (!dataUpdateAvailable || obDataRefreshBusy) return;
+    fetchData({ manual: true });
     trackAdminEvent('admin_refresh_control', {
-      action: 'toggle_ob_auto_refresh',
-      enabled: autoRefreshEnabled,
+      action: 'load_ob_update_notice',
+      result: 'submitted',
     });
   });
   obRefreshNow.addEventListener('click', () => {
+    if (obDataRefreshBusy) return;
     fetchData({ manual: true });
     trackAdminEvent('admin_refresh_control', {
       action: 'manual_refresh_ob_data',
-      enabled: autoRefreshEnabled,
+      result: 'submitted',
     });
   });
 
@@ -3594,13 +3650,6 @@
       }).catch(() => {});
     });
   }
-
-  // ── Auto-refresh every 10s ──
-  setInterval(() => {
-    if (loginVerified && obPassword && loginOverlay.classList.contains('hidden')) {
-      fetchData();
-    }
-  }, 10000);
 
   // ── Focus password input ──
   updateRefreshControls();

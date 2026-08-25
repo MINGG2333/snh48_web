@@ -79,6 +79,10 @@ class PasswordVerifyEndpointTests(unittest.TestCase):
                 )
             self.assertEqual(raised.exception.status_code, 403)
 
+    def test_ob_summary_is_password_protected(self) -> None:
+        route = next(route for route in ob_router.routes if route.path == "/api/ob/summary")
+        self.assertTrue(route.dependant.dependencies)
+
 
 if __name__ == "__main__":
     unittest.main()

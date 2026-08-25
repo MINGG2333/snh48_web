@@ -11,6 +11,7 @@ or session estimates.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from itertools import combinations
@@ -98,6 +99,43 @@ def verify_ob_login(response: Response, _=Depends(verify_ob_password)):
     """Verify the password without loading observation records."""
     response.headers["Cache-Control"] = "no-store"
     return {"verified": True}
+
+
+def _ob_data_revision() -> str:
+    """Return a metadata-only revision for the observation data sources."""
+    digest = hashlib.sha256()
+    roots = (
+        LOG_ROOT,
+        IP_CLIENTS_FILE,
+        READ_NOTIFS_FILE,
+        Path(cfg.ACTION_INBOX_ROOT) / "events",
+    )
+    for root in roots:
+        if root.is_file():
+            candidates = (root,)
+        elif root.is_dir():
+            try:
+                candidates = sorted(path for path in root.rglob("*") if path.is_file())
+            except OSError:
+                candidates = ()
+        else:
+            candidates = ()
+        for path in candidates:
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            digest.update(str(path).encode("utf-8", "surrogateescape"))
+            digest.update(str(stat.st_mtime_ns).encode("ascii"))
+            digest.update(str(stat.st_size).encode("ascii"))
+    return digest.hexdigest()
+
+
+@router.get("/summary")
+def get_ob_summary(response: Response, _=Depends(verify_ob_password)):
+    """Return only the current revision; polling this never replaces page data."""
+    response.headers["Cache-Control"] = "no-store"
+    return {"revision": _ob_data_revision()}
 
 
 @router.get("/data")
@@ -197,10 +235,12 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
     )
     association_groups = _build_ip_association_groups(groups)
     ip_network_graph = _build_ip_network_graph(groups)
+    revision = _ob_data_revision()
 
     stable_profiles = sum(1 for group in groups if not group["is_legacy"])
     legacy_sessions = len(groups) - stable_profiles
     return {
+        "revision": revision,
         "groups": groups,
         "association_groups": association_groups,
         "ip_network_graph": ip_network_graph,
