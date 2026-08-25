@@ -55,6 +55,14 @@ _qa_status: Dict[str, Any] = {"ready": False, "message": "未初始化", "stats"
 _qa_engine_load_thread: Optional[threading.Thread] = None
 _qa_engine_load_timer: Optional[threading.Timer] = None
 _qa_engine_load_generation = 0
+_qa_engine_load_stage = "idle"
+
+
+def _set_qa_engine_load_stage(stage: str) -> None:
+    """Publish a short diagnostic stage without exposing internal exceptions."""
+    global _qa_engine_load_stage
+    with _qa_engine_lock:
+        _qa_engine_load_stage = stage
 
 
 def _build_qa_engine() -> Any:
@@ -65,6 +73,7 @@ def _build_qa_engine() -> Any:
     lets health requests continue to respond and lets the watchdog publish a
     useful timeout instead of leaving the API in an eternal loading state.
     """
+    print("[QA] loading engine: validating knowledge-base paths", flush=True)
     records_path = Path(cfg.RECORDS_PATH)
     subtitle_root = Path(cfg.SUBTITLE_ROOT)
     kb_dir = Path(cfg.KB_DIR)
@@ -74,9 +83,13 @@ def _build_qa_engine() -> Any:
     if not kb_dir.exists() or not (kb_dir / "segment_store.json").exists():
         raise FileNotFoundError("知识库未构建，请先运行 `python run_kb_qa.py build`")
 
+    _set_qa_engine_load_stage("importing_qa_engine")
+    print("[QA] loading engine: importing kb_qa", flush=True)
     from kb_qa.qa import VideoKnowledgeQA
     from loguru import logger
 
+    _set_qa_engine_load_stage("constructing_qa_engine")
+    print("[QA] loading engine: constructing VideoKnowledgeQA", flush=True)
     return VideoKnowledgeQA(
         records_path=records_path,
         subtitle_root=subtitle_root,
@@ -102,6 +115,7 @@ def _set_load_error(message: str, *, retryable: bool = True) -> None:
 def _finish_qa_engine_load(generation: int, engine: Any = None, error: Optional[Exception] = None) -> None:
     """Publish a load result only if it belongs to the current attempt."""
     global _qa_engine, _qa_engine_loading, _qa_engine_load_thread, _qa_engine_load_timer
+    global _qa_engine_load_stage
     global _qa_status
 
     timer: Optional[threading.Timer] = None
@@ -124,6 +138,7 @@ def _finish_qa_engine_load(generation: int, engine: Any = None, error: Optional[
             _set_load_error(f"加载失败: {error}")
 
         _qa_engine_loading = False
+        _qa_engine_load_stage = "ready" if engine is not None else "error"
         if _qa_engine_load_thread is threading.current_thread():
             _qa_engine_load_thread = None
         timer = _qa_engine_load_timer
@@ -135,11 +150,12 @@ def _finish_qa_engine_load(generation: int, engine: Any = None, error: Optional[
 
 def _mark_qa_engine_load_timeout(generation: int) -> None:
     """Make a stuck background load observable without killing its thread."""
-    global _qa_engine_loading
+    global _qa_engine_loading, _qa_engine_load_stage
     with _qa_engine_lock:
         if generation != _qa_engine_load_generation or not _qa_engine_loading:
             return
         _qa_engine_loading = False
+        _qa_engine_load_stage = "timeout"
         _set_load_error(
             f"知识库加载超时（超过 {cfg.QA_ENGINE_LOAD_TIMEOUT_SECONDS} 秒），请稍后重试",
         )
@@ -149,6 +165,7 @@ def _start_qa_engine_load() -> bool:
     """Start one guarded background load attempt."""
     global _qa_engine_loading, _qa_engine_load_thread
     global _qa_engine_load_generation, _qa_engine_load_timer, _qa_status
+    global _qa_engine_load_stage
 
     with _qa_engine_lock:
         if _qa_engine is not None or _qa_engine_loading:
@@ -159,6 +176,7 @@ def _start_qa_engine_load() -> bool:
         _qa_engine_load_generation += 1
         generation = _qa_engine_load_generation
         _qa_engine_loading = True
+        _qa_engine_load_stage = "starting"
         _qa_status = {
             "ready": False,
             "message": "知识库正在后台加载",
@@ -169,6 +187,7 @@ def _start_qa_engine_load() -> bool:
 
         def _worker() -> None:
             try:
+                _set_qa_engine_load_stage("building")
                 _finish_qa_engine_load(generation, engine=_build_qa_engine())
             except Exception as exc:
                 _finish_qa_engine_load(generation, error=exc)
@@ -196,6 +215,42 @@ def _get_qa_engine():
 def warmup_qa_engine_async() -> bool:
     """Start QA engine warmup without blocking application requests."""
     return _start_qa_engine_load()
+
+
+def warmup_qa_engine_sync() -> bool:
+    """Load the engine during application startup before serving requests.
+
+    The embedding runtime may initialize native thread pools. Running this one
+    time on the startup thread avoids the deadlock observed when that runtime
+    is first imported from a daemon worker inside the already-running server.
+    """
+    global _qa_engine, _qa_engine_loading, _qa_engine_load_generation
+    global _qa_engine_load_stage, _qa_status
+
+    with _qa_engine_lock:
+        if _qa_engine is not None:
+            return False
+        if _qa_engine_loading:
+            return False
+        _qa_engine_load_generation += 1
+        generation = _qa_engine_load_generation
+        _qa_engine_loading = True
+        _qa_engine_load_stage = "starting"
+        _qa_status = {
+            "ready": False,
+            "message": "知识库正在启动加载",
+            "stats": {},
+            "retryable": False,
+        }
+
+    try:
+        engine = _build_qa_engine()
+    except Exception as exc:
+        _finish_qa_engine_load(generation, error=exc)
+        return False
+
+    _finish_qa_engine_load(generation, engine=engine)
+    return True
 
 
 # ── Question validation ────────────────────────────────────────────────────
@@ -323,6 +378,7 @@ def get_status():
     with _qa_engine_lock:
         status_payload = dict(_qa_status)
         status_payload["loading"] = _qa_engine_loading
+        status_payload["load_stage"] = _qa_engine_load_stage
         status_payload.setdefault("retryable", False)
         status_payload.pop("started_at", None)
     return status_payload
@@ -866,10 +922,12 @@ def build_knowledge_base(background_tasks: BackgroundTasks, _=Depends(verify_pas
         # background load so it cannot replace this freshly built engine.
         global _qa_engine, _qa_status, _qa_engine_loading
         global _qa_engine_load_generation, _qa_engine_load_thread, _qa_engine_load_timer
+        global _qa_engine_load_stage
         timer: Optional[threading.Timer] = None
         with _qa_engine_lock:
             _qa_engine_load_generation += 1
             _qa_engine_loading = False
+            _qa_engine_load_stage = "ready"
             _qa_engine_load_thread = None
             timer = _qa_engine_load_timer
             _qa_engine_load_timer = None

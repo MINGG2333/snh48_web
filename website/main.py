@@ -495,7 +495,8 @@ async def startup():
     On startup:
     1. Back up old qa_archive when QA is enabled
     2. Initialize interaction log session
-    3. Try to load the QA engine on enabled nodes (non-blocking on failure)
+    3. Load the QA engine on enabled nodes before accepting requests; failures
+       leave a retryable status without preventing the website from starting
     """
     if cfg.QA_ENABLED:
         kb_dir = Path(cfg.KB_DIR)
@@ -523,14 +524,14 @@ async def startup():
         print("  QA is disabled on this node; routes and warmup are not loaded.")
     elif cfg.QA_WARMUP_ON_STARTUP:
         try:
-            from website.qa_api.router import warmup_qa_engine_async
-            if warmup_qa_engine_async():
-                print("✓ QA engine warmup scheduled in background.")
+            from website.qa_api.router import warmup_qa_engine_sync
+            if warmup_qa_engine_sync():
+                print("✓ QA engine loaded during startup.")
             else:
-                print("✓ QA engine warmup already running or ready.")
+                print("! QA engine startup load failed; QA will remain retryable.")
         except Exception as e:
             print(f"! QA engine not available at startup: {e}")
-            print("  You can still serve the frontend. Build the KB later via API.")
+            print("  You can still serve the frontend and retry QA later.")
     else:
         print("  QA engine startup warmup disabled; it will load lazily when QA is used.")
 
