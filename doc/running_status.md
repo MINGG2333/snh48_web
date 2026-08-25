@@ -2,9 +2,9 @@
 
 更新日期：2026-08-26 CST +0800
 
-2026-08-26 06:37 阿里云 QA 长期修复完成：网站提交 `716ea77` 已由 `python3 deploy/deploy.py deploy aliyun` 通过 GitHub 快进部署并重启 `snh48-aliyun.service`。此前 `/api/qa/status` 长期停留在 loading，根因为 Chroma/Pydantic 在导入时按当前工作目录读取项目 `.env`，而生产 `.env` 按安全基线为 `root:root 0600`，导致 `snh48-web` 进程导入 QA 依赖时报 `PermissionError`；早期后台线程还会把该失败表现为不可恢复的 loading。当前 QA 初始化改为服务启动阶段执行，并在导入/构造 Chroma 时切换到服务账号可访问的 HOME，失败会记录 traceback 并返回可重试状态；懒加载仍有超时、代次保护和阶段状态。阿里云模型缓存保持在 `/var/lib/snh48-web/.cache/huggingface`，未修改 `.env` 权限或输出任何密钥。
+2026-08-26 06:41 阿里云 QA 长期修复完成：网站提交 `242c514` 已由 `python3 deploy/deploy.py deploy aliyun` 通过 GitHub 快进部署并重启 `snh48-aliyun.service`。此前 `/api/qa/status` 长期停留在 loading，根因为 Chroma/Pydantic 在导入时按当前工作目录读取项目 `.env`，而生产 `.env` 按安全基线为 `root:root 0600`，导致 `snh48-web` 进程导入 QA 依赖时报 `PermissionError`；早期后台线程还会把该失败表现为不可恢复的 loading。当前 QA 初始化改为服务启动阶段执行，并在导入 Chroma 时切换到服务账号可访问的 HOME，同时关闭 Chroma 后续 dotenv 探测，失败会记录 traceback 并返回可重试状态；懒加载仍有超时、代次保护和阶段状态。阿里云模型缓存保持在 `/var/lib/snh48-web/.cache/huggingface`，未修改 `.env` 权限或输出任何密钥。
 
-线上复核：阿里云 checkout `716ea77`，PID `2777676`，`active/running`、`NRestarts=0`，启动时间 06:36:41；本机和公网 `/api/qa/status` 均返回 `ready=true`、`loading=false`、`segment_count=292700`，首页、`/qa`、时间轴、Room、礼物、上麦回放、翻牌、计分礼物、静态资源、时间轴 API 和图片代理 smoke tests 全部通过。腾讯云未重启，继续按 `QA_ENABLED=false` 停用 QA；阿里云既有未跟踪运行文件保持原样。
+线上复核：阿里云 checkout `242c514`，PID `2779192`，`active/running`、`NRestarts=0`，启动时间 06:40:38；本机和公网 `/api/qa/status` 均返回 `ready=true`、`loading=false`、`segment_count=292700`，首页、`/qa`、时间轴、Room、礼物、上麦回放、翻牌、计分礼物、静态资源、时间轴 API 和图片代理 smoke tests 全部通过。腾讯云未重启，继续按 `QA_ENABLED=false` 停用 QA；阿里云既有未跟踪运行文件保持原样。
 
 2026-08-25 01:42 用户确认腾讯云后，阿里云网站通过 GitHub 从 `1dae795` 快进部署到 `358a65b`，重启 `snh48-aliyun.service` 后 PID `2625375`、active/running、`NRestarts=0`，01:41:27 启动，warning..emerg 日志为空；既有未跟踪 `website/data/manual_events.csv`、`website/data/runtime_backups/`、`website/static/js/timeline.js.bak` 原样保留。部署工具的首页、时间轴、Room 礼物、综合回礼、上麦回放、翻牌、计分礼物、静态资源、时间轴 API、QA 和图片代理烟测全部通过。阿里云翻牌账号管理仍为 200/disabled，没有安装腾讯云专用账号桥、转录 venv 或敏感凭据；鉴权后账号 `172884074` 返回 373 条记录、341 条转录，媒体 1-byte Range 为 206，腾讯云与阿里云 `accounts.json` 和账号 JSON SHA-256 分别一致。阿里云安全基线全部通过。公网和本机 Certbot 证书均有效至 2026-11-01，约剩 68 天，`certbot.timer` 与月度提醒 cron 正常，本轮未修改证书或 Nginx。
 
