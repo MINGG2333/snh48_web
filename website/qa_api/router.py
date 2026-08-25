@@ -103,19 +103,25 @@ def _build_qa_engine() -> Any:
     with _qa_import_context():
         from kb_qa.qa import VideoKnowledgeQA
         from loguru import logger
+        from chromadb.config import Settings as ChromaSettings
 
-        _set_qa_engine_load_stage("constructing_qa_engine")
-        print("[QA] loading engine: constructing VideoKnowledgeQA", flush=True)
-        return VideoKnowledgeQA(
-            records_path=records_path,
-            subtitle_root=subtitle_root,
-            kb_dir=kb_dir,
-            embedding_model=cfg.EMBEDDING_MODEL,
-            llm_model=cfg.LLM_MODEL,
-            api_base=cfg.LLM_API_BASE,
-            api_key=cfg.LLM_API_KEY,
-            logger=logger,
-        )
+        # systemd already injects the protected .env values into os.environ;
+        # prevent each later Chroma Settings() from probing that unreadable
+        # file again during PersistentClient construction.
+        ChromaSettings.Config.env_file = None
+
+    _set_qa_engine_load_stage("constructing_qa_engine")
+    print("[QA] loading engine: constructing VideoKnowledgeQA", flush=True)
+    return VideoKnowledgeQA(
+        records_path=records_path,
+        subtitle_root=subtitle_root,
+        kb_dir=kb_dir,
+        embedding_model=cfg.EMBEDDING_MODEL,
+        llm_model=cfg.LLM_MODEL,
+        api_base=cfg.LLM_API_BASE,
+        api_key=cfg.LLM_API_KEY,
+        logger=logger,
+    )
 
 
 def _set_load_error(message: str, *, retryable: bool = True) -> None:
