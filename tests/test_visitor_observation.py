@@ -224,10 +224,17 @@ class VisitorObservationTests(unittest.TestCase):
                 mock.patch.object(ob_api.cfg, "ACTION_INBOX_ROOT", str(inbox_root)),
             ):
                 first = ob_api.get_ob_summary(Response(), _=True)
-                (log_root / "new-event.md").write_text("new", encoding="utf-8")
+                session = log_root / "session_20260825_120000"
+                session.mkdir()
+                (session / "_events.jsonl").write_text("admin event", encoding="utf-8")
                 second = ob_api.get_ob_summary(Response(), _=True)
+                self.assertEqual(first["revision"], second["revision"])
+                (session / visitor_observation.PAGE_VIEWS_FILENAME).write_text(
+                    "new page view", encoding="utf-8"
+                )
+                third = ob_api.get_ob_summary(Response(), _=True)
 
-            self.assertNotEqual(first["revision"], second["revision"])
+            self.assertNotEqual(second["revision"], third["revision"])
 
     def test_ip_location_uses_region_names_without_coordinates(self) -> None:
         record = {

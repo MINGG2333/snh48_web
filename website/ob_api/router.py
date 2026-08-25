@@ -26,7 +26,11 @@ from website.logging_setup import LOG_ROOT
 from website.rate_limiter import check_ob_login_limit, get_client_ip
 from website.action_inbox import InboxError, list_requests, record_status
 from website.ip_geolocation import lookup_ip_locations
-from website.visitor_observation import is_valid_client_id, load_page_views
+from website.visitor_observation import (
+    PAGE_VIEWS_FILENAME,
+    is_valid_client_id,
+    load_page_views,
+)
 
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
 
@@ -115,7 +119,10 @@ def _ob_data_revision() -> str:
             candidates = (root,)
         elif root.is_dir():
             try:
-                candidates = sorted(path for path in root.rglob("*") if path.is_file())
+                if root == LOG_ROOT:
+                    candidates = sorted(root.glob(f"session_*/{PAGE_VIEWS_FILENAME}"))
+                else:
+                    candidates = sorted(path for path in root.rglob("*") if path.is_file())
             except OSError:
                 candidates = ()
         else:
