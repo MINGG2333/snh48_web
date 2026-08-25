@@ -15,6 +15,7 @@ import threading
 import time
 import traceback
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -65,6 +66,17 @@ def _set_qa_engine_load_stage(stage: str) -> None:
         _qa_engine_load_stage = stage
 
 
+@contextmanager
+def _qa_import_context():
+    """Keep Chroma's dotenv probe away from the root-owned project `.env`."""
+    previous_cwd = os.getcwd()
+    os.chdir(str(Path.home()))
+    try:
+        yield
+    finally:
+        os.chdir(previous_cwd)
+
+
 def _build_qa_engine() -> Any:
     """Build the engine without holding the state lock.
 
@@ -85,7 +97,11 @@ def _build_qa_engine() -> Any:
 
     _set_qa_engine_load_stage("importing_qa_engine")
     print("[QA] loading engine: importing kb_qa", flush=True)
-    from kb_qa.qa import VideoKnowledgeQA
+    # Chroma constructs a pydantic Settings default at import time and probes
+    # ``.env`` relative to cwd. The website's production .env is intentionally
+    # root-only, so import it from the service-owned home directory instead.
+    with _qa_import_context():
+        from kb_qa.qa import VideoKnowledgeQA
     from loguru import logger
 
     _set_qa_engine_load_stage("constructing_qa_engine")
