@@ -135,6 +135,7 @@ def _finish_qa_engine_load(generation: int, engine: Any = None, error: Optional[
                 "retryable": False,
             }
         elif error is not None:
+            print(f"[QA] knowledge-base load failed: {error!r}", flush=True)
             _set_load_error(f"加载失败: {error}")
 
         _qa_engine_loading = False
