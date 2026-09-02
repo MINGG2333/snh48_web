@@ -22,6 +22,7 @@ from pydantic import BaseModel, field_validator
 from website.rate_limiter import check_complaint_limit, get_client_ip
 from website.action_inbox import InboxError, record_request
 from website.captcha import consume_challenge
+from website.maintenance import ensure_writable
 
 router = APIRouter(prefix="/api/complaint", tags=["投诉举报"])
 
@@ -94,6 +95,7 @@ def submit_complaint(req: ComplaintRequest, request: Request):
     Generates a unique ticket_id for tracking, stores the complaint
     data in a JSONL file, and returns the ticket_id to the user.
     """
+    ensure_writable()
     # Rate-limit complaint submissions to prevent spam
     ip = get_client_ip(request)
     check_complaint_limit(ip)

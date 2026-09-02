@@ -24,6 +24,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Request, 
 from pydantic import BaseModel
 
 from website import config as cfg
+from website.maintenance import ensure_writable
 from website.rate_limiter import check_scroller_login_limit, get_client_ip
 from website.shared_runtime_state import (
     SharedStateError,
@@ -212,6 +213,7 @@ def update_texts(req: TextsUpdateRequest, _=Depends(verify_scroller_auth)):
     Cookie-protected endpoint – replace the list of scrolling texts.
     Authentication via HttpOnly cookie (set by POST /api/scroller/login).
     """
+    ensure_writable()
     texts = req.texts
     cleaned = [t.strip() for t in texts if t.strip()]
     if not cleaned:

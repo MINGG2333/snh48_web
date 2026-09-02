@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, field_validator
 
 from website.action_inbox import InboxError, list_chat_events, record_request
+from website.maintenance import ensure_writable
 from website.ob_api.router import verify_ob_password
 from website.rate_limiter import check_feedback_chat_history_limit, check_feedback_chat_limit, get_client_ip
 
@@ -238,6 +239,7 @@ async def watch_history(req: ChatWatchRequest, request: Request, response: Respo
 
 @router.post("/message")
 def send_message(req: ChatMessageRequest, request: Request, response: Response):
+    ensure_writable()
     check_feedback_chat_limit(get_client_ip(request))
     conversation_id = _conversation_id(req.identifier)
     created_at = _now()
@@ -305,6 +307,7 @@ def get_admin_history(req: AdminConversationRequest, response: Response, _=Depen
 
 @router.post("/reply")
 def reply_message(req: AdminReplyRequest, response: Response, _=Depends(verify_ob_password)):
+    ensure_writable()
     created_at = _now()
     message_id = f"FR-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:12].upper()}"
     user_identifier = _user_identifier(req.conversation_id)

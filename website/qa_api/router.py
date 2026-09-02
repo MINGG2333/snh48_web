@@ -37,6 +37,7 @@ from website.rate_limiter import (
     unregister_task,
 )
 from website.action_inbox import InboxError, deterministic_request_id, record_request
+from website.maintenance import ensure_writable
 
 # ── Import transcript_analyze (add parent to path) ──
 _KB_QA_DIR = Path(__file__).resolve().parent.parent.parent / "transcript_analyze"
@@ -742,6 +743,7 @@ def archive_email(req: ArchiveEmailRequest, request: Request):
       2. email_requests.md     — 人类可读的 Markdown 汇总文件（按时间倒序排列）
       3. notification_center.md — 统一通知中心（汇总所有待处理事件，含处理状态）
     """
+    ensure_writable()
     # Rate-limit email submissions to prevent spam
     ip = get_client_ip(request)
     check_email_submit_limit(ip)

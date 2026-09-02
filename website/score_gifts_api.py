@@ -22,6 +22,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from website import config as cfg
+from website.maintenance import ensure_writable
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, register_mutator
 
@@ -238,6 +239,7 @@ async def update_score_gift_business_review(
     _=Depends(verify_score_gifts_password),
 ):
     """Verify or manually override one live score-gift business result."""
+    ensure_writable()
     try:
         payload = await request.json()
     except json.JSONDecodeError as exc:

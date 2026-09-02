@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from website import config as cfg
+from website.maintenance import ensure_writable
 from website.logging_setup import LOG_ROOT
 from website.rate_limiter import check_ob_login_limit, get_client_ip
 from website.action_inbox import InboxError, list_requests, record_status
@@ -668,6 +669,7 @@ def mark_notification_read(req: MarkReadRequest, _=Depends(verify_ob_password)):
 @router.post("/inbox/status")
 def update_inbox_status(req: InboxStatusRequest, _=Depends(verify_ob_password)):
     """Append an immutable processing-status event for one shared request."""
+    ensure_writable()
     try:
         result = record_status(req.event_id.strip(), req.status.strip(), note=req.note.strip())
     except InboxError as exc:

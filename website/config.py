@@ -4,6 +4,7 @@ Reads from environment variables with sensible defaults for local development.
 """
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import sys
@@ -74,6 +75,22 @@ SCROLLER_PASSWORD = os.getenv("SCROLLER_PASSWORD", "")
 SCROLLER_TEXTS_PATH = os.getenv(
     "SCROLLER_TEXTS_PATH",
     str(PROJECT_ROOT / "website" / "data" / "scroller_texts.json"),
+)
+
+# Node-local drain switch used during a public-site migration. Read-only
+# pages and queries remain available; business writes are rejected explicitly
+# by the affected endpoints.
+SITE_MAINTENANCE_MODE = os.getenv("SITE_MAINTENANCE_MODE", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+SITE_MAINTENANCE_MESSAGE = os.getenv(
+    "SITE_MAINTENANCE_MESSAGE",
+    "本站正在进行迁移维护，暂时不接受提交或管理操作，请稍后再试。",
+).strip() or "本站正在进行迁移维护，暂时不接受提交或管理操作，请稍后再试。"
+SITE_MAINTENANCE_RETRY_AFTER_SECONDS = max(
+    1, int(os.getenv("SITE_MAINTENANCE_RETRY_AFTER_SECONDS", "300"))
 )
 
 # 观察页管理密码（独立密码，环境变量 OB_PASSWORD）
@@ -399,10 +416,25 @@ ACTION_INBOX_ROOT = os.getenv(
     "ACTION_INBOX_ROOT",
     str(PROJECT_ROOT / "website" / "data" / "action_inbox"),
 )
-SHARED_STATE_NODE_LABELS = {
+_default_shared_state_node_labels = {
     "tencent": "腾讯云 cjy.plus",
     "aliyun": "阿里云 cjy.我爱你",
 }
+_shared_state_node_labels_json = os.getenv("SHARED_STATE_NODE_LABELS_JSON", "").strip()
+if _shared_state_node_labels_json:
+    try:
+        _configured_labels = json.loads(_shared_state_node_labels_json)
+        if isinstance(_configured_labels, dict):
+            for _key, _value in _configured_labels.items():
+                if isinstance(_key, str) and isinstance(_value, str) and _key and _value.strip():
+                    _default_shared_state_node_labels[_key.strip().lower()] = _value.strip()
+    except (TypeError, ValueError):
+        # A malformed optional label map must not prevent the site from booting.
+        pass
+SHARED_STATE_NODE_LABEL = os.getenv("SHARED_STATE_NODE_LABEL", "").strip()
+if SHARED_STATE_NODE_LABEL:
+    _default_shared_state_node_labels[SHARED_STATE_NODE_ID] = SHARED_STATE_NODE_LABEL
+SHARED_STATE_NODE_LABELS = _default_shared_state_node_labels
 
 # 远程弹幕兜底读取。默认只硬拦截危险地址，域名白名单先用于灰度观察；
 # 确认历史弹幕源都覆盖后再开启 DANMU_REMOTE_ENFORCE_HOST_ALLOWLIST=true。

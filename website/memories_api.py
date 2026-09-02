@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from website import config as cfg
+from website.maintenance import ensure_writable
 from website.rate_limiter import (
     check_admin_login_limit,
     check_memories_submit_limit,
@@ -283,6 +284,7 @@ def submit_memory(
     request: Request,
 ):
     """Submit a new memory for basic review and display/queueing."""
+    ensure_writable()
     if not cfg.MEMORIES_SUBMIT_ENABLED:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前服务器暂不开放记忆提交")
 
@@ -310,6 +312,7 @@ def submit_memory(
 @router.post("/review")
 def review_memory(req: MemoryReviewRequest, request: Request):
     """Review or confirm a memory record."""
+    ensure_writable()
     if req.action == "confirm_idol":
         actor = "idol"
         _verify_idol_request(request)

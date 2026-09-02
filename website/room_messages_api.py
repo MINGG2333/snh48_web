@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from website import config as cfg
+from website.maintenance import ensure_writable
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, register_mutator
 
@@ -261,6 +262,7 @@ def ignore_latest_unreplied_gift_batch(
     _=Depends(verify_room_messages_password),
 ):
     """Mark the current latest un-replied gift batch as ignored."""
+    ensure_writable()
     response.headers["Cache-Control"] = "no-store"
     with _ignore_lock:
         try:
@@ -284,6 +286,7 @@ def undo_latest_ignored_gift_batch(
     _=Depends(verify_room_messages_password),
 ):
     """Undo the most recently ignored gift batch."""
+    ensure_writable()
     response.headers["Cache-Control"] = "no-store"
     with _ignore_lock:
         try:

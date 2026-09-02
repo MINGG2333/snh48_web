@@ -96,6 +96,29 @@ SHARED_STATE_PEER=root@124.222.72.203
 
 两端还要保持 `SHARED_STATE_REMOTE_ROOT=/home/snh48_web` 和正确的虚拟环境 Python 路径。旧 `ROOM_MESSAGES_IGNORE_DIRECT_*` 只作为本次滚动迁移的配置兼容回退，新部署应显式配置 `SHARED_STATE_*`。
 
+## 迁移维护模式与节点名称
+
+迁移公开站时，可在即将下线的节点 `.env` 中临时设置：
+
+```ini
+SITE_MAINTENANCE_MODE=true
+SITE_MAINTENANCE_MESSAGE=本站正在进行迁移维护，暂时不接受提交或管理操作，请稍后再试。
+SITE_MAINTENANCE_RETRY_AFTER_SECONDS=300
+```
+
+该开关只保护需要跨服务器一致性的业务写入：四类共享状态操作、投诉/邮箱/客服聊天可靠待办，以及 `/api/ob/inbox/status` 处理状态更新。接口返回 `503` 和 `Retry-After`，读取页面、查询接口、静态资源和访问追踪继续可用；管理员登录 Cookie、`/api/ob/mark-read` 本节点已读状态和 QA 临时任务不在拦截范围。迁移完成后恢复 `false` 并重启网站服务。社交凭据、翻牌账号管理等节点本地敏感操作不由此通道复制，迁移窗口应另行停用。
+
+可靠待处理箱中的显示名称可按部署目标配置，避免迁移到新域名后仍显示旧名称：
+
+```ini
+# 当前节点名称；NODE_ID 仍是稳定机器身份
+SHARED_STATE_NODE_LABEL=新公开站
+# 可选的多节点显示名覆盖/补充
+SHARED_STATE_NODE_LABELS_JSON={"aliyun-new":"新公开站"}
+```
+
+名称只影响 `/ob` 和待处理箱的可读标签，不改变 `origin_node`、事件 ID 或复制协议。
+
 ## 首次迁移与巡检
 
 首次只在腾讯云创建四个基线 revision：
