@@ -1,6 +1,8 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-08-26 CST +0800
+更新日期：2026-09-03 CST +0800
+
+2026-09-03 04:35 腾讯云先验部署网站提交 `6ee2077`：通过阿里云现有跨云 SSH 通道确认腾讯云工作树只保留既有未跟踪 `website/data/runtime_backups/`，未覆盖运行数据；腾讯云 `snh48-web.service` 定向重启后主 PID `3994901`、`active/running`、`NRestarts=0`，共享状态复制线程正常启动，`SITE_MAINTENANCE_MODE=false`（默认不改变线上写入）。本机首页和时间轴返回 200，公网 `https://cjy.plus/`、`/timeline`、`/score-gifts`、`/memories`、`/ob` 均返回 200，启动后 warning..emerg 日志为空。网站新增迁移维护守卫、节点显示名配置和迁移/容量记录文档；本地虚拟环境全量 97 项 unittest 通过。阿里云尚未部署，等待腾讯云用户验证后再同步。
 
 2026-08-26 06:41 阿里云 QA 长期修复完成：网站提交 `242c514` 已由 `python3 deploy/deploy.py deploy aliyun` 通过 GitHub 快进部署并重启 `snh48-aliyun.service`。此前 `/api/qa/status` 长期停留在 loading，根因为 Chroma/Pydantic 在导入时按当前工作目录读取项目 `.env`，而生产 `.env` 按安全基线为 `root:root 0600`，导致 `snh48-web` 进程导入 QA 依赖时报 `PermissionError`；早期后台线程还会把该失败表现为不可恢复的 loading。当前 QA 初始化改为服务启动阶段执行，并在导入 Chroma 时切换到服务账号可访问的 HOME，同时关闭 Chroma 后续 dotenv 探测，失败会记录 traceback 并返回可重试状态；懒加载仍有超时、代次保护和阶段状态。阿里云模型缓存保持在 `/var/lib/snh48-web/.cache/huggingface`，未修改 `.env` 权限或输出任何密钥。
 
