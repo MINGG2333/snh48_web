@@ -1,0 +1,10 @@
+[Unit]
+Description=Collect SNH48 website capacity metrics every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

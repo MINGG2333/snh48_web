@@ -1,0 +1,18 @@
+[Unit]
+Description=SNH48 website capacity metrics snapshot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/home/snh48_web
+EnvironmentFile=-/etc/snh48-web/observability.env
+ExecStart=/usr/bin/python3 /home/snh48_web/script/website_observability.py collect
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/var/lib/snh48-web/metrics
+ReadOnlyPaths=/var/log/nginx

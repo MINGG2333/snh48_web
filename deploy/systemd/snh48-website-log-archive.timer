@@ -1,0 +1,9 @@
+[Unit]
+Description=Check SNH48 website log capacity daily
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

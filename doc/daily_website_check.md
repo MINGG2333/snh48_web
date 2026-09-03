@@ -193,3 +193,39 @@ du -sh website/data/shared_state_history website/data/action_inbox website/data/
 ```
 
 - 历史恢复只在腾讯云运行 `script/shared_state_history.py restore ...`；恢复也会生成新 revision。完整说明见 `doc/shared_runtime_state.md`。
+
+## 3. 访问统计、资源快照与日志留存
+
+两个节点分别运行观测任务；不要把两个节点的请求量或资源曲线合并后判断规格：
+
+| 节点 | 专用访问日志 | 统计目录 | 日志归档 COS 配置 |
+|------|--------------|----------|-------------------|
+| 腾讯云非公开站 | `/var/log/nginx/snh48_access.log*` | `/var/lib/snh48-web/metrics/tencent/` | 使用腾讯云 fan-hub 私有配置 |
+| 阿里云公开站 | `/var/log/nginx/snh48_aliyun_access.log*` | `/var/lib/snh48-web/metrics/aliyun/` | 当前不放置 fan-hub 凭据，超过阈值时 fail-closed |
+
+每日检查命令（两台机器分别执行）：
+
+```bash
+systemctl is-enabled snh48-website-metrics.timer snh48-website-log-archive.timer
+systemctl is-active snh48-website-metrics.timer snh48-website-log-archive.timer
+systemctl show snh48-website-metrics.service snh48-website-log-archive.service \
+  -p Result -p ExecMainStatus -p ActiveEnterTimestamp
+python3 /usr/local/libexec/snh48-website-observability.py collect
+python3 /usr/local/libexec/snh48-website-observability.py archive-logs
+cat /var/lib/snh48-web/metrics/<node_id>/latest.json
+cat /var/lib/snh48-web/metrics/<node_id>/daily.json
+du -sh /var/log/nginx /var/lib/snh48-web/metrics/<node_id> /var/lib/snh48-web/log-archives/<node_id>
+```
+
+合格标准：metrics timer 和 archive timer 均为 `enabled` / `active`；metrics service 最近一次 `Result=success` 且 `latest.json` 更新时间在 5--10 分钟内；日志总量未超过 1 GiB 时 archive service 成功退出且不删除文件。超过阈值时，只有 COS 上传、远端对象大小校验以及本地 inode/大小/mtime 复核全部成功才允许删除最旧轮转日志；任何失败都必须保留文件并在 journal 中留下失败原因。阿里云当前没有归档凭据，因此即使未来超过阈值也只会报警并保留日志。
+
+```bash
+journalctl -u snh48-website-metrics.service -u snh48-website-log-archive.service \
+  --since 'today' --no-pager
+```
+
+该任务只管理 Nginx 网站日志，不 vacuum systemd journal。journal 的容量要单独查看：
+
+```bash
+journalctl --disk-usage
+```

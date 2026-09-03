@@ -1,0 +1,15 @@
+# Keep rotated Nginx logs until the website archive timer has uploaded and
+# verified them in COS. The timer is the only cleanup path.
+/var/log/nginx/*.log {
+    create 0640 nginx root
+    daily
+    rotate 100000
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -USR1 `cat /run/nginx.pid 2>/dev/null` 2>/dev/null || true
+    endscript
+}
