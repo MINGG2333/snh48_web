@@ -84,7 +84,7 @@
 
 腾讯云节点使用 `/var/log/nginx/snh48_access.log*`，阿里云节点使用 `/var/log/nginx/snh48_aliyun_access.log*`；两者分别写入 `metrics/tencent` 和 `metrics/aliyun`，不能合并为一个容量口径。统计文件本身不参与双向业务同步，迁移时作为第六类观测材料按需备份。
 
-两台机器的 Nginx `/var/log/nginx/*.log` 继续每日轮转和压缩，但仓库规则把 `rotate` 提高到 `100000`，因此普通 logrotate 不再按 10/14 份删除。`snh48-website-log-archive.timer` 每天检查所有 Nginx 日志的总大小：未超过 **1 GiB** 时只记录状态；超过阈值时只选择最旧的已轮转文件，先制作含逐文件 SHA-256 清单的压缩归档，上传 COS 并校验远端对象大小，再复核文件 inode/大小/mtime 未变化，最后才删除已归档文件。
+两台机器的 Nginx `/var/log/nginx/*.log` 继续每日轮转和压缩，但仓库规则把 `rotate` 提高到 `1000000000`，因此普通 logrotate 不再按 10/14 份删除。`snh48-website-log-archive.timer` 每天检查所有 Nginx 日志的总大小：未超过 **1 GiB** 时只记录状态；超过阈值时只选择最旧的已轮转文件，先制作含逐文件 SHA-256 清单的压缩归档，上传 COS 并校验远端对象大小，再复核文件 inode/大小/mtime 未变化，最后才删除已归档文件。
 
 归档任务遵循 fail-closed：COS rclone 配置/凭据缺失、上传失败、远端校验失败或日志在归档期间发生变化，均不删除任何文件并以失败状态留在 systemd journal。腾讯云可复用 `/home/snh48-fan-hub/config/` 中已有私有 COS 接入；阿里云不复制该凭据，默认只保留日志并在达到阈值时报警，待配置受限的跨云归档通道后才允许清理。这样“没有备份就不会删除”优先于磁盘自动释放。
 

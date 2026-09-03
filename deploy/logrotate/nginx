@@ -4,7 +4,7 @@
     # The Nginx master opens logs as root; avoid distro-specific nginx users.
     create 0640 root root
     daily
-    rotate 100000
+    rotate 1000000000
     missingok
     notifempty
     compress
