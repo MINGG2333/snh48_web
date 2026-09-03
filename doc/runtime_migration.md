@@ -79,7 +79,7 @@
 从本版本开始，两台网站节点分别运行 `snh48-website-metrics.timer`，每 5 分钟写入 root-only 的 `/var/lib/snh48-web/metrics/<node_id>/`：
 
 - `snapshots.jsonl`：每次采样的 CPU 使用率（相邻采样差值）、1/5/15 分钟负载、内存/Swap、根盘容量和磁盘 I/O 计数/增量；
-- `daily.json`：按日期聚合的专用站点请求数、页面请求数、响应字节、状态码和匿名访客数；只保存聚合数字，不保存 IP、User-Agent、请求正文或路径明细；
+- `daily.json`：按日期聚合的专用站点请求数、页面请求数、响应字节、状态码和匿名访客数，并在 `hourly` 中保留按小时的同类计数，便于识别峰值；只保存聚合数字，不保存 IP、User-Agent、请求正文或路径明细；
 - `latest.json`：最近一次快照；`collector_state.json`：轮转日志增量读取位置和 CPU/I/O 基线。
 
 腾讯云节点使用 `/var/log/nginx/snh48_access.log*`，阿里云节点使用 `/var/log/nginx/snh48_aliyun_access.log*`；两者分别写入 `metrics/tencent` 和 `metrics/aliyun`，不能合并为一个容量口径。统计文件本身不参与双向业务同步，迁移时作为第六类观测材料按需备份。

@@ -67,7 +67,7 @@ def expand_patterns(patterns: Iterable[str]) -> list[Path]:
     return sorted(files)
 
 
-def parse_log_line(line: str) -> tuple[str, int, int, bool] | None:
+def parse_log_line(line: str) -> tuple[str, str, int, int, bool] | None:
     match = LOG_LINE_RE.search(line)
     if not match:
         return None
@@ -83,15 +83,17 @@ def parse_log_line(line: str) -> tuple[str, int, int, bool] | None:
         and not path.startswith(("/api/", "/static/", "/image-proxy/"))
         and not path.startswith("/favicon")
     )
-    return timestamp.date().isoformat(), int(match.group("status")), int(match.group("bytes")), is_page
+    day = timestamp.date().isoformat()
+    hour = timestamp.strftime("%Y-%m-%dT%H:00:00%z")
+    return day, hour, int(match.group("status")), int(match.group("bytes")), is_page
 
 
 def empty_day() -> dict[str, Any]:
-    return {"requests": 0, "page_requests": 0, "response_bytes": 0, "status_counts": {}}
+    return {"requests": 0, "page_requests": 0, "response_bytes": 0, "status_counts": {}, "hourly": {}}
 
 
-def merge_log_line(daily: dict[str, Any], parsed: tuple[str, int, int, bool]) -> None:
-    day, status, response_bytes, is_page = parsed
+def merge_log_line(daily: dict[str, Any], parsed: tuple[str, str, int, int, bool]) -> None:
+    day, hour, status, response_bytes, is_page = parsed
     item = daily.setdefault(day, empty_day())
     item["requests"] += 1
     item["page_requests"] += int(is_page)
@@ -99,6 +101,16 @@ def merge_log_line(daily: dict[str, Any], parsed: tuple[str, int, int, bool]) ->
     status_counts = item.setdefault("status_counts", {})
     key = str(status)
     status_counts[key] = int(status_counts.get(key, 0)) + 1
+    hourly = item.setdefault("hourly", {})
+    bucket = hourly.setdefault(
+        hour,
+        {"requests": 0, "page_requests": 0, "response_bytes": 0, "status_counts": {}},
+    )
+    bucket["requests"] += 1
+    bucket["page_requests"] += int(is_page)
+    bucket["response_bytes"] += response_bytes
+    bucket_status_counts = bucket.setdefault("status_counts", {})
+    bucket_status_counts[key] = int(bucket_status_counts.get(key, 0)) + 1
 
 
 def load_json(path: Path, fallback: Any) -> Any:

@@ -58,7 +58,7 @@
 
 - 两个网站节点各自运行 `snh48-website-metrics.timer`（每 5 分钟）和 `snh48-website-log-archive.timer`（每天 03:20）。对应 unit 源文件为 `deploy/systemd/snh48-website-{metrics,log-archive}.{service,timer}`，安装入口为 `deploy/install_observability.sh`。
 - 统计只按节点保存：腾讯云读取 `/var/log/nginx/snh48_access.log*`，输出到 `/var/lib/snh48-web/metrics/tencent/`；阿里云读取 `/var/log/nginx/snh48_aliyun_access.log*`，输出到 `/var/lib/snh48-web/metrics/aliyun/`。目录和 JSON 为 root-only，不进入业务双向同步，也不提交 Git。
-- `daily.json` 保存请求数、页面请求数、状态码、响应字节和匿名访客聚合；`snapshots.jsonl` 保存 CPU、负载、内存/Swap、根盘和磁盘 I/O 的周期快照。两台机器必须分别分析，不能把公开站流量与非公开数据生成主机混成一个规格结论。
+- `daily.json` 保存请求数、页面请求数、状态码、响应字节、匿名访客和按小时峰值聚合；`snapshots.jsonl` 保存 CPU、负载、内存/Swap、根盘和磁盘 I/O 的周期快照。两台机器必须分别分析，不能把公开站流量与非公开数据生成主机混成一个规格结论。
 - 仓库 `/etc/logrotate.d/nginx` 规则继续每日压缩，但 `rotate=100000`，普通轮转不再因份数删除日志。归档服务只有在 `/var/log/nginx/*.log*` 总量超过 1 GiB 时才选择最旧的非活动轮转文件；它会先生成带逐文件 SHA-256 的 tar.gz、上传 COS、校验远端大小并复核 inode/大小/mtime，全部通过后才删除。
 - 腾讯云归档服务可读取 fan-hub 的私有 COS 配置 `/home/snh48-fan-hub/config/rclone_cos_archive.conf` 和 `cos_archive_credentials.json`；阿里云严禁复制这些 fan-hub 凭据，当前无 COS 时归档任务 fail-closed（只报警、不删除），需另行配置受限跨云归档通道后才可清理。systemd journal 不由该任务 vacuum。
 - 观测服务的私有环境文件为 `/etc/snh48-web/observability.env`（权限 `0600`）；修改节点路径、阈值、COS 前缀或定时周期时，必须同步更新 `doc/runtime_migration.md`、`doc/daily_website_check.md` 和 `doc/running_status.md`，并在两台机器分别查看 timer、最近一次 service 结果和 metrics 输出。
