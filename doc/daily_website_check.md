@@ -210,8 +210,8 @@ systemctl is-enabled snh48-website-metrics.timer snh48-website-log-archive.timer
 systemctl is-active snh48-website-metrics.timer snh48-website-log-archive.timer
 systemctl show snh48-website-metrics.service snh48-website-log-archive.service \
   -p Result -p ExecMainStatus -p ActiveEnterTimestamp
-python3 /usr/local/libexec/snh48-website-observability.py collect
-python3 /usr/local/libexec/snh48-website-observability.py archive-logs
+systemctl start snh48-website-metrics.service
+systemctl start snh48-website-log-archive.service
 cat /var/lib/snh48-web/metrics/<node_id>/latest.json
 cat /var/lib/snh48-web/metrics/<node_id>/daily.json
 du -sh /var/log/nginx /var/lib/snh48-web/metrics/<node_id> /var/lib/snh48-web/log-archives/<node_id>
