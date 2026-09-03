@@ -245,6 +245,7 @@ def resource_snapshot(state: dict[str, Any]) -> dict[str, Any]:
         load1 = load5 = load15 = 0.0
     return {
         "hostname": socket.gethostname(),
+        "cpu_count": os.cpu_count() or 0,
         "cpu_percent_since_previous": cpu_percent,
         "load_average": {"1m": round(load1, 3), "5m": round(load5, 3), "15m": round(load15, 3)},
         "memory": {
