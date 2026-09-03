@@ -1,7 +1,8 @@
 # Keep rotated Nginx logs until the website archive timer has uploaded and
 # verified them in COS. The timer is the only cleanup path.
 /var/log/nginx/*.log {
-    create 0640 nginx root
+    # The Nginx master opens logs as root; avoid distro-specific nginx users.
+    create 0640 root root
     daily
     rotate 100000
     missingok
