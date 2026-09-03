@@ -8,6 +8,7 @@ ACTIVE_LOG=${ACTIVE_LOG:?ACTIVE_LOG is required}
 COS_CONFIG=${COS_CONFIG:-}
 COS_CREDENTIALS=${COS_CREDENTIALS:-}
 
+install -d -o root -g root -m 0755 /usr/local/libexec
 install -o root -g root -m 0755 "$ROOT_DIR/script/website_observability.py" /usr/local/libexec/snh48-website-observability.py
 install -o root -g root -m 0644 "$ROOT_DIR/deploy/systemd/snh48-website-metrics.service" /etc/systemd/system/snh48-website-metrics.service
 install -o root -g root -m 0644 "$ROOT_DIR/deploy/systemd/snh48-website-metrics.timer" /etc/systemd/system/snh48-website-metrics.timer
