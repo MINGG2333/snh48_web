@@ -1,6 +1,8 @@
 # /home/snh48_web 后台运行与同步状态
 
-更新日期：2026-09-04 CST +0800
+更新日期：2026-09-05 CST +0800
+
+2026-09-05 02:38:53 双服务器单文件删除同步修复完成：网站仓库提交 `3a3eeeb` 已由腾讯云和阿里云快进到同一版本。腾讯云 `snh48-web.service`、阿里云 `snh48-aliyun.service` 以及两端 `snh48-website-metrics.timer`、`snh48-website-log-archive.timer` 均为 `active`；阿里云执行 `bash deploy/sync-from-tencent.sh core` 成功，事件主 CSV、兼容副本和社交时间轴均完成拉取。已确认 `website/data/manual_events.csv` 是旧时间轴端点遗留文件，内容已由 fan-hub 权威事件 CSV 接管，阿里云副本已删除。三个 core 单文件现在在源端确认删除后会删除阿里云副本，SSH 检查失败则不执行删除；目录同步继续使用 `--delete`/manifest 延迟清理。网站服务无需重启。
 
 2026-09-04 22:58 双服务器观测告警和可读服务别名部署完成：网站提交 `b3d4c55` 已由腾讯云和阿里云拉取；腾讯云 `snh48-web.service` / `snh48-web-tencent-private.service` 主 PID `1432070`、`active/running`、`NRestarts=0`，阿里云 `snh48-aliyun.service` / `snh48-web-aliyun-public.service` 主 PID `3946438`、`active/running`、`NRestarts=0`。两端观测 metrics/log-archive timer 均 enabled、active；最近归档检查分别成功且日志约 893 KiB / 2.3 MiB，远低于 1 GiB，未删除文件。归档 fail-closed 告警改为 root 仅通过 `snh48-web` 所有权写入本地 action-inbox/outbox，不读取网站 `.env` 或直接使用 root SSH；阿里云故障/恢复烟测事件已复制到腾讯云，`feishu-feedback-chat-forwarder.service` PID `1432193` 仍 `active/running`，成功发送 1 条告警和 1 条恢复卡片，当前状态计数 `sent=20`。阿里云首页、时间轴和 `/api/qa/status` 返回 200；旧 unit 名称继续作为兼容入口，可读别名不产生第二个进程。
 
