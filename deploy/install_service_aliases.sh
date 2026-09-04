@@ -6,18 +6,10 @@ set -euo pipefail
 SERVICE_ALIAS=${SERVICE_ALIAS:?SERVICE_ALIAS is required}
 SERVICE_TARGET=${SERVICE_TARGET:?SERVICE_TARGET is required}
 
-case "$SERVICE_ALIAS" in
-  ''|/*|*..*|*'/'*)
-    echo "Invalid SERVICE_ALIAS" >&2
-    exit 2
-    ;;
-esac
-case "$SERVICE_TARGET" in
-  ''|/*|*..*|*'/'*)
-    echo "Invalid SERVICE_TARGET" >&2
-    exit 2
-    ;;
-esac
+if [[ ! "$SERVICE_ALIAS" =~ ^[A-Za-z0-9_.@-]+$ || ! "$SERVICE_TARGET" =~ ^[A-Za-z0-9_.@-]+$ ]]; then
+  echo "Invalid service alias or target" >&2
+  exit 2
+fi
 
 ln -sfn "$SERVICE_TARGET" "/etc/systemd/system/$SERVICE_ALIAS"
 systemctl daemon-reload

@@ -163,6 +163,7 @@ def record_request(
 def record_observability_alert(
     alert_key: str,
     *,
+    incident_id: str | None = None,
     state: str,
     severity: str,
     reason: str,
@@ -182,10 +183,13 @@ def record_observability_alert(
         raise InboxError("invalid observability alert severity")
     stable_payload = {
         "alert_key": safe_key,
+        "incident_id": re.sub(r"[^A-Za-z0-9._:-]", "-", str(incident_id or "").strip())[:80],
         "state": state,
         "severity": severity,
         "reason": str(reason).strip()[:300],
     }
+    if not stable_payload["incident_id"]:
+        stable_payload["incident_id"] = uuid.uuid4().hex
     event_id = deterministic_request_id(
         "OBS-RECOVERY" if state == "resolved" else "OBS-ALERT",
         stable_payload,
@@ -331,7 +335,12 @@ def list_observability_alerts() -> list[dict[str, Any]]:
         payload = event.get("payload")
         if not isinstance(payload, dict):
             continue
-        key = str(payload.get("alert_key") or "").strip()
+        key = "|".join(
+            (
+                str(event.get("origin_node") or "").strip(),
+                str(payload.get("alert_key") or "").strip(),
+            )
+        )
         if not key:
             continue
         previous = latest.get(key)

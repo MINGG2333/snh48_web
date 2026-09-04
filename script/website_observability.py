@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import json
 import os
+import pwd
 import re
 import shlex
 import shutil
@@ -30,6 +31,9 @@ LOG_LINE_RE = re.compile(
 DEFAULT_THRESHOLD_BYTES = 1024**3
 DEFAULT_METRICS_ROOT = "/var/lib/snh48-web/metrics"
 DEFAULT_ARCHIVE_ROOT = "/var/lib/snh48-web/log-archives"
+DEFAULT_ACTION_INBOX_ROOT = "/home/snh48_web/website/data/action_inbox"
+DEFAULT_SHARED_OUTBOX_ROOT = "/home/snh48_web/website/data/shared_state_outbox"
+DEFAULT_NODE_LABELS = {"tencent": "腾讯云非公开站", "aliyun": "阿里云公开站"}
 
 
 class ObservabilityError(RuntimeError):
@@ -518,6 +522,105 @@ def _save_alert_state(state_dir: Path, value: dict[str, Any]) -> None:
     atomic_write_json(_alert_state_path(state_dir), value)
 
 
+def _service_identity() -> tuple[int, int]:
+    account = os.getenv("WEBSITE_ALERT_SERVICE_USER", "snh48-web").strip() or "snh48-web"
+    try:
+        entry = pwd.getpwnam(account)
+    except KeyError as exc:
+        raise ObservabilityError("website alert service account is missing", code="alert_persist_failed") from exc
+    return entry.pw_uid, entry.pw_gid
+
+
+def _atomic_create_service_file(path: Path, content: bytes) -> bool:
+    uid, gid = _service_identity()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chown(path.parent, uid, gid)
+    os.chmod(path.parent, 0o700)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return False
+    try:
+        os.fchown(fd, uid, gid)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return True
+
+
+def _atomic_replace_service_file(path: Path, content: bytes) -> None:
+    uid, gid = _service_identity()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chown(path.parent, uid, gid)
+    os.chmod(path.parent, 0o700)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temp_path = Path(temp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        os.fchown(fd, uid, gid)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp_path.replace(path)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
+def persist_observability_event(
+    *,
+    node_id: str,
+    incident_id: str,
+    state: str,
+    reason: str,
+    details: str,
+    total_bytes: int,
+    threshold_bytes: int,
+) -> dict[str, Any]:
+    """Persist a safe local event and queue it for the website's peer worker."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", node_id):
+        raise ObservabilityError("invalid alert node id", code="alert_persist_failed")
+    if state not in {"active", "resolved"}:
+        raise ObservabilityError("invalid alert state", code="alert_persist_failed")
+    transition = "RECOVERY" if state == "resolved" else "ALERT"
+    digest = hashlib.sha256(f"{node_id}|nginx_log_archive|{incident_id}|{state}".encode("utf-8")).hexdigest()[:24].upper()
+    event_id = f"OBS-{transition}-{digest}"
+    created_at = utc_now()
+    event = {
+        "schema_version": 1,
+        "event_id": event_id,
+        "event_type": "observability_recovery" if state == "resolved" else "observability_alert",
+        "created_at": created_at,
+        "origin_node": node_id,
+        "origin_label": os.getenv("WEBSITE_ALERT_NODE_LABEL", "").strip() or DEFAULT_NODE_LABELS.get(node_id, node_id),
+        "payload": {
+            "alert_key": "nginx_log_archive",
+            "incident_id": incident_id,
+            "state": state,
+            "severity": "info" if state == "resolved" else "error",
+            "reason": str(reason).strip()[:300],
+            "details": str(details).strip()[:1000],
+            "total_bytes": max(0, int(total_bytes)),
+            "threshold_bytes": max(0, int(threshold_bytes)),
+            "checked_at": created_at,
+        },
+    }
+    content = json.dumps(event, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    inbox_root = Path(os.getenv("WEBSITE_ALERT_ACTION_INBOX_ROOT", DEFAULT_ACTION_INBOX_ROOT))
+    event_path = inbox_root / "events" / f"{event_id}.json"
+    created = _atomic_create_service_file(event_path, content)
+    if not created and event_path.read_bytes() != content:
+        raise ObservabilityError("observability event id collision", code="alert_persist_failed")
+    outbox_root = Path(os.getenv("WEBSITE_ALERT_OUTBOX_ROOT", DEFAULT_SHARED_OUTBOX_ROOT))
+    _atomic_replace_service_file(outbox_root / "inbox" / f"{event_id}.json", content)
+    return event
+
+
 def _emit_archive_alert_transition(
     *,
     state_dir: Path,
@@ -537,25 +640,23 @@ def _emit_archive_alert_transition(
         return
     if isinstance(previous, dict) and previous.get("state") == state and previous.get("fingerprint") == fingerprint:
         return
+    incident_id = str((previous or {}).get("incident_id") or "") if isinstance(previous, dict) else ""
+    if state == "active":
+        incident_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}-{os.urandom(6).hex()}"
+    if not incident_id:
+        return
     try:
-        # Import lazily so the metrics collector remains usable on a minimal
-        # host and so secrets from the website environment are never printed.
-        from website.action_inbox import record_observability_alert
-
-        result = record_observability_alert(
-            alert_key,
+        persist_observability_event(
+            node_id=node_id,
+            incident_id=incident_id,
             state=state,
-            severity="error" if state == "active" else "info",
             reason=reason,
             details=details,
             total_bytes=total_bytes,
             threshold_bytes=threshold_bytes,
-            checked_at=utc_now(),
-            origin_node=node_id,
         )
-        if not result.get("replicated", True):
-            print("website_observability: alert queued for peer replication", file=sys.stderr)
-    except Exception as exc:  # Alerting must not change fail-closed deletion behavior.
+        print("website_observability: alert queued for website peer replication", file=sys.stderr)
+    except (ObservabilityError, OSError) as exc:  # Alerting must not change fail-closed deletion behavior.
         print(f"website_observability: unable to persist alert: {exc}", file=sys.stderr)
         return
     _save_alert_state(
@@ -565,6 +666,7 @@ def _emit_archive_alert_transition(
             alert_key: {
                 "state": state,
                 "fingerprint": fingerprint,
+                "incident_id": incident_id,
                 "updated_at": utc_now(),
             },
         },

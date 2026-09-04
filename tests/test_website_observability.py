@@ -90,7 +90,7 @@ class WebsiteObservabilityTests(unittest.TestCase):
     def test_archive_alert_transition_is_deduplicated_and_recovers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_dir = Path(temp_dir) / "archives"
-            with mock.patch("website.action_inbox.record_observability_alert", return_value={"replicated": True}) as record:
+            with mock.patch("script.website_observability.persist_observability_event", return_value={}) as record:
                 kwargs = {
                     "state_dir": state_dir,
                     "node_id": "aliyun",
