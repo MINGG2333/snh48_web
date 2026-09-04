@@ -195,7 +195,7 @@ cd /home/snh48-fan-hub
 venv/bin/python3 scripts/feishu/feedback_chat_forwarder.py status
 ```
 
-当归档任务处于 fail-closed 状态时，`/ob` 处理箱应出现“系统告警”，并显示“来源：腾讯云非公开站”或“来源：阿里云公开站”；腾讯云的 `feishu-feedback-chat-forwarder.service` 应在下一轮扫描后出现一次待投递/已投递记录。故障持续期间不重复发送，恢复后出现一条“系统告警已恢复”。
+当归档任务处于 fail-closed 状态时，`/ob` 处理箱应出现“系统告警”，并显示“来源：腾讯云 cjy.plus”或“来源：阿里云 cjy.我爱你”；腾讯云的 `feishu-feedback-chat-forwarder.service` 应在下一轮扫描后出现一次待投递/已投递记录。故障持续期间不重复发送，恢复后出现一条“系统告警已恢复”。服务别名分别保留“非公开站”和“公开站”角色含义，但事件显示名以域名区分节点。
 
 ### 合格标准与恢复
 
