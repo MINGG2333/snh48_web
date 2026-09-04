@@ -158,6 +158,16 @@
 
 上述阿里云只读副本由 root 同步，但必须以 `root:snh48-web`、目录 `0750`、文件 `0640` 落盘。`deploy/sync-from-tencent.sh` 和手动兜底 `deploy/sync-to-aliyun.sh` 已在每个 rsync 接收操作中固化该规则；三个 `core` 单文件（事件主文件、兼容副本、社交时间轴）在腾讯云源文件确实不存在时会删除阿里云对应文件，SSH 检查失败则 fail-closed，不执行删除。目录同步继续使用 `--delete` 或 manifest 延迟清理；共享状态历史、outbox、action inbox 和锁文件不适用删除镜像规则。迁移时不得只运行一次 ACL 后继续使用会恢复源端 `root:root` 权限的旧同步脚本。
 
+### 删除传播登记
+
+| 数据类型 | 当前规则 | 原因 |
+|---|---|---|
+| `chenjiayi_events.csv`、`schedule.csv`、`chenjiayi_social_timeline.json` | 源端 SSH 明确确认文件不存在后删除阿里云副本；检查失败不删除 | 这些是单文件权威镜像，源端删除必须避免陈旧页面数据 |
+| `live_push_replays/`、`live_covers/`、`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`score_gifts/`、`flip_data/audio/`、`flip_data/video/` | 源目录存在时使用 `rsync --delete`；可选目录本身消失时保留目标并记录跳过 | 目录级删除可镜像，但可选源目录消失也可能是暂时未挂载，不能误删整批媒体 |
+| `room_voice_replays/manifest.json`、`flip_data/web/accounts.json` | 作为发布清单最后原子提交；源目录或清单缺失时不自动删除已发布目标 | 清单缺失可能代表生成中断，保留上一版比公开半成品或空站更安全 |
+| `shared_state_history/`、`shared_state_outbox/`、`action_inbox/`、`.env` | 禁止使用删除镜像 | 历史、待发送项、待处理事件和节点配置必须保留并集或本地独立维护 |
+| 已退役 `website/data/manual_events.csv` | 两个同步入口每轮显式清理阿里云遗留文件 | 旧端点已删除，内容由 fan-hub 权威事件 CSV 接管 |
+
 如果新服务器要接替腾讯云成为数据生成源，还必须迁移 fan-hub 的代码、虚拟环境、采集配置、Cookie/Token、systemd/cron/screen 任务和历史原始数据；这些不属于网站仓库，不要从 `/home/snh48_web` 覆盖。
 
 ## 服务与系统配置
