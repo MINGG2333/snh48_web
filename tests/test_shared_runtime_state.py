@@ -157,6 +157,34 @@ class ActionInboxTests(unittest.TestCase):
                 "complaint", {"content": "不同内容"}, event_id="CMP-2", created_at="2026-07-20T10:00:00+08:00"
             )
 
+    def test_observability_alerts_collapse_to_latest_recovery_state(self) -> None:
+        active = action_inbox.record_observability_alert(
+            "nginx_log_archive",
+            state="active",
+            severity="error",
+            reason="cos_not_configured",
+            details="超过阈值但未删除",
+            total_bytes=2 * 1024**3,
+            threshold_bytes=1024**3,
+        )
+        self.assertEqual(active["event"]["origin_node"], "tencent")
+        self.assertEqual(action_inbox.list_observability_alerts()[0]["status"], "pending")
+
+        action_inbox.record_observability_alert(
+            "nginx_log_archive",
+            state="resolved",
+            severity="info",
+            reason="archive_check_ok",
+            details="已恢复",
+            total_bytes=0,
+            threshold_bytes=1024**3,
+        )
+        alerts = action_inbox.list_observability_alerts()
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0]["status"], "resolved")
+        self.assertEqual(alerts[0]["alert_state"], "resolved")
+        self.assertNotEqual(active["event"]["event_id"], alerts[0]["event_id"])
+
 
 if __name__ == "__main__":
     unittest.main()

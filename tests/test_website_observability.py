@@ -4,8 +4,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from script.website_observability import ObservabilityError, archive_logs, collect_metrics
+from script.website_observability import (
+    ObservabilityError,
+    _emit_archive_alert_transition,
+    archive_logs,
+    collect_metrics,
+)
 
 
 class WebsiteObservabilityTests(unittest.TestCase):
@@ -80,6 +86,33 @@ class WebsiteObservabilityTests(unittest.TestCase):
                 )
             self.assertTrue(active.exists())
             self.assertTrue(rotated.exists())
+
+    def test_archive_alert_transition_is_deduplicated_and_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_dir = Path(temp_dir) / "archives"
+            with mock.patch("website.action_inbox.record_observability_alert", return_value={"replicated": True}) as record:
+                kwargs = {
+                    "state_dir": state_dir,
+                    "node_id": "aliyun",
+                    "reason": "cos_not_configured",
+                    "details": "COS archive is not configured",
+                    "total_bytes": 2 * 1024**3,
+                    "threshold_bytes": 1024**3,
+                }
+                _emit_archive_alert_transition(state="active", **kwargs)
+                _emit_archive_alert_transition(state="active", **kwargs)
+                self.assertEqual(record.call_count, 1)
+                _emit_archive_alert_transition(
+                    state="resolved",
+                    reason="archive_check_ok",
+                    details="恢复",
+                    total_bytes=0,
+                    threshold_bytes=1024**3,
+                    state_dir=state_dir,
+                    node_id="aliyun",
+                )
+                self.assertEqual(record.call_count, 2)
+                self.assertEqual(record.call_args_list[-1].kwargs["state"], "resolved")
 
 
 if __name__ == "__main__":

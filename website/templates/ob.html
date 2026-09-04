@@ -1025,7 +1025,7 @@
       <span id="stableProfileCount">0</span> 个稳定浏览器档案 ·
       <span id="legacySessionCount">0</span> 个旧会话 ·
       <span id="totalNotifs">0</span> 条通知 ·
-      <span id="inboxPendingCount">0</span> 条待处理请求
+      <span id="inboxPendingCount">0</span> 条待处理事项
     </div>
     <nav class="ob-actions" aria-label="管理工具">
       <a class="ob-action-btn" href="/social-credentials-admin" data-track="ob_nav_social_credentials">
@@ -1927,7 +1927,12 @@
       const head = document.createElement('div');
       head.className = 'inbox-item-head';
       const type = document.createElement('strong');
-      type.textContent = event.event_type === 'complaint' ? '📋 投诉举报' : '📧 邮箱请求';
+      const isObservabilityAlert = event.event_type === 'observability_alert';
+      if (isObservabilityAlert) {
+        type.textContent = event.alert_state === 'resolved' ? '✅ 系统告警已恢复' : '🚨 系统告警';
+      } else {
+        type.textContent = event.event_type === 'complaint' ? '📋 投诉举报' : '📧 邮箱请求';
+      }
       head.appendChild(type);
       const origin = document.createElement('span');
       origin.className = 'origin-chip ' + (event.origin_node || '');
@@ -1936,7 +1941,8 @@
       const status = document.createElement('span');
       status.className = 'inbox-status';
       const statusLabels = { pending: '待处理', processing: '处理中', resolved: '已完成', rejected: '已驳回' };
-      status.textContent = '状态：' + (statusLabels[event.status] || event.status || '待处理');
+      const alertStatus = event.alert_state === 'resolved' ? '已恢复' : '告警';
+      status.textContent = '状态：' + (isObservabilityAlert ? alertStatus : (statusLabels[event.status] || event.status || '待处理'));
       head.appendChild(status);
       const time = document.createElement('span');
       time.className = 'inbox-time';
@@ -1946,7 +1952,20 @@
 
       const detail = document.createElement('div');
       detail.className = 'inbox-detail';
-      if (event.event_type === 'complaint') {
+      if (isObservabilityAlert) {
+        const total = Number(payload.total_bytes || 0);
+        const threshold = Number(payload.threshold_bytes || 0);
+        const formatBytes = (value) => value >= 1024 * 1024 * 1024
+          ? (value / (1024 * 1024 * 1024)).toFixed(2) + ' GiB'
+          : (value / (1024 * 1024)).toFixed(2) + ' MiB';
+        detail.textContent = [
+          '告警项：' + (payload.alert_key || '日志归档'),
+          '原因：' + (payload.reason || ''),
+          total ? '当前日志：' + formatBytes(total) + (threshold ? '，阈值：' + formatBytes(threshold) : '') : '',
+          payload.details || '',
+          payload.checked_at ? '检查时间：' + payload.checked_at : '',
+        ].filter(Boolean).join('\n');
+      } else if (event.event_type === 'complaint') {
         detail.textContent = [
           '编号：' + (payload.ticket_id || event.event_id),
           '类型：' + (payload.type_label || payload.type || ''),
@@ -1962,17 +1981,19 @@
       }
       item.appendChild(detail);
 
-      const actions = document.createElement('div');
-      actions.className = 'inbox-actions';
-      [['processing', '开始处理'], ['resolved', '标记完成'], ['rejected', '驳回']].forEach(([value, label]) => {
-        const button = document.createElement('button');
-        button.className = 'inbox-action';
-        button.textContent = label;
-        button.disabled = event.status === value;
-        button.addEventListener('click', () => updateInboxStatus(event.event_id, value));
-        actions.appendChild(button);
-      });
-      item.appendChild(actions);
+      if (!isObservabilityAlert) {
+        const actions = document.createElement('div');
+        actions.className = 'inbox-actions';
+        [['processing', '开始处理'], ['resolved', '标记完成'], ['rejected', '驳回']].forEach(([value, label]) => {
+          const button = document.createElement('button');
+          button.className = 'inbox-action';
+          button.textContent = label;
+          button.disabled = event.status === value;
+          button.addEventListener('click', () => updateInboxStatus(event.event_id, value));
+          actions.appendChild(button);
+        });
+        item.appendChild(actions);
+      }
       inboxList.appendChild(item);
     });
   }

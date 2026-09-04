@@ -21,12 +21,12 @@
 
 | 环境 | 域名 | IP | 服务管理 | Nginx 配置 |
 |------|------|----|----------|------------|
-| 腾讯云 | `cjy.plus` | `124.222.72.203` | `systemd` 服务 `snh48-web` | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
-| 阿里云香港 | `cjy.我爱你` / `cjy.xn--6qq986b3xl` | `8.210.188.184` | `systemd` 服务 `snh48-aliyun` | `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`，来源 `deploy/nginx-aliyun.conf` |
+| 腾讯云 | `cjy.plus` | `124.222.72.203` | `snh48-web.service`（可读别名 `snh48-web-tencent-private.service`） | `/etc/nginx/conf.d/snh48.conf`，来源 `deploy/nginx.conf` |
+| 阿里云香港 | `cjy.我爱你` / `cjy.xn--6qq986b3xl` | `8.210.188.184` | `snh48-aliyun.service`（可读别名 `snh48-web-aliyun-public.service`） | `/etc/nginx/conf.d/cjy.xn--6qq986b3xl.conf`，来源 `deploy/nginx-aliyun.conf` |
 
 ### 阿里云运行与 SSH 边界
 
-- `snh48-aliyun.service` 使用不可登录的 `snh48-web` 账号、`UMask=0077`、`NoNewPrivileges=yes` 和 systemd 文件系统/设备沙箱；版本化 unit 为 `deploy/systemd/snh48-aliyun.service`，权限入口为 `deploy/harden_aliyun_runtime_permissions.sh`。
+- `snh48-aliyun.service` 使用不可登录的 `snh48-web` 账号、`UMask=0077`、`NoNewPrivileges=yes` 和 systemd 文件系统/设备沙箱；版本化 unit 为 `deploy/systemd/snh48-aliyun.service`，可读别名为 `snh48-web-aliyun-public.service`，权限入口为 `deploy/harden_aliyun_runtime_permissions.sh`。
 - FastAPI 只监听 `127.0.0.1:8000`。网站运行数据由 `snh48-web` 以目录 `0700` / 文件 `0600` 管理；`.env` 和 `/var/log/snh48` 仍由 root 以 `0600` 文件权限管理。
 - 阿里云 `snh48-weibo-img-proxy.service` 使用 systemd `DynamicUser`，只监听 `127.0.0.1:8899`；unit 源在 fan-hub 的 `deploy/systemd/snh48-weibo-img-proxy-aliyun.service`，公网只能经 Nginx `/image-proxy/` 访问。
 - 阿里云 sshd 只允许公钥认证；root 只能用公钥登录，密码、keyboard-interactive、GSSAPI 和 X11 转发均关闭。网站跨云共享状态使用 `/var/lib/snh48-web/.ssh/` 下的专用密钥，远端 `authorized_keys` 只允许 `mutate` / `inbox-put` peer 子命令，不是交互式 root 通道。root cron 的必要数据拉取使用独立运维密钥，不与网站进程共享。
@@ -61,6 +61,7 @@
 - `daily.json` 保存请求数、页面请求数、状态码、响应字节、匿名访客和按小时峰值聚合；`snapshots.jsonl` 保存 CPU、负载、内存/Swap、根盘和磁盘 I/O 的周期快照。两台机器必须分别分析，不能把公开站流量与非公开数据生成主机混成一个规格结论。
 - 仓库 `/etc/logrotate.d/nginx` 规则继续每日压缩，但 `rotate=1000000000`，普通轮转不会在实际运行周期内因份数删除日志。归档服务只有在 `/var/log/nginx/*.log*` 总量超过 1 GiB 时才选择最旧的非活动轮转文件；它会先生成带逐文件 SHA-256 的 tar.gz、上传 COS、校验远端大小并复核 inode/大小/mtime，全部通过后才删除。
 - 腾讯云归档服务可读取 fan-hub 的私有 COS 配置 `/home/snh48-fan-hub/config/rclone_cos_archive.conf` 和 `cos_archive_credentials.json`；阿里云严禁复制这些 fan-hub 凭据，当前无 COS 时归档任务 fail-closed（只报警、不删除），需另行配置受限跨云归档通道后才可清理。systemd journal 不由该任务 vacuum。
+- fail-closed 事件会写入网站 `action_inbox` 的 `observability_alert` / `observability_recovery` 不可变事件，按节点和故障类型去重；OB 处理箱显示来源和最新状态，腾讯云 `feishu-feedback-chat-forwarder.service` 通过现有陈嘉仪网站 Bot 投递红色告警/绿色恢复卡片。阿里云不保存飞书凭据。
 - 观测服务的私有环境文件为 `/etc/snh48-web/observability.env`（权限 `0600`）；修改节点路径、阈值、COS 前缀或定时周期时，必须同步更新 `doc/runtime_migration.md`、`doc/daily_website_check.md` 和 `doc/running_status.md`，并在两台机器分别查看 timer、最近一次 service 结果和 metrics 输出。
 
 ## 数据生成工程依赖

@@ -33,6 +33,8 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0700 "$DANMU_CACHE"
 
 install -o root -g root -m 0755 deploy/privileged/snh48-shared-state-peer-bridge \
     /usr/local/sbin/snh48-shared-state-peer-bridge
+ln -sfn snh48-aliyun.service /etc/systemd/system/snh48-web-aliyun-public.service
+systemctl daemon-reload
 
 # The application may traverse only the website and the explicitly mirrored
 # data roots. Source code and generated inputs stay owned by their deployers.

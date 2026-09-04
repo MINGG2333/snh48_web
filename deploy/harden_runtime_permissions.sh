@@ -24,6 +24,7 @@ install -o root -g root -m 0644 deploy/systemd/snh48-privileged-bridge-social.se
     /etc/systemd/system/snh48-privileged-bridge-social.service
 install -o root -g root -m 0644 deploy/systemd/snh48-web.service \
     /etc/systemd/system/snh48-web.service
+ln -sfn snh48-web.service /etc/systemd/system/snh48-web-tencent-private.service
 
 # Code and generated website inputs remain root-owned; the service gets only
 # the read access needed to render them.

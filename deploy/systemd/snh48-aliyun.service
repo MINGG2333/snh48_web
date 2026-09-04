@@ -1,5 +1,5 @@
 [Unit]
-Description=SNH48 website FastAPI service (Aliyun)
+Description=SNH48 website FastAPI service (Aliyun public site; alias snh48-web-aliyun-public.service)
 After=network-online.target
 Wants=network-online.target
 

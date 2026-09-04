@@ -33,7 +33,10 @@ DEFAULT_ARCHIVE_ROOT = "/var/lib/snh48-web/log-archives"
 
 
 class ObservabilityError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, code: str = "archive_failed", total_bytes: int = 0):
+        super().__init__(message)
+        self.code = code
+        self.total_bytes = max(0, int(total_bytes))
 
 
 def utc_now() -> str:
@@ -397,9 +400,17 @@ def archive_logs(
         if selected_bytes >= reclaim:
             break
     if not selected or selected_bytes < reclaim:
-        raise ObservabilityError("log threshold exceeded but no safe rotated files cover the reclaim target")
+        raise ObservabilityError(
+            "log threshold exceeded but no safe rotated files cover the reclaim target",
+            code="no_safe_rotated_files",
+            total_bytes=total_bytes,
+        )
     if rclone_config is None or credentials_file is None:
-        raise ObservabilityError("COS archive is not configured; refusing to delete logs")
+        raise ObservabilityError(
+            "COS archive is not configured; refusing to delete logs",
+            code="cos_not_configured",
+            total_bytes=total_bytes,
+        )
 
     state_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -444,10 +455,18 @@ def archive_logs(
             remote_items = json.loads(listing.stdout or "[]")
             remote_size = int(remote_items[0]["Size"]) if remote_items else -1
         except (ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
-            raise ObservabilityError(f"COS archive verification returned invalid metadata: {exc}") from exc
+            raise ObservabilityError(
+                f"COS archive verification returned invalid metadata: {exc}",
+                code="remote_metadata_invalid",
+                total_bytes=total_bytes,
+            ) from exc
         local_size = temp_path.stat().st_size
         if remote_size != local_size:
-            raise ObservabilityError(f"COS archive size mismatch: local={local_size}, remote={remote_size}")
+            raise ObservabilityError(
+                f"COS archive size mismatch: local={local_size}, remote={remote_size}",
+                code="remote_size_mismatch",
+                total_bytes=total_bytes,
+            )
         for item in manifest:
             path = Path(item["path"])
             current = path.stat()
@@ -456,7 +475,11 @@ def archive_logs(
                 or current.st_size != item["size"]
                 or current.st_mtime_ns != item["mtime_ns"]
             ):
-                raise ObservabilityError(f"log changed during archive; refusing deletion: {path}")
+                raise ObservabilityError(
+                    f"log changed during archive; refusing deletion: {path}",
+                    code="source_changed",
+                    total_bytes=total_bytes,
+                )
         for item in manifest:
             Path(item["path"]).unlink()
         receipt = {
@@ -479,6 +502,73 @@ def archive_logs(
 def env_list(name: str, default: str) -> list[str]:
     value = os.getenv(name, default).strip()
     return shlex.split(value) if value else []
+
+
+def _alert_state_path(state_dir: Path) -> Path:
+    return state_dir / "alert_state.json"
+
+
+def _load_alert_state(state_dir: Path) -> dict[str, Any]:
+    value = load_json(_alert_state_path(state_dir), {})
+    return value if isinstance(value, dict) else {}
+
+
+def _save_alert_state(state_dir: Path, value: dict[str, Any]) -> None:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(_alert_state_path(state_dir), value)
+
+
+def _emit_archive_alert_transition(
+    *,
+    state_dir: Path,
+    node_id: str,
+    state: str,
+    reason: str,
+    details: str,
+    total_bytes: int,
+    threshold_bytes: int,
+) -> None:
+    """Write one durable alert only when the archive state changes."""
+    alert_key = "nginx_log_archive"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    previous = _load_alert_state(state_dir).get(alert_key)
+    fingerprint = reason if state == "active" else "resolved"
+    if state == "resolved" and not (isinstance(previous, dict) and previous.get("state") == "active"):
+        return
+    if isinstance(previous, dict) and previous.get("state") == state and previous.get("fingerprint") == fingerprint:
+        return
+    try:
+        # Import lazily so the metrics collector remains usable on a minimal
+        # host and so secrets from the website environment are never printed.
+        from website.action_inbox import record_observability_alert
+
+        result = record_observability_alert(
+            alert_key,
+            state=state,
+            severity="error" if state == "active" else "info",
+            reason=reason,
+            details=details,
+            total_bytes=total_bytes,
+            threshold_bytes=threshold_bytes,
+            checked_at=utc_now(),
+            origin_node=node_id,
+        )
+        if not result.get("replicated", True):
+            print("website_observability: alert queued for peer replication", file=sys.stderr)
+    except Exception as exc:  # Alerting must not change fail-closed deletion behavior.
+        print(f"website_observability: unable to persist alert: {exc}", file=sys.stderr)
+        return
+    _save_alert_state(
+        state_dir,
+        {
+            **_load_alert_state(state_dir),
+            alert_key: {
+                "state": state,
+                "fingerprint": fingerprint,
+                "updated_at": utc_now(),
+            },
+        },
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -520,17 +610,40 @@ def command_collect(args: argparse.Namespace) -> int:
 
 
 def command_archive(args: argparse.Namespace) -> int:
-    result = archive_logs(
+    state_dir = Path(args.state_dir)
+    threshold_bytes = max(1, args.threshold_bytes)
+    try:
+        result = archive_logs(
+            node_id=args.node_id,
+            log_patterns=args.log_pattern or env_list("WEBSITE_LOG_ARCHIVE_PATTERNS", "/var/log/nginx/*.log*"),
+            active_paths=args.active_path or env_list("WEBSITE_LOG_ARCHIVE_ACTIVE_PATHS", "/var/log/nginx/*.log"),
+            state_dir=state_dir,
+            threshold_bytes=threshold_bytes,
+            rclone_config=Path(args.rclone_config) if args.rclone_config else None,
+            credentials_file=Path(args.credentials_file) if args.credentials_file else None,
+            remote=args.remote,
+            bucket=args.bucket,
+            prefix=args.prefix,
+        )
+    except ObservabilityError as exc:
+        _emit_archive_alert_transition(
+            state_dir=state_dir,
+            node_id=args.node_id,
+            state="active",
+            reason=exc.code,
+            details=str(exc),
+            total_bytes=exc.total_bytes,
+            threshold_bytes=threshold_bytes,
+        )
+        raise
+    _emit_archive_alert_transition(
+        state_dir=state_dir,
         node_id=args.node_id,
-        log_patterns=args.log_pattern or env_list("WEBSITE_LOG_ARCHIVE_PATTERNS", "/var/log/nginx/*.log*"),
-        active_paths=args.active_path or env_list("WEBSITE_LOG_ARCHIVE_ACTIVE_PATHS", "/var/log/nginx/*.log"),
-        state_dir=Path(args.state_dir),
-        threshold_bytes=max(1, args.threshold_bytes),
-        rclone_config=Path(args.rclone_config) if args.rclone_config else None,
-        credentials_file=Path(args.credentials_file) if args.credentials_file else None,
-        remote=args.remote,
-        bucket=args.bucket,
-        prefix=args.prefix,
+        state="resolved",
+        reason="archive_check_ok",
+        details="日志归档检查恢复正常；未发生未备份删除。",
+        total_bytes=int(result.get("total_bytes") or 0),
+        threshold_bytes=threshold_bytes,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0

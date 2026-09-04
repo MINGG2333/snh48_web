@@ -19,7 +19,8 @@ from website.shared_runtime_state import SharedStatePeerError, node_id, node_lab
 EVENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 REQUEST_TYPES = {"complaint", "email_request"}
 CHAT_EVENT_TYPES = {"feedback_message", "feedback_reply"}
-EVENT_TYPES = REQUEST_TYPES | CHAT_EVENT_TYPES | {"status_update"}
+OBSERVABILITY_EVENT_TYPES = {"observability_alert", "observability_recovery"}
+EVENT_TYPES = REQUEST_TYPES | CHAT_EVENT_TYPES | OBSERVABILITY_EVENT_TYPES | {"status_update"}
 VALID_STATUSES = {"pending", "processing", "resolved", "rejected"}
 
 
@@ -159,6 +160,57 @@ def record_request(
     return {"event": event, "replicated": replicated}
 
 
+def record_observability_alert(
+    alert_key: str,
+    *,
+    state: str,
+    severity: str,
+    reason: str,
+    details: str = "",
+    total_bytes: int = 0,
+    threshold_bytes: int = 0,
+    checked_at: str | None = None,
+    origin_node: str | None = None,
+) -> dict[str, Any]:
+    """Persist one alert transition and replicate it without exposing secrets."""
+    safe_key = re.sub(r"[^A-Za-z0-9._:-]", "-", str(alert_key).strip()).strip("-")
+    if not safe_key or len(safe_key) > 80:
+        raise InboxError("invalid observability alert key")
+    if state not in {"active", "resolved"}:
+        raise InboxError("invalid observability alert state")
+    if severity not in {"info", "warning", "error"}:
+        raise InboxError("invalid observability alert severity")
+    stable_payload = {
+        "alert_key": safe_key,
+        "state": state,
+        "severity": severity,
+        "reason": str(reason).strip()[:300],
+    }
+    event_id = deterministic_request_id(
+        "OBS-RECOVERY" if state == "resolved" else "OBS-ALERT",
+        stable_payload,
+    )
+    payload = {
+        **stable_payload,
+        "details": str(details).strip()[:1000],
+        "total_bytes": max(0, int(total_bytes)),
+        "threshold_bytes": max(0, int(threshold_bytes)),
+        "checked_at": str(checked_at or _now()),
+    }
+    event = {
+        "schema_version": 1,
+        "event_id": event_id,
+        "event_type": "observability_recovery" if state == "resolved" else "observability_alert",
+        "created_at": _now(),
+        "origin_node": origin_node or node_id(),
+        "origin_label": node_label(origin_node or node_id()),
+        "payload": payload,
+    }
+    install_event(event)
+    replicated = _replicate_event(event)
+    return {"event": event, "replicated": replicated}
+
+
 def record_status(
     target_event_id: str,
     status: str,
@@ -258,6 +310,49 @@ def list_requests() -> list[dict[str, Any]]:
         item["status_updated_at"] = str((status_event or {}).get("created_at") or "")
         item["status_origin_node"] = str((status_event or {}).get("origin_node") or "")
         item["status_origin_label"] = str((status_event or {}).get("origin_label") or "")
+        output.append(item)
+    output.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("event_id") or "")), reverse=True)
+    return output
+
+
+def list_observability_alerts() -> list[dict[str, Any]]:
+    """Collapse immutable alert/recovery events into the latest state per key."""
+    latest: dict[str, dict[str, Any]] = {}
+    root = _events_dir()
+    if not root.exists():
+        return []
+    for path in root.glob("*.json"):
+        try:
+            event = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(event.get("event_type") or "") not in OBSERVABILITY_EVENT_TYPES:
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        key = str(payload.get("alert_key") or "").strip()
+        if not key:
+            continue
+        previous = latest.get(key)
+        current_key = (str(event.get("created_at") or ""), str(event.get("event_id") or ""))
+        previous_key = (
+            str(previous.get("created_at") or ""), str(previous.get("event_id") or "")
+        ) if previous else ("", "")
+        if previous is None or current_key > previous_key:
+            latest[key] = event
+
+    output: list[dict[str, Any]] = []
+    for event in latest.values():
+        item = dict(event)
+        payload = dict(event.get("payload") or {})
+        state = str(payload.get("state") or ("resolved" if event.get("event_type") == "observability_recovery" else "active"))
+        item["event_type"] = "observability_alert"
+        item["status"] = "resolved" if state == "resolved" else "pending"
+        item["alert_state"] = state
+        item["status_note"] = str(payload.get("details") or "")
+        item["status_updated_at"] = str(event.get("created_at") or "")
+        item["payload"] = payload
         output.append(item)
     output.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("event_id") or "")), reverse=True)
     return output

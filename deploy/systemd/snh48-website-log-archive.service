@@ -14,5 +14,5 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=read-only
 ProtectSystem=strict
-ReadWritePaths=/var/lib/snh48-web/log-archives
+ReadWritePaths=/var/lib/snh48-web/log-archives /home/snh48_web/website/data/action_inbox /home/snh48_web/website/data/shared_state_outbox
 ReadOnlyPaths=/var/log/nginx

@@ -180,6 +180,23 @@ du -sh website/data/shared_state_history website/data/action_inbox website/data/
 
 在浏览器登录 `/ob`，确认可靠待处理箱中的请求分别显示“来源：腾讯云 cjy.plus”或“来源：阿里云 cjy.我爱你”，并抽查一次状态更新后另一端能看到相同结果。不要在截图或聊天中暴露邮箱和投诉正文。
 
+### 日志归档告警与 Bot
+
+```bash
+# 两端都应能看到可读服务别名和历史兼容 unit 指向同一服务
+systemctl is-active snh48-web-tencent-private.service snh48-web.service 2>/dev/null || true
+ssh root@8.210.188.184 'systemctl is-active snh48-web-aliyun-public.service snh48-aliyun.service 2>/dev/null || true'
+
+# 归档最近一次结果；失败时应保持日志文件，不得出现已备份凭据或明文密钥
+journalctl -u snh48-website-log-archive.service -n 40 --no-pager
+
+# 腾讯云 Bot 转发器状态（包含 observability_alert 的投递计数）
+cd /home/snh48-fan-hub
+venv/bin/python3 scripts/feishu/feedback_chat_forwarder.py status
+```
+
+当归档任务处于 fail-closed 状态时，`/ob` 处理箱应出现“系统告警”，并显示“来源：腾讯云非公开站”或“来源：阿里云公开站”；腾讯云的 `feishu-feedback-chat-forwarder.service` 应在下一轮扫描后出现一次待投递/已投递记录。故障持续期间不重复发送，恢复后出现一条“系统告警已恢复”。
+
 ### 合格标准与恢复
 
 - 腾讯云输出 `tencent True True True`；阿里云输出 `aliyun False True True`。

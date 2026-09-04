@@ -1,5 +1,5 @@
 [Unit]
-Description=SNH48 website FastAPI service
+Description=SNH48 website FastAPI service (Tencent private site; alias snh48-web-tencent-private.service)
 After=network-online.target
 Wants=network-online.target
 

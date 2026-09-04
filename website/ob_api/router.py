@@ -25,7 +25,7 @@ from website import config as cfg
 from website.maintenance import ensure_writable
 from website.logging_setup import LOG_ROOT
 from website.rate_limiter import check_ob_login_limit, get_client_ip
-from website.action_inbox import InboxError, list_requests, record_status
+from website.action_inbox import InboxError, list_observability_alerts, list_requests, record_status
 from website.ip_geolocation import lookup_ip_locations
 from website.visitor_observation import (
     PAGE_VIEWS_FILENAME,
@@ -151,6 +151,8 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
     """Return records plus display-only IP association and graph layers."""
     response.headers["Cache-Control"] = "no-store"
     inbox = list_requests()
+    inbox.extend(list_observability_alerts())
+    inbox.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("event_id") or "")), reverse=True)
     ip_clients = _load_ip_clients()
     client_ips = _build_client_ip_index(ip_clients)
     page_views = load_page_views(LOG_ROOT)

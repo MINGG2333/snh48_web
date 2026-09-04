@@ -62,8 +62,8 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
         "qa_enabled": False,
-        "restart": "systemctl restart snh48-web",
-        "status": "systemctl is-active --quiet snh48-web",
+        "restart": "systemctl restart snh48-web-tencent-private.service 2>/dev/null || systemctl restart snh48-web.service",
+        "status": "systemctl is-active --quiet snh48-web-tencent-private.service 2>/dev/null || systemctl is-active --quiet snh48-web.service",
         "local_url": "http://127.0.0.1:8000/timeline",
         "public_base_url": "https://cjy.plus",
         "public_urls": [
@@ -167,8 +167,8 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
         "qa_enabled": True,
-        "restart": "systemctl restart snh48-aliyun",
-        "status": "systemctl is-active --quiet snh48-aliyun",
+        "restart": "systemctl restart snh48-web-aliyun-public.service 2>/dev/null || systemctl restart snh48-aliyun.service",
+        "status": "systemctl is-active --quiet snh48-web-aliyun-public.service 2>/dev/null || systemctl is-active --quiet snh48-aliyun.service",
         "local_url": "http://127.0.0.1:8000/timeline",
         "public_base_url": "https://cjy.xn--6qq986b3xl",
         "public_urls": [

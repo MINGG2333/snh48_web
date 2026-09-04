@@ -15,7 +15,13 @@ video_knowledge_db/
 kb_qa.log
 nohup.out
 
-# Website data
+# Website runtime data
+#
+# Source code, deployment scripts, contract documents and *.example.json files
+# remain tracked and are synchronized through GitHub. The paths below are
+# intentionally outside Git: migration-required state must be copied using
+# doc/runtime_migration.md, while node-local telemetry/cache can be discarded
+# or archived separately.
 website/data/interaction_logs/
 website/data/complaints/
 website/data/room_messages_ignored_batches.json
@@ -23,6 +29,7 @@ website/data/scroller_texts.json
 website/data/shared_state_history/
 website/data/shared_state_outbox/
 website/data/action_inbox/
+website/data/runtime_backups/
 # Shared-state advisory locks live beside their JSON files.
 website/data/.*.lock
 website/data/**/.*.lock
@@ -34,6 +41,9 @@ website/data/ops_reminders/
 website/data/geoip/
 website/data/memories/*.json
 !website/data/memories/*.example.json
+
+# Local backup artifacts are not deployable source files.
+website/static/**/*.bak
 
 # Environment
 .env
