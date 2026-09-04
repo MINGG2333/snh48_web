@@ -89,15 +89,18 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             {
                 "type": "file",
                 "path": "/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv",
+                "delete": True,
             },
             {
                 "type": "file",
                 "path": "/home/snh48-fan-hub/schedule_record/schedule.csv",
+                "delete": True,
             },
             {
                 "type": "file",
                 "path": "/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json",
                 "optional": True,
+                "delete": True,
             },
             {
                 "type": "dir",
@@ -768,7 +771,7 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
         remote(dest, f"mkdir -p {quote(dest_mkdir)}", dry_run=args.dry_run)
 
         opts = "-az --partial"
-        if item.get("delete"):
+        if item.get("delete") and is_dir:
             opts += " --delete"
         for pattern in item.get("excludes") or []:
             opts += f" --exclude={quote(str(pattern))}"
@@ -793,8 +796,20 @@ def sync_data(source: Dict[str, Any], dest: Dict[str, Any], args: argparse.Names
                 f"rsync {cleanup_opts} {quote(src)} {quote(dst)}"
             )
         else:
-            sync_command = f"rsync {opts} {quote(src)} {quote(dst)}"
-        if item.get("optional"):
+            rsync_command = f"rsync {opts} {quote(src)} {quote(dst)}"
+            if item.get("delete") and not is_dir:
+                remove_destination = (
+                    f"ssh -F /dev/null {quote(dest['ssh'])} "
+                    f"{quote('rm -f -- ' + quote(dest_path))}"
+                )
+                sync_command = (
+                    f"if [ -f {quote(src_path)} ]; then {rsync_command}; "
+                    f"elif [ ! -e {quote(src_path)} ]; then {remove_destination}; "
+                    f"else echo source path is not a regular file: {quote(src_path)} >&2; exit 1; fi"
+                )
+            else:
+                sync_command = rsync_command
+        if item.get("optional") and not (item.get("delete") and not is_dir):
             sync_command = (
                 f"if [ -e {quote(src_path)} ]; then "
                 f"{sync_command}; "

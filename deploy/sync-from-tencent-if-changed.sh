@@ -6,6 +6,23 @@ set -euo pipefail
 TENCENT=${TENCENT:-root@124.222.72.203}
 STATE_FILE=${TENCENT_PULL_STATE_FILE:-/tmp/snh48_sync_from_tencent.state}
 LOCK_FILE=${TENCENT_PULL_CHANGE_LOCK_FILE:-/tmp/snh48_sync_from_tencent_change.lock}
+RETIRED_LOCAL_FILES=(
+  /home/snh48_web/website/data/manual_events.csv
+)
+
+cleanup_retired_local_files() {
+  local path
+  for path in "${RETIRED_LOCAL_FILES[@]}"; do
+    if [ -d "$path" ]; then
+      echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] retired path is a directory: $path" >&2
+      return 1
+    fi
+    if [ -e "$path" ]; then
+      rm -f -- "$path"
+      echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] removed retired file: $path"
+    fi
+  done
+}
 
 fingerprint() {
   local group=$1
@@ -81,6 +98,7 @@ for group in "${groups[@]}"; do
 done
 
 if [ "${#changed_groups[@]}" -eq 0 ]; then
+  cleanup_retired_local_files
   echo "[sync-from-tencent-if-changed][$(date '+%Y-%m-%d %H:%M:%S')] no source changes, skipped"
   exit 0
 fi

@@ -29,6 +29,44 @@ class RoomVoiceSyncCommandTests(unittest.TestCase):
             for transfer in transfers:
                 self.assertIn('"${RSYNC_WEB_READ_OPTS[@]}"', transfer, filename)
 
+    def test_single_file_syncs_propagate_source_deletion(self) -> None:
+        deploy_root = MODULE_PATH.parent
+        pull_script = (deploy_root / "sync-from-tencent.sh").read_text(encoding="utf-8")
+        push_script = (deploy_root / "sync-to-aliyun.sh").read_text(encoding="utf-8")
+        self.assertIn("sync_file_from_tencent", pull_script)
+        self.assertIn("sync_file_to_aliyun", push_script)
+        self.assertIn("source missing, removing destination", pull_script)
+        self.assertIn("source missing, removing destination", push_script)
+
+        source = {
+            "ssh": "source.example",
+            "data_paths": [{
+                "type": "file",
+                "path": "/data/events.csv",
+                "delete": True,
+            }],
+        }
+        calls = []
+        with mock.patch.object(
+            deploy,
+            "remote",
+            side_effect=lambda target, command, dry_run=False: calls.append(command),
+        ):
+            deploy.sync_data(source, {"ssh": "dest.example"}, Namespace(dry_run=False))
+
+        self.assertEqual(calls[0], "mkdir -p /data")
+        self.assertIn("if [ -f /data/events.csv ]", calls[1])
+        self.assertIn("rm -f -- /data/events.csv", calls[1])
+
+    def test_builtin_single_file_contracts_are_deletion_aware(self) -> None:
+        paths = {
+            item["path"]: item
+            for item in deploy.BUILTIN_TARGETS["tencent"]["data_paths"]
+            if item.get("type") == "file"
+        }
+        self.assertTrue(paths)
+        self.assertTrue(all(item.get("delete") for item in paths.values()))
+
     def test_pull_and_fallback_push_commit_manifest_last(self) -> None:
         deploy_root = MODULE_PATH.parent
         for filename in ("sync-from-tencent.sh", "sync-to-aliyun.sh"):

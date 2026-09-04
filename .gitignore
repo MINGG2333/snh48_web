@@ -30,8 +30,6 @@ website/data/shared_state_history/
 website/data/shared_state_outbox/
 website/data/action_inbox/
 website/data/runtime_backups/
-# Legacy/manual timeline data; preserve separately during migration, not via Git.
-website/data/manual_events.csv
 # Shared-state advisory locks live beside their JSON files.
 website/data/.*.lock
 website/data/**/.*.lock

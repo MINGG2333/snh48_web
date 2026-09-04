@@ -33,6 +33,44 @@ if ! getent group snh48-web >/dev/null; then
   exit 1
 fi
 
+sync_file_from_tencent() {
+  local source_path=$1
+  local destination_path=$2
+  local source_state
+  if ! source_state=$(ssh "${SSH_OPTS[@]}" -S "$CONTROL_PATH" "$TENCENT" "if [ -f '$source_path' ]; then printf present; elif [ -e '$source_path' ]; then printf invalid; else printf absent; fi"); then
+    echo "$LOG_TAG unable to inspect source file: $source_path" >&2
+    return 1
+  fi
+  case "$source_state" in
+    present)
+      rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" "$TENCENT:$source_path" "$destination_path"
+      ;;
+    absent)
+      # A single-file rsync does not remove a missing destination.  Make the
+      # deletion explicit after a successful source-side existence check.
+      echo "$LOG_TAG source missing, removing destination: $destination_path"
+      if [ -d "$destination_path" ]; then
+        echo "$LOG_TAG destination is a directory: $destination_path" >&2
+        return 1
+      fi
+      rm -f -- "$destination_path"
+      ;;
+    *)
+      echo "$LOG_TAG source path is not a regular file: $source_path" >&2
+      return 1
+      ;;
+  esac
+}
+
+remove_retired_local_file() {
+  local destination_path=$1
+  if [ -d "$destination_path" ]; then
+    echo "$LOG_TAG retired path is a directory: $destination_path" >&2
+    return 1
+  fi
+  rm -f -- "$destination_path"
+}
+
 if [ "$#" -eq 0 ]; then
   SYNC_GROUPS=(core dynamic)
 else
@@ -69,6 +107,10 @@ mkdir -p \
   /home/snh48_web/website/data \
   /home/snh48_web/website/data/memories
 
+# The manual timeline endpoint was removed.  Remove an old public-node copy;
+# this is deliberately outside the shared-state and fan-hub data contracts.
+remove_retired_local_file /home/snh48_web/website/data/manual_events.csv
+
 CONTROL_DIR=$(mktemp -d "${TMPDIR:-/tmp}/snh48_tencent_pull.XXXXXX")
 CONTROL_PATH="$CONTROL_DIR/control"
 cleanup() {
@@ -82,15 +124,15 @@ RSYNC_RSH="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -
 
 if [ "$sync_core" -eq 1 ]; then
   # 1. chenjiayi_events.csv（事件/行程主文件，网站优先读取）
-  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv" /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
+  sync_file_from_tencent /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
   echo "$LOG_TAG chenjiayi_events.csv done"
 
   # 2. schedule.csv（事件/行程兼容副本，旧配置和回退读取）
-  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/schedule_record/schedule.csv" /home/snh48-fan-hub/schedule_record/schedule.csv
+  sync_file_from_tencent /home/snh48-fan-hub/schedule_record/schedule.csv /home/snh48-fan-hub/schedule_record/schedule.csv
   echo "$LOG_TAG schedule.csv done"
 
   # 3. lightweight authored Weibo/Douyin timeline data; no raw social CSV/Cookie is synced
-  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json" /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
+  sync_file_from_tencent /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
   echo "$LOG_TAG social timeline done"
 
   # 4. live_push_replays（仅同步陈嘉仪的数据）

@@ -17,7 +17,7 @@
 
 - 两端 `/home/snh48_web` 的 Git 工作树和已跟踪代码、配置一致；普通动态导出文件的 `generated_at` 会因两端生成时间不同而变化，但去除该时间字段后内容一致。
 - 首页背景词、房间忽略、记忆页和计分业务状态当前内容一致。计分业务状态此前曾停留在阿里云 7 月 20 日基线，原因是腾讯云季节性分析器在 7 月代码更新后未重启，旧进程继续使用未带 revision/复制逻辑的代码；本次已从腾讯云当前 898 条记录生成校准 revision `20260904T175340.984616Z-tencent-b83204a4190e` 并复制到阿里云，两端 SHA-256 和历史快照均已一致。
-- 阿里云独有的 `website/data/manual_events.csv` 不在 fan-hub `core` / `dynamic` 同步范围，且现行时间轴代码不再读取它；文件已加入 `.gitignore`，迁移时仍须按业务需要单独校验，不能把“被忽略”理解为“两端都有”。
+- 阿里云遗留的 `website/data/manual_events.csv` 已确认由 fan-hub 的权威事件/行程 CSV 覆盖，且现行时间轴代码不再读取；2026-09-05 已删除阿里云副本并移除 `.gitignore` 例外。同步脚本仍将它列为退役路径，发现旧副本时会显式清理。
 - 当前有意保留的环境差异只有节点身份/peer、`QA_ENABLED`、翻牌账号管理开关、社交凭据管理开关和备案号等；这些差异均由各节点 `.env` 控制，不应把其中一端的 `.env` 直接覆盖到另一端。
 - Nginx 域名、证书、访问日志路径、图片代理地址、缓存容量，以及 systemd 的服务描述和可写路径属于节点基础设施差异，不是网站页面代码差异；迁移时应使用对应节点模板并单独验收。
 
@@ -127,7 +127,7 @@
 | `/home/snh48_web/website/data/memories/memories.json` | 必须 | 记忆页运行数据 | 非 Git 版本化共享状态；迁移时以腾讯云权威 revision 为当前值，普通 `core` 拉取不覆盖 |
 | `/home/snh48_web/website/data/room_messages_ignored_batches.json` | 必须 | 房间消息页“忽略未回礼物批次”状态 | 非 Git 版本化共享状态；迁移时保留腾讯云权威 revision，不按 `updated_at` 猜测并互相覆盖 |
 | `/home/snh48_web/website/data/scroller_texts.json` | 必须 | 首页背景词内容 | 非 Git 版本化共享状态；从腾讯云权威节点迁移 |
-| `/home/snh48_web/website/data/manual_events.csv` | 按业务核对 | 阿里云历史遗留的手工事件 CSV；当前不属于四类共享状态，也不在腾讯云自动同步脚本范围内 | 迁移前先比较文件内容与业务是否仍依赖；需要保留时按 SHA-256 校验后安全复制，不通过 Git；当前腾讯云同路径不存在 |
+| `/home/snh48_web/website/data/manual_events.csv` | 不迁移 | 已删除的旧手工时间轴文件；当前代码不读取，内容已由 fan-hub 事件/行程 CSV 接管 | 退役路径；`sync-from-tencent*.sh` 和 `sync-to-aliyun.sh` 发现旧副本时显式删除，不重新加入 Git 或 `.gitignore` |
 | `/home/snh48_web/website/data/shared_state_history/` | 必须 | 四类共享状态的不可变 gzip 历史和幂等回执 | 安全复制整个目录；不得只迁当前 JSON 后丢弃版本链 |
 | `/home/snh48_web/website/data/shared_state_outbox/` | 必须 | 尚未复制到对端的持久待发送项 | 停服务后复制；恢复后让网站线程继续重试，不要删除积压 |
 | `/home/snh48_web/website/data/action_inbox/` | 必须 | 投诉、邮箱请求和处理状态的双服务器可靠待处理箱 | 两端事件取并集；同 event ID 内容必须一致，不能整目录 `--delete` 覆盖 |
@@ -156,7 +156,7 @@
 | `/home/snh48-fan-hub/flip_data/web/flip_cards.json` | 密码保护的翻牌记录应用数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |
 
-上述阿里云只读副本由 root 同步，但必须以 `root:snh48-web`、目录 `0750`、文件 `0640` 落盘。`deploy/sync-from-tencent.sh` 和手动兜底 `deploy/sync-to-aliyun.sh` 已在每个 rsync 接收操作中固化该规则；迁移时不得只运行一次 ACL 后继续使用会恢复源端 `root:root` 权限的旧同步脚本。
+上述阿里云只读副本由 root 同步，但必须以 `root:snh48-web`、目录 `0750`、文件 `0640` 落盘。`deploy/sync-from-tencent.sh` 和手动兜底 `deploy/sync-to-aliyun.sh` 已在每个 rsync 接收操作中固化该规则；三个 `core` 单文件（事件主文件、兼容副本、社交时间轴）在腾讯云源文件确实不存在时会删除阿里云对应文件，SSH 检查失败则 fail-closed，不执行删除。目录同步继续使用 `--delete` 或 manifest 延迟清理；共享状态历史、outbox、action inbox 和锁文件不适用删除镜像规则。迁移时不得只运行一次 ACL 后继续使用会恢复源端 `root:root` 权限的旧同步脚本。
 
 如果新服务器要接替腾讯云成为数据生成源，还必须迁移 fan-hub 的代码、虚拟环境、采集配置、Cookie/Token、systemd/cron/screen 任务和历史原始数据；这些不属于网站仓库，不要从 `/home/snh48_web` 覆盖。
 
@@ -177,7 +177,7 @@
 
 `snh48-website-log-archive.service` 在超过 1 GiB 但 COS 未配置、上传/远端校验失败或源文件发生变化时，仍 fail-closed，不删除日志；同时写入 `action_inbox` 的 `observability_alert` 事件。事件通过现有双向 outbox 复制到另一节点，`/ob` 处理箱显示最新告警状态和来源节点。腾讯云的 `feishu-feedback-chat-forwarder.service` 会消费该事件并使用现有陈嘉仪网站 Bot 发送红色告警卡片；恢复后发送绿色恢复卡片。告警按节点和故障类型去重，Bot 不会因每日 timer 重复轰炸。
 
-`.gitignore` 只负责排除 Git 跟踪，不能单独决定迁移范围。当前迁移边界以本文表格为准：`runtime_backups/`、`manual_events.csv`、共享状态历史/outbox、action inbox 和 `.env` 等忽略文件仍需按用途安全保留；交互日志、配额、GeoIP 和指标属于节点本地材料，按审计需要另行归档。`manual_events.csv` 是阿里云上已有的独立文件，不是当前腾讯云 `core` / `dynamic` 同步结果；迁移时必须单独核对，不能因为被 `.gitignore` 忽略就认为两端都有或内容一致。
+`.gitignore` 只负责排除 Git 跟踪，不能单独决定迁移范围。当前迁移边界以本文表格为准：`runtime_backups/`、共享状态历史/outbox、action inbox 和 `.env` 等忽略文件仍需按用途安全保留；交互日志、配额、GeoIP 和指标属于节点本地材料，按审计需要另行归档。已退役的 `manual_events.csv` 不再是有效迁移资产；同步脚本会清理遗留副本，避免旧文件在源端删除后继续留在阿里云。
 
 | 项 | 腾讯云当前口径 | 迁移注意 |
 |----|----------------|----------|

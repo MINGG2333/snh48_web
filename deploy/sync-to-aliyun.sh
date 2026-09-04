@@ -37,17 +37,48 @@ ssh -M -S "$CONTROL_PATH" -fN "$ALIYUN"
 SSH_MUX=(ssh -S "$CONTROL_PATH")
 RSYNC_RSH="ssh -S $CONTROL_PATH"
 
-"${SSH_MUX[@]}" "$ALIYUN" 'getent group snh48-web >/dev/null && install -d -o root -g snh48-web -m 0750 /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/web /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video && mkdir -p /home/snh48_web/website/data /home/snh48_web/website/data/memories'
+sync_file_to_aliyun() {
+  local source_path=$1
+  local destination_path=$2
+  if [ -f "$source_path" ]; then
+    rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" \
+      "$source_path" "$ALIYUN:$destination_path"
+    return
+  fi
+  if [ -e "$source_path" ]; then
+    echo "$LOG_TAG source path is not a regular file: $source_path" >&2
+    return 1
+  fi
+  # rsync --delete only applies to directory transfers.  Mirror an
+  # intentional source deletion for a single-file data contract explicitly.
+  echo "$LOG_TAG source missing, removing destination: $destination_path"
+  "${SSH_MUX[@]}" "$ALIYUN" "if [ -d '$destination_path' ]; then echo 'destination is a directory: $destination_path' >&2; exit 1; fi; rm -f -- '$destination_path'"
+}
+
+remove_retired_aliyun_file() {
+  local destination_path=$1
+  "${SSH_MUX[@]}" "$ALIYUN" "if [ -d '$destination_path' ]; then echo 'retired path is a directory: $destination_path' >&2; exit 1; fi; rm -f -- '$destination_path'"
+}
+
+# The manual timeline endpoint was removed.  Keep retirement explicit so an
+# old ignored copy cannot survive on the public node.
+remove_retired_aliyun_file /home/snh48_web/website/data/manual_events.csv
+
+"${SSH_MUX[@]}" "$ALIYUN" 'getent group snh48-web >/dev/null && install -d -o root -g snh48-web -m 0750 /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/social_record/timeline /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/web /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video && mkdir -p /home/snh48_web/website/data /home/snh48_web/website/data/memories'
 
 # 1. chenjiayi_events.csv（事件/行程主文件，网站优先读取）
-rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv"
+sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
 echo "$LOG_TAG chenjiayi_events.csv done"
 
 # 2. schedule.csv（事件/行程兼容副本，旧配置和回退读取）
-rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/schedule_record/schedule.csv "$ALIYUN:/home/snh48-fan-hub/schedule_record/schedule.csv"
+sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/schedule.csv /home/snh48-fan-hub/schedule_record/schedule.csv
 echo "$LOG_TAG schedule.csv done"
 
-# 3. live_push_replays（仅同步陈嘉仪的数据）
+# 3. lightweight authored Weibo/Douyin timeline data
+sync_file_to_aliyun /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
+echo "$LOG_TAG social timeline done"
+
+# 4. live_push_replays（仅同步陈嘉仪的数据）
 rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/"
 echo "$LOG_TAG live_push_replays done"
 
