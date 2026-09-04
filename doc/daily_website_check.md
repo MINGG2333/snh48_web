@@ -217,8 +217,8 @@ venv/bin/python3 scripts/feishu/feedback_chat_forwarder.py status
 
 | 节点 | 专用访问日志 | 统计目录 | 日志归档 COS 配置 |
 |------|--------------|----------|-------------------|
-| 腾讯云非公开站 | `/var/log/nginx/snh48_access.log*` | `/var/lib/snh48-web/metrics/tencent/` | 使用腾讯云 fan-hub 私有配置 |
-| 阿里云公开站 | `/var/log/nginx/snh48_aliyun_access.log*` | `/var/lib/snh48-web/metrics/aliyun/` | 当前不放置 fan-hub 凭据，超过阈值时 fail-closed |
+| 腾讯云非公开站 `cjy.plus` | `/var/log/nginx/snh48_access.log*` | `/var/lib/snh48-web/metrics/tencent/` | 使用腾讯云 fan-hub 私有配置 |
+| 阿里云公开站 `cjy.我爱你` | `/var/log/nginx/snh48_aliyun_access.log*` | `/var/lib/snh48-web/metrics/aliyun/` | 当前不放置 fan-hub 凭据，超过阈值时 fail-closed |
 
 每日检查命令（两台机器分别执行）：
 

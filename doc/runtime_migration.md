@@ -178,8 +178,8 @@
 
 | 可读别名 | 兼容 unit | 节点含义 |
 |----------|----------|----------|
-| `snh48-web-tencent-private.service` | `snh48-web.service` | 腾讯云非公开站/数据生成配套网站 |
-| `snh48-web-aliyun-public.service` | `snh48-aliyun.service` | 阿里云公开站 |
+| `snh48-web-tencent-private.service` | `snh48-web.service` | 腾讯云非公开站 `cjy.plus` / 数据生成配套网站 |
+| `snh48-web-aliyun-public.service` | `snh48-aliyun.service` | 阿里云公开站 `cjy.我爱你` |
 
 两个名字指向同一个实际进程，`systemctl status`、`is-active` 和日志仍可使用旧名。新部署优先使用可读别名，旧名只作为兼容入口。
 
