@@ -62,6 +62,8 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
         "qa_enabled": False,
+        "service_name": "snh48-web.service",
+        "service_alias": "snh48-web-tencent-private.service",
         "restart": "systemctl restart snh48-web-tencent-private.service 2>/dev/null || systemctl restart snh48-web.service",
         "status": "systemctl is-active --quiet snh48-web-tencent-private.service 2>/dev/null || systemctl is-active --quiet snh48-web.service",
         "local_url": "http://127.0.0.1:8000/timeline",
@@ -167,6 +169,8 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
         "repo_url": "git@github.com:MINGG2333/snh48_web.git",
         "transcript_repo_url": "git@github.com:MINGG2333/transcript_analyze.git",
         "qa_enabled": True,
+        "service_name": "snh48-aliyun.service",
+        "service_alias": "snh48-web-aliyun-public.service",
         "restart": "systemctl restart snh48-web-aliyun-public.service 2>/dev/null || systemctl restart snh48-aliyun.service",
         "status": "systemctl is-active --quiet snh48-web-aliyun-public.service 2>/dev/null || systemctl is-active --quiet snh48-aliyun.service",
         "local_url": "http://127.0.0.1:8000/timeline",
@@ -678,6 +682,7 @@ WantedBy=multi-user.target
 
 def bootstrap_ubuntu(name: str, target: Dict[str, Any], args: argparse.Namespace) -> None:
     service_name = str(target.get("service_name") or f"snh48-{name}")
+    service_alias = str(target.get("service_alias") or "")
     site = site_dir(target)
     repo_url = str(target.get("repo_url") or "git@github.com:MINGG2333/snh48_web.git")
     transcript_repo_url = str(
@@ -735,6 +740,7 @@ cat > /etc/systemd/system/{quote(service_name)}.service <<'EOF'
 {unit}EOF
 systemctl daemon-reload
 systemctl enable {quote(service_name)}
+{f'ln -sfn {quote(service_name)} /etc/systemd/system/{quote(service_alias)}' if service_alias else ''}
 {start_cmd}
 """
     print(f"\n== Bootstrap Ubuntu target: {name} ==")

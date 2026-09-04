@@ -168,7 +168,7 @@
 
 | 项 | 腾讯云当前口径 | 迁移注意 |
 |----|----------------|----------|
-| 网站服务 | `snh48-web.service` 以不可登录 `snh48-web` 账号运行；公开副本使用 `snh48-aliyun.service` | 从仓库安装对应 unit 和权限脚本，保持 `HOST=127.0.0.1`、`UMask=0077` 和 systemd 沙箱，不恢复 root/screen/nohup 生产方式 |
+| 网站服务 | `snh48-web.service`（可读别名 `snh48-web-tencent-private.service`）以不可登录 `snh48-web` 账号运行；公开副本使用 `snh48-aliyun.service`（可读别名 `snh48-web-aliyun-public.service`） | 从仓库安装对应 unit 和权限脚本；别名只是同一 unit 的可读入口，保持 `HOST=127.0.0.1`、`UMask=0077` 和 systemd 沙箱，不恢复 root/screen/nohup 生产方式 |
 | Nginx | `/etc/nginx/conf.d/snh48.conf`，仓库来源 `deploy/nginx.conf` | 迁移后运行 `nginx -t`；证书和域名按新服务器重配 |
 | HTTPS 证书 | 系统证书目录 | 不在 Git；迁移或重新签发 |
 | 阿里云拉取 cron | 阿里云 root crontab 每分钟运行 `deploy/sync-from-tencent-if-changed.sh` | 新目标如果继续拉取腾讯云，更新 `TENCENT`、SSH key、白名单和文档 |

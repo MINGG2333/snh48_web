@@ -63,6 +63,10 @@ python3 deploy/deploy.py check-env all
 python3 deploy/deploy.py sync-data tencent aliyun --prewarm
 ```
 
+网站 unit 的历史名称继续兼容：腾讯云 `snh48-web.service` 对应可读别名
+`snh48-web-tencent-private.service`，阿里云 `snh48-aliyun.service` 对应
+`snh48-web-aliyun-public.service`。别名与旧名指向同一 systemd 服务，不会启动第二个网站进程。
+
 完整的首次部署/迁移步骤仍请参照 **[deploy/TODO.md](TODO.md)**，按顺序执行。
 
 腾讯云设置 `QA_ENABLED=false`，只安装 `website/requirements.txt`，不需要
