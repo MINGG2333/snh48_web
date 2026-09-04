@@ -52,6 +52,7 @@ class WebsiteObservabilityTests(unittest.TestCase):
             self.assertEqual(daily["days"]["2026-09-04"]["unique_visitors"], 1)
             self.assertEqual(daily["days"]["2026-09-04"]["hourly"]["2026-09-04T00:00:00+0800"]["requests"], 2)
             self.assertGreaterEqual(first["resources"]["cpu_count"], 1)
+            self.assertEqual(first["resources"]["website_process"], {})
 
             with access.open("a", encoding="utf-8") as handle:
                 handle.write(

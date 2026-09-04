@@ -234,7 +234,7 @@ cat /var/lib/snh48-web/metrics/<node_id>/daily.json
 du -sh /var/log/nginx /var/lib/snh48-web/metrics/<node_id> /var/lib/snh48-web/log-archives/<node_id>
 ```
 
-合格标准：metrics timer 和 archive timer 均为 `enabled` / `active`；metrics service 最近一次 `Result=success` 且 `latest.json` 更新时间在 5--10 分钟内；`daily.json` 中应持续出现按小时的 `hourly` 聚合，供峰值容量分析；日志总量未超过 1 GiB 时 archive service 成功退出且不删除文件。超过阈值时，只有 COS 上传、远端对象大小校验以及本地 inode/大小/mtime 复核全部成功才允许删除最旧轮转日志；任何失败都必须保留文件并在 journal 中留下失败原因。阿里云当前没有归档凭据，因此即使未来超过阈值也只会报警并保留日志。
+合格标准：metrics timer 和 archive timer 均为 `enabled` / `active`；metrics service 最近一次 `Result=success` 且 `latest.json` 更新时间在 5--10 分钟内；`daily.json` 中应持续出现按小时的 `hourly` 聚合，供峰值容量分析；`latest.json` 的 `resources.website_process` 应包含对应网站服务的 RSS/HWM 字段，便于识别 QA 冷启动峰值；日志总量未超过 1 GiB 时 archive service 成功退出且不删除文件。超过阈值时，只有 COS 上传、远端对象大小校验以及本地 inode/大小/mtime 复核全部成功才允许删除最旧轮转日志；任何失败都必须保留文件并在 journal 中留下失败原因。阿里云当前没有归档凭据，因此即使未来超过阈值也只会报警并保留日志。
 
 ```bash
 journalctl -u snh48-website-metrics.service -u snh48-website-log-archive.service \

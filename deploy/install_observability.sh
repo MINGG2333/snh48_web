@@ -7,6 +7,11 @@ ACCESS_PATTERN=${ACCESS_PATTERN:?ACCESS_PATTERN is required}
 ACTIVE_LOG=${ACTIVE_LOG:?ACTIVE_LOG is required}
 COS_CONFIG=${COS_CONFIG:-}
 COS_CREDENTIALS=${COS_CREDENTIALS:-}
+case "$NODE_ID" in
+    tencent) DEFAULT_SERVICE_NAME=snh48-web.service ;;
+    aliyun) DEFAULT_SERVICE_NAME=snh48-aliyun.service ;;
+    *) DEFAULT_SERVICE_NAME= ;;
+esac
 
 install -d -o root -g root -m 0755 /usr/local/libexec
 install -o root -g root -m 0755 "$ROOT_DIR/script/website_observability.py" /usr/local/libexec/snh48-website-observability.py
@@ -24,6 +29,7 @@ WEBSITE_METRICS_NODE_ID=$NODE_ID
 WEBSITE_METRICS_ACCESS_PATTERNS=$(printf '%q' "$ACCESS_PATTERN")
 WEBSITE_METRICS_ACTIVE_PATHS=$(printf '%q' "$ACTIVE_LOG")
 WEBSITE_METRICS_OUTPUT_DIR=/var/lib/snh48-web/metrics/$NODE_ID
+WEBSITE_METRICS_SERVICE_NAME=$DEFAULT_SERVICE_NAME
 WEBSITE_LOG_ARCHIVE_NODE_ID=$NODE_ID
 WEBSITE_LOG_ARCHIVE_PATTERNS=/var/log/nginx/*.log*
 WEBSITE_LOG_ARCHIVE_ACTIVE_PATHS=/var/log/nginx/*.log
@@ -35,6 +41,10 @@ COS_REMOTE=cjy_archive
 COS_BUCKET=cjy-archive-1429902869
 COS_PREFIX=website-logs
 EOF
+    chmod 0600 /etc/snh48-web/observability.env
+fi
+if [[ -n "$DEFAULT_SERVICE_NAME" ]] && ! grep -q '^WEBSITE_METRICS_SERVICE_NAME=' /etc/snh48-web/observability.env; then
+    printf 'WEBSITE_METRICS_SERVICE_NAME=%s\n' "$DEFAULT_SERVICE_NAME" >> /etc/snh48-web/observability.env
     chmod 0600 /etc/snh48-web/observability.env
 fi
 

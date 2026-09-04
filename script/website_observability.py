@@ -33,6 +33,10 @@ DEFAULT_METRICS_ROOT = "/var/lib/snh48-web/metrics"
 DEFAULT_ARCHIVE_ROOT = "/var/lib/snh48-web/log-archives"
 DEFAULT_ACTION_INBOX_ROOT = "/home/snh48_web/website/data/action_inbox"
 DEFAULT_SHARED_OUTBOX_ROOT = "/home/snh48_web/website/data/shared_state_outbox"
+DEFAULT_SERVICE_NAMES = {
+    "tencent": "snh48-web.service",
+    "aliyun": "snh48-aliyun.service",
+}
 # Keep observability labels identical to website/config.py so the same event
 # has byte-for-byte identical metadata on both nodes after replication.
 DEFAULT_NODE_LABELS = {"tencent": "腾讯云 cjy.plus", "aliyun": "阿里云 cjy.我爱你"}
@@ -233,7 +237,59 @@ def read_disk_io() -> dict[str, int]:
     return totals
 
 
-def resource_snapshot(state: dict[str, Any]) -> dict[str, Any]:
+def read_service_process_metrics(service_name: str | None) -> dict[str, Any]:
+    """Read the web process RSS and lifetime high-water mark.
+
+    System-wide snapshots run every five minutes and can miss a short QA
+    startup spike. ``VmHWM`` is retained by the kernel for the lifetime of
+    the service process, so a later snapshot still records that peak.
+    """
+    if not service_name:
+        return {}
+    try:
+        result = subprocess.run(
+            ["systemctl", "show", "--property=MainPID", "--value", service_name],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+        pid = int((result.stdout or "").strip() or "0")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return {"service_name": service_name, "pid": 0}
+    metrics: dict[str, Any] = {"service_name": service_name, "pid": pid}
+    if pid <= 0:
+        return metrics
+    try:
+        lines = Path(f"/proc/{pid}/status").read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError):
+        return metrics
+    fields = {
+        "VmRSS": "rss_bytes",
+        "VmHWM": "hwm_bytes",
+        "VmSwap": "swap_bytes",
+        "VmSize": "vm_size_bytes",
+        "Threads": "threads",
+    }
+    for line in lines:
+        key, _, raw_value = line.partition(":")
+        output_key = fields.get(key)
+        if output_key is None:
+            continue
+        parts = raw_value.strip().split()
+        if not parts:
+            continue
+        try:
+            value = int(parts[0])
+        except ValueError:
+            continue
+        if key != "Threads" and len(parts) > 1 and parts[1] == "kB":
+            value *= 1024
+        metrics[output_key] = value
+    return metrics
+
+
+def resource_snapshot(state: dict[str, Any], service_name: str | None = None) -> dict[str, Any]:
     total_ticks, idle_ticks = read_cpu_ticks()
     previous = state.get("cpu") or {}
     cpu_percent = None
@@ -275,6 +331,7 @@ def resource_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             "swap_total_bytes": meminfo.get("SwapTotal", 0),
             "swap_free_bytes": meminfo.get("SwapFree", 0),
         },
+        "website_process": read_service_process_metrics(service_name),
         "disk_root": {
             "total_bytes": disk.total,
             "used_bytes": disk.used,
@@ -287,7 +344,13 @@ def resource_snapshot(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def collect_metrics(
-    *, node_id: str, access_patterns: list[str], active_paths: list[str], visitor_root: Path, output_dir: Path
+    *,
+    node_id: str,
+    access_patterns: list[str],
+    active_paths: list[str],
+    visitor_root: Path,
+    output_dir: Path,
+    service_name: str | None = None,
 ) -> dict[str, Any]:
     del active_paths  # Kept in the interface so collection and archive config can share one env file.
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -312,7 +375,7 @@ def collect_metrics(
         "node_id": node_id,
         "access_log_files": len(paths),
         "access_parse_errors": parse_errors,
-        "resources": resource_snapshot(state),
+        "resources": resource_snapshot(state, service_name),
     }
     snapshots_path = output_dir / "snapshots.jsonl"
     with snapshots_path.open("a", encoding="utf-8") as handle:
@@ -686,6 +749,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--active-path", action="append", default=None)
     collect.add_argument("--visitor-root", default=os.getenv("WEBSITE_METRICS_VISITOR_ROOT", "/home/snh48_web/website/data/interaction_logs"))
     collect.add_argument("--output-dir", default=os.getenv("WEBSITE_METRICS_OUTPUT_DIR", DEFAULT_METRICS_ROOT))
+    collect.add_argument("--service-name", default=os.getenv("WEBSITE_METRICS_SERVICE_NAME"))
     collect.set_defaults(handler=command_collect)
 
     archive = subparsers.add_parser("archive-logs")
@@ -710,6 +774,7 @@ def command_collect(args: argparse.Namespace) -> int:
         active_paths=args.active_path or env_list("WEBSITE_METRICS_ACTIVE_PATHS", "/var/log/nginx/snh48_access.log"),
         visitor_root=Path(args.visitor_root),
         output_dir=Path(args.output_dir),
+        service_name=args.service_name or DEFAULT_SERVICE_NAMES.get(args.node_id),
     )
     print(json.dumps(snapshot, ensure_ascii=False, sort_keys=True))
     return 0
