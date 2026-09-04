@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from script.website_observability import (
+    DEFAULT_NODE_LABELS,
     ObservabilityError,
     _emit_archive_alert_transition,
     archive_logs,
@@ -15,6 +16,9 @@ from script.website_observability import (
 
 
 class WebsiteObservabilityTests(unittest.TestCase):
+    def test_observability_node_labels_are_canonical(self) -> None:
+        self.assertEqual(DEFAULT_NODE_LABELS, {"tencent": "腾讯云 cjy.plus", "aliyun": "阿里云 cjy.我爱你"})
+
     def test_collects_incremental_access_and_resource_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

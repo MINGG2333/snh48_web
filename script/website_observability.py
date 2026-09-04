@@ -33,7 +33,9 @@ DEFAULT_METRICS_ROOT = "/var/lib/snh48-web/metrics"
 DEFAULT_ARCHIVE_ROOT = "/var/lib/snh48-web/log-archives"
 DEFAULT_ACTION_INBOX_ROOT = "/home/snh48_web/website/data/action_inbox"
 DEFAULT_SHARED_OUTBOX_ROOT = "/home/snh48_web/website/data/shared_state_outbox"
-DEFAULT_NODE_LABELS = {"tencent": "腾讯云非公开站", "aliyun": "阿里云公开站"}
+# Keep observability labels identical to website/config.py so the same event
+# has byte-for-byte identical metadata on both nodes after replication.
+DEFAULT_NODE_LABELS = {"tencent": "腾讯云 cjy.plus", "aliyun": "阿里云 cjy.我爱你"}
 
 
 class ObservabilityError(RuntimeError):
@@ -597,7 +599,9 @@ def persist_observability_event(
         "event_type": "observability_recovery" if state == "resolved" else "observability_alert",
         "created_at": created_at,
         "origin_node": node_id,
-        "origin_label": os.getenv("WEBSITE_ALERT_NODE_LABEL", "").strip() or DEFAULT_NODE_LABELS.get(node_id, node_id),
+        # The event is replicated by ID to the peer.  Derive its label from
+        # the canonical node map so both copies remain byte-for-byte equal.
+        "origin_label": DEFAULT_NODE_LABELS.get(node_id, node_id),
         "payload": {
             "alert_key": "nginx_log_archive",
             "incident_id": incident_id,
