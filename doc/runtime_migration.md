@@ -115,6 +115,7 @@
 | `/home/snh48_web/website/data/memories/memories.json` | 必须 | 记忆页运行数据 | 非 Git 版本化共享状态；迁移时以腾讯云权威 revision 为当前值，普通 `core` 拉取不覆盖 |
 | `/home/snh48_web/website/data/room_messages_ignored_batches.json` | 必须 | 房间消息页“忽略未回礼物批次”状态 | 非 Git 版本化共享状态；迁移时保留腾讯云权威 revision，不按 `updated_at` 猜测并互相覆盖 |
 | `/home/snh48_web/website/data/scroller_texts.json` | 必须 | 首页背景词内容 | 非 Git 版本化共享状态；从腾讯云权威节点迁移 |
+| `/home/snh48_web/website/data/manual_events.csv` | 按业务核对 | 阿里云历史遗留的手工事件 CSV；当前不属于四类共享状态，也不在腾讯云自动同步脚本范围内 | 迁移前先比较文件内容与业务是否仍依赖；需要保留时按 SHA-256 校验后安全复制，不通过 Git；当前腾讯云同路径不存在 |
 | `/home/snh48_web/website/data/shared_state_history/` | 必须 | 四类共享状态的不可变 gzip 历史和幂等回执 | 安全复制整个目录；不得只迁当前 JSON 后丢弃版本链 |
 | `/home/snh48_web/website/data/shared_state_outbox/` | 必须 | 尚未复制到对端的持久待发送项 | 停服务后复制；恢复后让网站线程继续重试，不要删除积压 |
 | `/home/snh48_web/website/data/action_inbox/` | 必须 | 投诉、邮箱请求和处理状态的双服务器可靠待处理箱 | 两端事件取并集；同 event ID 内容必须一致，不能整目录 `--delete` 覆盖 |
@@ -164,7 +165,7 @@
 
 `snh48-website-log-archive.service` 在超过 1 GiB 但 COS 未配置、上传/远端校验失败或源文件发生变化时，仍 fail-closed，不删除日志；同时写入 `action_inbox` 的 `observability_alert` 事件。事件通过现有双向 outbox 复制到另一节点，`/ob` 处理箱显示最新告警状态和来源节点。腾讯云的 `feishu-feedback-chat-forwarder.service` 会消费该事件并使用现有陈嘉仪网站 Bot 发送红色告警卡片；恢复后发送绿色恢复卡片。告警按节点和故障类型去重，Bot 不会因每日 timer 重复轰炸。
 
-`.gitignore` 只负责排除 Git 跟踪，不能单独决定迁移范围。当前迁移边界以本文表格为准：`runtime_backups/`、共享状态历史/outbox、action inbox 和 `.env` 等忽略文件仍需安全保留；交互日志、配额、GeoIP 和指标属于节点本地材料，按审计需要另行归档。
+`.gitignore` 只负责排除 Git 跟踪，不能单独决定迁移范围。当前迁移边界以本文表格为准：`runtime_backups/`、`manual_events.csv`、共享状态历史/outbox、action inbox 和 `.env` 等忽略文件仍需按用途安全保留；交互日志、配额、GeoIP 和指标属于节点本地材料，按审计需要另行归档。`manual_events.csv` 是阿里云上已有的独立文件，不是当前腾讯云 `core` / `dynamic` 同步结果；迁移时必须单独核对，不能因为被 `.gitignore` 忽略就认为两端都有或内容一致。
 
 | 项 | 腾讯云当前口径 | 迁移注意 |
 |----|----------------|----------|
