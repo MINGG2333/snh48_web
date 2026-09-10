@@ -2,6 +2,8 @@
 
 更新日期：2026-09-10 CST +0800
 
+2026-09-10 13:10:40 阿里云完成网站提交 `33b7f29` 部署：通过 `python3 deploy/deploy.py deploy aliyun` 从 GitHub 快进并定向重启 `snh48-aliyun.service`。阿里云主 PID `453606`，`active/running`、`NRestarts=0`，`ActiveEnterTimestamp=2026-09-10 13:07:38 CST`；启动日志显示 QA 知识库正常加载并完成启动，无新增 warning..emerg 异常。公网 `https://cjy.xn--6qq986b3xl/memories` 返回 200，未带密码数据接口返回 401，错误密码返回 403；页面登录框可见且内容区初始隐藏。腾讯云先行版本保持不变。
+
 2026-09-10 12:33:37 腾讯云先行部署网站提交 `77ab96f`：记忆页恢复进入访问密码，`/api/memories/data` 和 `/api/memories/submit` 均要求 `X-Memories-Password`；通过阿里云现有跨云 SSH 通道完成腾讯云 `git pull` 和 `snh48-web.service` 定向重启。腾讯云主 PID `2069716`，`active/running`、`NRestarts=0`，`ActiveEnterTimestamp=2026-09-10 12:32:34 CST`；启动日志仅有既有 FastAPI `on_event` 弃用提示，无新增 warning..emerg 异常。公网 `https://cjy.plus/memories` 返回 200，未带密码数据接口返回 401，错误密码返回 403，正确密码返回 200；页面登录框可见且内容区初始隐藏。阿里云中文域名尚未同步本提交，仍待腾讯云验收后确认再发布。
 
 
