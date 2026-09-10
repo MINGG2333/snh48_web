@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from website import config as cfg
@@ -225,7 +225,15 @@ def get_memories_data(
     confirmation_status: str = Query("all"),
     q: str = Query(""),
 ):
-    """Return public memory records for visitors and managers."""
+    """Return public memory records after view-password verification."""
+    _verify_password_value(
+        request=request,
+        expected=cfg.MEMORIES_VIEW_PASSWORD,
+        provided=request.headers.get("X-Memories-Password"),
+        disabled_detail="记忆页未启用",
+        missing_detail="需要记忆页密码",
+        wrong_detail="记忆页密码错误",
+    )
     response.headers["Cache-Control"] = "no-store"
     records = _filter_records(
         _load_items(),
@@ -282,8 +290,17 @@ def get_memories_manage_data(
 def submit_memory(
     req: MemorySubmitRequest,
     request: Request,
+    x_memories_password: str = Header(None, alias="X-Memories-Password"),
 ):
     """Submit a new memory for basic review and display/queueing."""
+    _verify_password_value(
+        request=request,
+        expected=cfg.MEMORIES_VIEW_PASSWORD,
+        provided=x_memories_password,
+        disabled_detail="记忆页未启用",
+        missing_detail="需要记忆页密码",
+        wrong_detail="记忆页密码错误",
+    )
     ensure_writable()
     if not cfg.MEMORIES_SUBMIT_ENABLED:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前服务器暂不开放记忆提交")

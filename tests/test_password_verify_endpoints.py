@@ -10,6 +10,7 @@ from website.gift_replies_api import (
     verify_gift_replies_login,
 )
 from website.memories_api import (
+    get_memories_data,
     router as memories_router,
     verify_memories_login,
 )
@@ -78,6 +79,34 @@ class PasswordVerifyEndpointTests(unittest.TestCase):
                     Response(),
                 )
             self.assertEqual(raised.exception.status_code, 403)
+
+    def test_memories_data_requires_view_password(self) -> None:
+        with mock.patch("website.memories_api.cfg.MEMORIES_VIEW_PASSWORD", "secret"), \
+             mock.patch("website.memories_api._load_items", return_value=[]):
+            with self.assertRaises(HTTPException) as missing:
+                get_memories_data(
+                    request_with_header("X-Test", "1"), Response(),
+                    page=1, page_size=24, memory_type="all", actor_platform="all",
+                    confirmation_status="all", q="",
+                )
+            self.assertEqual(missing.exception.status_code, 401)
+
+            with self.assertRaises(HTTPException) as wrong:
+                get_memories_data(
+                    request_with_header("X-Memories-Password", "wrong"), Response(),
+                    page=1, page_size=24, memory_type="all", actor_platform="all",
+                    confirmation_status="all", q="",
+                )
+            self.assertEqual(wrong.exception.status_code, 403)
+
+            response = Response()
+            payload = get_memories_data(
+                request_with_header("X-Memories-Password", "secret"), response,
+                page=1, page_size=24, memory_type="all", actor_platform="all",
+                confirmation_status="all", q="",
+            )
+            self.assertEqual(payload["items"], [])
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
 
     def test_ob_summary_is_password_protected(self) -> None:
         route = next(route for route in ob_router.routes if route.path == "/api/ob/summary")

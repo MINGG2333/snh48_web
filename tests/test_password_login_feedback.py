@@ -32,7 +32,10 @@ class PasswordLoginFeedbackTests(unittest.TestCase):
         template = self.read("website/templates/memories.html")
         script = self.read("website/static/js/memories.js")
         self.assertIn('id="memoriesLoginSubmit"', template)
+        self.assertIn('id="memoriesLogin">', template)
+        self.assertIn('id="memoriesApp" hidden', template)
         self.assertIn("/api/memories/verify", script)
+        self.assertIn("localStorage.getItem(storageKey)", script)
         self.assertIn("密码正确，正在加载记忆…", script)
         self.assertIn("重试加载", script)
 
