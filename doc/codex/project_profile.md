@@ -35,6 +35,7 @@
 
 - `QA_ENABLED` 控制当前节点是否注册 QA API、执行知识库归档维护和启动模型预热；默认值为 `true`。
 - 腾讯云设置 `QA_ENABLED=false`，`/qa` 只返回本机 503 未启用页面，`/api/qa/*` 不注册，不保留知识库索引和嵌入模型缓存。
+- 腾讯云约 1.9 GiB 物理内存，保留系统级 4 GiB `/swapfile-4g`（由 `/etc/fstab` 开机启用，优先级 10）供采集和维护峰值缓冲；QA 停用并不意味着整机不再需要 swap。容量变更记录见 fan-hub `doc/running_status.md`。
 - 阿里云保持 `QA_ENABLED=true` 并独立提供 QA。两个站点之间不设置 QA 跳转或互链。
 - `website/requirements.txt` 只包含所有节点共用的基础网站依赖；只有 QA 节点另外安装 `transcript_analyze/requirements_kb_qa.txt`。部署目标的 `qa_enabled` 决定全新引导时是否克隆知识库子项目并安装其依赖。
 - QA 知识库默认在应用启动阶段加载，避免嵌入模型在已运行服务的后台线程中初始化时阻塞或死锁；启动加载失败会返回可重试状态，前端可以稍后触发懒加载。懒加载最长等待时间由 `QA_ENGINE_LOAD_TIMEOUT_SECONDS` 控制（默认 300 秒），旧加载线程结束后不会覆盖新的构建结果。

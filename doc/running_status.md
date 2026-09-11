@@ -2,6 +2,8 @@
 
 更新日期：2026-09-11 CST +0800
 
+2026-09-11 08:53:20 CST 用户确认后，阿里云通过 `python3 deploy/deploy.py deploy aliyun` 从 `6a4ac81` 快进到 `e0b63be`（包含电台展示 `b48c5c9` 和本地弹幕路径修复 `d0ecf47`）。`snh48-aliyun.service` 于 08:47:54 定向重启，PID `546579`、active/running、`NRestarts=0`，启动后的 warning..emerg 日志为空；QA 返回 `ready=true`、`loading=false`。公网 8/22 回放为直播/1556 条弹幕，9/9 回放为电台/2522 条弹幕，HTML 播放模式均匹配；以阿里云实际网站账号在禁止网络和缓存回退的检查中，两份本地 LRC 均可直接读取。部署标准页面/API/图片代理烟测全部通过；TLS 证书有效至 2026-11-01，`certbot.timer` active，未调整证书或 Nginx。阿里云工作树保持干净；本轮未主动执行跨云数据同步，使用现有自动拉取的数据。腾讯云同期完成用户授权的 swap 12→4 GiB 调整，根盘可用约 16.63 GiB，网站 PID `2787612` 未变；配置与详细恢复记录见 fan-hub `doc/running_status.md`。网站 profile 和资源迁移说明已更新，未改变数据拓扑、QA 节点策略或应用健康检查范围。
+
 2026-09-11 08:37:54 CST 腾讯云先行部署 `b48c5c9`、`d0ecf47`：时间轴按 `live_type=2` 标记电台并提供“收听回放”；回放页以封面承载同步弹幕。修复 `danmu_local_path` 相对 fan-hub 根目录时重复拼接 `live_push_replays`，两场回放以 `snh48-web` 账号在禁止远端请求/缓存回退的验证中均直接读取本地 LRC。`snh48-web.service` 于 08:31:21 定向重启，PID `2787612`、`active/running`、`NRestarts=0`；QA 继续关闭。公网时间轴、两场回放及弹幕 API 返回 200，2026-08-22 为直播/1556 条弹幕，2026-09-09 为电台/2522 条弹幕；`/qa` 为 503、`/api/qa/status` 为 404。3 项 Python 契约测试、时间轴标签前端回归、源与产物 JS/内联脚本语法检查及构建通过；使用兼容音频样本驱动真实弹幕的浏览器验证通过播放、暂停、弹幕开关和 390px 移动布局，无页面 JS 错误。本机 Chromium 不支持原媒体的 AAC SourceBuffer，因此原 HLS 实际声音等待用户浏览器试听，未宣称机器端真实媒体播放通过。阿里云未部署，等待腾讯云用户验收。页面说明和 profile 已同步；未新增服务、调度器、路径或改变拓扑/健康检查范围。
 
 2026-09-10 13:10:40 阿里云完成网站提交 `33b7f29` 部署：通过 `python3 deploy/deploy.py deploy aliyun` 从 GitHub 快进并定向重启 `snh48-aliyun.service`。阿里云主 PID `453606`，`active/running`、`NRestarts=0`，`ActiveEnterTimestamp=2026-09-10 13:07:38 CST`；启动日志显示 QA 知识库正常加载并完成启动，无新增 warning..emerg 异常。公网 `https://cjy.xn--6qq986b3xl/memories` 返回 200，未带密码数据接口返回 401，错误密码返回 403；页面登录框可见且内容区初始隐藏。腾讯云先行版本保持不变。
