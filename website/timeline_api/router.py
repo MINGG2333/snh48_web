@@ -358,7 +358,11 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                 has_danmu = bool(const_danmu_local or const_danmu_url)
                 danmu_status = (row.get("danmu_status") or "").strip() or ("已生成" if has_danmu else "暂无弹幕")
 
-                title = (row.get("title") or "").strip() or f"直播 {dt.strftime('%m/%d %H:%M')}"
+                live_type_raw = (row.get("live_type") or "").strip()
+                live_type = int(live_type_raw) if live_type_raw.isdigit() else 1
+                is_radio = live_type == 2
+                type_label = "电台" if is_radio else "直播"
+                title = (row.get("title") or "").strip() or f"{type_label} {dt.strftime('%m/%d %H:%M')}"
 
                 live_id = (row.get("live_id") or "").strip()
                 record_id = f"live_{live_id}" if live_id else f"live_{dt.strftime('%Y%m%d_%H%M%S')}"
@@ -367,7 +371,7 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                 if title:
                     desc += f"\n\n{title}"
                 if replay_url:
-                    desc += f"\n\n🎬 有回放视频"
+                    desc += "\n\n🎧 有回放音频" if is_radio else "\n\n🎬 有回放视频"
 
                 records.append({
                     "id": record_id,
@@ -375,7 +379,9 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                     "datetime": dt.strftime("%Y-%m-%d %H:%M:%S"),
                     "title": title,
                     "type": "live",
-                    "typeLabel": "直播",
+                    "typeLabel": type_label,
+                    "live_type": live_type,
+                    "is_radio": is_radio,
                     "source": "room",
                     "description": desc,
                     "cover_url": cover_url,
@@ -383,7 +389,7 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                     "has_replay": bool(replay_url),
                     "has_danmu": has_danmu,
                     "danmu_status": danmu_status,
-                    "icon": "fa-video",
+                    "icon": "fa-headphones" if is_radio else "fa-video",
                 })
 
                 if len(records) >= limit:

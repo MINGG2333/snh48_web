@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}直播回放 - {{ site_title }}{% endblock %}
+{% block title %}{{ '电台回放' if is_radio else '直播回放' }} - {{ site_title }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -72,6 +72,48 @@
   height: 100%;
   display: block;
   outline: none;
+}
+
+.player-container.radio-mode {
+  background: radial-gradient(ellipse at top, #453150, #171525 75%);
+  min-height: 240px;
+}
+
+/* Keep the HLS media clock and audio active without showing its placeholder frames. */
+.player-container.radio-mode video {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radio-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 24px 70px;
+  pointer-events: none;
+  color: #fff;
+}
+
+.radio-cover {
+  width: clamp(72px, 16vw, 160px);
+  height: clamp(72px, 16vw, 160px);
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255,255,255,0.18);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.radio-label { font-size: 0.95rem; font-weight: 600; }
+.radio-hint { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
+
+.player-container.radio-mode .player-controls {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .danmu-layer {
@@ -459,8 +501,16 @@
 
 {% block content %}
 <main class="replay-page">
-    <div class="player-container" id="playerContainer">
+    <div class="player-container{% if is_radio %} radio-mode{% endif %}" id="playerContainer">
         <video id="replayVideo" playsinline></video>
+        {% if is_radio %}
+        <div class="radio-stage">
+            <img class="radio-cover" src="{{ cover_url or '/static/images/favicons/favicon1.png' }}" alt="电台封面"
+                 onerror="this.onerror=null;this.src='/static/images/favicons/favicon1.png'">
+            <span class="radio-label"><i class="fas fa-headphones"></i> 电台回放</span>
+            <span class="radio-hint">无画面直播 · 弹幕随声音同步播放</span>
+        </div>
+        {% endif %}
         <div class="click-overlay" id="clickOverlay"></div>
         <div class="danmu-layer" id="danmuLayer"></div>
 
@@ -514,7 +564,7 @@
 
     <div class="replay-info">
         <div class="replay-info-card">
-            <h3><i class="fas fa-info-circle"></i> 直播信息</h3>
+            <h3><i class="fas fa-info-circle"></i> {{ '电台信息' if is_radio else '直播信息' }}</h3>
             <p class="live-meta"><span class="live-title">{{ title }}</span><span class="live-date">{{ date }}</span></p>
         </div>
         <div class="replay-shortcuts">
@@ -546,8 +596,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorOverlay = document.getElementById('errorOverlay');
     const controls = document.getElementById('playerControls');
 
-    const replayUrl = '{{ replay_url|safe }}';
-    const liveId = '{{ live_id|e }}';
+    const replayUrl = {{ replay_url|tojson }};
+    const liveId = {{ live_id|tojson }};
     let isPlaying = false;
     let isDraggingProgress = false;
     let danmuItems = [];
@@ -629,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.classList.add('show-controls');
         clearTimeout(controlsTimer);
         controlsTimer = setTimeout(() => {
-            if (!video.paused && (!danmuSettingsMenu || danmuSettingsMenu.classList.contains('hidden'))) {
+            if (!container.classList.contains('radio-mode') && !video.paused && (!danmuSettingsMenu || danmuSettingsMenu.classList.contains('hidden'))) {
                 container.classList.remove('show-controls');
             }
         }, 3000);
@@ -651,10 +701,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadVideo(url) {
         // Timeout: show error if video doesn't load within 20 seconds
         loadTimeout = setTimeout(() => {
-            showVideoError('视频加载超时，回放可能已失效');
+            showVideoError('回放加载超时，请稍后重试');
         }, 20000);
 
-        if (url.includes('.m3u8') && Hls && Hls.isSupported()) {
+        if (url.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
             const hls = new Hls({ xhrSetup: (xhr) => {
                 xhr.withCredentials = false;
             }});
@@ -666,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
-                    showVideoError('视频加载失败，回放可能已失效');
+                    showVideoError('回放加载失败，请稍后重试');
                 }
             });
         } else if (url) {
@@ -676,10 +726,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadingOverlay.classList.add('hidden');
             });
             video.addEventListener('error', () => {
-                showVideoError('视频加载失败，回放可能已失效');
+                showVideoError('回放加载失败，请稍后重试');
             });
         } else {
-            showVideoError('回放视频链接不可用');
+            showVideoError('回放链接不可用');
         }
     }
 

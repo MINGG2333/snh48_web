@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
               ${keywordBadge ? `<span class="timeline-card-badge ${keywordBadge.split('|')[0]}" style="margin-left:4px;">${keywordBadge.split('|')[1]}</span>` : ''}
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
               ${ev.content_type === 'live' ? '<span class="timeline-card-badge live" style="margin-left:4px;">直播</span>' : ''}
-              ${ev.has_replay ? '<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas fa-play"></i> 回放</span>' : ''}
+              ${ev.has_replay ? `<span class="timeline-card-badge replay" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.2);margin-left:4px;"><i class="fas ${ev.is_radio ? 'fa-headphones' : 'fa-play'}"></i> 回放</span>` : ''}
             </div>
           </div>
         `;
@@ -826,7 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.content_type === 'live' ? '<span class="timeline-modal-badge live" style="margin-left:0;">直播</span>' : ''}
-        ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas fa-play"></i> 观看回放</a>` : ''}
+        ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas ${event.is_radio ? 'fa-headphones' : 'fa-play'}"></i> ${event.is_radio ? '收听回放' : '观看回放'}</a>` : ''}
         ${buildLocationMapLinks(event.location)}
         ${buildSourceLinks(event)}
         ${biliHtml}

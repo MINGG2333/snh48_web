@@ -293,6 +293,8 @@ node script/obfuscate_js.cjs
 
 ### 时光轴与分类筛选
 
+直播汇总按 `live_type` 区分视频直播（1）与无画面电台（2）。两者仍在“直播”筛选下；电台显示“收听回放”，回放页以封面展示并同步弹幕。详见 `doc/timeline_badges.md`。
+
 入口和文档：
 
 - 页面入口：`/timeline`

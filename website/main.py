@@ -208,11 +208,13 @@ async def timeline_page(request: Request):
 
 @app.get("/replay/{live_id}", response_class=HTMLResponse)
 async def replay_page(request: Request, live_id: str):
-    """Replay video player page with custom controls."""
+    """Video or radio replay page with synchronized danmu."""
     # Look up replay_url from summary CSV
     replay_url = ""
     title = "直播回放"
     date = ""
+    is_radio = False
+    cover_url = ""
     try:
         import csv
         from pathlib import Path
@@ -230,8 +232,15 @@ async def replay_page(request: Request, live_id: str):
                             vstatus = (row.get("video_status") or "").strip()
                             if play_url and vstatus in ("available", "downloaded"):
                                 replay_url = play_url
-                            title = (row.get("title") or "").strip() or "直播回放"
+                            is_radio = (row.get("live_type") or "").strip() == "2"
+                            title = (row.get("title") or "").strip() or ("电台回放" if is_radio else "直播回放")
                             date = (row.get("push_bj") or "").strip()
+                            cover_local = (row.get("cover_local_path") or "").strip()
+                            cover_cdn = (row.get("live_cover_url") or "").strip()
+                            if cover_local:
+                                cover_url = f"/live-covers/{Path(cover_local).name}"
+                            elif cover_cdn:
+                                cover_url = f"https://source3.48.cn{cover_cdn}"
                             break
                 break
     except Exception:
@@ -250,6 +259,8 @@ async def replay_page(request: Request, live_id: str):
             "live_id": live_id,
             "title": title,
             "date": date,
+            "is_radio": is_radio,
+            "cover_url": cover_url,
         },
     )
 
