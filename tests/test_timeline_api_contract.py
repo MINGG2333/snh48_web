@@ -20,6 +20,25 @@ FIELDNAMES = [
 
 
 class TimelineApiContractTests(unittest.TestCase):
+    def test_producer_relative_danmu_path_uses_local_file_without_network(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            replay_root = Path(temp) / "replays"
+            relative = Path("陈嘉仪_161808449/danmu/radio.lrc")
+            local = replay_root / relative
+            local.parent.mkdir(parents=True)
+            content = "[00:07.53]测试弹幕\n"
+            local.write_text(content, encoding="utf-8")
+            with mock.patch.object(router.cfg, "LIVE_PUSH_REPLAY_ROOT", str(replay_root)), mock.patch.object(
+                router, "_read_text_url", side_effect=AssertionError("local danmu must not fetch remotely")
+            ), mock.patch.object(router, "_read_danmu_url_cache", return_value=None):
+                self.assertEqual(router._get_danmu_text({
+                    "danmu_local_path": f"live_push_replays/{relative}",
+                    "danmu_url": "https://example.com/radio.lrc",
+                }), content)
+                self.assertEqual(router._resolve_danmu_file_path(str(local)), local)
+                self.assertEqual(router._resolve_danmu_file_path(str(relative)), local)
+                self.assertEqual(router._resolve_danmu_file_path("danmu/radio.lrc"), local)
+
     def test_radio_and_video_replays_keep_danmu_and_use_correct_player(self) -> None:
         from starlette.requests import Request
         from website import main

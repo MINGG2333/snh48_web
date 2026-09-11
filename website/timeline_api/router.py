@@ -113,6 +113,13 @@ def _resolve_danmu_file_path(path_str: str) -> Optional[Path]:
     if path.is_absolute() and path.exists():
         return path
 
+    # The producer stores paths relative to the fan-hub project root.
+    # Map that prefix onto the configured replay root without duplicating it.
+    if path.parts and path.parts[0] == "live_push_replays":
+        candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT).joinpath(*path.parts[1:])
+        if candidate.is_file():
+            return candidate
+
     candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT) / MEMBER_DIR / path
     if candidate.exists():
         return candidate

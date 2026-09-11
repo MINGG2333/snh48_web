@@ -67,6 +67,8 @@
 
 直播汇总 `live_type=1` 表示视频直播、`live_type=2` 表示电台；缺失类型沿用视频直播显示。API 保持 `type=live`、`source=room`，新增整数 `live_type` 和布尔 `is_radio`，两者继续归入“直播”筛选。电台卡片显示“电台”，弹窗入口为“收听回放”；`/replay/{live_id}` 展示封面、音频控制和同步弹幕，不显示原 HLS 流中的离开占位画面。播放器保留原媒体流及其时钟，弹幕时间和拖动进度语义不变。
 
+`danmu_local_path` 的标准格式是相对 fan-hub 根目录的 `live_push_replays/<成员>/danmu/<文件>.lrc`，网站将 `live_push_replays/` 前缀映射到 `LIVE_PUSH_REPLAY_ROOT` 后优先读取本地文件；同时兼容绝对路径、相对回放根目录和成员目录的旧路径。只有本地弹幕不可读时才使用远端缓存或下载，不应因重复拼接目录而退回网络请求。
+
 ## 地点与地图打开
 
 当行程数据存在 `location` 字段时，弹窗中会显示可点击地址。
