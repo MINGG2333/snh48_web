@@ -104,7 +104,7 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "type": "dir",
-                "path": "/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449",
+                "path": "/home/snh48-fan-hub/live_record/陈嘉仪_161808449",
                 "delete": True,
             },
             {
@@ -726,7 +726,7 @@ venv/bin/python -m pip install --upgrade pip
 venv/bin/pip install -r website/requirements.txt
 {qa_setup}mkdir -p /var/log/snh48
 mkdir -p /home/snh48-fan-hub/schedule_record
-mkdir -p /home/snh48-fan-hub/live_push_replays
+mkdir -p /home/snh48-fan-hub/live_record
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
 mkdir -p /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts

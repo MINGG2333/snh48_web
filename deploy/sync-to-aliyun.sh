@@ -64,7 +64,7 @@ remove_retired_aliyun_file() {
 # old ignored copy cannot survive on the public node.
 remove_retired_aliyun_file /home/snh48_web/website/data/manual_events.csv
 
-"${SSH_MUX[@]}" "$ALIYUN" 'getent group snh48-web >/dev/null && install -d -o root -g snh48-web -m 0750 /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/social_record/timeline /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/web /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video && mkdir -p /home/snh48_web/website/data /home/snh48_web/website/data/memories'
+"${SSH_MUX[@]}" "$ALIYUN" 'getent group snh48-web >/dev/null && install -d -o root -g snh48-web -m 0750 /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/social_record/timeline /home/snh48-fan-hub/live_record/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/web /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video && mkdir -p /home/snh48_web/website/data /home/snh48_web/website/data/memories'
 
 # 1. chenjiayi_events.csv（事件/行程主文件，网站优先读取）
 sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
@@ -78,9 +78,9 @@ echo "$LOG_TAG schedule.csv done"
 sync_file_to_aliyun /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
 echo "$LOG_TAG social timeline done"
 
-# 4. live_push_replays（仅同步陈嘉仪的数据）
-rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/"
-echo "$LOG_TAG live_push_replays done"
+# 4. live_record（仅同步陈嘉仪的数据）
+rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_record/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_record/陈嘉仪_161808449/"
+echo "$LOG_TAG live_record done"
 
 # 5. live_covers（直播封面原图）
 rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/"

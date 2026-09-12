@@ -32,7 +32,7 @@ setfacl -m u:"$SERVICE_USER":x /home /home/snh48-fan-hub
 setfacl -m u:"$SERVICE_USER":rx /home/snh48_web
 setfacl -R -m u:"$SERVICE_USER":rX "$WEB_ROOT/website"
 for path in \
-    "$FAN_ROOT/live_push_replays" \
+    "$FAN_ROOT/live_record" \
     "$FAN_ROOT/room_record" \
     "$FAN_ROOT/schedule_record" \
     "$FAN_ROOT/flip_data" \

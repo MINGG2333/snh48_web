@@ -7,7 +7,7 @@ WEB_ROOT="/home/snh48_web"
 FAN_ROOT="/home/snh48-fan-hub"
 KB_ROOT="$WEB_ROOT/transcript_analyze/video_knowledge_db"
 SCORE_ROOT="$FAN_ROOT/room_record/陈嘉仪_161808449/score_gifts"
-DANMU_CACHE="$FAN_ROOT/live_push_replays/陈嘉仪_161808449/.danmu_url_cache"
+DANMU_CACHE="$FAN_ROOT/live_record/陈嘉仪_161808449/.danmu_url_cache"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run as root." >&2
@@ -42,7 +42,7 @@ setfacl -m u:"$SERVICE_USER":x /home "$FAN_ROOT"
 setfacl -m u:"$SERVICE_USER":rx "$WEB_ROOT"
 setfacl -R -m u:"$SERVICE_USER":rX "$WEB_ROOT/website" "$WEB_ROOT/transcript_analyze"
 for path in \
-    "$FAN_ROOT/live_push_replays" \
+    "$FAN_ROOT/live_record" \
     "$FAN_ROOT/room_record" \
     "$FAN_ROOT/schedule_record" \
     "$FAN_ROOT/flip_data/web" \

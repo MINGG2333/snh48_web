@@ -93,7 +93,7 @@ echo "$LOG_TAG Starting sync groups=$(IFS=,; echo "${SYNC_GROUPS[*]}")..."
 install -d -o root -g snh48-web -m 0750 \
   /home/snh48-fan-hub/schedule_record \
   /home/snh48-fan-hub/social_record/timeline \
-  /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449 \
+  /home/snh48-fan-hub/live_record/陈嘉仪_161808449 \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards \
@@ -135,9 +135,9 @@ if [ "$sync_core" -eq 1 ]; then
   sync_file_from_tencent /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
   echo "$LOG_TAG social timeline done"
 
-  # 4. live_push_replays（仅同步陈嘉仪的数据）
-  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/" /home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/
-  echo "$LOG_TAG live_push_replays done"
+  # 4. live_record（仅同步陈嘉仪的数据）
+  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/live_record/陈嘉仪_161808449/" /home/snh48-fan-hub/live_record/陈嘉仪_161808449/
+  echo "$LOG_TAG live_record done"
 
   # 5. live_covers（直播封面原图）
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
