@@ -1,6 +1,6 @@
 """
 FastAPI router that serves live push + replay data from
-snh48-fan-hub live_push_replays/summary.csv for the Timeline page.
+snh48-fan-hub live_record/live_index.csv for the Timeline page.
 
 Summary CSV columns:
   key, member_name, member_id, live_id,
@@ -68,11 +68,8 @@ def parse_multi_urls(val: str) -> List[str]:
 
 
 def _get_summary_csv_path() -> Optional[Path]:
-    """Locate summary.csv for the target member."""
-    candidates = [
-        Path(cfg.LIVE_PUSH_REPLAY_ROOT) / MEMBER_DIR / "summary.csv",
-        Path("/home/snh48-fan-hub/live_push_replays") / MEMBER_DIR / "summary.csv",
-    ]
+    """Locate the unified live_index.csv."""
+    candidates = [Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "live_index.csv"]
     for p in candidates:
         if p.exists():
             return p
@@ -115,16 +112,16 @@ def _resolve_danmu_file_path(path_str: str) -> Optional[Path]:
 
     # The producer stores paths relative to the fan-hub project root.
     # Map that prefix onto the configured replay root without duplicating it.
-    if path.parts and path.parts[0] == "live_push_replays":
-        candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT).joinpath(*path.parts[1:])
+    if path.parts and path.parts[0] in {"live_push_replays", "live_record"}:
+        candidate = Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)).joinpath(*path.parts[1:])
         if candidate.is_file():
             return candidate
 
-    candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT) / MEMBER_DIR / path
+    candidate = Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / path
     if candidate.exists():
         return candidate
 
-    candidate = Path(cfg.LIVE_PUSH_REPLAY_ROOT) / path
+    candidate = Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / path
     if candidate.exists():
         return candidate
 
@@ -144,7 +141,7 @@ def _read_text_file(path: Path) -> Optional[str]:
 def _danmu_url_cache_dir() -> Path:
     if cfg.DANMU_REMOTE_CACHE_DIR:
         return Path(cfg.DANMU_REMOTE_CACHE_DIR)
-    return Path(cfg.LIVE_PUSH_REPLAY_ROOT) / MEMBER_DIR / ".danmu_url_cache"
+    return Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / MEMBER_DIR / ".danmu_url_cache"
 
 
 def _danmu_url_cache_path(url: str) -> Path:
@@ -306,7 +303,7 @@ def parse_pocket_danmu(file_content: str) -> List[Dict[str, Any]]:
 
 
 def _get_danmu_text(row: Dict[str, Any]) -> Optional[str]:
-    danmu_local_path = (row.get("danmu_local_path") or "").strip()
+    danmu_local_path = (row.get("danmu_local_path") or row.get("official_danmu_path") or "").strip()
     if danmu_local_path:
         file_path = _resolve_danmu_file_path(danmu_local_path)
         if file_path:
@@ -314,7 +311,7 @@ def _get_danmu_text(row: Dict[str, Any]) -> Optional[str]:
             if content:
                 return content
 
-    danmu_url = (row.get("danmu_url") or "").strip()
+    danmu_url = (row.get("danmu_url") or row.get("official_danmu_url") or "").strip()
     if danmu_url:
         cached_content = _read_danmu_url_cache(danmu_url)
         if cached_content:
@@ -328,7 +325,7 @@ def _get_danmu_text(row: Dict[str, Any]) -> Optional[str]:
 
 
 def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
-    """Read summary.csv, return list of timeline-ready event dicts."""
+    """Read the unified live_index.csv and return timeline-ready event dicts."""
     csv_path = _get_summary_csv_path()
     if not csv_path:
         return []
@@ -355,15 +352,15 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
 
                 # Replay video URL (may be empty if not available)
                 replay_url = ""
-                play_url = (row.get("play_url") or "").strip()
-                video_status = (row.get("video_status") or "").strip()
-                if play_url and video_status in ("available", "downloaded"):
+                play_url = (row.get("play_url") or row.get("official_replay_url") or "").strip()
+                video_status = (row.get("video_status") or row.get("official_replay_status") or "").strip()
+                if play_url and video_status in ("available", "downloaded", "replaced"):
                     replay_url = play_url
 
-                const_danmu_local = (row.get("danmu_local_path") or "").strip()
-                const_danmu_url = (row.get("danmu_url") or "").strip()
+                const_danmu_local = (row.get("danmu_local_path") or row.get("official_danmu_path") or "").strip()
+                const_danmu_url = (row.get("danmu_url") or row.get("official_danmu_url") or "").strip()
                 has_danmu = bool(const_danmu_local or const_danmu_url)
-                danmu_status = (row.get("danmu_status") or "").strip() or ("已生成" if has_danmu else "暂无弹幕")
+                danmu_status = (row.get("danmu_status") or row.get("official_danmu_status") or "").strip() or ("已生成" if has_danmu else "暂无弹幕")
 
                 live_type_raw = (row.get("live_type") or "").strip()
                 live_type = int(live_type_raw) if live_type_raw.isdigit() else 1

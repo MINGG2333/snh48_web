@@ -204,13 +204,14 @@ TRUSTED_HOSTS = tuple(
 
 ENABLE_API_DOCS = os.getenv("ENABLE_API_DOCS", "false").lower() in ("1", "true", "yes")
 
-# ── Live Push Replays (直播汇总，含回放信息，替代旧的 room_record) ─────────
-# summary.csv 所在目录，由 live_push_replay_matcher.py 生成
-# 服务器上：/home/snh48-fan-hub/live_push_replays/
-LIVE_PUSH_REPLAY_ROOT = os.getenv(
-    "LIVE_PUSH_REPLAY_ROOT",
-    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "live_push_replays"),
+# ── Live Record (统一直播索引与录制目录) ────────────────────────────────
+LIVE_RECORD_ROOT = os.getenv(
+    "LIVE_RECORD_ROOT",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "live_record"),
 )
+# Deprecated compatibility setting for deployment overrides and older tests.
+# Production reads the unified live_record tree by default.
+LIVE_PUSH_REPLAY_ROOT = os.getenv("LIVE_PUSH_REPLAY_ROOT", LIVE_RECORD_ROOT)
 
 # ── Gift Replies (口袋房间礼物回复状态) ─────────────────────────────────────
 # 由 snh48-fan-hub/scripts/live_monitor/gift_reply_exporter.py 生成
