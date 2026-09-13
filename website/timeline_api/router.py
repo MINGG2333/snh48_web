@@ -2,12 +2,8 @@
 FastAPI router that serves live push + replay data from
 snh48-fan-hub live_record/live_index.csv for the Timeline page.
 
-Summary CSV columns:
-  key, member_name, member_id, live_id,
-  push_time, push_bj, title, live_type,
-  live_cover_url, cover_local_path,
-  replay_status, video_status, danmu_status, last_checked_bj,
-  play_url, danmu_url, video_local_path, danmu_local_path
+The producer's unified index is ``live_record/live_index.csv``.  Legacy
+column names remain supported because older snapshots may still be present.
 """
 from __future__ import annotations
 
@@ -70,7 +66,14 @@ def parse_multi_urls(val: str) -> List[str]:
 def _get_summary_csv_path() -> Optional[Path]:
     """Locate the unified live_index.csv."""
     candidates = [Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "live_index.csv"]
+    live_root = getattr(cfg, "LIVE_RECORD_ROOT", "")
+    if live_root:
+        candidates.append(Path(live_root) / "live_index.csv")
+    seen = set()
     for p in candidates:
+        if p in seen:
+            continue
+        seen.add(p)
         if p.exists():
             return p
     return None
@@ -84,6 +87,21 @@ def parse_bj_time(bj_str: str) -> Optional[datetime]:
         return datetime.strptime(bj_str.strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJT)
     except (ValueError, AttributeError):
         return None
+
+
+def _row_live_datetime(row: Dict[str, Any]) -> Optional[datetime]:
+    """Return the best available start time across old and unified rows.
+
+    ``push_bj`` is absent for replay-only rows created from the live detail
+    endpoint.  Those rows still have the authoritative ``live_ctime_bj`` or
+    ``start_bj`` values and must remain visible on the timeline.
+    """
+    for field in ("push_bj", "live_ctime_bj", "start_bj"):
+        value = (row.get(field) or "").strip()
+        parsed = parse_bj_time(value)
+        if parsed:
+            return parsed
+    return None
 
 
 def _find_summary_row(live_id: str) -> Optional[Dict[str, Any]]:
@@ -110,20 +128,28 @@ def _resolve_danmu_file_path(path_str: str) -> Optional[Path]:
     if path.is_absolute() and path.exists():
         return path
 
+    roots = []
+    for value in (getattr(cfg, "LIVE_PUSH_REPLAY_ROOT", ""), getattr(cfg, "LIVE_RECORD_ROOT", "")):
+        if value:
+            root = Path(value)
+            if root not in roots:
+                roots.append(root)
+
     # The producer stores paths relative to the fan-hub project root.
     # Map that prefix onto the configured replay root without duplicating it.
     if path.parts and path.parts[0] in {"live_push_replays", "live_record"}:
-        candidate = Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)).joinpath(*path.parts[1:])
-        if candidate.is_file():
+        for root in roots:
+            candidate = root.joinpath(*path.parts[1:])
+            if candidate.is_file():
+                return candidate
+
+    for root in roots:
+        candidate = root / path
+        if candidate.exists():
             return candidate
-
-    candidate = Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / path
-    if candidate.exists():
-        return candidate
-
-    candidate = Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / path
-    if candidate.exists():
-        return candidate
+        member_candidate = root / MEMBER_DIR / path
+        if member_candidate.exists():
+            return member_candidate
 
     return None
 
@@ -335,8 +361,7 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
         with open(csv_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                push_bj = (row.get("push_bj") or "").strip()
-                dt = parse_bj_time(push_bj)
+                dt = _row_live_datetime(row)
                 if not dt:
                     continue
 

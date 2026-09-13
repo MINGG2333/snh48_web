@@ -82,7 +82,8 @@
 - `social_record/timeline/chenjiayi_social_timeline.json`（微博/抖音已过滤的轻量时光轴数据；网站消费副本，阿里云不运行采集器）
 - `/home/snh48_web/website/data/scroller_texts.json`（首页背景词非 Git 运行状态）
 - `/home/snh48_web/website/data/memories/memories.json`（记忆页运行数据；格式示例见 `website/data/memories/memories.example.json`）
-- `live_push_replays/陈嘉仪_161808449/`
+- `live_record/live_index.csv`（统一直播索引；网站按 `push_bj`、`live_ctime_bj`、`start_bj` 依次回退取开播时间）
+- `live_record/陈嘉仪_161808449/`（场次目录，含官方回放和弹幕）
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
 - `room_record/陈嘉仪_161808449/messages_shards/`（包含公开房间和小房间消息，按 `room_type` / `room_label` 标识来源）

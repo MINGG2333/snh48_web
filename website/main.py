@@ -216,8 +216,19 @@ async def replay_page(request: Request, live_id: str):
     try:
         import csv
         from pathlib import Path
-        csv_paths = [Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "live_index.csv"]
+        csv_paths = [
+            Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "live_index.csv",
+            Path(cfg.LIVE_PUSH_REPLAY_ROOT) / "陈嘉仪_161808449" / "summary.csv",
+        ]
+        live_root = getattr(cfg, "LIVE_RECORD_ROOT", "")
+        if live_root:
+            csv_paths.append(Path(live_root) / "live_index.csv")
+            csv_paths.append(Path(live_root) / "陈嘉仪_161808449" / "summary.csv")
+        seen_csv_paths = set()
         for csv_path in csv_paths:
+            if csv_path in seen_csv_paths:
+                continue
+            seen_csv_paths.add(csv_path)
             if csv_path.exists():
                 with open(csv_path, "r", encoding="utf-8-sig") as f:
                     reader = csv.DictReader(f)
@@ -229,7 +240,11 @@ async def replay_page(request: Request, live_id: str):
                                 replay_url = play_url
                             is_radio = (row.get("live_type") or "").strip() == "2"
                             title = (row.get("title") or "").strip() or ("电台回放" if is_radio else "直播回放")
-                            date = (row.get("push_bj") or "").strip()
+                            date = (
+                                (row.get("push_bj") or "").strip()
+                                or (row.get("live_ctime_bj") or "").strip()
+                                or (row.get("start_bj") or "").strip()
+                            )
                             cover_local = (row.get("cover_local_path") or "").strip()
                             cover_cdn = (row.get("live_cover_url") or "").strip()
                             if cover_local:

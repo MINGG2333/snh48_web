@@ -20,6 +20,43 @@ FIELDNAMES = [
 
 
 class TimelineApiContractTests(unittest.TestCase):
+    def test_unified_index_rows_without_push_time_use_live_start_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            index = Path(temp) / "live_index.csv"
+            fields = [
+                "live_id", "member_name", "title", "live_type", "push_bj",
+                "live_ctime_bj", "start_bj", "live_cover_url",
+                "official_replay_url", "official_replay_status",
+                "official_danmu_url", "official_danmu_status",
+            ]
+            with index.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerow({
+                    "live_id": "unified",
+                    "member_name": "陈嘉仪",
+                    "title": "最新直播",
+                    "live_type": "1",
+                    "push_bj": "",
+                    "live_ctime_bj": "2026-09-12 23:19:28",
+                    "start_bj": "2026-09-12 23:19:28",
+                    "live_cover_url": "/2026/0912/cover.jpg",
+                    "official_replay_url": "https://idol-vod.48.cn/replay.m3u8",
+                    "official_replay_status": "replaced",
+                    "official_danmu_url": "https://source.48.cn/live/lrc/demo.lrc",
+                    "official_danmu_status": "downloaded",
+                })
+            with mock.patch.object(router.cfg, "LIVE_PUSH_REPLAY_ROOT", temp), mock.patch.object(
+                router.cfg, "LIVE_RECORD_ROOT", temp
+            ):
+                records = router.read_live_pushes()
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["id"], "live_unified")
+            self.assertEqual(records[0]["datetime"], "2026-09-12 23:19:28")
+            self.assertEqual(records[0]["title"], "最新直播")
+            self.assertTrue(records[0]["has_replay"])
+            self.assertTrue(records[0]["has_danmu"])
+
     def test_producer_relative_danmu_path_uses_local_file_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             replay_root = Path(temp) / "replays"

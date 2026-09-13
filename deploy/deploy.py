@@ -103,6 +103,11 @@ BUILTIN_TARGETS: Dict[str, Dict[str, Any]] = {
                 "delete": True,
             },
             {
+                "type": "file",
+                "path": "/home/snh48-fan-hub/live_record/live_index.csv",
+                "delete": True,
+            },
+            {
                 "type": "dir",
                 "path": "/home/snh48-fan-hub/live_record/陈嘉仪_161808449",
                 "delete": True,
