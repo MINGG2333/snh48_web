@@ -81,7 +81,7 @@ echo "$LOG_TAG social timeline done"
 # 4. live_record（仅同步陈嘉仪的数据）
 sync_file_to_aliyun /home/snh48-fan-hub/live_record/live_index.csv /home/snh48-fan-hub/live_record/live_index.csv
 echo "$LOG_TAG live_index.csv done"
-rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/live_record/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_record/陈嘉仪_161808449/"
+rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='live.ts' --exclude='live.capture.ts' -e "$RSYNC_RSH" /home/snh48-fan-hub/live_record/陈嘉仪_161808449/ "$ALIYUN:/home/snh48-fan-hub/live_record/陈嘉仪_161808449/"
 echo "$LOG_TAG live_record done"
 
 # 5. live_covers（直播封面原图）

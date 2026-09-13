@@ -66,7 +66,7 @@ esac
 
 for src in "${sources[@]}"; do
   if [ -e "$src" ]; then
-    find "$src" -type f ! -name '.*.lock' ! -name 'live_business_fulfillments.json' -printf '%p\t%s\t%T@\n' 2>/dev/null
+    find "$src" -type f ! -name '.*.lock' ! -name 'live_business_fulfillments.json' ! -name 'live.ts' ! -name 'live.capture.ts' -printf '%p\t%s\t%T@\n' 2>/dev/null
   else
     printf '%s\tmissing\t0\n' "$src"
   fi
