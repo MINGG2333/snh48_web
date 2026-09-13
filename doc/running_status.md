@@ -2,6 +2,8 @@
 
 更新日期：2026-09-13 CST +0800
 
+2026-09-13 08:45:02 CST 腾讯云验收后，阿里云通过 GitHub 部署网站提交 `9690c08`，`snh48-aliyun.service` 定向重启后 PID `639411`、`active/running`、`NRestarts=0`。阿里云主动同步已完成，根索引 `live_record/live_index.csv` 与网站所需场次元数据、官方弹幕、封面及其他网站数据均已更新；跨云同步排除本地 `live.ts`/`live.capture.ts` 大型备份文件。公网 `https://cjy.xn--6qq986b3xl/api/timeline/live-pushes?limit=1` 返回最新场次 `1305673277881782272`、时间 `2026-09-12 23:19:28`、回放和弹幕均可用；同步日志显示 08:44:02 完成、08:45:02 后无源变更。网站部署烟测全部通过。
+
 2026-09-13 08:12:11 CST 腾讯云先行部署网站提交 `a2648b5`：统一直播索引中 `push_bj` 为空的场次改用 `live_ctime_bj`、`start_bj` 回退，最新场次 `1305673277881782272` 已出现在 `/api/timeline/live-pushes` 首条并带有回放、弹幕和封面；回放页日期同样支持回退。跨云 core 同步补充根目录 `live_record/live_index.csv`，避免阿里云索引停留在旧版本。网站相关 108 项 unittest、Python 编译、同步脚本语法检查和 diff 检查通过；`snh48-web.service` 定向重启后 PID `409594`、`active/running`、`NRestarts=0`，本机 `/timeline`、最新回放页和直播 API 均返回 200。阿里云尚未同步，等待腾讯云页面验收后再执行。
 
 2026-09-11 08:53:20 CST 用户确认后，阿里云通过 `python3 deploy/deploy.py deploy aliyun` 从 `6a4ac81` 快进到 `e0b63be`（包含电台展示 `b48c5c9` 和本地弹幕路径修复 `d0ecf47`）。`snh48-aliyun.service` 于 08:47:54 定向重启，PID `546579`、active/running、`NRestarts=0`，启动后的 warning..emerg 日志为空；QA 返回 `ready=true`、`loading=false`。公网 8/22 回放为直播/1556 条弹幕，9/9 回放为电台/2522 条弹幕，HTML 播放模式均匹配；以阿里云实际网站账号在禁止网络和缓存回退的检查中，两份本地 LRC 均可直接读取。部署标准页面/API/图片代理烟测全部通过；TLS 证书有效至 2026-11-01，`certbot.timer` active，未调整证书或 Nginx。阿里云工作树保持干净；本轮未主动执行跨云数据同步，使用现有自动拉取的数据。腾讯云同期完成用户授权的 swap 12→4 GiB 调整，根盘可用约 16.63 GiB，网站 PID `2787612` 未变；配置与详细恢复记录见 fan-hub `doc/running_status.md`。网站 profile 和资源迁移说明已更新，未改变数据拓扑、QA 节点策略或应用健康检查范围。
