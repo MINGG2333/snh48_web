@@ -16,7 +16,7 @@ MAX_MESSAGE_BYTES = 1024 * 1024
 FRAME_HEADER = struct.Struct("!I")
 COMMANDS = {
     "flip": frozenset({"send-sms", "security-answer", "verify-code", "job-status", "latest-job"}),
-    "social": frozenset({"status", "update"}),
+    "social": frozenset({"status", "update", "set-primary"}),
 }
 TIMEOUTS = {"flip": 45, "social": 175}
 

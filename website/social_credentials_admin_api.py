@@ -35,6 +35,12 @@ class UpdateRequest(BaseModel):
     platform: str
     slot: str
     cookie: str
+    phone: str = ""
+
+
+class PrimaryRequest(BaseModel):
+    platform: str
+    slot: str
 
 
 class PocketSmsRequest(BaseModel):
@@ -201,8 +207,15 @@ async def update_credential(payload: UpdateRequest, request: Request, response: 
     return await asyncio.to_thread(
         _run_bridge,
         "update",
-        {"platform": platform, "slot": slot, "cookie": cookie},
+        {"platform": platform, "slot": slot, "cookie": cookie, "phone": payload.phone.strip()},
     )
+
+
+@router.post("/set-primary")
+async def set_primary_credential(payload: PrimaryRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    return await asyncio.to_thread(_run_bridge, "set-primary", {"platform": payload.platform, "slot": payload.slot})
 
 
 @router.post("/pocket48/send-sms")

@@ -28,7 +28,7 @@ SERVICE_SETTINGS = {
         "timeout": 40,
     },
     "social": {
-        "commands": frozenset({"status", "update"}),
+        "commands": frozenset({"status", "update", "set-primary"}),
         "script": Path("scripts/web/social_credentials_admin.py"),
         "timeout": 170,
     },
