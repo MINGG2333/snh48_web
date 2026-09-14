@@ -117,8 +117,10 @@ def _run_pocket_bridge(command: str, payload: dict) -> dict:
     if not script.is_file():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="口袋账号登录桥未就绪")
     try:
+        prefix = tuple(getattr(cfg, "FLIP_CARDS_ACCOUNT_ADMIN_COMMAND", ()))
+        command_line = [*prefix, command] if prefix else [cfg.FLIP_CARDS_ACCOUNT_ADMIN_PYTHON, str(script), command]
         proc = subprocess.Popen(
-            [cfg.FLIP_CARDS_ACCOUNT_ADMIN_PYTHON, str(script), command],
+            command_line,
             cwd=script.parents[2], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, start_new_session=True,
         )
