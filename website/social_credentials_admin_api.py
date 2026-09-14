@@ -37,6 +37,21 @@ class UpdateRequest(BaseModel):
     cookie: str
 
 
+class PocketSmsRequest(BaseModel):
+    phone: str
+    area: str = "86"
+
+
+class PocketSecurityRequest(BaseModel):
+    session_id: str
+    option: str
+
+
+class PocketCodeRequest(BaseModel):
+    session_id: str
+    code: str
+
+
 def _token(password: str) -> str:
     return hashlib.sha256(_COOKIE_SECRET + password.encode("utf-8")).hexdigest()
 
@@ -94,6 +109,30 @@ def _run_bridge(command: str, payload: dict) -> dict:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="凭据管理桥返回异常")
     if not result.get("ok"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(result.get("error") or "验证失败"))
+    return result
+
+
+def _run_pocket_bridge(command: str, payload: dict) -> dict:
+    script = Path(cfg.FLIP_CARDS_ACCOUNT_ADMIN_SCRIPT)
+    if not script.is_file():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="口袋账号登录桥未就绪")
+    try:
+        proc = subprocess.Popen(
+            [cfg.FLIP_CARDS_ACCOUNT_ADMIN_PYTHON, str(script), command],
+            cwd=script.parents[2], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, start_new_session=True,
+        )
+        stdout, _ = proc.communicate(json.dumps(payload, ensure_ascii=False), timeout=180)
+        result = json.loads((stdout or "").strip())
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGTERM)
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="口袋登录超时，原配置未更改")
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="口袋账号登录桥暂时不可用")
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="口袋账号登录桥返回异常")
+    if not result.get("ok"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(result.get("error") or "口袋登录失败"))
     return result
 
 
@@ -162,3 +201,24 @@ async def update_credential(payload: UpdateRequest, request: Request, response: 
         "update",
         {"platform": platform, "slot": slot, "cookie": cookie},
     )
+
+
+@router.post("/pocket48/send-sms")
+async def pocket48_send_sms(payload: PocketSmsRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    return await asyncio.to_thread(_run_pocket_bridge, "send-sms", {"phone": payload.phone, "area": payload.area})
+
+
+@router.post("/pocket48/security-answer")
+async def pocket48_security_answer(payload: PocketSecurityRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    return await asyncio.to_thread(_run_pocket_bridge, "security-answer", {"session_id": payload.session_id, "option": payload.option})
+
+
+@router.post("/pocket48/verify-code")
+async def pocket48_verify_code(payload: PocketCodeRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    return await asyncio.to_thread(_run_pocket_bridge, "verify-code", {"session_id": payload.session_id, "code": payload.code})
