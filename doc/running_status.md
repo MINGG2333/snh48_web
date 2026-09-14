@@ -294,3 +294,4 @@ systemctl status nginx
 - 动态目录只能按同步日志、mtime 和 1 到 2 分钟延迟判断，不要要求瞬时 hash 完全一致。
 - 修改同步目录、同步方向或云服务器 IP 时，必须同步更新 `doc/codex/project_profile.md`、`doc/daily_website_check.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`。
 - 如果新增同步目标或更换阿里云 IP，需要提醒用户更新腾讯云登录风险白名单。
+2026-09-14 21:30 腾讯云社交凭据页修复：登录提交显示“正在登录并验证权限…”及加载失败原因；口袋48验证码输入框始终可见，发送短信成功后启用提交按钮。此前用户遇到的 `操作失败（OSError）` 来自翻牌账号特权桥长期进程状态异常，已重启 `snh48-privileged-bridge-flip.service` 后通过实际 `send-sms` 烟测；`snh48-web.service` active/running。微博当前主/备用 Cookie 检查均失败，抖音主/备用均为有效，B站 Cookie 验证通过。
