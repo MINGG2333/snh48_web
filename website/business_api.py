@@ -48,6 +48,36 @@ REFERENCE_IMAGES = {
 _ALLOWED_REF_NAMES = {name for names in REFERENCE_IMAGES.values() for name in names}
 _REF_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
+# 说明图 Cookie：<img> 标签无法携带密码请求头，登录成功后种下
+# HttpOnly Cookie（值为密码的 HMAC，不存明文），仅对说明图端点有效。
+_REF_COOKIE_NAME = "business_ref_token"
+_REF_COOKIE_MAX_AGE = 8 * 3600
+
+
+def _ref_cookie_value() -> str:
+    expected = (cfg.BUSINESS_ADMIN_PASSWORD or "").encode("utf-8")
+    return hmac.new(expected, b"business-reference-image", digestmod="sha256").hexdigest()
+
+
+def _verify_ref_access(request: Request) -> None:
+    """说明图端点鉴权：密码请求头或登录时种下的 HttpOnly Cookie 二选一。"""
+    expected = cfg.BUSINESS_ADMIN_PASSWORD
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="应援会业务管理页未启用",
+        )
+    header_value = request.headers.get("X-Business-Admin-Password")
+    if header_value and hmac.compare_digest(expected, header_value):
+        return
+    cookie = request.cookies.get(_REF_COOKIE_NAME, "")
+    if cookie and hmac.compare_digest(_ref_cookie_value(), cookie):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="需要密码",
+    )
+
 
 async def verify_business_password(
     request: Request,
@@ -96,6 +126,15 @@ def verify_business_login(
 ):
     """Verify the password without loading business data."""
     response.headers["Cache-Control"] = "no-store"
+    response.set_cookie(
+        _REF_COOKIE_NAME,
+        _ref_cookie_value(),
+        max_age=_REF_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/api/business/reference-image",
+    )
     return {"verified": True}
 
 
@@ -149,10 +188,11 @@ def _normalise_status(value: Any) -> str:
 
 @router.get("/reference-image")
 def get_reference_image(
+    request: Request,
     name: str = Query(..., max_length=120),
-    _=Depends(verify_business_password),
 ):
     """按文件名回传业务说明参考图（仅限白名单内的移交包图片）。"""
+    _verify_ref_access(request)
     if name not in _ALLOWED_REF_NAMES:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未知说明图")
     path = REFERENCE_DIR / name

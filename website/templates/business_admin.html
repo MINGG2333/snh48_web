@@ -154,6 +154,14 @@
       margin-bottom: 18px;
     }
     .filter-bar .filter-label { color: var(--muted); font-size: 13px; }
+    .filter-bar .chip-group-label {
+      color: var(--muted);
+      font-size: 12px;
+      align-self: center;
+      margin: 0 2px 0 10px;
+      padding-left: 10px;
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+    }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
     .chip {
       min-height: 28px;
@@ -538,6 +546,30 @@
         return tasks.filter(function (item) { return item.biz_type === activeBizType; });
       }
 
+      // 业务类型分组：实体（按交付链路排序）、线上、其他；未列入的归入"其他"
+      var PHYSICAL_ORDER = [
+        "手写奖状", "挑礼物＋选购原因卡片", "仪嘉人签名", "甲鱼/顺顺两寸照或顺顺毛发护身符",
+        "手作盲盒 A（消耗型）", "手作盲盒 B（保存型）", "感恩手写信", "手写感谢信",
+        "甲鱼的神秘礼物", "随机拼豆", "指定拼豆"
+      ];
+      var ONLINE_ORDER = [
+        "ID 合影", "顺呆点 ID 合影", "加入背景墙", "抖音点唱", "点唱", "自拍",
+        "指定手势舞", "指定造型", "感谢视频", "画头像", "写 ID 发口袋",
+        "指定风格写真（需甲鱼审核）", "翻跟斗", "查水表", "答案之书", "圣诞树"
+      ];
+
+      function groupTypes(types) {
+        var pick = function (order) {
+          return order.filter(function (t) { return types.indexOf(t) >= 0; });
+        };
+        var physical = pick(PHYSICAL_ORDER);
+        var online = pick(ONLINE_ORDER);
+        var other = types.filter(function (t) {
+          return PHYSICAL_ORDER.indexOf(t) < 0 && ONLINE_ORDER.indexOf(t) < 0;
+        }).sort();
+        return [["实体", physical], ["线上", online], ["其他", other]].filter(function (g) { return g[1].length; });
+      }
+
       function renderBizChips() {
         var bar = document.getElementById("filterBar");
         var chips = document.getElementById("bizChips");
@@ -548,18 +580,27 @@
         });
         if (!types.length) { bar.style.display = "none"; return; }
         bar.style.display = "flex";
-        var all = [""].concat(types);
-        all.forEach(function (type) {
+
+        function addChip(type, label) {
           var chip = document.createElement("button");
           chip.type = "button";
           chip.className = "chip" + (type === activeBizType ? " active" : "");
-          chip.textContent = type || "全部";
+          chip.textContent = label;
           chip.addEventListener("click", function () {
             activeBizType = type;
             renderBizChips();
             renderGroups();
           });
           chips.appendChild(chip);
+        }
+
+        addChip("", "全部");
+        groupTypes(types).forEach(function (group) {
+          var label = document.createElement("span");
+          label.className = "chip-group-label";
+          label.textContent = group[0];
+          chips.appendChild(label);
+          group[1].forEach(function (type) { addChip(type, type); });
         });
       }
 
@@ -673,10 +714,19 @@
         info.type = "button";
         info.className = "info-btn";
         info.textContent = "?";
-        info.title = task.detail || "查看业务说明";
+        info.addEventListener("mouseenter", function () {
+          openDetailPop(info, task);
+        });
+        info.addEventListener("mouseleave", function () {
+          scheduleCloseDetail();
+        });
         info.addEventListener("click", function (event) {
           event.stopPropagation();
-          toggleDetailPop(info, task);
+          if (detailPop.style.display !== "none" && detailPop.dataset.id === task.id) {
+            closeDetailPop();
+          } else {
+            openDetailPop(info, task);
+          }
         });
         infoCell.appendChild(info);
         row.appendChild(infoCell);
@@ -693,13 +743,23 @@
         return row;
       }
 
-      function toggleDetailPop(anchor, task) {
-        if (detailPop.style.display !== "none" && detailPop.dataset.id === task.id) {
-          detailPop.style.display = "none";
-          detailPop.dataset.id = "";
-          anchor.classList.remove("active");
-          return;
-        }
+      var detailCloseTimer = null;
+
+      function closeDetailPop() {
+        clearTimeout(detailCloseTimer);
+        detailPop.style.display = "none";
+        detailPop.dataset.id = "";
+        document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
+      }
+
+      function scheduleCloseDetail() {
+        clearTimeout(detailCloseTimer);
+        detailCloseTimer = setTimeout(closeDetailPop, 250);
+      }
+
+      function openDetailPop(anchor, task) {
+        clearTimeout(detailCloseTimer);
+        if (detailPop.style.display !== "none" && detailPop.dataset.id === task.id) return;
         document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
         anchor.classList.add("active");
         detailPop.innerHTML = "";
@@ -717,21 +777,9 @@
             var img = document.createElement("img");
             img.className = "ref-img";
             img.alt = name;
+            img.loading = "lazy";
+            img.src = "/api/business/reference-image?name=" + encodeURIComponent(name);
             detailPop.appendChild(img);
-            fetch("/api/business/reference-image?name=" + encodeURIComponent(name), {
-              headers: { "X-Business-Admin-Password": password },
-              cache: "no-store"
-            }).then(function (resp) {
-              if (!resp.ok) throw new Error("HTTP " + resp.status);
-              return resp.blob();
-            }).then(function (blob) {
-              img.src = URL.createObjectURL(blob);
-            }).catch(function () {
-              var fail = document.createElement("div");
-              fail.className = "ref-pending";
-              fail.textContent = name + " 加载失败";
-              img.replaceWith(fail);
-            });
           });
         }
         if (!hasContent) {
@@ -757,11 +805,11 @@
       }
 
       document.addEventListener("click", function () {
-        detailPop.style.display = "none";
-        detailPop.dataset.id = "";
-        document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
+        closeDetailPop();
       });
       detailPop.addEventListener("click", function (event) { event.stopPropagation(); });
+      detailPop.addEventListener("mouseenter", function () { clearTimeout(detailCloseTimer); });
+      detailPop.addEventListener("mouseleave", function () { scheduleCloseDetail(); });
 
       async function saveTask(id, statusValue, plannedValue, noteValue, button) {
         button.disabled = true;
