@@ -126,7 +126,7 @@
 <main class="page-content">
     <div class="page-container">
         <h1><i class="fas fa-chart-line"></i> 粉丝数记录</h1>
-        <p class="fans-note">各平台粉丝数每天定时记录两次，此页展示最新值与近期趋势。<span id="fetchedAt"></span></p>
+        <p class="fans-note">各平台粉丝数每天定时记录，此页展示最新值与近期趋势。<span id="fetchedAt"></span></p>
 
         <div class="fans-stats-grid" id="platformCards"></div>
         <div id="trendList"></div>
@@ -273,6 +273,28 @@
         maxLabel.setAttribute("font-size", "11");
         maxLabel.textContent = formatNumber(Math.round(max));
         svg.appendChild(maxLabel);
+
+        function fmtAxisTs(ts) {
+            // "2026-09-26 15:53:17" -> "09-26 15:53"
+            var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(ts || "");
+            if (!m) return ts || "";
+            return m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
+        }
+
+        var axisIdx = [0, points.length - 1];
+        if (points.length >= 3) {
+            axisIdx.splice(1, 0, Math.floor((points.length - 1) / 2));
+        }
+        axisIdx.forEach(function (i) {
+            var tick = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            tick.setAttribute("x", x(i));
+            tick.setAttribute("y", height - 8);
+            tick.setAttribute("text-anchor", i === 0 ? "start" : (i === points.length - 1 ? "end" : "middle"));
+            tick.setAttribute("fill", "#95a4b6");
+            tick.setAttribute("font-size", "10");
+            tick.textContent = fmtAxisTs(points[i].ts);
+            svg.appendChild(tick);
+        });
 
         block.appendChild(svg);
         return block;
