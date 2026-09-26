@@ -318,6 +318,15 @@
       word-break: break-word;
     }
     .detail-pop .src { display: block; margin-top: 8px; color: #657386; font-size: 11px; }
+    .detail-pop .ref-img {
+      display: block;
+      max-width: 100%;
+      max-height: 420px;
+      margin-top: 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .detail-pop .ref-pending { color: var(--muted); }
 
     .empty-state { color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px; }
 
@@ -660,18 +669,16 @@
         row.appendChild(note);
 
         var infoCell = document.createElement("div");
-        if (task.detail) {
-          var info = document.createElement("button");
-          info.type = "button";
-          info.className = "info-btn";
-          info.textContent = "?";
-          info.title = task.detail;
-          info.addEventListener("click", function (event) {
-            event.stopPropagation();
-            toggleDetailPop(info, task);
-          });
-          infoCell.appendChild(info);
-        }
+        var info = document.createElement("button");
+        info.type = "button";
+        info.className = "info-btn";
+        info.textContent = "?";
+        info.title = task.detail || "查看业务说明";
+        info.addEventListener("click", function (event) {
+          event.stopPropagation();
+          toggleDetailPop(info, task);
+        });
+        infoCell.appendChild(info);
         row.appendChild(infoCell);
 
         var save = document.createElement("button");
@@ -695,7 +702,44 @@
         }
         document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
         anchor.classList.add("active");
-        detailPop.textContent = task.detail;
+        detailPop.innerHTML = "";
+        var hasContent = false;
+        if (task.detail) {
+          var text = document.createElement("div");
+          text.textContent = task.detail;
+          detailPop.appendChild(text);
+          hasContent = true;
+        }
+        var refImages = task.ref_images || [];
+        if (refImages.length) {
+          hasContent = true;
+          refImages.forEach(function (name) {
+            var img = document.createElement("img");
+            img.className = "ref-img";
+            img.alt = name;
+            detailPop.appendChild(img);
+            fetch("/api/business/reference-image?name=" + encodeURIComponent(name), {
+              headers: { "X-Business-Admin-Password": password },
+              cache: "no-store"
+            }).then(function (resp) {
+              if (!resp.ok) throw new Error("HTTP " + resp.status);
+              return resp.blob();
+            }).then(function (blob) {
+              img.src = URL.createObjectURL(blob);
+            }).catch(function () {
+              var fail = document.createElement("div");
+              fail.className = "ref-pending";
+              fail.textContent = name + " 加载失败";
+              img.replaceWith(fail);
+            });
+          });
+        }
+        if (!hasContent) {
+          var pending = document.createElement("div");
+          pending.className = "ref-pending";
+          pending.textContent = "待添加";
+          detailPop.appendChild(pending);
+        }
         var src = document.createElement("span");
         src.className = "src";
         src.textContent = "来源：" + (task.source_section || "-") + "；更新于 " + (task.updated_at || "-");

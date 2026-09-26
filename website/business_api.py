@@ -14,7 +14,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi.responses import FileResponse
+from pathlib import Path
 
 from website import config as cfg
 from website.maintenance import ensure_writable
@@ -35,6 +37,16 @@ TASK_ID_RE = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TEXT_LIMIT = 500
 BATCH_LIMIT = 500
+
+# 业务说明参考图：存放在业务数据旁的移交包目录（本地私有，不进 Git、不上阿里云）。
+# 按业务类别映射；"?" 弹窗展示，没有映射的类别显示"待添加"。
+REFERENCE_DIR = Path(cfg.BUSINESS_DATA_PATH).resolve().parent.parent / "移交包" / "嘉仪业务"
+REFERENCE_IMAGES = {
+    "暗账": ["总选暗账业务说明.jpg", "总选暗账业务名单.jpg"],
+    "积分奖励": ["总选明账业务说明.jpg"],
+}
+_ALLOWED_REF_NAMES = {name for names in REFERENCE_IMAGES.values() for name in names}
+_REF_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
 
 async def verify_business_password(
@@ -126,12 +138,28 @@ def _public_task(task: dict[str, Any]) -> dict[str, Any]:
         "detail": _clean_text(task.get("detail")),
         "source_section": _clean_text(task.get("source_section"), 80),
         "updated_at": _clean_text(task.get("updated_at"), 40),
+        "ref_images": list(REFERENCE_IMAGES.get(_clean_text(task.get("category"), 80), [])),
     }
 
 
 def _normalise_status(value: Any) -> str:
     text = _clean_text(value, 20)
     return text if text in VALID_STATUSES else "未完成"
+
+
+@router.get("/reference-image")
+def get_reference_image(
+    name: str = Query(..., max_length=120),
+    _=Depends(verify_business_password),
+):
+    """按文件名回传业务说明参考图（仅限白名单内的移交包图片）。"""
+    if name not in _ALLOWED_REF_NAMES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未知说明图")
+    path = REFERENCE_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="说明图文件不存在")
+    media_type = _REF_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type)
 
 
 def _clean_planned_date(value: Any) -> str:
