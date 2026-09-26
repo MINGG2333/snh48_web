@@ -144,24 +144,20 @@
 
     .filter-bar {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
       padding: 10px 16px;
       margin-bottom: 18px;
     }
-    .filter-bar .filter-label { color: var(--muted); font-size: 13px; }
-    .filter-bar .chip-group-label {
-      color: var(--muted);
-      font-size: 12px;
-      align-self: center;
-      margin: 0 2px 0 10px;
-      padding-left: 10px;
-      border-left: 1px solid rgba(255, 255, 255, 0.15);
-    }
+    .filter-row { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+    .filter-row .filter-label { color: var(--muted); font-size: 13px; line-height: 28px; flex-shrink: 0; }
+    .chips-col { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .chip.group-btn { font-weight: 600; border-color: var(--teal); color: var(--text); }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
     .chip {
       min-height: 28px;
@@ -379,9 +375,15 @@
       </section>
 
       <div class="filter-bar" id="filterBar" style="display:none">
-        <span class="filter-label">业务类型</span>
-        <div class="chips" id="bizChips"></div>
-        <button class="btn danger" id="batchDoneBtn" type="button">筛选结果全部标记为已完成</button>
+        <div class="filter-row">
+          <span class="filter-label">业务类型</span>
+          <div class="chips-col" id="bizChips"></div>
+          <button class="btn danger" id="batchDoneBtn" type="button">筛选结果全部标记为已完成</button>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">领取方式</span>
+          <div class="chips" id="pickupChips"></div>
+        </div>
       </div>
 
       <details class="add-panel" id="addPanel">
@@ -417,7 +419,8 @@
       var loginBusy = false;
       var loginVerified = false;
       var tasks = [];
-      var activeBizType = "";
+      var activeTypes = new Set();
+      var activePickup = "";
 
       var loginOverlay = document.getElementById("loginOverlay");
       var passwordInput = document.getElementById("passwordInput");
@@ -517,6 +520,7 @@
           tasks = Array.isArray(data.tasks) ? data.tasks : [];
           renderStats();
           renderBizChips();
+          renderPickupChips();
           renderGroups();
           document.getElementById("updatedAt").textContent = "更新于：" + (data.updated_at || data.generated_at || "-");
           loginBusy = false;
@@ -541,9 +545,22 @@
         document.getElementById("statDone").textContent = done;
       }
 
+      function pickupOf(task) {
+        var note = task.note || "";
+        if (note.indexOf("邮寄") >= 0) return "邮寄";
+        if (note.indexOf("线下领取") >= 0 || note.indexOf("现场交付") >= 0) return "线下";
+        return "未确定";
+      }
+
       function visibleTasks() {
-        if (!activeBizType) return tasks;
-        return tasks.filter(function (item) { return item.biz_type === activeBizType; });
+        var out = tasks;
+        if (activeTypes.size) {
+          out = out.filter(function (item) { return activeTypes.has(item.biz_type); });
+        }
+        if (activePickup) {
+          out = out.filter(function (item) { return pickupOf(item) === activePickup; });
+        }
+        return out;
       }
 
       // 业务类型分组：实体（按交付链路排序）、线上、其他；未列入的归入"其他"
@@ -581,26 +598,64 @@
         if (!types.length) { bar.style.display = "none"; return; }
         bar.style.display = "flex";
 
-        function addChip(type, label) {
+        function makeChip(label, isActive, onClick, extraClass) {
           var chip = document.createElement("button");
           chip.type = "button";
-          chip.className = "chip" + (type === activeBizType ? " active" : "");
+          chip.className = "chip" + (extraClass || "") + (isActive ? " active" : "");
           chip.textContent = label;
-          chip.addEventListener("click", function () {
-            activeBizType = type;
-            renderBizChips();
-            renderGroups();
-          });
-          chips.appendChild(chip);
+          chip.addEventListener("click", onClick);
+          return chip;
         }
 
-        addChip("", "全部");
+        var allRow = document.createElement("div");
+        allRow.className = "chip-row";
+        allRow.appendChild(makeChip("全部", activeTypes.size === 0, function () {
+          activeTypes.clear();
+          renderBizChips();
+          renderGroups();
+        }));
+        chips.appendChild(allRow);
+
         groupTypes(types).forEach(function (group) {
-          var label = document.createElement("span");
-          label.className = "chip-group-label";
-          label.textContent = group[0];
-          chips.appendChild(label);
-          group[1].forEach(function (type) { addChip(type, type); });
+          var groupName = group[0], groupList = group[1];
+          var row = document.createElement("div");
+          row.className = "chip-row";
+          var allIn = groupList.every(function (t) { return activeTypes.has(t); });
+          row.appendChild(makeChip(groupName, allIn, function () {
+            if (allIn) {
+              groupList.forEach(function (t) { activeTypes.delete(t); });
+            } else {
+              groupList.forEach(function (t) { activeTypes.add(t); });
+            }
+            renderBizChips();
+            renderGroups();
+          }, " group-btn"));
+          groupList.forEach(function (type) {
+            row.appendChild(makeChip(type, activeTypes.has(type), function () {
+              if (activeTypes.has(type)) activeTypes.delete(type);
+              else activeTypes.add(type);
+              renderBizChips();
+              renderGroups();
+            }));
+          });
+          chips.appendChild(row);
+        });
+      }
+
+      function renderPickupChips() {
+        var box = document.getElementById("pickupChips");
+        box.innerHTML = "";
+        [["", "全部"], ["线下", "线下"], ["邮寄", "邮寄"], ["未确定", "未确定"]].forEach(function (pair) {
+          var chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip" + (pair[0] === activePickup ? " active" : "");
+          chip.textContent = pair[1];
+          chip.addEventListener("click", function () {
+            activePickup = pair[0];
+            renderPickupChips();
+            renderGroups();
+          });
+          box.appendChild(chip);
         });
       }
 
@@ -856,7 +911,10 @@
           alert("当前筛选结果中没有未完成的业务");
           return;
         }
-        var scope = activeBizType ? "类型「" + activeBizType + "」" : "全部业务";
+        var scopeParts = [];
+        if (activeTypes.size) scopeParts.push("选中的 " + activeTypes.size + " 个类型");
+        if (activePickup) scopeParts.push("领取方式「" + activePickup + "」");
+        var scope = scopeParts.length ? scopeParts.join("＋") : "全部业务";
         if (!confirm("将把" + scope + "中 " + pending.length + " 条未完成业务全部标记为已完成，确认执行？")) {
           return;
         }
