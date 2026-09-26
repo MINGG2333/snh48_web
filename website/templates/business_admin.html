@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site_title }} · 业务管理</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0c1016;
+      --panel: #151b24;
+      --panel-2: #1b2430;
+      --line: #2c394b;
+      --text: #e8eef6;
+      --muted: #95a4b6;
+      --ink: #091017;
+      --teal: #41b9aa;
+      --gold: #f0b84b;
+      --blue: #67a8ff;
+      --green: #4dc27c;
+      --red: #e36f6f;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(180deg, rgba(65, 185, 170, 0.08), transparent 240px), var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      line-height: 1.45;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    #loginOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      padding: 24px;
+    }
+    #loginOverlay.hidden { display: none; }
+
+    .login-box {
+      width: min(360px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+    .login-box h1 { font-size: 20px; font-weight: 720; margin-bottom: 8px; }
+    .login-box p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .login-box input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 12px;
+      outline: none;
+    }
+    .login-box input:focus { border-color: var(--teal); }
+    .login-btn {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--teal);
+      color: var(--ink);
+      font-weight: 760;
+    }
+    .login-btn:disabled { cursor: wait; opacity: 0.72; }
+    .login-error { display: none; margin-top: 10px; color: var(--red); font-size: 13px; }
+    .login-error.show { display: block; }
+    .login-error.status { color: var(--teal); }
+    .login-error.success { color: var(--green); }
+
+    .page { display: none; min-height: 100vh; }
+    .page.ready { display: block; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(12, 16, 22, 0.96);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+    .topbar-inner {
+      width: min(1200px, 100%);
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .title h1 { font-size: 21px; font-weight: 760; }
+    .title p { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+
+    .btn {
+      min-height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .btn:hover { border-color: var(--teal); color: var(--teal); }
+    .btn.primary { background: var(--teal); border-color: var(--teal); color: var(--ink); font-weight: 700; }
+    .btn:disabled { cursor: wait; opacity: 0.6; }
+
+    main { width: min(1200px, 100%); margin: 0 auto; padding: 20px 24px 40px; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px 14px;
+    }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 24px; font-weight: 760; margin-top: 4px; }
+    .kpi.s-pending .value { color: var(--muted); }
+    .kpi.s-doing .value { color: var(--blue); }
+    .kpi.s-confirm .value { color: var(--gold); }
+    .kpi.s-done .value { color: var(--green); }
+
+    .add-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      margin-bottom: 18px;
+    }
+    .add-panel summary {
+      cursor: pointer;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--teal);
+      list-style: none;
+    }
+    .add-panel summary::before { content: "＋ "; }
+    .add-panel[open] summary::before { content: "－ "; }
+    .add-form {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+    .add-form .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .add-form input, .add-form select, .add-form textarea {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 6px 10px;
+      outline: none;
+      font-size: 13px;
+    }
+    .add-form textarea { min-height: 60px; resize: vertical; grid-column: span 3; }
+    .add-form .field.wide { grid-column: span 3; }
+    .add-form input:focus, .add-form select:focus, .add-form textarea:focus { border-color: var(--teal); }
+    .add-form .add-actions { grid-column: span 3; display: flex; align-items: center; gap: 10px; }
+    .add-status { font-size: 13px; color: var(--muted); }
+
+    .fan-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      margin-bottom: 14px;
+      overflow: visible;
+    }
+    .fan-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-2);
+      border-radius: 8px 8px 0 0;
+    }
+    .fan-head h2 { font-size: 15px; font-weight: 740; }
+    .fan-head .count { color: var(--muted); font-size: 12px; }
+
+    .task-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 1.2fr) 120px minmax(130px, 1fr) minmax(160px, 1.4fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(44, 57, 75, 0.5);
+    }
+    .task-row:last-child { border-bottom: 0; }
+    .task-biz { font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .badge.secret { color: var(--gold); border-color: var(--gold); }
+    .task-row select, .task-row input {
+      width: 100%;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 4px 8px;
+      font-size: 13px;
+      outline: none;
+    }
+    .task-row select:focus, .task-row input:focus { border-color: var(--teal); }
+    select.st-待开始 { color: var(--muted); }
+    select.st-进行中 { color: var(--blue); }
+    select.st-待确认 { color: var(--gold); }
+    select.st-已完成 { color: var(--green); }
+
+    .info-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1;
+    }
+    .info-btn:hover, .info-btn.active { border-color: var(--teal); color: var(--teal); }
+
+    .save-btn {
+      min-height: 30px;
+      padding: 0 12px;
+      border: 1px solid var(--teal);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--teal);
+      font-size: 13px;
+    }
+    .save-btn:hover { background: var(--teal); color: var(--ink); }
+    .save-btn:disabled { cursor: wait; opacity: 0.6; }
+    .save-btn.saved { border-color: var(--green); color: var(--green); }
+
+    .detail-pop {
+      position: fixed;
+      z-index: 40;
+      max-width: min(360px, calc(100vw - 32px));
+      background: var(--panel-2);
+      border: 1px solid var(--teal);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--text);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .detail-pop .src { display: block; margin-top: 8px; color: var(--faint, #657386); font-size: 11px; }
+
+    .empty-state { color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px; }
+
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+      .add-form { grid-template-columns: 1fr; }
+      .add-form textarea, .add-form .field.wide, .add-form .add-actions { grid-column: span 1; }
+      .task-row { grid-template-columns: 1fr 110px; }
+      .task-biz { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h1>应援会业务管理</h1>
+      <p>请输入业务管理页密码</p>
+      <input type="password" id="passwordInput" placeholder="密码" autocomplete="current-password" autofocus>
+      <button class="login-btn" id="loginBtn">进入</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+  </div>
+
+  <div class="page" id="page">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="title">
+          <h1>应援会业务管理</h1>
+          <p>按粉丝分组的业务完成状态跟踪（仅内部可见，数据仅保存腾讯云）</p>
+        </div>
+        <div class="topbar-actions">
+          <span id="updatedAt">更新于：-</span>
+          <button class="btn" id="reloadBtn" type="button">重新加载</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="kpi-grid" aria-label="状态统计">
+        <div class="kpi"><div class="label">粉丝分组</div><div class="value" id="statFans">0</div></div>
+        <div class="kpi s-pending"><div class="label">待开始</div><div class="value" id="statPending">0</div></div>
+        <div class="kpi s-doing"><div class="label">进行中</div><div class="value" id="statDoing">0</div></div>
+        <div class="kpi s-confirm"><div class="label">待确认</div><div class="value" id="statConfirm">0</div></div>
+        <div class="kpi s-done"><div class="label">已完成</div><div class="value" id="statDone">0</div></div>
+      </section>
+
+      <details class="add-panel" id="addPanel">
+        <summary>新增业务</summary>
+        <form class="add-form" id="addForm">
+          <div class="field"><label>粉丝名称 *</label><input id="addFan" required maxlength="80"></div>
+          <div class="field"><label>业务类型 *</label><input id="addBiz" required maxlength="80" placeholder="如：点唱 / 手写奖状"></div>
+          <div class="field"><label>类别标注</label><input id="addCategory" maxlength="80" placeholder="如：暗账 / 瓜 / 总选服"></div>
+          <div class="field"><label>状态</label>
+            <select id="addStatus">
+              <option>待开始</option><option>进行中</option><option>待确认</option><option>已完成</option>
+            </select>
+          </div>
+          <div class="field"><label>计划完成时间</label><input id="addPlanned" maxlength="120" placeholder="如：9/27 握手会"></div>
+          <div class="field"><label>备注</label><input id="addNote" maxlength="500"></div>
+          <div class="field wide"><label>详情（“?”图标悬浮内容）</label><textarea id="addDetail" maxlength="500"></textarea></div>
+          <div class="add-actions">
+            <button class="btn primary" type="submit" id="addSubmit">添加</button>
+            <span class="add-status" id="addStatus2"></span>
+          </div>
+        </form>
+      </details>
+
+      <div id="groupList"></div>
+      <div class="empty-state" id="emptyState" style="display:none">暂无业务数据</div>
+    </main>
+  </div>
+
+  <div class="detail-pop" id="detailPop" style="display:none"></div>
+
+  <script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      var STATUSES = ["待开始", "进行中", "待确认", "已完成"];
+      var password = "";
+      var loginBusy = false;
+      var loginVerified = false;
+      var tasks = [];
+
+      var loginOverlay = document.getElementById("loginOverlay");
+      var passwordInput = document.getElementById("passwordInput");
+      var loginBtn = document.getElementById("loginBtn");
+      var loginError = document.getElementById("loginError");
+      var pageEl = document.getElementById("page");
+      var detailPop = document.getElementById("detailPop");
+
+      function trackAdminEvent(eventType, data) {
+        if (!window._trackEvent) return;
+        window._trackEvent(eventType, Object.assign({ area: "business_admin" }, data || {}));
+      }
+
+      function setLoginFeedback(kind, message) {
+        loginError.textContent = message;
+        loginError.classList.add("show");
+        loginError.classList.toggle("status", kind === "verifying");
+        loginError.classList.toggle("success", kind === "loading" || kind === "retry");
+        loginBtn.disabled = kind === "verifying" || kind === "loading";
+        passwordInput.disabled = kind !== "idle";
+        loginBtn.textContent = kind === "verifying" ? "正在验证…" : (kind === "loading" ? "正在加载…" : (kind === "retry" ? "重试加载" : "进入"));
+      }
+
+      function resetLoginForPassword(message) {
+        loginBusy = false;
+        loginVerified = false;
+        password = "";
+        passwordInput.disabled = false;
+        passwordInput.value = "";
+        loginBtn.disabled = false;
+        loginBtn.textContent = "进入";
+        loginError.textContent = message || "密码错误";
+        loginError.classList.remove("status", "success");
+        loginError.classList.add("show");
+        loginOverlay.classList.remove("hidden");
+        passwordInput.focus();
+      }
+
+      function showLoginLoadRetry(message) {
+        loginBusy = false;
+        loginVerified = true;
+        setLoginFeedback("retry", message || "密码正确，但数据加载失败，请点击重试加载");
+      }
+
+      async function readError(resp) {
+        try {
+          var body = await resp.json();
+          if (body && body.detail) return String(body.detail);
+        } catch (e) { /* ignore */ }
+        return "";
+      }
+
+      async function verifyLoginPassword() {
+        var resp = await fetch("/api/business/verify", {
+          headers: { "X-Business-Admin-Password": password },
+          cache: "no-store"
+        });
+        if (!resp.ok) throw new Error(await readError(resp) || "密码验证失败");
+      }
+
+      async function doLogin() {
+        if (loginBusy) return;
+        if (!loginVerified) {
+          var value = passwordInput.value.trim();
+          if (!value) return;
+          password = value;
+        }
+        loginBusy = true;
+        trackAdminEvent("login_attempt", { action: "business_admin_login", result: "submitted" });
+        if (!loginVerified) {
+          setLoginFeedback("verifying", "正在验证密码…");
+          try {
+            await verifyLoginPassword();
+            loginVerified = true;
+          } catch (error) {
+            resetLoginForPassword(error.message || "密码验证失败，请重试");
+            trackAdminEvent("login_attempt", { action: "business_admin_login", result: "failure" });
+            return;
+          }
+        }
+        setLoginFeedback("loading", "密码正确，正在加载业务数据…");
+        await loadData(true);
+      }
+
+      async function loadData(fromLogin) {
+        try {
+          var resp = await fetch("/api/business/data", {
+            headers: { "X-Business-Admin-Password": password },
+            cache: "no-store"
+          });
+          if (resp.status === 401 || resp.status === 403) {
+            resetLoginForPassword(loginVerified ? "密码已失效，请重新输入" : "密码错误");
+            return;
+          }
+          if (!resp.ok) throw new Error(await readError(resp) || "数据加载失败");
+          var data = await resp.json();
+          tasks = Array.isArray(data.tasks) ? data.tasks : [];
+          renderStats(data);
+          renderGroups();
+          document.getElementById("updatedAt").textContent = "更新于：" + (data.updated_at || data.generated_at || "-");
+          loginBusy = false;
+          loginOverlay.classList.add("hidden");
+          pageEl.classList.add("ready");
+          if (fromLogin) trackAdminEvent("login_attempt", { action: "business_admin_login", result: "success" });
+        } catch (error) {
+          if (loginOverlay.classList.contains("hidden")) {
+            alert(error.message || "数据加载失败，请稍后重试");
+            loginBusy = false;
+          } else {
+            showLoginLoadRetry("密码正确，但数据加载失败：" + (error.message || "请重试"));
+          }
+        }
+      }
+
+      function renderStats(data) {
+        var stats = data.stats || {};
+        document.getElementById("statFans").textContent = data.fan_count || 0;
+        document.getElementById("statPending").textContent = stats["待开始"] || 0;
+        document.getElementById("statDoing").textContent = stats["进行中"] || 0;
+        document.getElementById("statConfirm").textContent = stats["待确认"] || 0;
+        document.getElementById("statDone").textContent = stats["已完成"] || 0;
+      }
+
+      function renderGroups() {
+        var container = document.getElementById("groupList");
+        container.innerHTML = "";
+        document.getElementById("emptyState").style.display = tasks.length ? "none" : "block";
+        var groups = new Map();
+        tasks.forEach(function (task) {
+          var key = task.fan_name || "（未命名）";
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(task);
+        });
+        Array.from(groups.keys()).sort(function (a, b) { return a.localeCompare(b, "zh-Hans-CN"); }).forEach(function (fan) {
+          container.appendChild(buildFanCard(fan, groups.get(fan)));
+        });
+      }
+
+      function buildFanCard(fan, items) {
+        var card = document.createElement("section");
+        card.className = "fan-card";
+        var head = document.createElement("div");
+        head.className = "fan-head";
+        var title = document.createElement("h2");
+        title.textContent = fan;
+        var count = document.createElement("span");
+        count.className = "count";
+        count.textContent = items.length + " 项业务";
+        head.appendChild(title);
+        head.appendChild(count);
+        card.appendChild(head);
+        items.forEach(function (task) {
+          card.appendChild(buildTaskRow(task));
+        });
+        return card;
+      }
+
+      function buildTaskRow(task) {
+        var row = document.createElement("div");
+        row.className = "task-row";
+        row.dataset.id = task.id;
+
+        var biz = document.createElement("div");
+        biz.className = "task-biz";
+        var bizText = document.createElement("span");
+        bizText.textContent = task.biz_type || "（未分类）";
+        biz.appendChild(bizText);
+        if (task.category) {
+          var badge = document.createElement("span");
+          badge.className = "badge" + (task.category === "暗账" ? " secret" : "");
+          badge.textContent = task.category;
+          biz.appendChild(badge);
+        }
+        if (task.source_section) {
+          var src = document.createElement("span");
+          src.className = "badge";
+          src.textContent = task.source_section.replace(/^[一二三四五六七八九〇]、/, "");
+          biz.appendChild(src);
+        }
+        row.appendChild(biz);
+
+        var statusSelect = document.createElement("select");
+        STATUSES.forEach(function (value) {
+          var opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = value;
+          statusSelect.appendChild(opt);
+        });
+        statusSelect.value = STATUSES.indexOf(task.status) >= 0 ? task.status : "待开始";
+        statusSelect.classList.add("st-" + statusSelect.value);
+        statusSelect.addEventListener("change", function () {
+          statusSelect.className = "st-" + statusSelect.value;
+        });
+        row.appendChild(statusSelect);
+
+        var planned = document.createElement("input");
+        planned.value = task.planned_date || "";
+        planned.placeholder = "计划完成时间";
+        planned.maxLength = 120;
+        row.appendChild(planned);
+
+        var note = document.createElement("input");
+        note.value = task.note || "";
+        note.placeholder = "备注";
+        note.maxLength = 500;
+        row.appendChild(note);
+
+        var infoCell = document.createElement("div");
+        if (task.detail) {
+          var info = document.createElement("button");
+          info.type = "button";
+          info.className = "info-btn";
+          info.textContent = "?";
+          info.title = task.detail;
+          info.addEventListener("click", function (event) {
+            event.stopPropagation();
+            toggleDetailPop(info, task);
+          });
+          infoCell.appendChild(info);
+        }
+        row.appendChild(infoCell);
+
+        var save = document.createElement("button");
+        save.type = "button";
+        save.className = "save-btn";
+        save.textContent = "保存";
+        save.addEventListener("click", function () {
+          saveTask(task.id, statusSelect.value, planned.value, note.value, save);
+        });
+        row.appendChild(save);
+
+        return row;
+      }
+
+      function toggleDetailPop(anchor, task) {
+        if (detailPop.style.display !== "none" && detailPop.dataset.id === task.id) {
+          detailPop.style.display = "none";
+          detailPop.dataset.id = "";
+          anchor.classList.remove("active");
+          return;
+        }
+        document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
+        anchor.classList.add("active");
+        detailPop.textContent = task.detail;
+        var src = document.createElement("span");
+        src.className = "src";
+        src.textContent = "来源：" + (task.source_section || "-") + "；更新于 " + (task.updated_at || "-");
+        detailPop.appendChild(src);
+        detailPop.dataset.id = task.id;
+        detailPop.style.display = "block";
+        var rect = anchor.getBoundingClientRect();
+        var top = rect.bottom + 8;
+        var left = Math.min(rect.left, window.innerWidth - detailPop.offsetWidth - 16);
+        if (top + detailPop.offsetHeight > window.innerHeight - 8) {
+          top = Math.max(8, rect.top - detailPop.offsetHeight - 8);
+        }
+        detailPop.style.top = top + "px";
+        detailPop.style.left = Math.max(8, left) + "px";
+      }
+
+      document.addEventListener("click", function () {
+        detailPop.style.display = "none";
+        detailPop.dataset.id = "";
+        document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
+      });
+      detailPop.addEventListener("click", function (event) { event.stopPropagation(); });
+
+      async function saveTask(id, statusValue, plannedValue, noteValue, button) {
+        button.disabled = true;
+        button.classList.remove("saved");
+        try {
+          var resp = await fetch("/api/business/update", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Business-Admin-Password": password
+            },
+            body: JSON.stringify({
+              action: "update",
+              id: id,
+              status: statusValue,
+              planned_date: plannedValue,
+              note: noteValue
+            })
+          });
+          if (resp.status === 401 || resp.status === 403) {
+            resetLoginForPassword("密码已失效，请重新输入");
+            return;
+          }
+          if (!resp.ok) throw new Error(await readError(resp) || "保存失败");
+          var body = await resp.json();
+          var updated = body.task || {};
+          tasks = tasks.map(function (item) { return item.id === id ? Object.assign({}, item, updated) : item; });
+          var done = 0, doing = 0, confirm = 0, pending = 0;
+          tasks.forEach(function (item) {
+            if (item.status === "已完成") done += 1;
+            else if (item.status === "进行中") doing += 1;
+            else if (item.status === "待确认") confirm += 1;
+            else pending += 1;
+          });
+          renderStats({ stats: { "待开始": pending, "进行中": doing, "待确认": confirm, "已完成": done }, fan_count: new Set(tasks.map(function (i) { return i.fan_name; })).size });
+          button.textContent = "已保存";
+          button.classList.add("saved");
+          setTimeout(function () { button.textContent = "保存"; button.classList.remove("saved"); }, 1600);
+          trackAdminEvent("save_task", { action: "business_task_update", result: "success" });
+        } catch (error) {
+          alert(error.message || "保存失败，请重试");
+          trackAdminEvent("save_task", { action: "business_task_update", result: "failure" });
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      document.getElementById("addForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        var submit = document.getElementById("addSubmit");
+        var statusEl = document.getElementById("addStatus2");
+        submit.disabled = true;
+        statusEl.textContent = "保存中…";
+        try {
+          var resp = await fetch("/api/business/update", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Business-Admin-Password": password
+            },
+            body: JSON.stringify({
+              action: "add",
+              fan_name: document.getElementById("addFan").value,
+              biz_type: document.getElementById("addBiz").value,
+              category: document.getElementById("addCategory").value,
+              status: document.getElementById("addStatus").value,
+              planned_date: document.getElementById("addPlanned").value,
+              note: document.getElementById("addNote").value,
+              detail: document.getElementById("addDetail").value
+            })
+          });
+          if (resp.status === 401 || resp.status === 403) {
+            resetLoginForPassword("密码已失效，请重新输入");
+            return;
+          }
+          if (!resp.ok) throw new Error(await readError(resp) || "添加失败");
+          var body = await resp.json();
+          if (body.task && body.task.id) tasks.push(body.task);
+          statusEl.textContent = "已添加";
+          event.target.reset();
+          await loadData(false);
+        } catch (error) {
+          statusEl.textContent = error.message || "添加失败，请重试";
+        } finally {
+          submit.disabled = false;
+        }
+      });
+
+      document.getElementById("reloadBtn").addEventListener("click", function () { loadData(false); });
+      loginBtn.addEventListener("click", doLogin);
+      passwordInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") doLogin();
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -336,6 +336,21 @@ SCORE_GIFTS_DATA_PATH = os.getenv(
     ),
 )
 
+# ── Business Tasks (应援会业务管理页) ────────────────────────────────
+# 默认复用礼物回复页密码；如需单独管理可设置 BUSINESS_ADMIN_PASSWORD。
+BUSINESS_ADMIN_PASSWORD = os.getenv("BUSINESS_ADMIN_PASSWORD", GIFT_REPLIES_PASSWORD)
+# 业务数据含暗账粉丝名单，只保存在腾讯云本地非 Git 目录，不复制到阿里云。
+BUSINESS_DATA_PATH = os.getenv(
+    "BUSINESS_DATA_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "business_tasks.json"
+    ),
+)
+
 # ── Room Score PK (房间计分 PK) ──────────────────────────────────────
 # 复用计分礼物页密码，只读取 fan-hub 生成的派生小 JSON。
 PK_SCORE_PASSWORD = SCORE_GIFTS_PASSWORD

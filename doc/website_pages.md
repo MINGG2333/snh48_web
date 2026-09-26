@@ -1,6 +1,6 @@
 # 网站页面清单
 
-> 最后更新：2026-09-11
+> 最后更新：2026-09-26
 
 本文记录当前网站所有前端页面入口、可见性、鉴权方式和主要代码位置。新增、删除、改名页面，或新增短入口、改变密码策略时，需要同步更新本文。
 
@@ -58,6 +58,7 @@
 | 社交凭据管理 | `/social-credentials-admin` | 无 | `website/templates/social_credentials_admin.html` | `/api/social-credentials/login`、`/status`、`/update`、`/logout` | `SOCIAL_CREDENTIALS_ADMIN_PASSWORD`，迁移期留空复用 `OB_PASSWORD`；短时路径限定 HttpOnly Cookie；更新 POST 必须同源 | 不读取或返回原 Cookie；微博/抖音显示主备槽位，B站显示主槽位，新值由 fan-hub 严格桥实时验证成功后原子替换。只允许腾讯云主节点写入，阿里云硬禁用；不进入导航并设置 `noindex,nofollow` |
 | 计分礼物管理 | `/score-gifts` | `/score` | `website/templates/score_gifts.html` | `/api/score-gifts/verify`、`/api/score-gifts/data`、`/api/score-gifts/summary`、`/api/score-gifts/export.xlsx`、`/api/score-gifts/sender-export.xlsx`、`/api/score-gifts/business-review` | `SCORE_GIFTS_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Score-Gifts-Password`；页面可跳转计分 PK | `score_gifts.json` 为派生展示数据；送礼用户导出包含用户汇总与逐笔投分明细；`live_business_fulfillments.json` 为版本化共享业务状态；`/score` 继续保留为兼容入口 |
 | 房间计分 PK | `/score-pk` | 无 | `website/templates/pk_score.html` | `/api/pk-score/verify`、`/api/pk-score/data` | 复用 `SCORE_GIFTS_PASSWORD`；`X-PK-Score-Password`；页面可跳转计分礼物 | fan-hub `room_record/pk_scores/current.json`；展示双方 17:15 后新增分、基础分、累计分、差值和明细 |
+| 应援会业务管理 | `/business-admin` | 无 | `website/templates/business_admin.html` | `/api/business/verify`、`/api/business/data`、`/api/business/update` | `BUSINESS_ADMIN_PASSWORD`，默认复用 `GIFT_REPLIES_PASSWORD`；`X-Business-Admin-Password` | fan-hub `private_handover/web_state/business_tasks.json`（`BUSINESS_DATA_PATH`）；按粉丝分组管理业务状态/计划时间/备注；数据含暗账粉丝名单，属 local-only 共享状态，只保存在腾讯云本地非 Git 目录，不做 peer 复制、不同步阿里云，避免暗账名单外泄；初始数据由 fan-hub `scripts/data/init_business_tasks.py` 从业务清单导入，之后网页是唯一数据源；设置 `noindex,nofollow` |
 
 直接使用请求头密码的管理页先调用轻量 `/verify` 接口，再读取完整数据；使用登录 Cookie 的翻牌与上麦回放页在 `/login` 成功后再读取数据。前端必须分别显示“正在验证”和“密码正确，正在加载”；若只是数据加载失败，应允许直接重试，不得误报为密码错误或要求重输密码。
 
@@ -96,6 +97,7 @@ curl -sS -D - -o /dev/null https://cjy.plus/flip
 curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/score
 curl -sS -D - -o /dev/null https://cjy.plus/score-pk
+curl -sS -D - -o /dev/null https://cjy.plus/business-admin
 curl -sS -D - -o /dev/null https://cjy.plus/memories
 curl -sS -D - -o /dev/null https://cjy.plus/memory
 ```

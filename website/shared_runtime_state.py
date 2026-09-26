@@ -42,6 +42,10 @@ class SharedStatePeerError(SharedStateError):
 
 Mutator = Callable[[dict[str, Any], dict[str, Any]], tuple[dict[str, Any], dict[str, Any]]]
 
+# 含暗账粉丝名单等敏感数据的资源只保存在腾讯云本地：
+# 不向 peer 复制、不写入 outbox，也不接受非主节点转发来的变更。
+LOCAL_ONLY_RESOURCES = {"business_tasks"}
+
 _registry: dict[tuple[str, str], Mutator] = {}
 _worker_started = False
 _worker_lock = threading.Lock()
@@ -70,6 +74,7 @@ def resource_path(resource: str) -> Path:
         "room_ignore": Path(cfg.ROOM_MESSAGES_IGNORE_PATH),
         "score_business": Path(cfg.SCORE_GIFTS_DATA_PATH).parent / "live_business_fulfillments.json",
         "memories": Path(cfg.MEMORIES_DATA_PATH),
+        "business_tasks": Path(cfg.BUSINESS_DATA_PATH),
     }
     try:
         return paths[resource]
@@ -83,6 +88,7 @@ def default_document(resource: str) -> dict[str, Any]:
         "room_ignore": {"version": 2, "ignored_batches": []},
         "score_business": {"version": 1, "records": {}},
         "memories": {"version": 1, "items": []},
+        "business_tasks": {"version": 1, "tasks": []},
     }
     return deepcopy(defaults[resource])
 
@@ -101,6 +107,8 @@ def normalise_document(resource: str, value: Any) -> dict[str, Any]:
         doc["records"] = {}
     elif resource == "memories" and not isinstance(doc.get("items"), list):
         doc["items"] = []
+    elif resource == "business_tasks" and not isinstance(doc.get("tasks"), list):
+        doc["tasks"] = []
     return doc
 
 
@@ -308,6 +316,17 @@ def execute_mutation(
     operation_id: str | None = None,
 ) -> dict[str, Any]:
     op_id = operation_id or uuid.uuid4().hex
+    if resource in LOCAL_ONLY_RESOURCES:
+        # 本地专属资源不转发到主节点、不在副本节点落盘，避免敏感数据离开腾讯云。
+        if cfg.SHARED_STATE_SYNC_ENABLED and not cfg.SHARED_STATE_IS_PRIMARY:
+            raise SharedStateError("该数据仅保存在腾讯云主节点，当前节点不支持变更")
+        return apply_authoritative_mutation(
+            resource,
+            operation,
+            payload,
+            operation_id=op_id,
+            origin=node_id(),
+        )
     if not cfg.SHARED_STATE_SYNC_ENABLED or cfg.SHARED_STATE_IS_PRIMARY:
         return apply_authoritative_mutation(
             resource,
@@ -332,6 +351,8 @@ def execute_mutation(
 
 
 def install_replica(resource: str, doc: dict[str, Any], *, operation: str = "replica") -> dict[str, Any]:
+    if resource in LOCAL_ONLY_RESOURCES:
+        raise SharedStateError("local-only resource does not accept replica state")
     incoming = normalise_document(resource, doc)
     incoming_revision = str((incoming.get("_state") or {}).get("revision") or "")
     meta = incoming.get("_state") if isinstance(incoming.get("_state"), dict) else {}
@@ -371,6 +392,8 @@ def _queue_replica(resource: str, doc: dict[str, Any]) -> None:
 
 
 def _replicate_or_queue(resource: str, doc: dict[str, Any]) -> bool:
+    if resource in LOCAL_ONLY_RESOURCES:
+        return True
     if not cfg.SHARED_STATE_SYNC_ENABLED or not cfg.SHARED_STATE_PEER:
         return True
     revision = str((doc.get("_state") or {}).get("revision") or "")

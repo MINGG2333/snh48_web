@@ -490,6 +490,22 @@ async def pk_score_page(request: Request):
     )
 
 
+@app.get("/business-admin", response_class=HTMLResponse)
+async def business_admin_page(request: Request):
+    """Password-protected fan-club business admin page (Tencent only)."""
+    return templates.TemplateResponse(
+        "business_admin.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/memory", response_class=HTMLResponse)
 @app.get("/memories", response_class=HTMLResponse)
 async def memories_page(request: Request):
@@ -622,6 +638,9 @@ app.include_router(flip_cards_router)
 
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)
+
+from website.business_api import router as business_router
+app.include_router(business_router)
 
 from website.pk_score_api import router as pk_score_router
 app.include_router(pk_score_router)
