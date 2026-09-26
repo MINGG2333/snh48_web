@@ -119,13 +119,15 @@
     }
     .btn:hover { border-color: var(--teal); color: var(--teal); }
     .btn.primary { background: var(--teal); border-color: var(--teal); color: var(--ink); font-weight: 700; }
+    .btn.danger { border-color: var(--green); color: var(--green); }
+    .btn.danger:hover { background: var(--green); color: var(--ink); }
     .btn:disabled { cursor: wait; opacity: 0.6; }
 
     main { width: min(1200px, 100%); margin: 0 auto; padding: 20px 24px 40px; }
 
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
       gap: 12px;
       margin-bottom: 18px;
     }
@@ -137,10 +139,33 @@
     }
     .kpi .label { color: var(--muted); font-size: 12px; }
     .kpi .value { font-size: 24px; font-weight: 760; margin-top: 4px; }
-    .kpi.s-pending .value { color: var(--muted); }
-    .kpi.s-doing .value { color: var(--blue); }
-    .kpi.s-confirm .value { color: var(--gold); }
+    .kpi.s-pending .value { color: var(--gold); }
     .kpi.s-done .value { color: var(--green); }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px 16px;
+      margin-bottom: 18px;
+    }
+    .filter-bar .filter-label { color: var(--muted); font-size: 13px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+    .chip {
+      min-height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .chip:hover { border-color: var(--teal); color: var(--teal); }
+    .chip.active { background: var(--teal); border-color: var(--teal); color: var(--ink); font-weight: 700; }
 
     .add-panel {
       border: 1px solid var(--line);
@@ -165,7 +190,7 @@
       padding: 0 16px 16px;
     }
     .add-form .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-    .add-form input, .add-form select, .add-form textarea {
+    .add-form input, .add-form textarea {
       width: 100%;
       min-height: 36px;
       border: 1px solid var(--line);
@@ -175,10 +200,13 @@
       padding: 6px 10px;
       outline: none;
       font-size: 13px;
+      color-scheme: dark;
     }
     .add-form textarea { min-height: 60px; resize: vertical; grid-column: span 3; }
     .add-form .field.wide { grid-column: span 3; }
-    .add-form input:focus, .add-form select:focus, .add-form textarea:focus { border-color: var(--teal); }
+    .add-form input:focus, .add-form textarea:focus { border-color: var(--teal); }
+    .add-form .check-field { display: flex; align-items: flex-end; padding-bottom: 6px; gap: 8px; color: var(--muted); font-size: 13px; }
+    .add-form .check-field input { width: auto; min-height: 0; }
     .add-form .add-actions { grid-column: span 3; display: flex; align-items: center; gap: 10px; }
     .add-status { font-size: 13px; color: var(--muted); }
 
@@ -201,16 +229,18 @@
     }
     .fan-head h2 { font-size: 15px; font-weight: 740; }
     .fan-head .count { color: var(--muted); font-size: 12px; }
+    .fan-head .earliest { color: var(--gold); font-size: 12px; }
 
     .task-row {
       display: grid;
-      grid-template-columns: minmax(140px, 1.2fr) 120px minmax(130px, 1fr) minmax(160px, 1.4fr) auto auto;
+      grid-template-columns: minmax(140px, 1.2fr) 96px 150px minmax(160px, 1.4fr) auto auto;
       gap: 8px;
       align-items: center;
       padding: 10px 16px;
       border-bottom: 1px solid rgba(44, 57, 75, 0.5);
     }
     .task-row:last-child { border-bottom: 0; }
+    .task-row.row-done .task-biz { opacity: 0.55; text-decoration: line-through; }
     .task-biz { font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .badge {
       display: inline-block;
@@ -221,7 +251,7 @@
       color: var(--muted);
     }
     .badge.secret { color: var(--gold); border-color: var(--gold); }
-    .task-row select, .task-row input {
+    .task-row input[type="date"], .task-row input[type="text"] {
       width: 100%;
       min-height: 32px;
       border: 1px solid var(--line);
@@ -231,12 +261,22 @@
       padding: 4px 8px;
       font-size: 13px;
       outline: none;
+      color-scheme: dark;
     }
-    .task-row select:focus, .task-row input:focus { border-color: var(--teal); }
-    select.st-待开始 { color: var(--muted); }
-    select.st-进行中 { color: var(--blue); }
-    select.st-待确认 { color: var(--gold); }
-    select.st-已完成 { color: var(--green); }
+    .task-row input:focus { border-color: var(--teal); }
+
+    .done-toggle {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .done-toggle.done { border-color: var(--green); color: var(--green); }
+    .done-toggle:hover { border-color: var(--teal); }
 
     .info-btn {
       width: 26px;
@@ -277,15 +317,14 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .detail-pop .src { display: block; margin-top: 8px; color: var(--faint, #657386); font-size: 11px; }
+    .detail-pop .src { display: block; margin-top: 8px; color: #657386; font-size: 11px; }
 
     .empty-state { color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px; }
 
     @media (max-width: 900px) {
-      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
       .add-form { grid-template-columns: 1fr; }
       .add-form textarea, .add-form .field.wide, .add-form .add-actions { grid-column: span 1; }
-      .task-row { grid-template-columns: 1fr 110px; }
+      .task-row { grid-template-columns: 1fr 100px; }
       .task-biz { grid-column: span 2; }
     }
   </style>
@@ -318,11 +357,15 @@
     <main>
       <section class="kpi-grid" aria-label="状态统计">
         <div class="kpi"><div class="label">粉丝分组</div><div class="value" id="statFans">0</div></div>
-        <div class="kpi s-pending"><div class="label">待开始</div><div class="value" id="statPending">0</div></div>
-        <div class="kpi s-doing"><div class="label">进行中</div><div class="value" id="statDoing">0</div></div>
-        <div class="kpi s-confirm"><div class="label">待确认</div><div class="value" id="statConfirm">0</div></div>
+        <div class="kpi s-pending"><div class="label">未完成</div><div class="value" id="statPending">0</div></div>
         <div class="kpi s-done"><div class="label">已完成</div><div class="value" id="statDone">0</div></div>
       </section>
+
+      <div class="filter-bar" id="filterBar" style="display:none">
+        <span class="filter-label">业务类型</span>
+        <div class="chips" id="bizChips"></div>
+        <button class="btn danger" id="batchDoneBtn" type="button">筛选结果全部标记为已完成</button>
+      </div>
 
       <details class="add-panel" id="addPanel">
         <summary>新增业务</summary>
@@ -330,13 +373,9 @@
           <div class="field"><label>粉丝名称 *</label><input id="addFan" required maxlength="80"></div>
           <div class="field"><label>业务类型 *</label><input id="addBiz" required maxlength="80" placeholder="如：点唱 / 手写奖状"></div>
           <div class="field"><label>类别标注</label><input id="addCategory" maxlength="80" placeholder="如：暗账 / 瓜 / 总选服"></div>
-          <div class="field"><label>状态</label>
-            <select id="addStatus">
-              <option>待开始</option><option>进行中</option><option>待确认</option><option>已完成</option>
-            </select>
-          </div>
-          <div class="field"><label>计划完成时间</label><input id="addPlanned" maxlength="120" placeholder="如：9/27 握手会"></div>
+          <div class="field"><label>计划完成时间</label><input id="addPlanned" type="date"></div>
           <div class="field"><label>备注</label><input id="addNote" maxlength="500"></div>
+          <div class="check-field"><input type="checkbox" id="addDone"><label for="addDone">已完成</label></div>
           <div class="field wide"><label>详情（“?”图标悬浮内容）</label><textarea id="addDetail" maxlength="500"></textarea></div>
           <div class="add-actions">
             <button class="btn primary" type="submit" id="addSubmit">添加</button>
@@ -357,11 +396,11 @@
     (function () {
       "use strict";
 
-      var STATUSES = ["待开始", "进行中", "待确认", "已完成"];
       var password = "";
       var loginBusy = false;
       var loginVerified = false;
       var tasks = [];
+      var activeBizType = "";
 
       var loginOverlay = document.getElementById("loginOverlay");
       var passwordInput = document.getElementById("passwordInput");
@@ -459,7 +498,8 @@
           if (!resp.ok) throw new Error(await readError(resp) || "数据加载失败");
           var data = await resp.json();
           tasks = Array.isArray(data.tasks) ? data.tasks : [];
-          renderStats(data);
+          renderStats();
+          renderBizChips();
           renderGroups();
           document.getElementById("updatedAt").textContent = "更新于：" + (data.updated_at || data.generated_at || "-");
           loginBusy = false;
@@ -476,27 +516,77 @@
         }
       }
 
-      function renderStats(data) {
-        var stats = data.stats || {};
-        document.getElementById("statFans").textContent = data.fan_count || 0;
-        document.getElementById("statPending").textContent = stats["待开始"] || 0;
-        document.getElementById("statDoing").textContent = stats["进行中"] || 0;
-        document.getElementById("statConfirm").textContent = stats["待确认"] || 0;
-        document.getElementById("statDone").textContent = stats["已完成"] || 0;
+      function renderStats() {
+        var done = 0;
+        tasks.forEach(function (item) { if (item.status === "已完成") done += 1; });
+        document.getElementById("statFans").textContent = new Set(tasks.map(function (i) { return i.fan_name; })).size;
+        document.getElementById("statPending").textContent = tasks.length - done;
+        document.getElementById("statDone").textContent = done;
+      }
+
+      function visibleTasks() {
+        if (!activeBizType) return tasks;
+        return tasks.filter(function (item) { return item.biz_type === activeBizType; });
+      }
+
+      function renderBizChips() {
+        var bar = document.getElementById("filterBar");
+        var chips = document.getElementById("bizChips");
+        chips.innerHTML = "";
+        var types = [];
+        tasks.forEach(function (item) {
+          if (item.biz_type && types.indexOf(item.biz_type) < 0) types.push(item.biz_type);
+        });
+        if (!types.length) { bar.style.display = "none"; return; }
+        bar.style.display = "flex";
+        var all = [""].concat(types);
+        all.forEach(function (type) {
+          var chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip" + (type === activeBizType ? " active" : "");
+          chip.textContent = type || "全部";
+          chip.addEventListener("click", function () {
+            activeBizType = type;
+            renderBizChips();
+            renderGroups();
+          });
+          chips.appendChild(chip);
+        });
+      }
+
+      function earliestPlanned(items) {
+        var dates = items.map(function (t) { return t.planned_date || ""; }).filter(Boolean);
+        if (!dates.length) return "";
+        return dates.sort()[0];
       }
 
       function renderGroups() {
         var container = document.getElementById("groupList");
         container.innerHTML = "";
-        document.getElementById("emptyState").style.display = tasks.length ? "none" : "block";
+        var visible = visibleTasks();
+        document.getElementById("emptyState").style.display = visible.length ? "none" : "block";
+        if (!visible.length && tasks.length) {
+          document.getElementById("emptyState").textContent = "当前筛选下没有业务";
+        } else {
+          document.getElementById("emptyState").textContent = "暂无业务数据";
+        }
         var groups = new Map();
-        tasks.forEach(function (task) {
+        visible.forEach(function (task) {
           var key = task.fan_name || "（未命名）";
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key).push(task);
         });
-        Array.from(groups.keys()).sort(function (a, b) { return a.localeCompare(b, "zh-Hans-CN"); }).forEach(function (fan) {
-          container.appendChild(buildFanCard(fan, groups.get(fan)));
+        var entries = Array.from(groups.entries());
+        entries.sort(function (a, b) {
+          var da = earliestPlanned(a[1]);
+          var db = earliestPlanned(b[1]);
+          if (da && db && da !== db) return da < db ? -1 : 1;
+          if (da && !db) return -1;
+          if (!da && db) return 1;
+          return a[0].localeCompare(b[0], "zh-Hans-CN");
+        });
+        entries.forEach(function (pair) {
+          container.appendChild(buildFanCard(pair[0], pair[1]));
         });
       }
 
@@ -507,11 +597,12 @@
         head.className = "fan-head";
         var title = document.createElement("h2");
         title.textContent = fan;
-        var count = document.createElement("span");
-        count.className = "count";
-        count.textContent = items.length + " 项业务";
+        var right = document.createElement("span");
+        right.className = "count";
+        var earliest = earliestPlanned(items);
+        right.textContent = items.length + " 项业务" + (earliest ? " · 最近计划 " + earliest : "");
         head.appendChild(title);
-        head.appendChild(count);
+        head.appendChild(right);
         card.appendChild(head);
         items.forEach(function (task) {
           card.appendChild(buildTaskRow(task));
@@ -521,7 +612,7 @@
 
       function buildTaskRow(task) {
         var row = document.createElement("div");
-        row.className = "task-row";
+        row.className = "task-row" + (task.status === "已完成" ? " row-done" : "");
         row.dataset.id = task.id;
 
         var biz = document.createElement("div");
@@ -538,32 +629,31 @@
         if (task.source_section) {
           var src = document.createElement("span");
           src.className = "badge";
-          src.textContent = task.source_section.replace(/^[一二三四五六七八九〇]、/, "");
+          src.textContent = task.source_section.replace(/[一二三四五六七八九〇]、/g, "");
           biz.appendChild(src);
         }
         row.appendChild(biz);
 
-        var statusSelect = document.createElement("select");
-        STATUSES.forEach(function (value) {
-          var opt = document.createElement("option");
-          opt.value = value;
-          opt.textContent = value;
-          statusSelect.appendChild(opt);
+        var toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "done-toggle" + (task.status === "已完成" ? " done" : "");
+        toggle.textContent = task.status === "已完成" ? "✓ 已完成" : "未完成";
+        toggle.addEventListener("click", function () {
+          var done = !toggle.classList.contains("done");
+          toggle.classList.toggle("done", done);
+          toggle.textContent = done ? "✓ 已完成" : "未完成";
+          row.classList.toggle("row-done", done);
         });
-        statusSelect.value = STATUSES.indexOf(task.status) >= 0 ? task.status : "待开始";
-        statusSelect.classList.add("st-" + statusSelect.value);
-        statusSelect.addEventListener("change", function () {
-          statusSelect.className = "st-" + statusSelect.value;
-        });
-        row.appendChild(statusSelect);
+        row.appendChild(toggle);
 
         var planned = document.createElement("input");
+        planned.type = "date";
         planned.value = task.planned_date || "";
-        planned.placeholder = "计划完成时间";
-        planned.maxLength = 120;
+        planned.title = "计划完成时间";
         row.appendChild(planned);
 
         var note = document.createElement("input");
+        note.type = "text";
         note.value = task.note || "";
         note.placeholder = "备注";
         note.maxLength = 500;
@@ -589,7 +679,7 @@
         save.className = "save-btn";
         save.textContent = "保存";
         save.addEventListener("click", function () {
-          saveTask(task.id, statusSelect.value, planned.value, note.value, save);
+          saveTask(task.id, toggle.classList.contains("done") ? "已完成" : "未完成", planned.value, note.value, save);
         });
         row.appendChild(save);
 
@@ -655,14 +745,7 @@
           var body = await resp.json();
           var updated = body.task || {};
           tasks = tasks.map(function (item) { return item.id === id ? Object.assign({}, item, updated) : item; });
-          var done = 0, doing = 0, confirm = 0, pending = 0;
-          tasks.forEach(function (item) {
-            if (item.status === "已完成") done += 1;
-            else if (item.status === "进行中") doing += 1;
-            else if (item.status === "待确认") confirm += 1;
-            else pending += 1;
-          });
-          renderStats({ stats: { "待开始": pending, "进行中": doing, "待确认": confirm, "已完成": done }, fan_count: new Set(tasks.map(function (i) { return i.fan_name; })).size });
+          renderStats();
           button.textContent = "已保存";
           button.classList.add("saved");
           setTimeout(function () { button.textContent = "保存"; button.classList.remove("saved"); }, 1600);
@@ -674,6 +757,46 @@
           button.disabled = false;
         }
       }
+
+      document.getElementById("batchDoneBtn").addEventListener("click", async function () {
+        var pending = visibleTasks().filter(function (item) { return item.status !== "已完成"; });
+        if (!pending.length) {
+          alert("当前筛选结果中没有未完成的业务");
+          return;
+        }
+        var scope = activeBizType ? "类型「" + activeBizType + "」" : "全部业务";
+        if (!confirm("将把" + scope + "中 " + pending.length + " 条未完成业务全部标记为已完成，确认执行？")) {
+          return;
+        }
+        var btn = document.getElementById("batchDoneBtn");
+        btn.disabled = true;
+        try {
+          var resp = await fetch("/api/business/update", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Business-Admin-Password": password
+            },
+            body: JSON.stringify({
+              action: "batch_complete",
+              ids: pending.map(function (item) { return item.id; })
+            })
+          });
+          if (resp.status === 401 || resp.status === 403) {
+            resetLoginForPassword("密码已失效，请重新输入");
+            return;
+          }
+          if (!resp.ok) throw new Error(await readError(resp) || "批量操作失败");
+          var body = await resp.json();
+          trackAdminEvent("save_task", { action: "business_batch_complete", result: "success", count: body.updated_count });
+          await loadData(false);
+          alert("已将 " + (body.updated_count || 0) + " 条业务标记为已完成");
+        } catch (error) {
+          alert(error.message || "批量操作失败，请重试");
+        } finally {
+          btn.disabled = false;
+        }
+      });
 
       document.getElementById("addForm").addEventListener("submit", async function (event) {
         event.preventDefault();
@@ -693,7 +816,7 @@
               fan_name: document.getElementById("addFan").value,
               biz_type: document.getElementById("addBiz").value,
               category: document.getElementById("addCategory").value,
-              status: document.getElementById("addStatus").value,
+              status: document.getElementById("addDone").checked ? "已完成" : "未完成",
               planned_date: document.getElementById("addPlanned").value,
               note: document.getElementById("addNote").value,
               detail: document.getElementById("addDetail").value

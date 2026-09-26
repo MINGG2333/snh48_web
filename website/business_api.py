@@ -30,9 +30,11 @@ from website.shared_runtime_state import (
 router = APIRouter(prefix="/api/business", tags=["应援会业务管理页"])
 
 BJ_TZ = timezone(timedelta(hours=8))
-VALID_STATUSES = {"待开始", "进行中", "待确认", "已完成"}
+VALID_STATUSES = {"未完成", "已完成"}
 TASK_ID_RE = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TEXT_LIMIT = 500
+BATCH_LIMIT = 500
 
 
 async def verify_business_password(
@@ -100,7 +102,7 @@ def get_business_data(
             detail=f"业务数据读取失败：{exc}",
         ) from exc
     tasks = [_public_task(task) for task in doc.get("tasks", []) if isinstance(task, dict)]
-    stats = {value: 0 for value in ("待开始", "进行中", "待确认", "已完成")}
+    stats = {value: 0 for value in ("未完成", "已完成")}
     for task in tasks:
         stats[task["status"]] = stats.get(task["status"], 0) + 1
     return {
@@ -129,7 +131,20 @@ def _public_task(task: dict[str, Any]) -> dict[str, Any]:
 
 def _normalise_status(value: Any) -> str:
     text = _clean_text(value, 20)
-    return text if text in VALID_STATUSES else "待开始"
+    return text if text in VALID_STATUSES else "未完成"
+
+
+def _clean_planned_date(value: Any) -> str:
+    """planned_date 只接受 ISO 日期或空值。"""
+    text = _clean_text(value, 120)
+    if not text:
+        return ""
+    if not ISO_DATE_RE.fullmatch(text):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="计划完成时间必须是 YYYY-MM-DD 日期",
+        )
+    return text
 
 
 @router.post("/update")
@@ -147,7 +162,7 @@ async def update_business_task(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请求体格式无效")
 
     action = _clean_text(payload.get("action"), 20)
-    if action not in {"update", "add"}:
+    if action not in {"update", "add", "batch_complete"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
 
     try:
@@ -163,6 +178,7 @@ async def update_business_task(
     return {
         "ok": True,
         "task": result.get("task") or {},
+        "updated_count": int(result.get("updated_count", 0) or 0),
     }
 
 
@@ -186,11 +202,42 @@ def _update_task_mutator(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效状态")
         task["status"] = new_status
     if "planned_date" in payload:
-        task["planned_date"] = _clean_text(payload.get("planned_date"), 120)
+        task["planned_date"] = _clean_planned_date(payload.get("planned_date"))
     if "note" in payload:
         task["note"] = _clean_text(payload.get("note"))
     task["updated_at"] = _bj_now()
     return state, {"task": _public_task(task)}
+
+
+def _batch_complete_mutator(
+    state: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """把指定 id 列表的任务全部标记为已完成（页面按筛选结果批量操作）。"""
+    ids = payload.get("ids")
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少任务 ID 列表")
+    ids = [_clean_text(item, 80) for item in ids][: BATCH_LIMIT + 1]
+    if len(ids) > BATCH_LIMIT:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"单次最多批量处理 {BATCH_LIMIT} 条")
+    for task_id in ids:
+        if not task_id or not re.fullmatch(TASK_ID_RE, task_id):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="存在无效的任务 ID")
+
+    tasks = state.setdefault("tasks", [])
+    if not isinstance(tasks, list):
+        tasks = []
+        state["tasks"] = tasks
+    by_id = {item.get("id"): item for item in tasks if isinstance(item, dict)}
+    now = _bj_now()
+    updated = 0
+    for task_id in dict.fromkeys(ids):
+        task = by_id.get(task_id)
+        if task is None or task.get("status") == "已完成":
+            continue
+        task["status"] = "已完成"
+        task["updated_at"] = now
+        updated += 1
+    return state, {"updated_count": updated}
 
 
 def _add_task_mutator(
@@ -202,7 +249,7 @@ def _add_task_mutator(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请填写粉丝名称")
     if not biz_type:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请填写业务类型")
-    status_value = _clean_text(payload.get("status"), 20) or "待开始"
+    status_value = _clean_text(payload.get("status"), 20) or "未完成"
     if status_value not in VALID_STATUSES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效状态")
 
@@ -216,7 +263,7 @@ def _add_task_mutator(
         "biz_type": biz_type,
         "category": _clean_text(payload.get("category"), 80),
         "status": status_value,
-        "planned_date": _clean_text(payload.get("planned_date"), 120),
+        "planned_date": _clean_planned_date(payload.get("planned_date")),
         "note": _clean_text(payload.get("note")),
         "detail": _clean_text(payload.get("detail")),
         "source_section": "网页新增",
@@ -228,3 +275,4 @@ def _add_task_mutator(
 
 register_mutator("business_tasks", "business_update", _update_task_mutator)
 register_mutator("business_tasks", "business_add", _add_task_mutator)
+register_mutator("business_tasks", "business_batch_complete", _batch_complete_mutator)
