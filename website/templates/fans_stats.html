@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}粉丝数记录 - {{ site_title }}{% endblock %}
+
+{% block footer %}
+{{ super() }}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .fans-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin: 20px 0 28px;
+    }
+    .fans-card {
+        background: var(--card-bg, rgba(255, 255, 255, 0.06));
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 18px 20px;
+    }
+    .fans-card .platform {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--text-dim, #9aa4b2);
+        font-size: 0.92rem;
+    }
+    .fans-card .count {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 8px 0 4px;
+        color: var(--primary, #ff6b9d);
+    }
+    .fans-card .count.na {
+        font-size: 1.05rem;
+        color: var(--text-dim, #9aa4b2);
+        font-weight: 400;
+    }
+    .fans-card .meta {
+        color: var(--text-dim, #9aa4b2);
+        font-size: 0.8rem;
+        line-height: 1.5;
+        word-break: break-all;
+    }
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .status-dot.ok { background: #4dc27c; }
+    .status-dot.error { background: #e36f6f; }
+    .status-dot.unsupported { background: #95a4b6; }
+    .trend-block {
+        margin-bottom: 28px;
+    }
+    .trend-block h2 {
+        font-size: 1.1rem;
+        margin-bottom: 10px;
+    }
+    .trend-block svg {
+        width: 100%;
+        height: 180px;
+        display: block;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+    }
+    .fans-empty {
+        color: var(--text-dim, #9aa4b2);
+        padding: 40px 0;
+        text-align: center;
+    }
+    .fans-note {
+        color: var(--text-dim, #9aa4b2);
+        font-size: 0.85rem;
+        margin-top: 6px;
+    }
+</style>
+{% endblock %}
+
+{% block header %}
+<nav class="navbar" id="mainNav">
+    <div class="nav-container">
+        <a href="/" class="nav-logo">
+            <i class="fas fa-star"></i> {{ site_title }}
+        </a>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
+            <a href="/timeline"><i class="fas fa-clock"></i> 时光轴</a>
+            <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+
+<!-- Mobile Circular Menu -->
+<div class="circular-menu" id="circularMenu">
+    <div class="circular-menu-ring">
+        <div class="circular-menu-close" id="circularMenuClose">
+            <i class="fas fa-times"></i>
+        </div>
+        <a href="/timeline" class="circular-menu-item item-timeline">
+            <i class="fas fa-clock"></i>
+            <span>时光轴</span>
+        </a>
+        <a href="/qa" class="circular-menu-item item-qa">
+            <i class="fas fa-robot"></i>
+            <span>AI 问答</span>
+        </a>
+        <a href="/about" class="circular-menu-item item-about">
+            <i class="fas fa-info-circle"></i>
+            <span>关于</span>
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<main class="page-content">
+    <div class="page-container">
+        <h1><i class="fas fa-chart-line"></i> 粉丝数记录</h1>
+        <p class="fans-note">各平台粉丝数每天定时记录两次，此页展示最新值与近期趋势。<span id="fetchedAt"></span></p>
+
+        <div class="fans-stats-grid" id="platformCards"></div>
+        <div id="trendList"></div>
+        <div class="fans-empty" id="emptyState" style="display:none">暂无粉丝数记录，等待首次采集。</div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    var PLATFORM_ORDER = ["weibo", "douyin", "bilibili", "pocket48"];
+    var STATUS_TEXT = { ok: "正常", error: "采集失败", unsupported: "暂不支持" };
+
+    function formatNumber(value) {
+        var n = Number(value);
+        if (!isFinite(n)) return "-";
+        return n.toLocaleString("zh-CN");
+    }
+
+    function renderCards(platforms) {
+        var container = document.getElementById("platformCards");
+        container.innerHTML = "";
+        PLATFORM_ORDER.forEach(function (key) {
+            var item = platforms[key];
+            if (!item) return;
+            var card = document.createElement("div");
+            card.className = "fans-card";
+
+            var head = document.createElement("div");
+            head.className = "platform";
+            var name = document.createElement("span");
+            var dot = document.createElement("span");
+            dot.className = "status-dot " + (item.status || "unsupported");
+            name.appendChild(dot);
+            name.appendChild(document.createTextNode(item.label || key));
+            var status = document.createElement("span");
+            status.textContent = STATUS_TEXT[item.status] || item.status || "";
+            head.appendChild(name);
+            head.appendChild(status);
+            card.appendChild(head);
+
+            var count = document.createElement("div");
+            if (item.status === "ok" && item.followers != null) {
+                count.className = "count";
+                count.textContent = formatNumber(item.followers);
+            } else {
+                count.className = "count na";
+                count.textContent = item.status === "error" ? "本次采集失败" : "暂无数据";
+            }
+            card.appendChild(count);
+
+            var meta = document.createElement("div");
+            meta.className = "meta";
+            var parts = [];
+            if (item.handle) parts.push(item.handle);
+            if (item.ts) parts.push("更新于 " + item.ts);
+            if (item.status !== "ok" && item.error) parts.push(item.error);
+            meta.textContent = parts.join("；");
+            card.appendChild(meta);
+
+            container.appendChild(card);
+        });
+    }
+
+    function renderTrend(platform, label, points) {
+        var block = document.createElement("section");
+        block.className = "trend-block";
+        var title = document.createElement("h2");
+        title.innerHTML = '<i class="fas fa-chart-area"></i> ';
+        title.appendChild(document.createTextNode(label + " 近趋势"));
+        block.appendChild(title);
+
+        var width = 720, height = 180, pad = 34;
+        var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+        svg.setAttribute("preserveAspectRatio", "none");
+
+        if (points.length < 2) {
+            var tip = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            tip.setAttribute("x", width / 2);
+            tip.setAttribute("y", height / 2);
+            tip.setAttribute("text-anchor", "middle");
+            tip.setAttribute("fill", "#95a4b6");
+            tip.setAttribute("font-size", "13");
+            tip.textContent = "数据点不足，积累几天后展示趋势";
+            svg.appendChild(tip);
+            block.appendChild(svg);
+            return block;
+        }
+
+        var values = points.map(function (p) { return p.followers; });
+        var min = Math.min.apply(null, values);
+        var max = Math.max.apply(null, values);
+        if (min === max) { min -= 1; max += 1; }
+        var span = max - min;
+        min -= span * 0.1;
+        max += span * 0.1;
+
+        function x(i) { return pad + (width - pad * 2) * (i / (points.length - 1)); }
+        function y(v) { return height - pad - (height - pad * 2) * ((v - min) / (max - min)); }
+
+        var d = points.map(function (p, i) {
+            return (i === 0 ? "M" : "L") + x(i).toFixed(1) + "," + y(p.followers).toFixed(1);
+        }).join(" ");
+
+        var area = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        area.setAttribute("d", d + " L" + x(points.length - 1).toFixed(1) + "," + (height - pad) + " L" + x(0).toFixed(1) + "," + (height - pad) + " Z");
+        area.setAttribute("fill", "rgba(255, 107, 157, 0.12)");
+        svg.appendChild(area);
+
+        var line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        line.setAttribute("d", d);
+        line.setAttribute("fill", "none");
+        line.setAttribute("stroke", "#ff6b9d");
+        line.setAttribute("stroke-width", "2");
+        svg.appendChild(line);
+
+        points.forEach(function (p, i) {
+            var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            dot.setAttribute("cx", x(i));
+            dot.setAttribute("cy", y(p.followers));
+            dot.setAttribute("r", "3");
+            dot.setAttribute("fill", "#ff6b9d");
+            var tip = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            tip.textContent = p.ts + "：" + formatNumber(p.followers);
+            dot.appendChild(tip);
+            svg.appendChild(dot);
+        });
+
+        var minLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        minLabel.setAttribute("x", 6);
+        minLabel.setAttribute("y", y(min + (max - min) * 0.06));
+        minLabel.setAttribute("fill", "#95a4b6");
+        minLabel.setAttribute("font-size", "11");
+        minLabel.textContent = formatNumber(Math.round(min));
+        svg.appendChild(minLabel);
+        var maxLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        maxLabel.setAttribute("x", 6);
+        maxLabel.setAttribute("y", y(max - (max - min) * 0.06) + 10);
+        maxLabel.setAttribute("fill", "#95a4b6");
+        maxLabel.setAttribute("font-size", "11");
+        maxLabel.textContent = formatNumber(Math.round(max));
+        svg.appendChild(maxLabel);
+
+        block.appendChild(svg);
+        return block;
+    }
+
+    async function load() {
+        try {
+            var resp = await fetch("/api/fans-stats?days=30", { cache: "no-store" });
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            var data = await resp.json();
+            if (!data.available) {
+                document.getElementById("emptyState").style.display = "block";
+                return;
+            }
+            document.getElementById("fetchedAt").textContent = data.fetched_at ? "最近采集时间：" + data.fetched_at : "";
+            renderCards(data.platforms || {});
+            var trendList = document.getElementById("trendList");
+            trendList.innerHTML = "";
+            var series = data.series || {};
+            PLATFORM_ORDER.forEach(function (key) {
+                var points = series[key];
+                var item = (data.platforms || {})[key] || {};
+                if (!points || !points.length) return;
+                trendList.appendChild(renderTrend(key, item.label || key, points));
+            });
+            if (window._trackEvent) {
+                window._trackEvent("page_data_load", { area: "fans_stats", result: "success" });
+            }
+        } catch (error) {
+            var empty = document.getElementById("emptyState");
+            empty.textContent = "粉丝数数据加载失败，请稍后刷新重试。";
+            empty.style.display = "block";
+        }
+    }
+
+    load();
+})();
+</script>
+{% endblock %}

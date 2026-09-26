@@ -36,7 +36,7 @@
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
 | 外部资源清单 | `doc/security/external_resources.md` 记录 CDN、地图、图片、HLS、第三方 API、图片代理和服务端出站请求 | 降低新增外链、代理或第三方调用时漏评估 CSP/封禁/SSRF 风险 | 新增或删除外部资源时必须同步更新 |
-| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才拉取。上麦回放以 manifest 原子提交；翻牌多账号先同步脱敏账号 JSON 和媒体，再原子提交 `web/accounts.json`；所有接收文件强制为网站组只读 | 保留只读派生数据约 1 分钟同步延迟，同时避免读到半个发布包或因原子替换丢失网站读取权限 | 不要恢复腾讯云侧常驻推送；翻牌同步只允许 `web/`、`audio/`、`video/`，不得加入 `metadata/`、`transcripts/`、手机号、Token、登录会话或任务日志；不得移除同步脚本的接收端属组和权限参数；其他既有排除规则不变 |
+| 阿里云主动拉取腾讯云运行数据 | 自动任务在阿里云每分钟按 `core` / `dynamic` 分组检查腾讯云源数据指纹；源数据变化时才拉取。上麦回放以 manifest 原子提交；翻牌多账号先同步脱敏账号 JSON 和媒体，再原子提交 `web/accounts.json`；所有接收文件强制为网站组只读 | 保留只读派生数据约 1 分钟同步延迟，同时避免读到半个发布包或因原子替换丢失网站读取权限 | 不要恢复腾讯云侧常驻推送；翻牌同步只允许 `web/`、`audio/`、`video/`，不得加入 `metadata/`、`transcripts/`、手机号、Token、登录会话或任务日志；不得移除同步脚本的接收端属组和权限参数；粉丝数记录页 `social_record/fan_counts/` 为公开只读数据可入 `dynamic` 组，应援会业务管理页 `private_handover/web_state/` 含暗账名单，禁止加入任何同步分组；其他既有排除规则不变 |
 | 前端 XSS 防护 | QA 答案、引用、时光轴文本、URL、图标类名进行转义或白名单校验 | 降低后端数据或第三方数据污染后的脚本执行风险 | 新增 `innerHTML` 前必须先转义或改用 DOM API |
 | 管理 Cookie | scroller 管理 Cookie 支持 `SECURE_COOKIES=true` | HTTPS 生产环境下防止 Cookie 经明文连接发送 | IP/http 临时测试时才允许设为 `false` |
 | 前端构建 | 生产通过 `USE_OBFUSCATED_JS=true` 使用 `js-dist` / `css-dist` | 降低静态源码直接暴露程度，并压缩资源 | 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs` 并提交 dist |

@@ -102,7 +102,8 @@ install -d -o root -g snh48-web -m 0750 \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays \
   /home/snh48-fan-hub/flip_data/web \
   /home/snh48-fan-hub/flip_data/audio \
-  /home/snh48-fan-hub/flip_data/video
+  /home/snh48-fan-hub/flip_data/video \
+  /home/snh48-fan-hub/social_record/fan_counts
 mkdir -p \
   /home/snh48_web/website/data \
   /home/snh48_web/website/data/memories
@@ -209,6 +210,14 @@ if [ "$sync_dynamic" -eq 1 ]; then
     echo "$LOG_TAG flip_data/web done"
   else
     echo "$LOG_TAG flip_data/web skipped (source missing)"
+  fi
+
+  # 14. fan_counts（粉丝数记录页公开只读小数据；不同步原始社交 CSV 或 Cookie）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/social_record/fan_counts'; then
+    rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/social_record/fan_counts/" /home/snh48-fan-hub/social_record/fan_counts/
+    echo "$LOG_TAG fan_counts done"
+  else
+    echo "$LOG_TAG fan_counts skipped (source missing)"
   fi
 fi
 

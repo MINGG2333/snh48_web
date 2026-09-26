@@ -56,6 +56,7 @@ case "$group" in
       /home/snh48-fan-hub/flip_data/web
       /home/snh48-fan-hub/flip_data/audio
       /home/snh48-fan-hub/flip_data/video
+      /home/snh48-fan-hub/social_record/fan_counts
     )
     ;;
   *)

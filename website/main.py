@@ -358,6 +358,22 @@ async def complaint_page(request: Request):
     )
 
 
+@app.get("/fans-stats", response_class=HTMLResponse)
+async def fans_stats_page(request: Request):
+    """Public read-only fan-count statistics page."""
+    return templates.TemplateResponse(
+        "fans_stats.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/ob", response_class=HTMLResponse)
 async def ob_page(request: Request):
     """Admin observation page - activity grouped by estimated browser visitor."""
@@ -641,6 +657,9 @@ app.include_router(score_gifts_router)
 
 from website.business_api import router as business_router
 app.include_router(business_router)
+
+from website.fan_stats_api import router as fan_stats_router
+app.include_router(fan_stats_router)
 
 from website.pk_score_api import router as pk_score_router
 app.include_router(pk_score_router)

@@ -351,6 +351,13 @@ BUSINESS_DATA_PATH = os.getenv(
     ),
 )
 
+# ── Fan Counts (粉丝数记录页) ────────────────────────────────────────
+# 公开只读数据，由 fan-hub fan_count_collector.py 定时采集，允许同步阿里云。
+FAN_COUNTS_DATA_PATH = os.getenv(
+    "FAN_COUNTS_DATA_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "social_record" / "fan_counts"),
+)
+
 # ── Room Score PK (房间计分 PK) ──────────────────────────────────────
 # 复用计分礼物页密码，只读取 fan-hub 生成的派生小 JSON。
 PK_SCORE_PASSWORD = SCORE_GIFTS_PASSWORD

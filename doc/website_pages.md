@@ -42,6 +42,7 @@
 | 服务条款 | `/terms` | 页脚 | `website/templates/terms.html` | 无专用脚本 | 法务页面 |
 | 隐私政策 | `/privacy` | 页脚 | `website/templates/privacy.html` | 无专用脚本 | 法务页面 |
 | 投诉举报 | `/complaint` | 页脚 | `website/templates/complaint.html` | `/api/complaint/submit` | 含验证码和提交限速 |
+| 粉丝数记录 | `/fans-stats` | 仅 URL，公开只读 | `website/templates/fans_stats.html`（继承 base.html） | `/api/fans-stats` | fan-hub `social_record/fan_counts/`（`FAN_COUNTS_DATA_PATH`），由 `fan_count_collector.py` 每日两次采集；展示各平台最新粉丝数与近 30 天趋势；属公开数据，随网站必要数据同步阿里云 |
 
 ## 管理和仅 URL 页面
 
@@ -98,6 +99,7 @@ curl -sS -D - -o /dev/null https://cjy.plus/score-gifts
 curl -sS -D - -o /dev/null https://cjy.plus/score
 curl -sS -D - -o /dev/null https://cjy.plus/score-pk
 curl -sS -D - -o /dev/null https://cjy.plus/business-admin
+curl -sS -D - -o /dev/null https://cjy.plus/fans-stats
 curl -sS -D - -o /dev/null https://cjy.plus/memories
 curl -sS -D - -o /dev/null https://cjy.plus/memory
 ```
