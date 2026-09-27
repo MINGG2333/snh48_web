@@ -257,6 +257,16 @@
     .badge.secret { color: var(--gold); border-color: var(--gold); }
     .badge.pickup-off { color: var(--green); border-color: var(--green); }
     .badge.pickup-mail { color: var(--teal); border-color: var(--teal); }
+    .fan-bulk { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
+    .fan-bulk input[type="date"] {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--ink);
+      color: var(--text);
+      padding: 0 8px;
+      font-size: 12px;
+    }
     .task-row input[type="date"], .task-row input[type="text"] {
       width: 100%;
       min-height: 32px;
@@ -567,8 +577,14 @@
       function pickupOf(task) {
         var note = task.note || "";
         if (note.indexOf("邮寄") >= 0) return "邮寄";
-        if (note.indexOf("线下领取") >= 0 || note.indexOf("现场交付") >= 0) return "线下";
+        if (note.indexOf("线下领取") >= 0 || note.indexOf("现场交付") >= 0) return "面取";
         return "未确定";
+      }
+
+      function groupTagOf(task) {
+        if (PHYSICAL_ORDER.indexOf(task.biz_type) >= 0) return "实体";
+        if (ONLINE_ORDER.indexOf(task.biz_type) >= 0) return "虚拟";
+        return "";
       }
 
       function visibleTasks(ignoreTag) {
@@ -580,7 +596,9 @@
           out = out.filter(function (item) { return pickupOf(item) === activePickup; });
         }
         if (activeTag && !ignoreTag) {
-          out = out.filter(function (item) { return tagsOf(item).indexOf(activeTag) >= 0; });
+          out = out.filter(function (item) {
+            return tagsOf(item).indexOf(activeTag) >= 0 || groupTagOf(item) === activeTag;
+          });
         }
         return out;
       }
@@ -606,7 +624,7 @@
         var other = types.filter(function (t) {
           return PHYSICAL_ORDER.indexOf(t) < 0 && ONLINE_ORDER.indexOf(t) < 0;
         }).sort();
-        return [["实体", physical], ["线上", online], ["其他", other]].filter(function (g) { return g[1].length; });
+        return [["实体", physical], ["虚拟", online], ["其他", other]].filter(function (g) { return g[1].length; });
       }
 
       function renderBizChips() {
@@ -667,7 +685,7 @@
       function renderPickupChips() {
         var box = document.getElementById("pickupChips");
         box.innerHTML = "";
-        [["", "全部"], ["线下", "线下"], ["邮寄", "邮寄"], ["未确定", "未确定"]].forEach(function (pair) {
+        [["", "全部"], ["面取", "面取"], ["邮寄", "邮寄"], ["未确定", "未确定"]].forEach(function (pair) {
           var chip = document.createElement("button");
           chip.type = "button";
           chip.className = "chip" + (pair[0] === activePickup ? " active" : "");
@@ -690,6 +708,8 @@
           tagsOf(item).forEach(function (tag) {
             counts.set(tag, (counts.get(tag) || 0) + 1);
           });
+          var g = groupTagOf(item);
+          if (g) counts.set(g, (counts.get(g) || 0) + 1);
         });
         if (activeTag && !counts.has(activeTag)) activeTag = "";
         var all = document.createElement("button");
@@ -701,7 +721,9 @@
           renderGroups();
         });
         box.appendChild(all);
-        Array.from(counts.keys()).sort().forEach(function (tag) {
+        var orderedTags = ["实体", "虚拟"].filter(function (t) { return counts.has(t); })
+          .concat(Array.from(counts.keys()).filter(function (t) { return t !== "实体" && t !== "虚拟"; }).sort());
+        orderedTags.forEach(function (tag) {
           var chip = document.createElement("button");
           chip.type = "button";
           chip.className = "chip" + (tag === activeTag ? " active" : "");
@@ -759,11 +781,62 @@
         head.className = "fan-head";
         var title = document.createElement("h2");
         title.textContent = fan;
+
+        var bulk = document.createElement("span");
+        bulk.className = "fan-bulk";
+        var bulkDate = document.createElement("input");
+        bulkDate.type = "date";
+        bulkDate.title = "选择日期后点右侧按钮，批量设置该粉丝所有未面取实体礼物的计划领取时间";
+        var bulkBtn = document.createElement("button");
+        bulkBtn.type = "button";
+        bulkBtn.className = "save-btn";
+        bulkBtn.textContent = "批量设面取日期";
+        bulkBtn.addEventListener("click", async function () {
+          if (!bulkDate.value) { alert("请先选择日期"); return; }
+          var ids = items.filter(function (t) {
+            return t.status !== "已完成" && PHYSICAL_ORDER.indexOf(t.biz_type) >= 0;
+          }).map(function (t) { return t.id; });
+          if (!ids.length) { alert("该粉丝没有未完成的实体业务"); return; }
+          if (!confirm("将把「" + fan + "」的 " + ids.length + " 条未完成实体业务的计划时间设为 " + bulkDate.value + "，确认？")) return;
+          bulkBtn.disabled = true;
+          try {
+            var resp = await fetch("/api/business/update", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Business-Admin-Password": password
+              },
+              body: JSON.stringify({ action: "set_planned", ids: ids, planned_date: bulkDate.value })
+            });
+            if (resp.status === 401 || resp.status === 403) {
+              resetLoginForPassword("密码已失效，请重新输入");
+              return;
+            }
+            if (!resp.ok) throw new Error(await readError(resp) || "批量设置失败");
+            var body = await resp.json();
+            var changed = body.updated_count || 0;
+            tasks = tasks.map(function (item) {
+              return ids.indexOf(item.id) >= 0 && item.status !== "已完成"
+                ? Object.assign({}, item, { planned_date: bulkDate.value })
+                : item;
+            });
+            renderGroups();
+            alert("已设置 " + changed + " 条");
+          } catch (error) {
+            alert(error.message || "批量设置失败，请重试");
+          } finally {
+            bulkBtn.disabled = false;
+          }
+        });
+        bulk.appendChild(bulkDate);
+        bulk.appendChild(bulkBtn);
+
         var right = document.createElement("span");
         right.className = "count";
         var earliest = earliestPlanned(items);
         right.textContent = items.length + " 项业务" + (earliest ? " · 最近计划 " + earliest : "");
         head.appendChild(title);
+        head.appendChild(bulk);
         head.appendChild(right);
         card.appendChild(head);
         items.forEach(function (task) {
@@ -783,10 +856,14 @@
         bizText.textContent = task.biz_type || "（未分类）";
         biz.appendChild(bizText);
         if (task.category) {
-          var badge = document.createElement("span");
-          badge.className = "badge" + (task.category === "暗账" ? " secret" : "");
-          badge.textContent = task.category;
-          biz.appendChild(badge);
+          // "暗账"类别徽章与来源标签"暗账实体奖励"重复，只留来源标签
+          var dup = task.category === "暗账" && tagsOf(task).indexOf("暗账实体奖励") >= 0;
+          if (!dup) {
+            var badge = document.createElement("span");
+            badge.className = "badge" + (task.category === "暗账" ? " secret" : "");
+            badge.textContent = task.category;
+            biz.appendChild(badge);
+          }
         }
         if (task.source_section) {
           tagsOf(task).forEach(function (tag) {
@@ -799,7 +876,7 @@
         var pickup = pickupOf(task);
         if (pickup !== "未确定") {
           var pk = document.createElement("span");
-          pk.className = "badge " + (pickup === "线下" ? "pickup-off" : "pickup-mail");
+          pk.className = "badge " + (pickup === "面取" ? "pickup-off" : "pickup-mail");
           pk.textContent = pickup;
           biz.appendChild(pk);
         }

@@ -230,7 +230,7 @@ async def update_business_task(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请求体格式无效")
 
     action = _clean_text(payload.get("action"), 20)
-    if action not in {"update", "add", "batch_complete"}:
+    if action not in {"update", "add", "batch_complete", "set_planned"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
 
     try:
@@ -308,6 +308,40 @@ def _batch_complete_mutator(
     return state, {"updated_count": updated}
 
 
+def _set_planned_mutator(
+    state: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """把指定 id 列表的任务批量设置计划完成时间（页面按粉丝批量设置面取日期）。"""
+    ids = payload.get("ids")
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少任务 ID 列表")
+    ids = [_clean_text(item, 80) for item in ids][: BATCH_LIMIT + 1]
+    if len(ids) > BATCH_LIMIT:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"单次最多批量处理 {BATCH_LIMIT} 条")
+    for task_id in ids:
+        if not task_id or not re.fullmatch(TASK_ID_RE, task_id):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="存在无效的任务 ID")
+    planned = _clean_planned_date(payload.get("planned_date"))
+    if not planned:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请选择计划完成时间")
+
+    tasks = state.setdefault("tasks", [])
+    if not isinstance(tasks, list):
+        tasks = []
+        state["tasks"] = tasks
+    by_id = {item.get("id"): item for item in tasks if isinstance(item, dict)}
+    now = _bj_now()
+    updated = 0
+    for task_id in dict.fromkeys(ids):
+        task = by_id.get(task_id)
+        if task is None or task.get("status") == "已完成":
+            continue
+        task["planned_date"] = planned
+        task["updated_at"] = now
+        updated += 1
+    return state, {"updated_count": updated}
+
+
 def _add_task_mutator(
     state: dict[str, Any], payload: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -344,3 +378,4 @@ def _add_task_mutator(
 register_mutator("business_tasks", "business_update", _update_task_mutator)
 register_mutator("business_tasks", "business_add", _add_task_mutator)
 register_mutator("business_tasks", "business_batch_complete", _batch_complete_mutator)
+register_mutator("business_tasks", "business_set_planned", _set_planned_mutator)
