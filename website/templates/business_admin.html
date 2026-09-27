@@ -255,6 +255,8 @@
       color: var(--muted);
     }
     .badge.secret { color: var(--gold); border-color: var(--gold); }
+    .badge.pickup-off { color: var(--green); border-color: var(--green); }
+    .badge.pickup-mail { color: var(--teal); border-color: var(--teal); }
     .task-row input[type="date"], .task-row input[type="text"] {
       width: 100%;
       min-height: 32px;
@@ -556,6 +558,7 @@
         raw.split("、").forEach(function (part) {
           var tag = part.trim().replace(/（累计补登）$/, "");
           if (!tag || /^[〇零一二三四五六七八九十]+$/.test(tag)) return;
+          if (tag === "线下领取确认名单") return; // 与领取方式徽章/筛选重复，不展示
           if (seen.indexOf(tag) < 0) seen.push(tag);
         });
         return seen;
@@ -792,6 +795,13 @@
             src.textContent = tag;
             biz.appendChild(src);
           });
+        }
+        var pickup = pickupOf(task);
+        if (pickup !== "未确定") {
+          var pk = document.createElement("span");
+          pk.className = "badge " + (pickup === "线下" ? "pickup-off" : "pickup-mail");
+          pk.textContent = pickup;
+          biz.appendChild(pk);
         }
         row.appendChild(biz);
 
