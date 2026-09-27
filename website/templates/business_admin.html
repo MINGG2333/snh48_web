@@ -259,6 +259,13 @@
     .badge.pickup-mail { color: var(--teal); border-color: var(--teal); }
     .badge.tag-btn { cursor: pointer; }
     .badge.tag-btn:hover { border-color: var(--text); color: var(--text); }
+    .convert-link {
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      text-decoration: underline dotted;
+    }
+    .convert-link:hover { color: var(--text); }
     .recorded-name { color: var(--muted); font-size: 11px; }
     .fan-bulk { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
     .fan-bulk input[type="date"] {
@@ -895,6 +902,41 @@
             renderGroups();
           });
           biz.appendChild(pk);
+          if (pickup === "面取") {
+            var convert = document.createElement("span");
+            convert.className = "convert-link";
+            convert.textContent = "转邮寄";
+            convert.title = "把这条业务改为邮寄：清除面取时间，备注改为邮寄标注";
+            convert.addEventListener("click", async function (event) {
+              event.stopPropagation();
+              if (!confirm("把「" + task.biz_type + "」转为邮寄？面取时间将被清除。")) return;
+              try {
+                var resp = await fetch("/api/business/update", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-Business-Admin-Password": password
+                  },
+                  body: JSON.stringify({ action: "to_mail", ids: [task.id] })
+                });
+                if (resp.status === 401 || resp.status === 403) {
+                  resetLoginForPassword("密码已失效，请重新输入");
+                  return;
+                }
+                if (!resp.ok) throw new Error(await readError(resp) || "转邮寄失败");
+                var body = await resp.json();
+                var changed = body.tasks || [];
+                tasks = tasks.map(function (item) {
+                  var hit = changed.find(function (c) { return c.id === item.id; });
+                  return hit ? Object.assign({}, hit, { latest_name: item.latest_name }) : item;
+                });
+                renderGroups();
+              } catch (error) {
+                alert(error.message || "转邮寄失败，请重试");
+              }
+            });
+            biz.appendChild(convert);
+          }
         }
         row.appendChild(biz);
 
@@ -953,45 +995,6 @@
           saveTask(task.id, toggle.classList.contains("done") ? "已完成" : "未完成", planned.value, note.value, save);
         });
         row.appendChild(save);
-
-        if (pickup === "面取") {
-          var toMail = document.createElement("button");
-          toMail.type = "button";
-          toMail.className = "save-btn";
-          toMail.textContent = "转邮寄";
-          toMail.title = "把这条业务改为邮寄：清除面取时间，备注改为邮寄标注";
-          toMail.addEventListener("click", async function () {
-            if (!confirm("把「" + task.biz_type + "」转为邮寄？面取时间将被清除。")) return;
-            toMail.disabled = true;
-            try {
-              var resp = await fetch("/api/business/update", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-Business-Admin-Password": password
-                },
-                body: JSON.stringify({ action: "to_mail", ids: [task.id] })
-              });
-              if (resp.status === 401 || resp.status === 403) {
-                resetLoginForPassword("密码已失效，请重新输入");
-                return;
-              }
-              if (!resp.ok) throw new Error(await readError(resp) || "转邮寄失败");
-              var body = await resp.json();
-              var changed = body.tasks || [];
-              tasks = tasks.map(function (item) {
-                var hit = changed.find(function (c) { return c.id === item.id; });
-                return hit ? Object.assign({}, hit, { latest_name: item.latest_name }) : item;
-              });
-              renderGroups();
-            } catch (error) {
-              alert(error.message || "转邮寄失败，请重试");
-            } finally {
-              toMail.disabled = false;
-            }
-          });
-          row.appendChild(toMail);
-        }
 
         return row;
       }
