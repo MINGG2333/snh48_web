@@ -353,6 +353,33 @@
       border: 1px solid rgba(255, 255, 255, 0.15);
     }
     .detail-pop .ref-pending { color: var(--muted); }
+    .detail-pop .ref-img-wrap { position: relative; display: block; }
+    .detail-pop .img-remove {
+      position: absolute;
+      top: 10px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      text-align: center;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.65);
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .detail-pop .upload-btn {
+      margin-top: 8px;
+      min-height: 26px;
+      padding: 0 12px;
+      border: 1px dashed var(--line);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .detail-pop .upload-btn:hover { color: var(--text); border-color: var(--text); }
 
     .empty-state { color: var(--muted); text-align: center; padding: 40px 0; font-size: 14px; }
 
@@ -422,6 +449,7 @@
           <div class="field"><label>备注</label><input id="addNote" maxlength="500"></div>
           <div class="check-field"><input type="checkbox" id="addDone"><label for="addDone">已完成</label></div>
           <div class="field wide"><label>详情（“?”图标悬浮内容）</label><textarea id="addDetail" maxlength="500"></textarea></div>
+          <div class="field wide"><label>详情图片（可多选，JPG/PNG/GIF/WebP，单张 ≤8MB）</label><input id="addImages" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple></div>
           <div class="add-actions">
             <button class="btn primary" type="submit" id="addSubmit">添加</button>
             <span class="add-status" id="addStatus2"></span>
@@ -1000,6 +1028,50 @@
       }
 
       var detailCloseTimer = null;
+      var popupAnchor = null;
+
+      async function uploadImage(file) {
+        var fd = new FormData();
+        fd.append("file", file);
+        var resp = await fetch("/api/business/upload-image", {
+          method: "POST",
+          headers: { "X-Business-Admin-Password": password },
+          body: fd
+        });
+        if (resp.status === 401 || resp.status === 403) {
+          resetLoginForPassword("密码已失效，请重新输入");
+          throw new Error("密码已失效，请重新输入");
+        }
+        if (!resp.ok) throw new Error(await readError(resp) || "图片上传失败");
+        var body = await resp.json();
+        return body.name;
+      }
+
+      async function updateTaskImages(task, images) {
+        var resp = await fetch("/api/business/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Business-Admin-Password": password
+          },
+          body: JSON.stringify({ action: "update", id: task.id, images: images })
+        });
+        if (resp.status === 401 || resp.status === 403) {
+          resetLoginForPassword("密码已失效，请重新输入");
+          return;
+        }
+        if (!resp.ok) throw new Error(await readError(resp) || "保存失败");
+        var body = await resp.json();
+        var updated = body.task || {};
+        tasks = tasks.map(function (item) {
+          return item.id === task.id ? Object.assign({}, item, updated, { latest_name: item.latest_name }) : item;
+        });
+        var fresh = tasks.find(function (item) { return item.id === task.id; });
+        if (fresh && popupAnchor) {
+          detailPop.dataset.id = "";
+          openDetailPop(popupAnchor, fresh);
+        }
+      }
 
       function closeDetailPop() {
         clearTimeout(detailCloseTimer);
@@ -1016,6 +1088,7 @@
       function openDetailPop(anchor, task) {
         clearTimeout(detailCloseTimer);
         if (detailPop.style.display !== "none" && detailPop.dataset.id === task.id) return;
+        popupAnchor = anchor;
         document.querySelectorAll(".info-btn.active").forEach(function (btn) { btn.classList.remove("active"); });
         anchor.classList.add("active");
         detailPop.innerHTML = "";
@@ -1038,12 +1111,62 @@
             detailPop.appendChild(img);
           });
         }
+        var taskImages = task.images || [];
+        if (taskImages.length) {
+          hasContent = true;
+          taskImages.forEach(function (name) {
+            var wrap = document.createElement("div");
+            wrap.className = "ref-img-wrap";
+            var img = document.createElement("img");
+            img.className = "ref-img";
+            img.alt = "详情图片";
+            img.loading = "lazy";
+            img.src = "/api/business/reference-image?name=" + encodeURIComponent(name);
+            var rm = document.createElement("span");
+            rm.className = "img-remove";
+            rm.textContent = "×";
+            rm.title = "移除这张图片";
+            rm.addEventListener("click", function (event) {
+              event.stopPropagation();
+              updateTaskImages(task, (task.images || []).filter(function (n) { return n !== name; }))
+                .catch(function (error) { alert(error.message || "移除失败"); });
+            });
+            wrap.appendChild(img);
+            wrap.appendChild(rm);
+            detailPop.appendChild(wrap);
+          });
+        }
         if (!hasContent) {
           var pending = document.createElement("div");
           pending.className = "ref-pending";
           pending.textContent = "待添加";
           detailPop.appendChild(pending);
         }
+        var upBtn = document.createElement("button");
+        upBtn.type = "button";
+        upBtn.className = "upload-btn";
+        upBtn.textContent = "＋ 上传图片";
+        var fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/jpeg,image/png,image/gif,image/webp";
+        fileInput.style.display = "none";
+        fileInput.addEventListener("change", async function () {
+          if (!fileInput.files.length) return;
+          upBtn.textContent = "上传中…";
+          try {
+            var name = await uploadImage(fileInput.files[0]);
+            await updateTaskImages(task, (task.images || []).concat([name]));
+          } catch (error) {
+            alert(error.message || "上传失败");
+            upBtn.textContent = "＋ 上传图片";
+          }
+        });
+        upBtn.addEventListener("click", function (event) {
+          event.stopPropagation();
+          fileInput.click();
+        });
+        detailPop.appendChild(upBtn);
+        detailPop.appendChild(fileInput);
         var src = document.createElement("span");
         src.className = "src";
         src.textContent = "来源：" + (task.source_section || "-") + "；更新于 " + (task.updated_at || "-");
@@ -1156,6 +1279,13 @@
         submit.disabled = true;
         statusEl.textContent = "保存中…";
         try {
+          var imageNames = [];
+          var files = document.getElementById("addImages").files;
+          for (var i = 0; i < files.length; i++) {
+            statusEl.textContent = "上传图片 " + (i + 1) + "/" + files.length + "…";
+            imageNames.push(await uploadImage(files[i]));
+          }
+          statusEl.textContent = "保存中…";
           var resp = await fetch("/api/business/update", {
             method: "POST",
             headers: {
@@ -1170,7 +1300,8 @@
               status: document.getElementById("addDone").checked ? "已完成" : "未完成",
               planned_date: document.getElementById("addPlanned").value,
               note: document.getElementById("addNote").value,
-              detail: document.getElementById("addDetail").value
+              detail: document.getElementById("addDetail").value,
+              images: imageNames
             })
           });
           if (resp.status === 401 || resp.status === 403) {

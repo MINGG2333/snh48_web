@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from pathlib import Path
 
@@ -60,7 +60,30 @@ REFERENCE_IMAGES = {
     "计分奖励": ["总选明账业务说明.jpg"],
 }
 _ALLOWED_REF_NAMES = {name for names in REFERENCE_IMAGES.values() for name in names}
-_REF_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+_REF_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp"}
+
+# 每条业务自传的详情图片：统一命名 uuid32.扩展名，存放在业务数据旁的本地目录。
+UPLOAD_DIR = Path(cfg.BUSINESS_DATA_PATH).resolve().parent / "business_images"
+_UPLOAD_NAME_RE = re.compile(r"^[a-f0-9]{32}\.(jpg|jpeg|png|gif|webp)$")
+_UPLOAD_MIME_EXT = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+_MAX_IMAGES_PER_TASK = 10
+
+
+def _clean_images(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value[: _MAX_IMAGES_PER_TASK]:
+        name = _clean_text(item, 60)
+        if _UPLOAD_NAME_RE.fullmatch(name) and (UPLOAD_DIR / name).is_file():
+            out.append(name)
+    return out
 
 # 说明图 Cookie：<img> 标签无法携带密码请求头，登录成功后种下
 # HttpOnly Cookie（值为密码的 HMAC，不存明文），仅对说明图端点有效。
@@ -204,6 +227,7 @@ def _public_task(task: dict[str, Any], name_map: dict[str, Any] | None = None) -
         "source_section": _clean_text(task.get("source_section"), 80),
         "updated_at": _clean_text(task.get("updated_at"), 40),
         "ref_images": list(REFERENCE_IMAGES.get(_clean_text(task.get("category"), 80), [])),
+        "images": _clean_images(task.get("images")),
     }
 
 
@@ -217,15 +241,38 @@ def get_reference_image(
     request: Request,
     name: str = Query(..., max_length=120),
 ):
-    """按文件名回传业务说明参考图（仅限白名单内的移交包图片）。"""
+    """按文件名回传业务说明参考图（白名单移交包图片或已上传的详情图）。"""
     _verify_ref_access(request)
-    if name not in _ALLOWED_REF_NAMES:
+    if name in _ALLOWED_REF_NAMES:
+        path = REFERENCE_DIR / name
+    elif _UPLOAD_NAME_RE.fullmatch(name):
+        path = UPLOAD_DIR / name
+    else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未知说明图")
-    path = REFERENCE_DIR / name
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="说明图文件不存在")
     media_type = _REF_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
     return FileResponse(path, media_type=media_type)
+
+
+@router.post("/upload-image")
+async def upload_business_image(
+    file: UploadFile = File(...),
+    _=Depends(verify_business_password),
+):
+    """上传一条业务的详情图片，返回可挂到任务 images 字段的文件名。"""
+    ext = _UPLOAD_MIME_EXT.get((file.content_type or "").lower())
+    if not ext:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="仅支持 JPG/PNG/GIF/WebP 图片")
+    content = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="空文件")
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="图片不能超过 8MB")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}{ext}"
+    (UPLOAD_DIR / name).write_bytes(content)
+    return {"ok": True, "name": name}
 
 
 def _clean_planned_date(value: Any) -> str:
@@ -300,6 +347,10 @@ def _update_task_mutator(
         task["planned_date"] = _clean_planned_date(payload.get("planned_date"))
     if "note" in payload:
         task["note"] = _clean_text(payload.get("note"))
+    if "detail" in payload:
+        task["detail"] = _clean_text(payload.get("detail"))
+    if "images" in payload:
+        task["images"] = _clean_images(payload.get("images"))
     task["updated_at"] = _bj_now()
     return state, {"task": _public_task(task)}
 
@@ -431,6 +482,7 @@ def _add_task_mutator(
         "planned_date": _clean_planned_date(payload.get("planned_date")),
         "note": _clean_text(payload.get("note")),
         "detail": _clean_text(payload.get("detail")),
+        "images": _clean_images(payload.get("images")),
         "source_section": "网页新增",
         "updated_at": _bj_now(),
     }
