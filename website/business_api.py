@@ -57,7 +57,7 @@ def _load_fan_name_map() -> dict[str, Any]:
 REFERENCE_DIR = Path(cfg.BUSINESS_DATA_PATH).resolve().parent.parent / "移交包" / "嘉仪业务"
 REFERENCE_IMAGES = {
     "暗账": ["总选暗账业务说明.jpg", "总选暗账业务名单.jpg"],
-    "积分奖励": ["总选明账业务说明.jpg"],
+    "计分奖励": ["总选明账业务说明.jpg"],
 }
 _ALLOWED_REF_NAMES = {name for names in REFERENCE_IMAGES.values() for name in names}
 _REF_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
@@ -256,7 +256,7 @@ async def update_business_task(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请求体格式无效")
 
     action = _clean_text(payload.get("action"), 20)
-    if action not in {"update", "add", "batch_complete", "set_planned"}:
+    if action not in {"update", "add", "batch_complete", "set_planned", "to_mail"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
 
     try:
@@ -272,6 +272,7 @@ async def update_business_task(
     return {
         "ok": True,
         "task": result.get("task") or {},
+        "tasks": result.get("tasks") or [],
         "updated_count": int(result.get("updated_count", 0) or 0),
     }
 
@@ -368,6 +369,42 @@ def _set_planned_mutator(
     return state, {"updated_count": updated}
 
 
+def _to_mail_mutator(
+    state: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """把指定 id 列表的任务从面取转为邮寄：清除计划时间，备注改为邮寄标注。"""
+    ids = payload.get("ids")
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少任务 ID 列表")
+    ids = [_clean_text(item, 80) for item in ids][: BATCH_LIMIT + 1]
+    if len(ids) > BATCH_LIMIT:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"单次最多批量处理 {BATCH_LIMIT} 条")
+    for task_id in ids:
+        if not task_id or not re.fullmatch(TASK_ID_RE, task_id):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="存在无效的任务 ID")
+
+    tasks = state.setdefault("tasks", [])
+    if not isinstance(tasks, list):
+        tasks = []
+        state["tasks"] = tasks
+    by_id = {item.get("id"): item for item in tasks if isinstance(item, dict)}
+    now = _bj_now()
+    stamp = now[5:10].replace("-", "/")
+    updated_tasks = []
+    for task_id in dict.fromkeys(ids):
+        task = by_id.get(task_id)
+        if task is None or task.get("status") == "已完成":
+            continue
+        segments = [seg.strip() for seg in re.split(r"[；;]", str(task.get("note") or "")) if seg.strip()]
+        kept = [seg for seg in segments if not seg.startswith("领取方式：") and seg != "现场交付"]
+        kept.append(f"领取方式：邮寄（{stamp} 标注）；收件信息待收集")
+        task["note"] = "；".join(kept)
+        task["planned_date"] = ""
+        task["updated_at"] = now
+        updated_tasks.append(_public_task(task))
+    return state, {"updated_count": len(updated_tasks), "tasks": updated_tasks}
+
+
 def _add_task_mutator(
     state: dict[str, Any], payload: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -405,3 +442,4 @@ register_mutator("business_tasks", "business_update", _update_task_mutator)
 register_mutator("business_tasks", "business_add", _add_task_mutator)
 register_mutator("business_tasks", "business_batch_complete", _batch_complete_mutator)
 register_mutator("business_tasks", "business_set_planned", _set_planned_mutator)
+register_mutator("business_tasks", "business_to_mail", _to_mail_mutator)
