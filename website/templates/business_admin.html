@@ -586,12 +586,6 @@
         return "未确定";
       }
 
-      function groupTagOf(task) {
-        if (PHYSICAL_ORDER.indexOf(task.biz_type) >= 0) return "实体";
-        if (ONLINE_ORDER.indexOf(task.biz_type) >= 0) return "虚拟";
-        return "";
-      }
-
       function visibleTasks(ignoreTag) {
         var out = tasks;
         if (activeTypes.size) {
@@ -602,7 +596,7 @@
         }
         if (activeTag && !ignoreTag) {
           out = out.filter(function (item) {
-            return tagsOf(item).indexOf(activeTag) >= 0 || groupTagOf(item) === activeTag;
+            return tagsOf(item).indexOf(activeTag) >= 0;
           });
         }
         return out;
@@ -713,8 +707,6 @@
           tagsOf(item).forEach(function (tag) {
             counts.set(tag, (counts.get(tag) || 0) + 1);
           });
-          var g = groupTagOf(item);
-          if (g) counts.set(g, (counts.get(g) || 0) + 1);
         });
         if (activeTag && !counts.has(activeTag)) activeTag = "";
         var all = document.createElement("button");
@@ -726,9 +718,7 @@
           renderGroups();
         });
         box.appendChild(all);
-        var orderedTags = ["实体", "虚拟"].filter(function (t) { return counts.has(t); })
-          .concat(Array.from(counts.keys()).filter(function (t) { return t !== "实体" && t !== "虚拟"; }).sort());
-        orderedTags.forEach(function (tag) {
+        Array.from(counts.keys()).sort().forEach(function (tag) {
           var chip = document.createElement("button");
           chip.type = "button";
           chip.className = "chip" + (tag === activeTag ? " active" : "");
