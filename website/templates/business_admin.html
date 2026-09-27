@@ -368,12 +368,6 @@
     </header>
 
     <main>
-      <section class="kpi-grid" aria-label="状态统计">
-        <div class="kpi"><div class="label">粉丝分组</div><div class="value" id="statFans">0</div></div>
-        <div class="kpi s-pending"><div class="label">未完成</div><div class="value" id="statPending">0</div></div>
-        <div class="kpi s-done"><div class="label">已完成</div><div class="value" id="statDone">0</div></div>
-      </section>
-
       <div class="filter-bar" id="filterBar" style="display:none">
         <div class="filter-row">
           <span class="filter-label">业务类型</span>
@@ -384,7 +378,17 @@
           <span class="filter-label">领取方式</span>
           <div class="chips" id="pickupChips"></div>
         </div>
+        <div class="filter-row">
+          <span class="filter-label">来源标签</span>
+          <div class="chips" id="tagChips"></div>
+        </div>
       </div>
+
+      <section class="kpi-grid" aria-label="筛选结果统计">
+        <div class="kpi"><div class="label">粉丝数</div><div class="value" id="statFans">0</div></div>
+        <div class="kpi s-pending"><div class="label">未完成</div><div class="value" id="statPending">0</div></div>
+        <div class="kpi s-done"><div class="label">已完成</div><div class="value" id="statDone">0</div></div>
+      </section>
 
       <details class="add-panel" id="addPanel">
         <summary>新增业务</summary>
@@ -421,6 +425,7 @@
       var tasks = [];
       var activeTypes = new Set();
       var activePickup = "";
+      var activeTag = "";
 
       var loginOverlay = document.getElementById("loginOverlay");
       var passwordInput = document.getElementById("passwordInput");
@@ -518,7 +523,6 @@
           if (!resp.ok) throw new Error(await readError(resp) || "数据加载失败");
           var data = await resp.json();
           tasks = Array.isArray(data.tasks) ? data.tasks : [];
-          renderStats();
           renderBizChips();
           renderPickupChips();
           renderGroups();
@@ -537,12 +541,24 @@
         }
       }
 
-      function renderStats() {
+      function renderStats(items) {
         var done = 0;
-        tasks.forEach(function (item) { if (item.status === "已完成") done += 1; });
-        document.getElementById("statFans").textContent = new Set(tasks.map(function (i) { return i.fan_name; })).size;
-        document.getElementById("statPending").textContent = tasks.length - done;
+        items.forEach(function (item) { if (item.status === "已完成") done += 1; });
+        document.getElementById("statFans").textContent = new Set(items.map(function (i) { return i.fan_name; })).size;
+        document.getElementById("statPending").textContent = items.length - done;
         document.getElementById("statDone").textContent = done;
+      }
+
+      function tagsOf(task) {
+        var raw = task.source_section || "";
+        if (!raw) return [];
+        var seen = [];
+        raw.split("、").forEach(function (part) {
+          var tag = part.trim().replace(/（累计补登）$/, "");
+          if (!tag || /^[〇零一二三四五六七八九十]+$/.test(tag)) return;
+          if (seen.indexOf(tag) < 0) seen.push(tag);
+        });
+        return seen;
       }
 
       function pickupOf(task) {
@@ -552,13 +568,16 @@
         return "未确定";
       }
 
-      function visibleTasks() {
+      function visibleTasks(ignoreTag) {
         var out = tasks;
         if (activeTypes.size) {
           out = out.filter(function (item) { return activeTypes.has(item.biz_type); });
         }
         if (activePickup) {
           out = out.filter(function (item) { return pickupOf(item) === activePickup; });
+        }
+        if (activeTag && !ignoreTag) {
+          out = out.filter(function (item) { return tagsOf(item).indexOf(activeTag) >= 0; });
         }
         return out;
       }
@@ -659,6 +678,39 @@
         });
       }
 
+      function renderTagChips() {
+        var box = document.getElementById("tagChips");
+        box.innerHTML = "";
+        // 可选标签随前两个筛选动态变化
+        var counts = new Map();
+        visibleTasks(true).forEach(function (item) {
+          tagsOf(item).forEach(function (tag) {
+            counts.set(tag, (counts.get(tag) || 0) + 1);
+          });
+        });
+        if (activeTag && !counts.has(activeTag)) activeTag = "";
+        var all = document.createElement("button");
+        all.type = "button";
+        all.className = "chip" + (activeTag === "" ? " active" : "");
+        all.textContent = "全部";
+        all.addEventListener("click", function () {
+          activeTag = "";
+          renderGroups();
+        });
+        box.appendChild(all);
+        Array.from(counts.keys()).sort().forEach(function (tag) {
+          var chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip" + (tag === activeTag ? " active" : "");
+          chip.textContent = tag + " (" + counts.get(tag) + ")";
+          chip.addEventListener("click", function () {
+            activeTag = (activeTag === tag) ? "" : tag;
+            renderGroups();
+          });
+          box.appendChild(chip);
+        });
+      }
+
       function earliestPlanned(items) {
         var dates = items.map(function (t) { return t.planned_date || ""; }).filter(Boolean);
         if (!dates.length) return "";
@@ -668,7 +720,9 @@
       function renderGroups() {
         var container = document.getElementById("groupList");
         container.innerHTML = "";
+        renderTagChips();
         var visible = visibleTasks();
+        renderStats(visible);
         document.getElementById("emptyState").style.display = visible.length ? "none" : "block";
         if (!visible.length && tasks.length) {
           document.getElementById("emptyState").textContent = "当前筛选下没有业务";
@@ -732,10 +786,12 @@
           biz.appendChild(badge);
         }
         if (task.source_section) {
-          var src = document.createElement("span");
-          src.className = "badge";
-          src.textContent = task.source_section.replace(/[一二三四五六七八九〇]、/g, "");
-          biz.appendChild(src);
+          tagsOf(task).forEach(function (tag) {
+            var src = document.createElement("span");
+            src.className = "badge";
+            src.textContent = tag;
+            biz.appendChild(src);
+          });
         }
         row.appendChild(biz);
 
@@ -892,7 +948,7 @@
           var body = await resp.json();
           var updated = body.task || {};
           tasks = tasks.map(function (item) { return item.id === id ? Object.assign({}, item, updated) : item; });
-          renderStats();
+          renderStats(visibleTasks());
           button.textContent = "已保存";
           button.classList.add("saved");
           setTimeout(function () { button.textContent = "保存"; button.classList.remove("saved"); }, 1600);
