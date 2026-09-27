@@ -259,6 +259,7 @@
     .badge.pickup-mail { color: var(--teal); border-color: var(--teal); }
     .badge.tag-btn { cursor: pointer; }
     .badge.tag-btn:hover { border-color: var(--text); color: var(--text); }
+    .recorded-name { color: var(--muted); font-size: 11px; }
     .fan-bulk { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
     .fan-bulk input[type="date"] {
       min-height: 28px;
@@ -758,7 +759,7 @@
         }
         var groups = new Map();
         visible.forEach(function (task) {
-          var key = task.fan_name || "（未命名）";
+          var key = (task.latest_name || task.fan_name || "（未命名）");
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key).push(task);
         });
@@ -857,6 +858,12 @@
         var bizText = document.createElement("span");
         bizText.textContent = task.biz_type || "（未分类）";
         biz.appendChild(bizText);
+        if (task.latest_name && task.latest_name !== task.fan_name) {
+          var oldName = document.createElement("span");
+          oldName.className = "recorded-name";
+          oldName.textContent = "记录时：" + task.fan_name;
+          biz.appendChild(oldName);
+        }
         if (task.category) {
           // 与来源标签重复的类别徽章不显示（暗账实体奖励 / 总选计分奖励）
           var srcTags = tagsOf(task);
@@ -1051,7 +1058,7 @@
           if (!resp.ok) throw new Error(await readError(resp) || "保存失败");
           var body = await resp.json();
           var updated = body.task || {};
-          tasks = tasks.map(function (item) { return item.id === id ? Object.assign({}, item, updated) : item; });
+          tasks = tasks.map(function (item) { return item.id === id ? Object.assign({}, item, updated, { latest_name: item.latest_name }) : item; });
           renderStats(visibleTasks());
           button.textContent = "已保存";
           button.classList.add("saved");

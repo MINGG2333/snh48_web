@@ -38,6 +38,20 @@ ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TEXT_LIMIT = 500
 BATCH_LIMIT = 500
 
+# 粉丝"记录时昵称 → 最新昵称"映射，由 fan-hub scripts/data/build_fan_name_map.py
+# 定期从房间消息生成；文件缺失时静默跳过（显示原名）。
+FAN_NAME_MAP_PATH = Path(cfg.BUSINESS_DATA_PATH).resolve().parent / "fan_name_map.json"
+
+
+def _load_fan_name_map() -> dict[str, Any]:
+    try:
+        data = json.loads(FAN_NAME_MAP_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    mapping = data.get("map")
+    return mapping if isinstance(mapping, dict) else {}
+
+
 # 业务说明参考图：存放在业务数据旁的移交包目录（本地私有，不进 Git、不上阿里云）。
 # 按业务类别映射；"?" 弹窗展示，没有映射的类别显示"待添加"。
 REFERENCE_DIR = Path(cfg.BUSINESS_DATA_PATH).resolve().parent.parent / "移交包" / "嘉仪业务"
@@ -152,7 +166,12 @@ def get_business_data(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"业务数据读取失败：{exc}",
         ) from exc
-    tasks = [_public_task(task) for task in doc.get("tasks", []) if isinstance(task, dict)]
+    name_map = _load_fan_name_map()
+    tasks = [
+        _public_task(task, name_map)
+        for task in doc.get("tasks", [])
+        if isinstance(task, dict)
+    ]
     stats = {value: 0 for value in ("未完成", "已完成")}
     for task in tasks:
         stats[task["status"]] = stats.get(task["status"], 0) + 1
@@ -165,10 +184,17 @@ def get_business_data(
     }
 
 
-def _public_task(task: dict[str, Any]) -> dict[str, Any]:
+def _public_task(task: dict[str, Any], name_map: dict[str, Any] | None = None) -> dict[str, Any]:
+    fan_name = _clean_text(task.get("fan_name"), 80)
+    latest_name = ""
+    if name_map:
+        entry = name_map.get(fan_name)
+        if isinstance(entry, dict):
+            latest_name = _clean_text(entry.get("latest"), 80)
     return {
         "id": _clean_text(task.get("id"), 80),
-        "fan_name": _clean_text(task.get("fan_name"), 80),
+        "fan_name": fan_name,
+        "latest_name": latest_name,
         "biz_type": _clean_text(task.get("biz_type"), 80),
         "category": _clean_text(task.get("category"), 80),
         "status": _normalise_status(task.get("status")),
