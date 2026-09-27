@@ -257,6 +257,8 @@
     .badge.secret { color: var(--gold); border-color: var(--gold); }
     .badge.pickup-off { color: var(--green); border-color: var(--green); }
     .badge.pickup-mail { color: var(--teal); border-color: var(--teal); }
+    .badge.tag-btn { cursor: pointer; }
+    .badge.tag-btn:hover { border-color: var(--text); color: var(--text); }
     .fan-bulk { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
     .fan-bulk input[type="date"] {
       min-height: 28px;
@@ -856,8 +858,10 @@
         bizText.textContent = task.biz_type || "（未分类）";
         biz.appendChild(bizText);
         if (task.category) {
-          // "暗账"类别徽章与来源标签"暗账实体奖励"重复，只留来源标签
-          var dup = task.category === "暗账" && tagsOf(task).indexOf("暗账实体奖励") >= 0;
+          // 与来源标签重复的类别徽章不显示（暗账实体奖励 / 总选计分奖励）
+          var srcTags = tagsOf(task);
+          var dup = (task.category === "暗账" && srcTags.indexOf("暗账实体奖励") >= 0) ||
+                    (task.category === "计分奖励" && srcTags.indexOf("总选计分奖励") >= 0);
           if (!dup) {
             var badge = document.createElement("span");
             badge.className = "badge" + (task.category === "暗账" ? " secret" : "");
@@ -868,16 +872,29 @@
         if (task.source_section) {
           tagsOf(task).forEach(function (tag) {
             var src = document.createElement("span");
-            src.className = "badge";
+            src.className = "badge tag-btn";
             src.textContent = tag;
+            src.title = "点击按此标签筛选";
+            src.addEventListener("click", function (event) {
+              event.stopPropagation();
+              activeTag = (activeTag === tag) ? "" : tag;
+              renderGroups();
+            });
             biz.appendChild(src);
           });
         }
         var pickup = pickupOf(task);
         if (pickup !== "未确定") {
           var pk = document.createElement("span");
-          pk.className = "badge " + (pickup === "面取" ? "pickup-off" : "pickup-mail");
+          pk.className = "badge tag-btn " + (pickup === "面取" ? "pickup-off" : "pickup-mail");
           pk.textContent = pickup;
+          pk.title = "点击按此领取方式筛选";
+          pk.addEventListener("click", function (event) {
+            event.stopPropagation();
+            activePickup = (activePickup === pickup) ? "" : pickup;
+            renderPickupChips();
+            renderGroups();
+          });
           biz.appendChild(pk);
         }
         row.appendChild(biz);
