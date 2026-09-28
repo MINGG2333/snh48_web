@@ -3,6 +3,9 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
+from fastapi import HTTPException
+
+from website.business_api import _batch_to_mail_mutator, _to_mail_mutator
 from website.memories_api import _review_memory_mutator, _seed_merge_mutator, _submit_memory_mutator
 from website.room_messages_api import _ignore_latest_mutator, _undo_latest_mutator
 from website.score_gifts_api import _business_review_mutator
@@ -72,6 +75,93 @@ class SharedStateMutatorTests(unittest.TestCase):
         self.assertIn("other", updated["records"])
         self.assertEqual(updated["records"]["live-1"]["status"], "uncertain")
         self.assertEqual(result["item_id"], "live-1")
+
+    def test_business_batch_to_mail_converts_physical_and_keeps_virtual(self) -> None:
+        state = {
+            "version": 1,
+            "tasks": [
+                {
+                    "id": "t-physical",
+                    "fan_name": "粉丝甲",
+                    "biz_type": "手写奖状",
+                    "status": "未完成",
+                    "planned_date": "2026-10-01",
+                    "note": "领取方式：面取；礼物已买；10/01 面交",
+                },
+                {
+                    "id": "t-virtual",
+                    "fan_name": "粉丝甲",
+                    "biz_type": "点唱",
+                    "status": "未完成",
+                    "planned_date": "2026-10-02",
+                    "note": "领取方式：面取",
+                },
+                {
+                    "id": "t-done",
+                    "fan_name": "粉丝甲",
+                    "biz_type": "随机拼豆",
+                    "status": "已完成",
+                    "planned_date": "2026-09-01",
+                    "note": "领取方式：面取",
+                },
+            ],
+        }
+        # 前端把该粉丝卡片所有未完成实体业务的 id 都传过来，虚拟/已完成即使误传也应被跳过
+        updated, result = _batch_to_mail_mutator(
+            state, {"ids": ["t-physical", "t-virtual", "t-done"]}
+        )
+
+        self.assertEqual(result["updated_count"], 1)
+        self.assertEqual([task["id"] for task in result["tasks"]], ["t-physical"])
+        by_id = {task["id"]: task for task in updated["tasks"]}
+
+        physical = by_id["t-physical"]
+        self.assertEqual(physical["planned_date"], "")
+        self.assertIn("领取方式：邮寄", physical["note"])
+        self.assertIn("收件信息待收集", physical["note"])
+        # 其他备注段保留
+        self.assertIn("礼物已买", physical["note"])
+        self.assertIn("10/01 面交", physical["note"])
+        self.assertNotIn("领取方式：面取", physical["note"])
+
+        # 虚拟类业务不受影响
+        virtual = by_id["t-virtual"]
+        self.assertEqual(virtual["planned_date"], "2026-10-02")
+        self.assertEqual(virtual["note"], "领取方式：面取")
+
+        # 已完成业务不受影响
+        done = by_id["t-done"]
+        self.assertEqual(done["planned_date"], "2026-09-01")
+        self.assertEqual(done["note"], "领取方式：面取")
+
+    def test_business_batch_to_mail_matches_single_to_mail_note(self) -> None:
+        def make_state() -> dict:
+            return {
+                "version": 1,
+                "tasks": [
+                    {
+                        "id": "t-1",
+                        "fan_name": "粉丝乙",
+                        "biz_type": "指定拼豆",
+                        "status": "未完成",
+                        "planned_date": "2026-10-05",
+                        "note": "现场交付；已付款",
+                    }
+                ],
+            }
+
+        single, single_result = _to_mail_mutator(make_state(), {"ids": ["t-1"]})
+        batch, batch_result = _batch_to_mail_mutator(make_state(), {"ids": ["t-1"]})
+        self.assertEqual(single["tasks"][0]["note"], batch["tasks"][0]["note"])
+        self.assertEqual(single_result["updated_count"], batch_result["updated_count"])
+        self.assertNotIn("现场交付", batch["tasks"][0]["note"])
+        self.assertIn("已付款", batch["tasks"][0]["note"])
+
+    def test_business_batch_to_mail_rejects_invalid_payload(self) -> None:
+        with self.assertRaises(HTTPException):
+            _batch_to_mail_mutator({"tasks": []}, {"ids": []})
+        with self.assertRaises(HTTPException):
+            _batch_to_mail_mutator({"tasks": []}, {"ids": ["bad id!"]})
 
     def test_memory_submit_review_and_seed_merge_keep_manual_state(self) -> None:
         record = {

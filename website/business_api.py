@@ -303,7 +303,7 @@ async def update_business_task(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="请求体格式无效")
 
     action = _clean_text(payload.get("action"), 20)
-    if action not in {"update", "add", "batch_complete", "set_planned", "to_mail"}:
+    if action not in {"update", "add", "batch_complete", "set_planned", "to_mail", "batch_to_mail"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
 
     try:
@@ -420,10 +420,7 @@ def _set_planned_mutator(
     return state, {"updated_count": updated}
 
 
-def _to_mail_mutator(
-    state: dict[str, Any], payload: dict[str, Any]
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """把指定 id 列表的任务从面取转为邮寄：清除计划时间，备注改为邮寄标注。"""
+def _clean_id_list(payload: dict[str, Any]) -> list[str]:
     ids = payload.get("ids")
     if not isinstance(ids, list) or not ids:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少任务 ID 列表")
@@ -433,6 +430,28 @@ def _to_mail_mutator(
     for task_id in ids:
         if not task_id or not re.fullmatch(TASK_ID_RE, task_id):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="存在无效的任务 ID")
+    return ids
+
+
+def _to_mail_note(note: Any, stamp: str) -> str:
+    """备注改写：去掉旧的领取方式标注，追加邮寄标注，保留其他备注段。"""
+    segments = [seg.strip() for seg in re.split(r"[；;]", str(note or "")) if seg.strip()]
+    kept = [seg for seg in segments if not seg.startswith("领取方式：") and seg != "现场交付"]
+    kept.append(f"领取方式：邮寄（{stamp} 标注）；收件信息待收集")
+    return "；".join(kept)
+
+
+def _apply_to_mail(task: dict[str, Any], now: str, stamp: str) -> None:
+    task["note"] = _to_mail_note(task.get("note"), stamp)
+    task["planned_date"] = ""
+    task["updated_at"] = now
+
+
+def _to_mail_mutator(
+    state: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """把指定 id 列表的任务从面取转为邮寄：清除计划时间，备注改为邮寄标注。"""
+    ids = _clean_id_list(payload)
 
     tasks = state.setdefault("tasks", [])
     if not isinstance(tasks, list):
@@ -446,12 +465,41 @@ def _to_mail_mutator(
         task = by_id.get(task_id)
         if task is None or task.get("status") == "已完成":
             continue
-        segments = [seg.strip() for seg in re.split(r"[；;]", str(task.get("note") or "")) if seg.strip()]
-        kept = [seg for seg in segments if not seg.startswith("领取方式：") and seg != "现场交付"]
-        kept.append(f"领取方式：邮寄（{stamp} 标注）；收件信息待收集")
-        task["note"] = "；".join(kept)
-        task["planned_date"] = ""
-        task["updated_at"] = now
+        _apply_to_mail(task, now, stamp)
+        updated_tasks.append(_public_task(task))
+    return state, {"updated_count": len(updated_tasks), "tasks": updated_tasks}
+
+
+# 实体类业务类型，与 business_admin.html 的 PHYSICAL_ORDER 保持一致；
+# 批量转邮寄只作用于这些类型，虚拟/线上业务即使误传 id 也不会被改。
+PHYSICAL_BIZ_TYPES = frozenset({
+    "手写奖状", "挑礼物＋选购原因卡片", "仪嘉人签名", "甲鱼/顺顺两寸照或顺顺毛发护身符",
+    "手作盲盒 A（消耗型）", "手作盲盒 B（保存型）", "感恩手写信", "手写感谢信",
+    "甲鱼的神秘礼物", "随机拼豆", "指定拼豆",
+})
+
+
+def _batch_to_mail_mutator(
+    state: dict[str, Any], payload: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """把指定粉丝（页面按粉丝卡片给出 id 列表）的未完成实体业务批量转为邮寄。"""
+    ids = _clean_id_list(payload)
+
+    tasks = state.setdefault("tasks", [])
+    if not isinstance(tasks, list):
+        tasks = []
+        state["tasks"] = tasks
+    by_id = {item.get("id"): item for item in tasks if isinstance(item, dict)}
+    now = _bj_now()
+    stamp = now[5:10].replace("-", "/")
+    updated_tasks = []
+    for task_id in dict.fromkeys(ids):
+        task = by_id.get(task_id)
+        if task is None or task.get("status") == "已完成":
+            continue
+        if _clean_text(task.get("biz_type"), 80) not in PHYSICAL_BIZ_TYPES:
+            continue
+        _apply_to_mail(task, now, stamp)
         updated_tasks.append(_public_task(task))
     return state, {"updated_count": len(updated_tasks), "tasks": updated_tasks}
 
@@ -495,3 +543,4 @@ register_mutator("business_tasks", "business_add", _add_task_mutator)
 register_mutator("business_tasks", "business_batch_complete", _batch_complete_mutator)
 register_mutator("business_tasks", "business_set_planned", _set_planned_mutator)
 register_mutator("business_tasks", "business_to_mail", _to_mail_mutator)
+register_mutator("business_tasks", "business_batch_to_mail", _batch_to_mail_mutator)

@@ -858,8 +858,50 @@
             bulkBtn.disabled = false;
           }
         });
+        var bulkMailBtn = document.createElement("button");
+        bulkMailBtn.type = "button";
+        bulkMailBtn.className = "save-btn";
+        bulkMailBtn.textContent = "批量转邮寄";
+        bulkMailBtn.title = "把该粉丝所有未完成实体业务转为邮寄：清除面取时间，备注改为邮寄标注";
+        bulkMailBtn.addEventListener("click", async function () {
+          var targets = items.filter(function (t) {
+            return t.status !== "已完成" && PHYSICAL_ORDER.indexOf(t.biz_type) >= 0;
+          });
+          var ids = targets.map(function (t) { return t.id; });
+          if (!ids.length) { alert("该粉丝没有未完成的实体业务"); return; }
+          if (!confirm("将把「" + fan + "」的 " + ids.length + " 条未完成实体业务转为邮寄：面取时间将被清除，备注改为邮寄标注，确认？")) return;
+          bulkMailBtn.disabled = true;
+          try {
+            var resp = await fetch("/api/business/update", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Business-Admin-Password": password
+              },
+              body: JSON.stringify({ action: "batch_to_mail", ids: ids })
+            });
+            if (resp.status === 401 || resp.status === 403) {
+              resetLoginForPassword("密码已失效，请重新输入");
+              return;
+            }
+            if (!resp.ok) throw new Error(await readError(resp) || "批量转邮寄失败");
+            var body = await resp.json();
+            var changed = body.tasks || [];
+            tasks = tasks.map(function (item) {
+              var hit = changed.find(function (c) { return c.id === item.id; });
+              return hit ? Object.assign({}, hit, { latest_name: item.latest_name }) : item;
+            });
+            renderGroups();
+            alert("已转邮寄 " + (body.updated_count || changed.length) + " 条");
+          } catch (error) {
+            alert(error.message || "批量转邮寄失败，请重试");
+          } finally {
+            bulkMailBtn.disabled = false;
+          }
+        });
         bulk.appendChild(bulkDate);
         bulk.appendChild(bulkBtn);
+        bulk.appendChild(bulkMailBtn);
 
         var right = document.createElement("span");
         right.className = "count";
