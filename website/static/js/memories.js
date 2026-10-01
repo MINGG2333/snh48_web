@@ -22,11 +22,7 @@
   function init() {
     bindElements();
     bindEvents();
-    state.password = localStorage.getItem(storageKey) || '';
-    if (state.password) {
-      els.password.value = state.password;
-      attemptLogin(true);
-    }
+    localStorage.removeItem(storageKey);
   }
 
   function bindElements() {
@@ -104,7 +100,6 @@
     setLoginFeedback('loading', '密码正确，正在加载记忆…');
     try {
       await loadMemories();
-      localStorage.setItem(storageKey, state.password);
       showApp();
       track('login_attempt', { area: 'memories', result: 'success', mode: 'view' });
     } catch (error) {
