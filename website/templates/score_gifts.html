@@ -138,6 +138,11 @@
     .score-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); text-decoration: none; font-size: 12px; }
     .score-nav a:hover, .score-nav a:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
 
+    .refresh-actions { margin-top: 9px; }
+    .refresh-btn { min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); font-size: 12px; }
+    .refresh-btn:hover, .refresh-btn:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .refresh-btn:disabled { cursor: wait; opacity: 0.72; }
+
     main {
       width: min(1500px, 100%);
       margin: 0 auto;
@@ -833,6 +838,9 @@
         <div class="refresh">
           <div>每 <strong id="refreshSeconds">30</strong> 秒检查更新</div>
           <div id="generatedAt">生成时间：-</div>
+          <div class="refresh-actions">
+            <button class="refresh-btn" id="manualRefreshBtn" type="button">刷新</button>
+          </div>
           <nav class="score-nav" aria-label="计分页面导航">
             <a href="/score-pk" data-track="score_nav_pk">计分 PK</a>
           </nav>
@@ -1041,6 +1049,7 @@
     var sourceFilter = "all";
     var refreshTimer = null;
     var refreshSeconds = 30;
+    var manualRefreshRevertTimer = null;
     var lastDatasetSnapshot = null;
     var checkingUpdates = false;
     var lastCatalogHash = "";
@@ -1113,6 +1122,7 @@
     var loadMoreState = document.getElementById("loadMoreState");
     var loadMoreSentinel = document.getElementById("loadMoreSentinel");
     var updatePill = document.getElementById("updatePill");
+    var manualRefreshBtn = document.getElementById("manualRefreshBtn");
     var detailPanel = document.getElementById("detailPanel");
 
     function trackAdminEvent(eventType, data) {
@@ -1233,7 +1243,7 @@
         });
 
         if (await handleAuthFailure(resp)) {
-          return;
+          return false;
         }
 
         if (!resp.ok) {
@@ -1261,12 +1271,14 @@
           });
         }
         if (options.resetTimer) resetRefreshTimer();
+        return true;
       } catch (err) {
         if (loginAttempt) showLoginLoadRetry("密码正确，但计分礼物数据加载失败，请点击重试加载");
         else {
           loginError.textContent = "加载失败：" + err.message;
           loginError.classList.add("show");
         }
+        return false;
       } finally {
         dashboard.classList.remove("loading");
       }
@@ -2126,6 +2138,39 @@
       }
     }
 
+    async function manualRefresh() {
+      if (manualRefreshBtn.disabled) return;
+      if (!password || !pageEl.classList.contains("ready")) return;
+      if (manualRefreshRevertTimer) {
+        window.clearTimeout(manualRefreshRevertTimer);
+        manualRefreshRevertTimer = null;
+      }
+      manualRefreshBtn.disabled = true;
+      manualRefreshBtn.textContent = "正在刷新...";
+      trackAdminEvent("admin_filter", scoreFilterPayload("manual_refresh"));
+      var ok = false;
+      try {
+        ok = await fetchData({ resetTimer: true });
+      } finally {
+        manualRefreshBtn.disabled = false;
+        if (ok) {
+          manualRefreshBtn.textContent = "已更新";
+          manualRefreshRevertTimer = window.setTimeout(function() {
+            manualRefreshRevertTimer = null;
+            manualRefreshBtn.textContent = "刷新";
+          }, 2000);
+        } else if (pageEl.classList.contains("ready")) {
+          manualRefreshBtn.textContent = "刷新失败，请重试";
+          manualRefreshRevertTimer = window.setTimeout(function() {
+            manualRefreshRevertTimer = null;
+            manualRefreshBtn.textContent = "刷新";
+          }, 3000);
+        } else {
+          manualRefreshBtn.textContent = "刷新";
+        }
+      }
+    }
+
     function resetRefreshTimer() {
       stopRefresh();
       refreshTimer = window.setInterval(checkUpdates, Math.max(refreshSeconds, 15) * 1000);
@@ -2226,6 +2271,7 @@
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
     updatePill.addEventListener("click", loadLatestData);
+    manualRefreshBtn.addEventListener("click", manualRefresh);
     exportDetailsBtn.addEventListener("click", exportDetails);
     exportSendersBtn.addEventListener("click", exportSenderDistribution);
     openSenderModalBtn.addEventListener("click", openSenderModal);

@@ -186,13 +186,14 @@
         statusEl.className = 'qa-status ready';
         statusEl.innerHTML = `<i class="fas fa-check-circle"></i> 知识库已就绪
           （${data.stats?.segment_count || '?'} 个片段）
-          <button class="btn" style="margin-left:12px;padding:4px 12px;font-size:0.8rem"
-                  onclick="window.location.reload()">
+          <button id="qaRefreshBtn" class="btn" style="margin-left:12px;padding:4px 12px;font-size:0.8rem"
+                  onclick="window._qaRefresh()">
             <i class="fas fa-sync"></i> 刷新
           </button>`;
 
         // Now check if password verification is needed
-        const authed = await checkPassword();
+        // In-page refresh keeps sitePassword in memory → no need to re-prompt
+        const authed = sitePassword ? true : await checkPassword();
         if (authed) {
           inputEl.disabled = false;
           submitEl.disabled = false;
@@ -1513,6 +1514,27 @@
     }).catch(() => {
       if (feedback) feedback.innerHTML = '<span style="color:#ef4444;">重试失败，请稍后再试</span>';
     });
+  };
+
+  // ── Global: In-page refresh of KB status (no page reload, keeps login) ──
+  window._qaRefresh = async function() {
+    const btn = document.getElementById('qaRefreshBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 正在刷新...';
+    }
+    // checkStatus() re-fetches /api/qa/status and rebuilds the status banner
+    // (including a fresh refresh button) on every outcome; errors are shown
+    // in the banner by checkStatus itself and never touch the login state.
+    await checkStatus();
+    const newBtn = document.getElementById('qaRefreshBtn');
+    if (newBtn && statusEl.classList.contains('ready')) {
+      const hint = document.createElement('span');
+      hint.style.cssText = 'margin-left:8px;font-size:0.8rem;color:#4ade80;';
+      hint.textContent = '已更新 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      newBtn.parentNode.appendChild(hint);
+      setTimeout(() => hint.remove(), 5000);
+    }
   };
 
   // ── Convert backend rate-limit messages to user-friendly text ────────

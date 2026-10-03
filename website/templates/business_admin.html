@@ -568,7 +568,7 @@
           });
           if (resp.status === 401 || resp.status === 403) {
             resetLoginForPassword(loginVerified ? "密码已失效，请重新输入" : "密码错误");
-            return;
+            return false;
           }
           if (!resp.ok) throw new Error(await readError(resp) || "数据加载失败");
           var data = await resp.json();
@@ -581,6 +581,7 @@
           loginOverlay.classList.add("hidden");
           pageEl.classList.add("ready");
           if (fromLogin) trackAdminEvent("login_attempt", { action: "business_admin_login", result: "success" });
+          return true;
         } catch (error) {
           if (loginOverlay.classList.contains("hidden")) {
             alert(error.message || "数据加载失败，请稍后重试");
@@ -588,6 +589,7 @@
           } else {
             showLoginLoadRetry("密码正确，但数据加载失败：" + (error.message || "请重试"));
           }
+          return false;
         }
       }
 
@@ -1363,7 +1365,22 @@
         }
       });
 
-      document.getElementById("reloadBtn").addEventListener("click", function () { loadData(false); });
+      var reloadBtn = document.getElementById("reloadBtn");
+      reloadBtn.addEventListener("click", async function () {
+        if (reloadBtn.disabled) return;
+        reloadBtn.disabled = true;
+        reloadBtn.textContent = "正在刷新…";
+        var ok = await loadData(false);
+        reloadBtn.disabled = false;
+        if (ok) {
+          reloadBtn.textContent = "已更新";
+          setTimeout(function () {
+            if (!reloadBtn.disabled) reloadBtn.textContent = "重新加载";
+          }, 1600);
+        } else {
+          reloadBtn.textContent = "重新加载";
+        }
+      });
       loginBtn.addEventListener("click", doLogin);
       passwordInput.addEventListener("keydown", function (event) {
         if (event.key === "Enter") doLogin();

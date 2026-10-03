@@ -674,6 +674,7 @@
         </div>
         <div class="actions">
           <select id="accountSelect" class="account-select" aria-label="翻牌账号"></select>
+          <button id="refreshDataBtn" class="action-btn" type="button">刷新数据</button>
           <button id="manageAccountBtn" class="action-btn" type="button">账号管理</button>
           <button id="updateStatusBtn" class="action-btn" type="button" hidden>更新状态</button>
           <button id="logoutBtn" class="action-btn" type="button">退出</button>
@@ -789,6 +790,7 @@
     const resetBtn = document.getElementById("resetBtn");
     const logoutBtn = document.getElementById("logoutBtn");
     const accountSelect = document.getElementById("accountSelect");
+    const refreshDataBtn = document.getElementById("refreshDataBtn");
     const manageAccountBtn = document.getElementById("manageAccountBtn");
     const updateStatusBtn = document.getElementById("updateStatusBtn");
     const accountModal = document.getElementById("accountModal");
@@ -1483,6 +1485,7 @@
         resetDatasetUpdateTimer();
         if (!failed) syncUpdatePill();
       }
+      return !failed;
     }
 
     function jumpToLatestLoadedRecord() {
@@ -1496,6 +1499,18 @@
         return;
       }
       jumpToLatestLoadedRecord();
+    }
+
+    async function handleRefreshDataClick() {
+      if (refreshDataBtn.disabled) return;
+      refreshDataBtn.disabled = true;
+      refreshDataBtn.textContent = "正在刷新...";
+      const succeeded = await loadLatestRecords();
+      refreshDataBtn.textContent = succeeded === false ? "刷新失败，请重试" : "已更新";
+      window.setTimeout(function () {
+        refreshDataBtn.textContent = "刷新数据";
+        refreshDataBtn.disabled = false;
+      }, 1800);
     }
 
     async function loadApp() {
@@ -1842,6 +1857,7 @@
     });
 
     updatePill.addEventListener("click", handleUpdatePillClick);
+    refreshDataBtn.addEventListener("click", handleRefreshDataClick);
     chatScroll.addEventListener("scroll", function () {
       syncUpdatePill();
       loadOlderRecordsIfNeeded();

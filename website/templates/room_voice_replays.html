@@ -44,7 +44,8 @@
     }
     .primary { background: var(--rose); border-color: var(--rose); color: white; }
     .primary:hover { background: var(--rose-dark); }
-    .primary:disabled { cursor: wait; opacity: .7; }
+    .primary:disabled, .ghost:disabled { cursor: wait; opacity: .7; }
+    #refreshSessions { width: 100%; margin-top: 8px; }
     .login-wrap { min-height: 68vh; display: grid; place-items: center; }
     .login-card {
       width: min(420px, 100%); padding: 30px; background: var(--paper);
@@ -199,6 +200,7 @@
               <option value="main">公开房间</option>
               <option value="small">小房间</option>
             </select>
+            <button id="refreshSessions" class="ghost" type="button">刷新</button>
           </div>
           <div id="sessionList" class="session-list"></div>
         </details>
@@ -260,6 +262,7 @@
     const filterSummary = document.getElementById("filterSummary");
     const roomFilter = document.getElementById("roomFilter");
     const sessionList = document.getElementById("sessionList");
+    const refreshSessionsButton = document.getElementById("refreshSessions");
     const detailEmpty = document.getElementById("detailEmpty");
     const detailContent = document.getElementById("detailContent");
     const audioPlayer = document.getElementById("audioPlayer");
@@ -480,10 +483,31 @@
         return true;
       } catch (error) {
         if (options.loginAttempt) throw error;
+        if (options.keepAppOnError && error.status !== 401 && error.status !== 403) return false;
         if (error.status === 401 || error.status === 403) showLogin("");
         else showLogin(error.message);
         return false;
       }
+    }
+
+    let refreshFeedbackTimer = null;
+
+    async function refreshSessionsList() {
+      if (refreshSessionsButton.disabled) return;
+      refreshSessionsButton.disabled = true;
+      refreshSessionsButton.textContent = "正在刷新…";
+      if (refreshFeedbackTimer) {
+        window.clearTimeout(refreshFeedbackTimer);
+        refreshFeedbackTimer = null;
+      }
+      const ok = await loadSessions({ keepAppOnError: true });
+      refreshSessionsButton.disabled = false;
+      refreshSessionsButton.textContent = ok ? "已更新" : "刷新失败，请重试";
+      refreshFeedbackTimer = window.setTimeout(() => {
+        refreshSessionsButton.textContent = "刷新";
+        refreshFeedbackTimer = null;
+      }, ok ? 1500 : 3000);
+      track("click", { action: "room_voice_sessions_refresh", result: ok ? "success" : "failure" });
     }
 
     function messageText(item) {
@@ -812,6 +836,7 @@
       }
     });
 
+    refreshSessionsButton.addEventListener("click", refreshSessionsList);
     roomFilter.addEventListener("change", () => {
       renderSessions();
       const visibleCount = sessions.filter(item => roomFilter.value === "all" || item.room_type === roomFilter.value).length;

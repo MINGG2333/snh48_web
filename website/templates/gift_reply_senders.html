@@ -242,6 +242,7 @@
       font-size: 12px;
     }
     .stats-toggle:hover, .stats-toggle:focus-visible { color: var(--muted); }
+    .stats-toggle:disabled { cursor: wait; opacity: 0.72; }
     .sender-list { display: grid; gap: 12px; }
     .sender-card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
     .sender-card summary {
@@ -725,7 +726,7 @@
 
       <div class="result-head">
         <span id="resultSummary">共 0 人，当前显示 0 人</span>
-        <div class="result-actions"><span id="refreshLabel">每 30 秒检查更新</span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
+        <div class="result-actions"><span id="refreshLabel">每 30 秒检查更新</span><button class="stats-toggle" id="manualRefreshBtn" type="button">刷新</button><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
       </div>
       <button class="update-pill" id="updatePill" type="button" aria-live="polite">跳到最新</button>
       <section class="sender-list" id="senderList" aria-label="按送礼人整理的礼物历史"></section>
@@ -810,6 +811,7 @@
     var giftFilterClose = document.getElementById("giftFilterClose");
     var giftFilterPreviousFocus = null;
     var statsToggle = document.getElementById("statsToggle");
+    var manualRefreshBtn = document.getElementById("manualRefreshBtn");
     var updatePill = document.getElementById("updatePill");
     var supportChatNav = document.getElementById("supportChatNav");
     var supportChatModal = document.getElementById("supportChatModal");
@@ -1547,6 +1549,22 @@
       }
     }
 
+    var manualRefreshFeedbackTimer = null;
+
+    async function manualRefresh() {
+      if (!password || loading || !page.classList.contains("ready")) return;
+      manualRefreshBtn.disabled = true;
+      manualRefreshBtn.textContent = "正在刷新…";
+      var ok = await loadData(false);
+      manualRefreshBtn.disabled = false;
+      manualRefreshBtn.textContent = ok ? "已更新" : "刷新失败，请重试";
+      if (manualRefreshFeedbackTimer) window.clearTimeout(manualRefreshFeedbackTimer);
+      manualRefreshFeedbackTimer = window.setTimeout(function() {
+        manualRefreshBtn.textContent = "刷新";
+        manualRefreshFeedbackTimer = null;
+      }, ok ? 1500 : 2500);
+    }
+
     function isNearLatest() {
       return (window.pageYOffset || document.documentElement.scrollTop || 0) < 160;
     }
@@ -1620,6 +1638,7 @@
       track("click", { action: visible ? "show_gift_statistics" : "hide_gift_statistics" });
     });
     updatePill.addEventListener("click", loadLatestData);
+    manualRefreshBtn.addEventListener("click", manualRefresh);
     window.addEventListener("scroll", syncUpdatePill, { passive: true });
     giftFilterToggle.addEventListener("click", function() {
       setGiftFilterModalOpen(!giftFilterModal.classList.contains("open"));

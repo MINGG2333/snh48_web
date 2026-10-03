@@ -18,6 +18,7 @@
   const countEl   = document.getElementById('textCount');
   const btnAdd    = document.getElementById('btnAdd');
   const btnSave   = document.getElementById('btnSave');
+  const btnRefresh = document.getElementById('btnRefresh');
   const statusMsg = document.getElementById('statusMsg');
 
   const loginOverlay = document.getElementById('loginOverlay');
@@ -85,10 +86,13 @@
         const data = await resp.json();
         texts = data.texts || [];
         render();
+        return true;
       }
+      showStatus('❌ 加载背景词失败: ' + resp.status, 'error');
     } catch (e) {
       showStatus('加载背景词失败: ' + e.message, 'error');
     }
+    return false;
   }
 
   // ── Check if the feature is available (password configured) ────────────
@@ -200,6 +204,20 @@
 
   // Save
   btnSave.addEventListener('click', saveTexts);
+
+  // Refresh: re-pull texts via the existing loader, no page reload, no re-login
+  async function refreshTexts() {
+    btnRefresh.disabled = true;
+    btnRefresh.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 刷新中...';
+    try {
+      const ok = await loadTexts();
+      if (ok) showStatus('✅ 已更新，共 ' + texts.length + ' 条背景词', 'success');
+    } finally {
+      btnRefresh.disabled = false;
+      btnRefresh.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新';
+    }
+  }
+  btnRefresh.addEventListener('click', refreshTexts);
 
   // ── Init ──────────────────────────────────────────────────────────────
   loadTexts();

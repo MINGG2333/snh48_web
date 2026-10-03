@@ -214,6 +214,23 @@
       white-space: nowrap;
     }
 
+    .refresh-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .refresh-btn:disabled { opacity: 0.6; }
+
     .filter-modal,
     .filter-modal-card,
     .filter-modal-scroll {
@@ -1192,6 +1209,7 @@
           <button class="mobile-filter-toggle" id="filterToggle" type="button" aria-expanded="false">筛选</button>
           <span>总数 <strong id="totalMessages">0</strong></span>
           <span id="latestTime">更新时间：-</span>
+          <button class="refresh-btn" id="refreshBtn" type="button">刷新</button>
         </div>
       </div>
       <div class="filter-modal" id="filterModal">
@@ -1361,6 +1379,7 @@
     var totalMessages = document.getElementById("totalMessages");
     var loadedMessages = document.getElementById("loadedMessages");
     var latestTime = document.getElementById("latestTime");
+    var refreshBtn = document.getElementById("refreshBtn");
     var familyStrip = document.getElementById("familyStrip");
     var typeSelect = document.getElementById("typeSelect");
     var roomSelect = document.getElementById("roomSelect");
@@ -2216,6 +2235,29 @@
       }
     }
 
+    var refreshFeedbackTimer = null;
+
+    async function manualRefresh() {
+      if (!password || loading || refreshBtn.disabled) return;
+      if (refreshFeedbackTimer) {
+        window.clearTimeout(refreshFeedbackTimer);
+        refreshFeedbackTimer = null;
+      }
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "正在刷新…";
+      await checkUpdates();
+      var data = true;
+      if (!loading) {
+        data = await reloadLatest("");
+      }
+      refreshBtn.textContent = data ? "已更新" : "刷新失败，请重试";
+      refreshFeedbackTimer = window.setTimeout(function() {
+        refreshFeedbackTimer = null;
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "刷新";
+      }, 1600);
+    }
+
     function isNearBottom() {
       return currentScrollHeight() - currentScrollTop() - currentClientHeight() < 180;
     }
@@ -2919,6 +2961,9 @@
     }
     if (filterToggle) {
       filterToggle.addEventListener("click", toggleFilterPanel);
+    }
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", manualRefresh);
     }
     if (voiceReplayLink) {
       voiceReplayLink.addEventListener("click", function() {
