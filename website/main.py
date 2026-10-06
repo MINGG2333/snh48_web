@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -372,6 +372,12 @@ async def fans_stats_page(request: Request):
             "static_version": static_version,
         },
     )
+
+
+@app.get("/fans", response_class=HTMLResponse)
+async def fans_short_link():
+    """Short link redirecting to the fan-count statistics page."""
+    return RedirectResponse(url="/fans-stats", status_code=302)
 
 
 @app.get("/ob", response_class=HTMLResponse)
