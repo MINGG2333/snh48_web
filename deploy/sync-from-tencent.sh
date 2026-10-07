@@ -147,6 +147,18 @@ if [ "$sync_core" -eq 1 ]; then
   # 5. live_covers（直播封面原图）
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/
   echo "$LOG_TAG live_covers done"
+
+  # 5b. 陈嘉仪直播录制之外的房间原始数据（消息、元数据和房间媒体）
+  # 直播录制/下载回放视频位于 live_record，单独排除并归档 COS；房间原始
+  # 数据属于用户要求的陈嘉仪完整副本，继续同步到阿里云网站节点。
+  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial \
+    --exclude='gift_replies/' --exclude='messages_shards/' \
+    --exclude='audio_transcripts/' --exclude='score_gifts/' \
+    --exclude='room_voice_replays/' --exclude='live_covers/' \
+    --exclude='*.lock' --exclude='*.tmp' \
+    -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/" \
+    /home/snh48-fan-hub/room_record/陈嘉仪_161808449/
+  echo "$LOG_TAG chenjiayi room raw non-video data done"
 fi
 
 if [ "$sync_dynamic" -eq 1 ]; then

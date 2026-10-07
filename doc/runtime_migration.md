@@ -161,8 +161,11 @@ swap **不是云主机规格自动提供的内存**，通常需要在磁盘上�
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 房间语音转录文本 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 密码保护的成员房间上麦回放发布包；包含兼容版/原始音质版 M4A、元数据和同期消息，不含原始 FLV | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 计分礼物页派生小数据；其中 `live_business_fulfillments.json` 是版本化共享状态 | 其他文件由 `sync-from-tencent.sh dynamic` 拉取；可写业务状态和锁文件明确排除 |
+
 | `/home/snh48-fan-hub/flip_data/web/flip_cards.json` | 密码保护的翻牌记录应用数据 | `sync-from-tencent.sh dynamic` |
 | `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 翻牌页本地音视频依赖；不含 `flip_data/metadata/` | `sync-from-tencent.sh dynamic` |
+
+陈嘉仪房间的 `messages.csv`、`metadata/`、`images/`、`videos/`、`audio/`、`expressions/` 和 `gifts/` 由 `sync-from-tencent.sh core` 按白名单复制；`live_record/` 下的直播录制与下载回放视频不复制到阿里云，历史大视频按腾讯云 COS manifest 流程归档。
 
 上述阿里云只读副本由 root 同步，但必须以 `root:snh48-web`、目录 `0750`、文件 `0640` 落盘。`deploy/sync-from-tencent.sh` 和手动兜底 `deploy/sync-to-aliyun.sh` 已在每个 rsync 接收操作中固化该规则；三个 `core` 单文件（事件主文件、兼容副本、社交时间轴）在腾讯云源文件确实不存在时会删除阿里云对应文件，SSH 检查失败则 fail-closed，不执行删除。目录同步继续使用 `--delete` 或 manifest 延迟清理；共享状态历史、outbox、action inbox 和锁文件不适用删除镜像规则。迁移时不得只运行一次 ACL 后继续使用会恢复源端 `root:root` 权限的旧同步脚本。
 

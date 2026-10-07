@@ -15,6 +15,7 @@ HTTPS 证书不是每日必查项；阿里云已建立月度提醒机制，详�
 - 脚本先通过 SSH 分别检查腾讯云 `core` 和 `dynamic` 两组源数据指纹；只有某组指纹变化时才调用 `deploy/sync-from-tencent.sh` 拉取对应分组。
 - 四个可写业务状态不进入这两组；计分目录指纹和 rsync 都排除 `live_business_fulfillments.json`、`.*.lock`。
 - 粉丝数记录页数据 `social_record/fan_counts/` 属公开只读小数据，在 `dynamic` 组同步；应援会业务管理页数据 `private_handover/web_state/` 含暗账名单，不进入任何同步分组。
+- 陈嘉仪直播录制之外的房间原始数据和派生数据按 `core` 白名单同步；`live_record/` 下的直播录制和下载回放视频不进阿里云，历史视频只在腾讯云 COS manifest 校验后清理本地。
 - 上麦回放目录先同步 session、消息和音频，再原子提交 `manifest.json`，最后清理旧文件；同步中途旧 manifest 仍保持可播放。
 - 翻牌多账号先同步脱敏账号 JSON 和账号级媒体，再原子提交 `flip_data/web/accounts.json`；手机号、Token、登录会话、完整 metadata 和转录中间产物不进入阿里云。
 - 腾讯云侧 `sync-to-aliyun.sh`、`sync-to-aliyun-if-changed.sh`、`sync-to-aliyun-loop.sh` 只作为手动兜底，不应放回生产 cron。
@@ -95,6 +96,7 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] social timeline done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_push_replays done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_covers done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] chenjiayi room raw non-video data done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] gift_replies done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] messages_shards done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] audio_transcripts done
@@ -114,7 +116,7 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 - 腾讯云生产 cron 没有启用 `sync-to-aliyun-loop.sh`、`sync-to-aliyun-if-changed.sh` 或 `sync-to-aliyun.sh`；旧任务注释行可以保留。
 - 腾讯云 `/var/log/snh48/sync-to-aliyun.log` 不再持续产生新记录。
 - `chenjiayi_events.csv`、`schedule.csv`、`social_record/timeline/chenjiayi_social_timeline.json` 两端 hash 一致；四个可写状态按下一节核对 revision，不用普通 rsync 日志作为一致性依据。社交时间轴只同步轻量 JSON，不同步原始社交 CSV、Cookie 或采集器。
-- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/`、`flip_data/audio/`、`flip_data/video/`、`social_record/fan_counts/` 如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟。
+- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/`、`flip_data/audio/`、`flip_data/video/`、`social_record/fan_counts/` 以及陈嘉仪房间白名单数据如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟；`live_record/` 大视频不在同步范围内。
 - 翻牌同步后，`web/accounts.json` 必须只包含口袋号、昵称、生成时间和摘要；其 mtime 应晚于或等于本轮账号 JSON。阿里云不得出现 `flip_data/metadata/`、`flip_data/transcripts/` 或 `notifications/flip_web_admin/` 的同步副本。
 - `room_voice_replays manifest committed` 只能出现在 `payload done` 之后；如果同步在提交 manifest 前失败，网站继续读取旧回放是预期的安全降级，下一分钟应重试。
 - 只有动态小数据变化时，日志应优先显示 `groups=dynamic`；不应每次都同步 `live_covers` 和 `live_push_replays`。

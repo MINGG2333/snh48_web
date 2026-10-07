@@ -249,7 +249,7 @@ node script/obfuscate_js.cjs
 - `/api/score-gifts/business-review` 把核实操作交给腾讯云权威节点，在同一文件锁下更新 `score_gifts/` 下的 `live_business_fulfillments.json`，用于人工确认或修正直播计分礼物的业务兑换结果；与 fan-hub 分析器写入共用锁和版本历史。
 - 页面按数据文件里的 `refresh_interval_seconds` 轮询轻量 summary；检测到新条目时只显示更新提示，不重建当前已加载详情，用户点击提示后才加载最新数据。该值由 fan-hub 的 `config/room_monitor.json` 中 `gift_reply_export_interval_seconds` 热更新，和礼物回复页保持一致。
 - 详情区可导出当前筛选条件下的逐笔明细；“送礼用户分布”可导出包含“送礼用户汇总”和“投分明细”两个工作表的 Excel，逐笔记录按用户汇总顺序分组，并保留送礼时间、房间/直播来源、计分礼物、数量、单个分值和对应分数。
-- 阿里云只同步 `room_record/陈嘉仪_161808449/score_gifts/` 小目录，不同步整个 `room_record/陈嘉仪_161808449/`。
+- 阿里云同步脚本按用户要求接收陈嘉仪直播录制之外的房间原始数据和派生数据白名单；`live_record/` 下直播录制和下载回放视频不进入阿里云，`room_record/` 的同步仍排除锁文件、临时文件、敏感派生状态和其他成员目录。
 
 ### 房间计分 PK 页
 
