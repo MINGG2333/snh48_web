@@ -163,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="timeline-card-date">${escapeHtml(formatDate(ev.date))}${eventTime}</div>
               <div class="timeline-card-title">${titleText}</div>
               <span class="timeline-card-badge ${badgeClass}">${typeLabelText}</span>
+              ${ev.show_no ? `<span class="timeline-card-badge showno" style="margin-left:4px;">第${escapeHtml(String(ev.show_no))}场</span>` : ''}
               ${keywordBadge ? `<span class="timeline-card-badge ${keywordBadge.split('|')[0]}" style="margin-left:4px;">${keywordBadge.split('|')[1]}</span>` : ''}
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
               ${ev.content_type === 'live' ? '<span class="timeline-card-badge live" style="margin-left:4px;">直播</span>' : ''}

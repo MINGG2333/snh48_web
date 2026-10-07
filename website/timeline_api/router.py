@@ -653,6 +653,7 @@ def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
                     "title": title,
                     "type": event_type,
                     "typeLabel": type_label,
+                    "show_no": (row.get("show_no") or "").strip(),
                     "eventType": row_event_type,
                     "timelineCategory": timeline_category,
                     "source": "assistant",
