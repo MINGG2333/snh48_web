@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-08 公演互动文本同步
+
+- 同步实现提交 `22e688a` 已推送，阿里云通过GitHub fast-forward更新，原每分钟主动拉取cron保持不变；未重启网站服务。
+- core组新增 `performance_record/陈嘉仪_161808449/` 文本白名单，238文件、189,202字节，腾讯云/阿里云逐文件SHA-256清单汇总一致：`ffc9fbfdff57fdc41af3afb9e069256ea5fe44bee511d21516fb6e5723c40f1f`。历史元数据79场；公演视频、配置、凭据、collector状态和PK诊断不进入同步。
+- shell语法与Git差异检查通过；同步日志 `/tmp/pocket48-performance-sync-20261008.log`。没有新增网页/API/公开入口，前端构建和站点重启不适用。采集器、COS和飞书投递的详细快照在fan-hub `doc/running_status.md`，避免重复维护PID。
+
+
 更新日期：2026-09-13 CST +0800
 
 2026-09-13 08:45:02 CST 腾讯云验收后，阿里云通过 GitHub 部署网站提交 `9690c08`，`snh48-aliyun.service` 定向重启后 PID `639411`、`active/running`、`NRestarts=0`。阿里云主动同步已完成，根索引 `live_record/live_index.csv` 与网站所需场次元数据、官方弹幕、封面及其他网站数据均已更新；跨云同步排除本地 `live.ts`/`live.capture.ts` 大型备份文件。公网 `https://cjy.xn--6qq986b3xl/api/timeline/live-pushes?limit=1` 返回最新场次 `1305673277881782272`、时间 `2026-09-12 23:19:28`、回放和弹幕均可用；同步日志显示 08:44:02 完成、08:45:02 后无源变更。网站部署烟测全部通过。
