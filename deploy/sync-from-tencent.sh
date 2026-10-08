@@ -94,6 +94,7 @@ install -d -o root -g snh48-web -m 0750 \
   /home/snh48-fan-hub/schedule_record \
   /home/snh48-fan-hub/social_record/timeline \
   /home/snh48-fan-hub/live_record/陈嘉仪_161808449 \
+  /home/snh48-fan-hub/performance_record/陈嘉仪_161808449 \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards \
@@ -143,6 +144,14 @@ if [ "$sync_core" -eq 1 ]; then
   # backups and are intentionally excluded from the cross-cloud web dataset.
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='live.ts' --exclude='live.capture.ts' -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/live_record/陈嘉仪_161808449/" /home/snh48-fan-hub/live_record/陈嘉仪_161808449/
   echo "$LOG_TAG live_record done"
+
+  # Chen Jiayi participating performances: public interaction text only.
+  # Keep the collector state, credentials, backup staging and media out of Aliyun.
+  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --partial --delay-updates \
+    --include='*/' --include='*.json' --include='*.jsonl' --include='*.csv' --include='*.lrc' --exclude='*' \
+    -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/performance_record/陈嘉仪_161808449/" \
+    /home/snh48-fan-hub/performance_record/陈嘉仪_161808449/
+  echo "$LOG_TAG performance interaction text done"
 
   # 5. live_covers（直播封面原图）
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/

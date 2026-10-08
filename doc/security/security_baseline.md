@@ -201,3 +201,9 @@ git add website/static/js-dist/ website/static/css-dist/
 - 状态历史使用完整 gzip 快照而不是增量 diff，恢复更直接但会持续占用磁盘；日常检查需要观察目录大小，归档或保留策略必须先确认不能破坏当前 revision 和审计需求。
 - 前端混淆不是访问控制，真正的保护仍依赖后端鉴权、限速和不泄露敏感数据。
 - 本文件不能证明线上已部署，线上状态必须按验证清单复核。
+
+## 公演互动文本副本（2026-10-08）
+
+用户已确认腾讯云长期保留、阿里云同步及COS备份的实施范围。阿里云原有每分钟主动拉取的core组新增 `/home/snh48-fan-hub/performance_record/陈嘉仪_161808449/`，仅同步 `.json/.jsonl/.csv/.lrc`。数据是该成员参演公演的整场公开互动，包含送给其他参演成员的礼物；公演视频不采集，Token、配置、collector状态、验收诊断和COS暂存不复制。
+
+本次没有网站页面/API变化、不新增公开访问入口、不改变同步方向或cron频率；同步脚本通过GitHub更新，服务器运行数据不进Git。验收检查源/目标成员索引及稳定文本SHA-256，查看 `/var/log/snh48/sync-from-tencent.log`。生产契约位于 fan-hub 的 `doc/pocket48_performance_capture.md`。

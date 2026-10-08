@@ -43,6 +43,7 @@ case "$group" in
       /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
       /home/snh48-fan-hub/live_record/live_index.csv
       /home/snh48-fan-hub/live_record/陈嘉仪_161808449
+      /home/snh48-fan-hub/performance_record/陈嘉仪_161808449
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/metadata

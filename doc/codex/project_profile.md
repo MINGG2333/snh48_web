@@ -494,3 +494,9 @@ curl -I --connect-timeout 5 http://8.210.188.184:8000
 - `website/data/ip_daily_quota.json`
 - `website/data/read_notifications.json`
 - `website/static/js/timeline.js.bak`
+
+## 公演互动文本副本（2026-10-08）
+
+用户已确认腾讯云长期保留、阿里云同步及COS备份的实施范围。阿里云原有每分钟主动拉取的core组新增 `/home/snh48-fan-hub/performance_record/陈嘉仪_161808449/`，仅同步 `.json/.jsonl/.csv/.lrc`。数据是该成员参演公演的整场公开互动，包含送给其他参演成员的礼物；公演视频不采集，Token、配置、collector状态、验收诊断和COS暂存不复制。
+
+本次没有网站页面/API变化、不新增公开访问入口、不改变同步方向或cron频率；同步脚本通过GitHub更新，服务器运行数据不进Git。验收检查源/目标成员索引及稳定文本SHA-256，查看 `/var/log/snh48/sync-from-tencent.log`。生产契约位于 fan-hub 的 `doc/pocket48_performance_capture.md`。
