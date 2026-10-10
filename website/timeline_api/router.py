@@ -619,15 +619,15 @@ def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
                 chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
                 snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
 
-                # Build description: use CSV description if provided, else auto-generate
+                # Build description: date/time/location header always first, then CSV description or fallback name
+                desc_parts = [f"📅 {date_str}"]
+                if time_str:
+                    desc_parts.append(f"🕐 {time_str}")
+                if location:
+                    desc_parts.append(f"📍 {location}")
                 if csv_desc:
-                    desc_parts = [csv_desc]
+                    desc_parts.append(f"\n\n{csv_desc}")
                 else:
-                    desc_parts = [f"📅 {date_str}"]
-                    if time_str:
-                        desc_parts.append(f"🕐 {time_str}")
-                    if location:
-                        desc_parts.append(f"📍 {location}")
                     desc_parts.append(f"\n\n{name}")
 
                 title = name
