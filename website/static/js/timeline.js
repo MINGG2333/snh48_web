@@ -769,7 +769,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modalKeywordBadge = secondaryPerformanceBadge(event);
 
-    const descHtml = escapeHtml(event.description || '').replace(/\n/g, '<br>');
+    const descRaw = String(event.description || '');
+    // 详情顶部已有日期/时间/地点行，去掉 desc 开头重复的 📅/🕐/📍 行
+    const descLines = descRaw.split('\n');
+    while (descLines.length && /^(📅|🕐|📍)/.test(descLines[0].trim())) descLines.shift();
+    const descHtml = escapeHtml(descLines.join('\n').replace(/^\s+/, '')).replace(/\n/g, '<br>');
 
     // Build cover/gallery: if multiple images, show scrollable gallery; else single cover
     let coverHtml = '';
@@ -818,21 +822,22 @@ document.addEventListener('DOMContentLoaded', () => {
       videoHtml += '</div>';
     }
 
+    const modalTimeText = event.datetime && !String(event.datetime).endsWith('00:00:00') ? ' ' + String(event.datetime).slice(11).trim() : '';
     modalContent.innerHTML = `
       ${coverHtml}
       <div class="timeline-modal-body">
-        <div class="timeline-modal-date">${escapeHtml(formatDate(event.date))}</div>
+        <div class="timeline-modal-date">${escapeHtml(formatDate(event.date))}${escapeHtml(modalTimeText)}</div>
         <div class="timeline-modal-title">${escapeHtml(event.title || '')}</div>
         <span class="timeline-modal-badge ${badgeClass}">${escapeHtml(event.typeLabel || '')}</span>
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.content_type === 'live' ? '<span class="timeline-modal-badge live" style="margin-left:0;">直播</span>' : ''}
-        ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas ${event.is_radio ? 'fa-headphones' : 'fa-play'}"></i> ${event.is_radio ? '收听回放' : '观看回放'}</a>` : ''}
         ${buildLocationMapLinks(event.location)}
+        <div class="timeline-modal-desc">${descHtml}</div>
+        ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas ${event.is_radio ? 'fa-headphones' : 'fa-play'}"></i> ${event.is_radio ? '收听回放' : '观看回放'}</a>` : ''}
         ${buildSourceLinks(event)}
         ${biliHtml}
         ${videoHtml}
-        <div class="timeline-modal-desc">${descHtml}</div>
       </div>
     `;
     overlay.classList.add('open');
