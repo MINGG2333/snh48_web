@@ -35,22 +35,19 @@ UNKNOWN_SENDER_VALUES = {"", "?"}
 BJ_TZ = timezone(timedelta(hours=8))
 LIVE_BUSINESS_STATE_FILENAME = "live_business_fulfillments.json"
 BUSINESS_STATUSES = {"redeemed", "unredeemed", "uncertain"}
+# 与 fan-hub score_gift_business_state.SIGNATURE_FIELDS 保持一致：只含弹幕事件的
+# 稳定字段，不含身份映射/标题/开播时间/弹幕文件名等可变元数据。
 SIGNATURE_FIELDS = (
     "id",
     "source",
     "event_time",
-    "sender_name",
-    "sender_id",
     "gift_id",
     "gift_name",
     "gift_count",
     "unit_score",
     "total_score",
     "live_id",
-    "live_title",
-    "live_bj_time",
     "danmu_offset",
-    "danmu_file",
     "danmu_line_number",
     "raw_content",
 )
