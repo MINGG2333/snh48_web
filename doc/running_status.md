@@ -1,5 +1,11 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-11 口袋48榜单快照同步
+
+- `dynamic` 组新增 `pocket48_ranks/陈嘉仪_161808449/`（陈嘉仪口袋48榜单快照：粉丝鸡腿贡献榜、鸡腿年榜等，公开只读小 JSONL，排除 `.collector.lock`）；指纹脚本 `sync-from-tencent-if-changed.sh` 同步加入该目录。
+- 数据源为腾讯云 fan-hub 新增的 `pocket48-rank-collector.timer`（每小时一次）；采集器注册表和运行快照见 fan-hub `doc/codex/project_profile.md` 与 `doc/running_status.md`。
+- 未新增网页/API/公开入口，网站服务无需重启；阿里云 cron 拉取机制不变。
+
 ## 2026-10-08 公演互动文本同步
 
 - 同步实现提交 `22e688a` 已推送，阿里云通过GitHub fast-forward更新，原每分钟主动拉取cron保持不变；未重启网站服务。

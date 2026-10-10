@@ -240,6 +240,14 @@ if [ "$sync_dynamic" -eq 1 ]; then
   else
     echo "$LOG_TAG fan_counts skipped (source missing)"
   fi
+
+  # 15. pocket48_ranks（口袋48榜单快照公开只读小数据；排除采集锁）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449'; then
+    rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='.*.lock' --exclude='.collector.lock' -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449/" /home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449/
+    echo "$LOG_TAG pocket48_ranks done"
+  else
+    echo "$LOG_TAG pocket48_ranks skipped (source missing)"
+  fi
 fi
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then

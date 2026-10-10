@@ -65,6 +65,7 @@ case "$group" in
       /home/snh48-fan-hub/flip_data/audio
       /home/snh48-fan-hub/flip_data/video
       /home/snh48-fan-hub/social_record/fan_counts
+      /home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449
     )
     ;;
   *)
