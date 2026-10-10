@@ -57,6 +57,19 @@ def deterministic_request_id(prefix: str, payload: dict[str, Any]) -> str:
     return f"{safe_prefix}-{digest}"
 
 
+def _match_dir_owner(path: Path) -> None:
+    # peer 通道以 root 身份落盘时，把事件文件归属调整为目标目录属主（网站服务账号），
+    # 否则网站进程读不到这条事件。
+    if os.geteuid() != 0:
+        return
+    try:
+        st = path.parent.stat()
+        if st.st_uid != 0:
+            os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+
+
 def _atomic_create(path: Path, content: bytes) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -72,6 +85,7 @@ def _atomic_create(path: Path, content: bytes) -> bool:
     except Exception:
         path.unlink(missing_ok=True)
         raise
+    _match_dir_owner(path)
     return True
 
 
@@ -90,6 +104,7 @@ def _atomic_replace(path: Path, content: bytes) -> None:
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
+    _match_dir_owner(path)
 
 
 def _fsync_directory(path: Path) -> None:

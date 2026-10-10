@@ -46,6 +46,10 @@ Mutator = Callable[[dict[str, Any], dict[str, Any]], tuple[dict[str, Any], dict[
 # 不向 peer 复制、不写入 outbox，也不接受非主节点转发来的变更。
 LOCAL_ONLY_RESOURCES = {"business_tasks"}
 
+# 当前状态文件的写入权限。score_business 位于 fan-hub 数据目录，由 root 身份的
+# peer/分析器写入，而网站进程以 snh48-web 用户读取，必须保持组外可读。
+RESOURCE_FILE_MODES = {"score_business": 0o644}
+
 _registry: dict[tuple[str, str], Mutator] = {}
 _worker_started = False
 _worker_lock = threading.Lock()
@@ -218,7 +222,7 @@ def _write_snapshot(resource: str, doc: dict[str, Any], operation: str) -> None:
 
 def _write_current(resource: str, doc: dict[str, Any]) -> None:
     content = json.dumps(doc, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
-    _atomic_write(resource_path(resource), content)
+    _atomic_write(resource_path(resource), content, mode=RESOURCE_FILE_MODES.get(resource, 0o600))
 
 
 def _commit_locked(
