@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const titleText = escapeHtml(ev.title || '');
         const typeLabelText = escapeHtml(ev.typeLabel || '');
         const eventId = escapeHtml(ev.id || '');
-        const eventTime = ev.datetime && !String(ev.datetime).endsWith('00:00:00') ? ' ' + escapeHtml(String(ev.datetime).slice(11, 16)) : '';
+        const eventTime = ev.datetime && !String(ev.datetime).endsWith('00:00:00') ? ' ' + escapeHtml(String(ev.datetime).slice(11).trim()) : '';
         const iconClass = safeIcon(ev.icon);
         const imgHtml = hasCover
           ? `<img class="timeline-card-img" src="${coverSrc}" alt="${titleText}" loading="lazy">`

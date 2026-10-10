@@ -396,7 +396,7 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                 live_id = (row.get("live_id") or "").strip()
                 record_id = f"live_{live_id}" if live_id else f"live_{dt.strftime('%Y%m%d_%H%M%S')}"
 
-                desc = f"📅 {dt.strftime('%Y-%m-%d %H:%M')}"
+                desc = f"📅 {dt.strftime('%Y-%m-%d')}\n🕐 {dt.strftime('%H:%M')}"
                 if title:
                     desc += f"\n\n{title}"
                 if replay_url:
