@@ -22,6 +22,8 @@
 
 四个当前状态文件都只走版本化复制通道，不再由普通 `core` / `dynamic` rsync 覆盖。计分礼物目录中的 `score_gifts.json` 等只读派生文件仍按 `dynamic` 拉取，但明确排除 `live_business_fulfillments.json` 和 `.*.lock`；手动 `deploy.py sync-data` 也使用相同排除规则。这样旧文件不会在新 revision 到达后把副本回滚。
 
+当前状态文件的落盘权限按资源区分（`shared_runtime_state.RESOURCE_FILE_MODES`）：`score_business` 位于 fan-hub 数据目录，写入方是 root 身份的 peer 或分析器，而网站进程以 `snh48-web` 用户读取，固定 `0644`；其余资源留在 `website/data/` 内、由网站进程自身读写，保持 `0600`。root 身份的 peer 通过 `inbox-put` 落盘 action inbox 事件后，会自动 chown 为事件目录属主，保证网站进程可读。
+
 不纳入业务复制：`interaction_logs/`、`ip_clients.json`、`read_notifications.json`、`ip_daily_quota.json`、`balance_log.csv`、缓存、进程日志和 QA 任务内存状态。它们分别属于本节点观测、已读、限额、审计或临时状态，强行整目录双向覆盖会制造重复日志、错误已读状态或限额回滚。
 
 ## 历史版本
