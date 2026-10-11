@@ -512,6 +512,7 @@ async def pk_score_page(request: Request):
     )
 
 
+@app.get("/business", response_class=HTMLResponse)
 @app.get("/business-admin", response_class=HTMLResponse)
 async def business_admin_page(request: Request):
     """Password-protected fan-club business admin page (Tencent only)."""
