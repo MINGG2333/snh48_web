@@ -54,7 +54,7 @@
 
 | 数据来源 | 字段 | 代码路径 | 可能域名 | 触发方式 | 风险说明 |
 |----------|------|----------|----------|----------|----------|
-| 服务器 `schedule.csv` | `cover_url`、`event_images`、`image_urls` | `read_schedule()` → `timeline.js` | `sinaimg.cn`、`hdslb.com`、其他 HTTPS 图源 | 时光轴卡片/弹窗加载图片 | URL 来自运行时数据；前端允许任意 HTTPS 图片；`.sinaimg.cn` 会被改写到 `/image-proxy/` |
+| 服务器 `chenjiayi_events.csv` / `chenjiayi_milestones.csv` / `schedule.csv` | `cover_url`、`event_images`、`image_urls` | `read_schedule()` → `timeline.js` | `sinaimg.cn`、`hdslb.com`、其他 HTTPS 图源 | 时光轴卡片/弹窗加载图片 | URL 来自运行时数据；前端允许任意 HTTPS 图片；`.sinaimg.cn` 会被改写到 `/image-proxy/` |
 | 服务器 `schedule.csv` | `event_link`、`source_url`、`video_urls`、`snh48_bilibili_urls`、`snh48_weibo_urls`、`chenjiayi_weibo_urls` | `read_schedule()` → `buildSourceLinks()` | 微博、B站、活动页等 | 用户点击弹窗链接 | 能跳转到任意 HTTPS URL；前端会过滤危险协议，但不限制域名 |
 | 服务器 `summary.csv` | `live_cover_url` | `read_live_pushes()` | `source3.48.cn` | 直播卡片/弹窗加载封面 | 服务端拼接为 `https://source3.48.cn{path}`，但高流量直连官方图源仍可能触发防盗链/限流 |
 | 服务器 `summary.csv` | `play_url` | `/replay/{live_id}` → `hls.js` | HLS/CDN 域名不固定 | 用户打开回放页后浏览器拉取 `.m3u8` 和分片 | CSP 允许任意 HTTPS 连接与媒体；若数据被污染，访问者浏览器会请求非预期 HLS 域名 |

@@ -70,6 +70,10 @@ remove_retired_aliyun_file /home/snh48_web/website/data/manual_events.csv
 sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
 echo "$LOG_TAG chenjiayi_events.csv done"
 
+# 1b. chenjiayi_milestones.csv（里程碑独立文件，列结构同主文件，全部归入 event）
+sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv
+echo "$LOG_TAG chenjiayi_milestones.csv done"
+
 # 2. schedule.csv（事件/行程兼容副本，旧配置和回退读取）
 sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/schedule.csv /home/snh48-fan-hub/schedule_record/schedule.csv
 echo "$LOG_TAG schedule.csv done"

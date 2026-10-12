@@ -67,7 +67,7 @@
 
 ## 数据生成工程依赖
 
-本网站运行时读取 `snh48-fan-hub` 生成的数据。修改 `/timeline`、直播回放、图片代理、`EVENTS_CSV_PATH`、`SCHEDULE_CSV_PATH`、`LIVE_PUSH_REPLAY_ROOT` 或相关展示逻辑前，先确认这份数据契约。
+本网站运行时读取 `snh48-fan-hub` 生成的数据。修改 `/timeline`、直播回放、图片代理、`EVENTS_CSV_PATH`、`MILESTONES_CSV_PATH`、`SCHEDULE_CSV_PATH`、`LIVE_PUSH_REPLAY_ROOT` 或相关展示逻辑前，先确认这份数据契约。
 
 | 环境 | `snh48-fan-hub` 角色 | 同步策略 |
 |------|----------------------|----------|
@@ -78,6 +78,7 @@
 网站必要数据集：
 
 - `schedule_record/chenjiayi_events.csv`（事件/行程主文件，网站优先读取）
+- `schedule_record/chenjiayi_milestones.csv`（里程碑独立文件，列结构同主文件，网站全部归入 event 分类；不存在时跳过）
 - `schedule_record/schedule.csv`（事件/行程兼容副本，旧配置和回退读取）
 - `social_record/timeline/chenjiayi_social_timeline.json`（微博/抖音已过滤的轻量时光轴数据；网站消费副本，阿里云不运行采集器）
 - `/home/snh48_web/website/data/scroller_texts.json`（首页背景词非 Git 运行状态）
@@ -105,7 +106,7 @@ bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。拉取和手动推送 shell 脚本在每次 rsync 接收时强制 `root:snh48-web`、目录 `0750`、文件 `0640`，因此原子替换文件后网站进程仍保持只读访问；不能改回继承腾讯云 `root:root 0640` 的接收方式。三个 `core` 单文件（事件主文件、兼容副本、社交时间轴）采用显式存在性检查：源文件确认不存在时删除阿里云对应文件，SSH 检查失败则不删除；这样源端删除不会留下陈旧副本。`room_voice_replays/` 在三个入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话。管理员新增的事件和行程统一写入 fan-hub 事件/行程 CSV 并按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。已退役的 `website/data/manual_events.csv` 不加入任何同步源，两个同步入口会主动清理阿里云旧副本。
+线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。拉取和手动推送 shell 脚本在每次 rsync 接收时强制 `root:snh48-web`、目录 `0750`、文件 `0640`，因此原子替换文件后网站进程仍保持只读访问；不能改回继承腾讯云 `root:root 0640` 的接收方式。四个 `core` 单文件（事件主文件、里程碑文件、兼容副本、社交时间轴）采用显式存在性检查：源文件确认不存在时删除阿里云对应文件，SSH 检查失败则不删除；这样源端删除不会留下陈旧副本。`room_voice_replays/` 在三个入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话。管理员新增的事件和行程统一写入 fan-hub 事件/行程 CSV 并按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。已退役的 `website/data/manual_events.csv` 不加入任何同步源，两个同步入口会主动清理阿里云旧副本。
 
 自动同步运行状态口径：
 

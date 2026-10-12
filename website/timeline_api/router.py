@@ -562,116 +562,147 @@ def _find_schedule_csv() -> Optional[Path]:
     return None
 
 
-def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
-    """Read the Chen Jiayi event CSV, return timeline-ready event dicts."""
-    csv_path = _find_schedule_csv()
-    if not csv_path:
-        return []
+def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> List[Dict[str, Any]]:
+    """Parse one event CSV into timeline-ready records.
 
+    force_event_category 用于里程碑独立文件：其中所有行都归入 event 分类。
+    """
     records = []
-    try:
-        with open(csv_path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                date_str = (row.get("date") or "").strip()
-                if not date_str:
-                    continue
+    with open(csv_path, "r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            date_str = (row.get("date") or "").strip()
+            if not date_str:
+                continue
 
-                # Skip deleted entries
-                is_deleted = (row.get("delete") or "").strip()
-                if is_deleted:
-                    continue
+            # Skip deleted entries
+            is_deleted = (row.get("delete") or "").strip()
+            if is_deleted:
+                continue
 
-                name = (row.get("name") or "").strip()
-                event_type = (row.get("type") or "其他").strip()
-                time_str = (row.get("time") or "").strip()
-                type_label = TYPE_LABEL_MAP.get(event_type, event_type)
+            name = (row.get("name") or "").strip()
+            event_type = (row.get("type") or "其他").strip()
+            time_str = (row.get("time") or "").strip()
+            type_label = TYPE_LABEL_MAP.get(event_type, event_type)
 
-                # event_type (行程/里程碑; legacy 日常 rows are ignored)
-                row_event_type = (row.get("event_type") or "").strip()
-                # Personal-Weibo daily posts have their own social timeline.
-                # Keep the CSV as provenance, but do not duplicate them here.
-                if row_event_type == "日常":
-                    continue
+            # event_type (行程/里程碑; legacy 日常 rows are ignored)
+            row_event_type = (row.get("event_type") or "").strip()
+            # Personal-Weibo daily posts have their own social timeline.
+            # Keep the CSV as provenance, but do not duplicate them here.
+            if row_event_type == "日常":
+                continue
+            if force_event_category:
+                timeline_category = "event"
+            else:
                 timeline_category = "schedule" if row_event_type == "行程" else "event"
 
-                # Optional enhanced fields from CSV
-                location = (row.get("location") or "").strip()
-                cover_url_src = (row.get("cover_url") or "").strip()
-                source_url = (row.get("source_url") or "").strip()
-                csv_desc = (row.get("description") or "").strip()
-                event_link = (row.get("event_link") or "").strip()
-                remark = (row.get("remark") or "").strip()
-                video_urls = parse_multi_urls(row.get("video_urls"))
+            # Optional enhanced fields from CSV
+            location = (row.get("location") or "").strip()
+            cover_url_src = (row.get("cover_url") or "").strip()
+            source_url = (row.get("source_url") or "").strip()
+            csv_desc = (row.get("description") or "").strip()
+            event_link = (row.get("event_link") or "").strip()
+            remark = (row.get("remark") or "").strip()
+            video_urls = parse_multi_urls(row.get("video_urls"))
 
-                # Images: event_images shown first, then image_urls follows
-                event_images = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("event_images"))]
-                csv_image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
-                all_images = event_images + csv_image_urls
+            # Images: event_images shown first, then image_urls follows
+            event_images = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("event_images"))]
+            csv_image_urls = [sinaimg_to_proxy(u) for u in parse_multi_urls(row.get("image_urls"))]
+            all_images = event_images + csv_image_urls
 
-                # Cover URL priority: manual cover_url → event_images[0] → image_urls[0]
-                cover_url = sinaimg_to_proxy(cover_url_src)
-                if not cover_url and event_images:
-                    cover_url = event_images[0]
-                if not cover_url and csv_image_urls:
-                    cover_url = csv_image_urls[0]
-                bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
-                chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
-                snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
+            # Cover URL priority: manual cover_url → image_urls[0]
+            # event_images 只保留在输出图集中供详情弹窗使用，不参与卡片封面回退。
+            cover_url = sinaimg_to_proxy(cover_url_src)
+            if not cover_url and csv_image_urls:
+                cover_url = csv_image_urls[0]
+            bilibili_urls = parse_multi_urls(row.get("snh48_bilibili_urls"))
+            chenjiayi_weibo_urls = parse_multi_urls(row.get("chenjiayi_weibo_urls"))
+            snh48_weibo_urls = parse_multi_urls(row.get("snh48_weibo_urls"))
 
-                # Build description: date/time/location header always first, then CSV description or fallback name
-                desc_parts = [f"📅 {date_str}"]
-                if time_str:
-                    desc_parts.append(f"🕐 {time_str}")
-                if location:
-                    desc_parts.append(f"📍 {location}")
-                if csv_desc:
-                    desc_parts.append(f"\n\n{csv_desc}")
-                else:
-                    desc_parts.append(f"\n\n{name}")
+            # Build description: date/time/location header always first, then CSV description or fallback name
+            desc_parts = [f"📅 {date_str}"]
+            if time_str:
+                desc_parts.append(f"🕐 {time_str}")
+            if location:
+                desc_parts.append(f"📍 {location}")
+            if csv_desc:
+                desc_parts.append(f"\n\n{csv_desc}")
+            else:
+                desc_parts.append(f"\n\n{name}")
 
-                title = name
+            title = name
 
-                # Icon: use CSV column if provided, otherwise fallback by type
-                icon = (row.get("icon") or "").strip()
-                if not icon:
-                    icon = {
-                        "公演": "fa-music",
-                        "Live": "fa-microphone",
-                        "外务": "fa-plane",
-                        "见面会": "fa-handshake",
-                        "里程碑": "fa-star",
-                        "日常": "fa-heart",
-                    }.get(event_type, "fa-calendar-check")
+            # Icon: use CSV column if provided, otherwise fallback by type
+            icon = (row.get("icon") or "").strip()
+            if not icon:
+                icon = {
+                    "公演": "fa-music",
+                    "Live": "fa-microphone",
+                    "外务": "fa-plane",
+                    "见面会": "fa-handshake",
+                    "里程碑": "fa-star",
+                    "日常": "fa-heart",
+                }.get(event_type, "fa-calendar-check")
 
-                # Safe ID: sanitize name for HTML attribute use
-                safe_id_name = re.sub(r'[^\w\u4e00-\u9fff\-]', '_', name)
-                records.append({
-                    "id": f"sched_{date_str}_{safe_id_name}_{event_type}",
-                    "date": date_str,
-                    "datetime": f"{date_str} {time_str}" if time_str else f"{date_str} 00:00:00",
-                    "title": title,
-                    "type": event_type,
-                    "typeLabel": type_label,
-                    "show_no": (row.get("show_no") or "").strip(),
-                    "eventType": row_event_type,
-                    "timelineCategory": timeline_category,
-                    "source": "assistant",
-                    "description": "\n".join(desc_parts),
-                    "cover_url": cover_url,
-                    "icon": icon,
-                    "location": location,
-                    "source_url": source_url,
-                    "image_urls": all_images,
-                    "event_link": event_link,
-                    "video_urls": video_urls,
-                    "bilibili_urls": bilibili_urls,
-                    "snh48_weibo_urls": snh48_weibo_urls,
-                    "chenjiayi_weibo_urls": chenjiayi_weibo_urls,
-                })
-    except (IOError, csv.Error) as e:
-        print(f"[timeline_api] Error reading schedule CSV: {e}")
-        return []
+            # Safe ID: sanitize name for HTML attribute use
+            safe_id_name = re.sub(r'[^\w\u4e00-\u9fff\-]', '_', name)
+            records.append({
+                "id": f"sched_{date_str}_{safe_id_name}_{event_type}",
+                "date": date_str,
+                "datetime": f"{date_str} {time_str}" if time_str else f"{date_str} 00:00:00",
+                "title": title,
+                "type": event_type,
+                "typeLabel": type_label,
+                "show_no": (row.get("show_no") or "").strip(),
+                "eventType": row_event_type,
+                "timelineCategory": timeline_category,
+                "source": "assistant",
+                "description": "\n".join(desc_parts),
+                "cover_url": cover_url,
+                "icon": icon,
+                "location": location,
+                "source_url": source_url,
+                "image_urls": all_images,
+                "event_link": event_link,
+                "video_urls": video_urls,
+                "bilibili_urls": bilibili_urls,
+                "snh48_weibo_urls": snh48_weibo_urls,
+                "chenjiayi_weibo_urls": chenjiayi_weibo_urls,
+            })
+    return records
+
+
+def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
+    """Read the Chen Jiayi event CSVs, return timeline-ready event dicts.
+
+    主文件由 _find_schedule_csv() 定位；里程碑独立文件
+    (MILESTONES_CSV_PATH) 列结构相同、全部归入 event 分类，不存在时跳过。
+    两个文件按 (date, name, type) 去重，避免拆分过渡期重复出卡。
+    """
+    sources: List[tuple] = []
+    csv_path = _find_schedule_csv()
+    if csv_path:
+        sources.append((csv_path, False))
+    milestones_value = getattr(cfg, "MILESTONES_CSV_PATH", "")
+    if milestones_value:
+        milestones_path = Path(milestones_value)
+        if milestones_path.exists() and (not csv_path or milestones_path != csv_path):
+            sources.append((milestones_path, True))
+
+    records: List[Dict[str, Any]] = []
+    seen_keys = set()
+    for source_path, force_event in sources:
+        try:
+            parsed = _parse_schedule_csv(source_path, force_event_category=force_event)
+        except (IOError, csv.Error) as e:
+            print(f"[timeline_api] Error reading schedule CSV {source_path}: {e}")
+            continue
+        for record in parsed:
+            key = (record["date"], record["title"], record["type"])
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            records.append(record)
 
     today = on_date or datetime.now(BJT).date()
     debut_date_text = debut_date().strftime("%Y年%m月%d日")

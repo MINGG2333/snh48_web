@@ -250,6 +250,7 @@ systemctl status nginx
 | 腾讯云源路径 | 阿里云目标路径 | 说明 |
 |--------------|----------------|------|
 | `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 事件/行程主文件，网站优先读取 |
+| `/home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv` | 同路径 | 里程碑独立文件，列结构同主文件；源端可能尚未创建 |
 | `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 兼容副本 |
 | `/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json` | 同路径 | 微博/抖音已过滤的轻量时间轴数据；不包含原始社交 CSV、Cookie 或采集器 |
 | `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
@@ -303,7 +304,7 @@ systemctl status nginx
 
 - `source changed groups=dynamic, pulling...` 每分钟出现不一定异常。礼物回复、计分礼物、房间消息分片、语音转录、上麦发布包或翻牌应用数据等运行数据更新时，动态组源数据指纹会变化。
 - `source changed groups=core,dynamic, pulling...` 如果长期每分钟出现，需要确认 `core` 组是否真的持续变化；否则检查状态文件是否被删除或无法写入。
-- 稳定单向文件如 `chenjiayi_events.csv`、`schedule.csv` 和社交时间轴 JSON 应可以用 `sha256sum` 严格比对；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
+- 稳定单向文件如 `chenjiayi_events.csv`、`chenjiayi_milestones.csv`、`schedule.csv` 和社交时间轴 JSON 应可以用 `sha256sum` 严格比对；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
 - 动态目录只能按同步日志、mtime 和 1 到 2 分钟延迟判断，不要要求瞬时 hash 完全一致。
 - 修改同步目录、同步方向或云服务器 IP 时，必须同步更新 `doc/codex/project_profile.md`、`doc/daily_website_check.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`。
 - 如果新增同步目标或更换阿里云 IP，需要提醒用户更新腾讯云登录风险白名单。

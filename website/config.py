@@ -484,6 +484,12 @@ SCHEDULE_CSV_PATH = os.getenv(
     "SCHEDULE_CSV_PATH",
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "schedule.csv"),
 )
+# 里程碑文件：/home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv
+# 与主文件列结构相同，由 fan-hub 拆分维护；不存在时跳过。
+MILESTONES_CSV_PATH = os.getenv(
+    "MILESTONES_CSV_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "schedule_record" / "chenjiayi_milestones.csv"),
+)
 
 # fan-hub 生成的轻量社交时间轴数据；不读取微博/抖音原始 CSV，也不在网站侧采集。
 SOCIAL_TIMELINE_PATH = os.getenv(

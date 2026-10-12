@@ -39,6 +39,7 @@ case "$group" in
   core)
     sources=(
       /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
+      /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv
       /home/snh48-fan-hub/schedule_record/schedule.csv
       /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
       /home/snh48-fan-hub/live_record/live_index.csv

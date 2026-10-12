@@ -9,6 +9,7 @@ LOCK_FILE=${ALIYUN_SYNC_CHANGE_LOCK_FILE:-/tmp/snh48_sync_to_aliyun_change.lock}
 
 sources=(
   /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
+  /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv
   /home/snh48-fan-hub/schedule_record/schedule.csv
   /home/snh48-fan-hub/live_record/live_index.csv
   /home/snh48-fan-hub/live_record/陈嘉仪_161808449
