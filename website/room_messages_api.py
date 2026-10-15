@@ -2,8 +2,9 @@
 Room messages API router.
 
 Exposes a password-protected, cursor-based view over the room_monitor messages
-dataset. The API prefers derived JSONL shards for cheaper cross-cloud sync and
-falls back to messages.csv when shards are unavailable.
+dataset. The API prefers the jsonl fact table (main file + sealed monthly
+files under the fan-hub metadata dir), then derived JSONL shards, and falls
+back to the retired messages.csv layout for legacy deployments.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import hmac
 import json
 import re
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -79,6 +81,7 @@ _cache_ignore_mtime_ns = -2
 _cache_transcripts_mtime_ns = -2
 _cache_rows: list[dict[str, Any]] = []
 _cache_summary: dict[str, Any] = {}
+_cache_loaded_at = 0.0
 _ignore_lock = threading.Lock()
 
 
@@ -352,6 +355,18 @@ def _data_path() -> Path:
     return Path(cfg.ROOM_MESSAGES_CSV_PATH)
 
 
+def _metadata_dir() -> Path:
+    return Path(cfg.ROOM_MESSAGES_METADATA_DIR)
+
+
+def _jsonl_main_path() -> Path:
+    return _metadata_dir() / "messages.jsonl"
+
+
+def _jsonl_archive_manifest_path() -> Path:
+    return _metadata_dir() / "messages_archive_manifest.json"
+
+
 def _shards_dir() -> Path:
     return Path(cfg.ROOM_MESSAGES_SHARDS_DIR)
 
@@ -369,57 +384,150 @@ def _audio_transcripts_path() -> Path:
 
 
 def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_rows, _cache_summary
+    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_rows, _cache_summary, _cache_loaded_at
 
     source_kind, path = _dataset_source()
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据未生成")
 
-    stat = path.stat()
+    source_mtime_ns = _source_mtime_ns(source_kind, path)
     ignore_mtime_ns = _ignore_mtime_ns()
     transcripts_mtime_ns = _audio_transcripts_mtime_ns()
-    if (
-        _cache_mtime_ns == stat.st_mtime_ns
+    cache_fresh = (
+        _cache_mtime_ns == source_mtime_ns
         and _cache_ignore_mtime_ns == ignore_mtime_ns
         and _cache_transcripts_mtime_ns == transcripts_mtime_ns
-    ):
+    )
+    if cache_fresh:
+        return _cache_rows, _cache_summary
+
+    # jsonl 事实表随实时推送逐条变化；全量重建约 7 秒，不能每个请求都重建。
+    # 距上次重建不足最小间隔时沿用旧缓存（数据滞后最多该间隔）。
+    min_interval = cfg.ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS
+    if _cache_rows and (time.monotonic() - _cache_loaded_at) < min_interval:
         return _cache_rows, _cache_summary
 
     with _cache_lock:
-        stat = path.stat()
+        if _cache_rows and (time.monotonic() - _cache_loaded_at) < min_interval:
+            return _cache_rows, _cache_summary
+        source_mtime_ns = _source_mtime_ns(source_kind, path)
         ignore_mtime_ns = _ignore_mtime_ns()
         transcripts_mtime_ns = _audio_transcripts_mtime_ns()
         if (
-            _cache_mtime_ns == stat.st_mtime_ns
+            _cache_mtime_ns == source_mtime_ns
             and _cache_ignore_mtime_ns == ignore_mtime_ns
             and _cache_transcripts_mtime_ns == transcripts_mtime_ns
         ):
             return _cache_rows, _cache_summary
 
         transcripts = _load_audio_transcripts()
-        if source_kind == "shards":
+        if source_kind == "jsonl":
+            rows, source_path, source_mtime = _load_jsonl_rows(path, transcripts)
+        elif source_kind == "shards":
             rows, source_path, source_mtime = _load_sharded_rows(path, transcripts)
         else:
-            rows, source_path, source_mtime = _load_csv_rows(path, transcripts), str(path), stat.st_mtime
+            rows, source_path, source_mtime = _load_csv_rows(path, transcripts), str(path), path.stat().st_mtime
 
         _attach_message_links(rows)
         ignored_state = _load_ignored_state()
         ignored_ids = _ignored_gift_ids(ignored_state)
         _attach_ignored_gifts(rows, ignored_ids)
         summary = _build_summary(rows, source_mtime, ignored_state, source_path)
-        _cache_mtime_ns = stat.st_mtime_ns
+        _cache_mtime_ns = source_mtime_ns
         _cache_ignore_mtime_ns = ignore_mtime_ns
         _cache_transcripts_mtime_ns = transcripts_mtime_ns
         _cache_rows = rows
         _cache_summary = summary
+        _cache_loaded_at = time.monotonic()
         return _cache_rows, _cache_summary
 
 
 def _dataset_source() -> tuple[str, Path]:
+    main_jsonl = _jsonl_main_path()
+    if main_jsonl.exists():
+        return "jsonl", main_jsonl
     manifest_path = _shards_manifest_path()
     if manifest_path.exists():
         return "shards", manifest_path
     return "csv", _data_path()
+
+
+def _source_mtime_ns(source_kind: str, path: Path) -> int:
+    if source_kind != "jsonl":
+        return path.stat().st_mtime_ns
+    # jsonl 事实表：主文件随新消息变化；月封存文件一旦封存不再变化，
+    # 迟到合并/新月封存都会同步更新封存清单，故签名 = 主文件与清单的较大 mtime。
+    candidates = [path]
+    manifest = _jsonl_archive_manifest_path()
+    if manifest.exists():
+        candidates.append(manifest)
+    return max((p.stat().st_mtime_ns for p in candidates), default=0)
+
+
+# QChat 实时链路独有、不进网站视图的类型（与 fan-hub room_message_store 的
+# JSONL_ONLY_MSG_TYPES 保持一致；契约见 doc/room_messages_data_contract.md）。
+JSONL_ONLY_MSG_TYPES = frozenset({
+    "DELETE",
+    "ESSENCE_OPERATE",
+    "PRESENT_NORMAL",
+    "PRESENT_FULLSCREEN_TWO",
+    "QCHAT_SERVER_NOTICE",
+    "QCHAT_CONTROL",
+    "QCHAT_JSON_UNKNOWN",
+})
+
+# jsonl 行字段名 → CSV 视角字段名（其余字段同名直传）。
+_JSONL_TO_CSV_KEYS = {
+    "text": "text_content",
+    "reply_to": "reply_to_id",
+}
+_CSV_VIEW_KEYS = (
+    "id", "server_id", "bj_time", "msg_type", "sender_name", "sender_id",
+    "text_content", "reply_to_id", "reply_text", "gift_name", "gift_count",
+    "gift_score", "media_url", "media_path", "meta_path", "jsonl_lineno",
+    "room_type", "room_label", "room_channel_id", "room_server_id",
+)
+
+
+def _jsonl_row_to_csv_view(row: dict[str, Any]) -> dict[str, str]:
+    view: dict[str, str] = {}
+    for key in _CSV_VIEW_KEYS:
+        source = _JSONL_TO_CSV_KEYS.get(key, key)
+        value = row.get(source, "")
+        view[key] = "" if value is None else str(value)
+    return view
+
+
+def _load_jsonl_rows(
+    main_path: Path,
+    transcripts: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str, float]:
+    metadata_dir = main_path.parent
+    # 月封存文件按文件名时间序，主文件（近期数据）在最后。
+    month_files = sorted(metadata_dir.glob("messages_2*.jsonl"))
+    rows: list[dict[str, Any]] = []
+    for file_path in [*month_files, main_path]:
+        try:
+            with file_path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    if str(payload.get("msg_type", "") or "") in JSONL_ONLY_MSG_TYPES:
+                        continue
+                    normalised = _normalise_row(_jsonl_row_to_csv_view(payload))
+                    _attach_audio_transcript(normalised, transcripts)
+                    normalised["_row_index"] = len(rows)
+                    rows.append(normalised)
+        except OSError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
+    return rows, str(metadata_dir), main_path.stat().st_mtime
 
 
 def _load_csv_rows(path: Path, transcripts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -966,10 +1074,11 @@ def _batch_id(batch: dict[str, Any]) -> str:
 
 
 def _invalidate_cache() -> None:
-    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns
+    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_loaded_at
     _cache_mtime_ns = -1
     _cache_ignore_mtime_ns = -2
     _cache_transcripts_mtime_ns = -2
+    _cache_loaded_at = 0.0
 
 
 def _summary_payload(summary: dict[str, Any]) -> dict[str, Any]:

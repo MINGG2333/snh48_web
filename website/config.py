@@ -249,6 +249,22 @@ ROOM_MESSAGES_SHARDS_DIR = os.getenv(
         / "messages_shards"
     ),
 )
+# 房间消息 jsonl 事实表目录（主文件 messages.jsonl + 月封存文件 messages_YYYY-MM.jsonl）。
+# 2026-10 起为首选数据源；分片/CSV 仅为过渡回退。
+ROOM_MESSAGES_METADATA_DIR = os.getenv(
+    "ROOM_MESSAGES_METADATA_DIR",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "metadata"
+    ),
+)
+# jsonl 事实表随实时推送逐条变化，全量重建约数秒；两次重建的最小间隔。
+ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS = int(
+    os.getenv("ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS", "20")
+)
 ROOM_AUDIO_TRANSCRIPTS_PATH = os.getenv(
     "ROOM_AUDIO_TRANSCRIPTS_PATH",
     str(
