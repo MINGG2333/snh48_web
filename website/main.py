@@ -145,6 +145,30 @@ async def index(request: Request):
     )
 
 
+_AUDIO_PLAYER_ALLOWED_HOSTS = (
+    "mp4-new1.48.cn", "source.48.cn", "source3.48.cn",
+    "kd48-nosdn.yunxinsvr.com", "nim.nosdn.127.net",
+)
+
+
+@app.get("/audio-player", response_class=HTMLResponse)
+async def audio_player(request: Request, url: str = ""):
+    """口袋语音在线播放页（QQ/飞书等外链点开时避免浏览器直接弹下载）。"""
+    from urllib.parse import urlparse
+
+    audio_url = ""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme == "https" and parsed.hostname in _AUDIO_PLAYER_ALLOWED_HOSTS:
+            audio_url = url
+    except ValueError:
+        audio_url = ""
+    return templates.TemplateResponse(
+        "audio_player.html",
+        {"request": request, "site_title": cfg.SITE_TITLE, "audio_url": audio_url},
+    )
+
+
 @app.get("/about", response_class=HTMLResponse)
 async def about(request: Request):
     """About page."""

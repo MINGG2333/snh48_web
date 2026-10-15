@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ site_title }} · 语音播放</title>
+  <style>
+    body { margin: 0; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+           background: #17131f; font-family: -apple-system, "Noto Sans SC", sans-serif; }
+    .player-card { text-align: center; padding: 28px 24px; max-width: 92vw; }
+    .title { color: #e7e2f3; font-size: 15px; font-weight: 700; margin-bottom: 18px; }
+    audio { width: min(420px, 86vw); }
+    .error { color: #f1b2b2; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="player-card">
+    <div class="title">🎧 房间语音</div>
+    {% if audio_url %}
+    <audio controls autoplay preload="auto" src="{{ audio_url }}"></audio>
+    {% else %}
+    <div class="error">无效或不支持的音频地址</div>
+    {% endif %}
+  </div>
+</body>
+</html>
