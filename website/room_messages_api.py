@@ -588,6 +588,42 @@ def _load_gift_effect_map(metadata_dir: Path) -> dict[str, dict[str, Any]]:
     return gifts if isinstance(gifts, dict) else {}
 
 
+def _notice_snapshot(payload_ext: dict[str, Any]) -> dict[str, str]:
+    """从 raw_extInfo 提取房间资料快照的关键字段（用于前后通知 diff）。"""
+    server_info = payload_ext.get("serverInfo", {}) if isinstance(payload_ext, dict) else {}
+    inner = _loads_json(str(server_info.get("5", "") or ""))
+    if not isinstance(inner, dict):
+        inner = {}
+    return {
+        "房间名": str(server_info.get("3", "") or ""),
+        "频道背景": str(server_info.get("4", "") or ""),
+        "房主背景墙": str(inner.get("serverBgWallImg", "") or ""),
+        "房间状态": str(inner.get("serverStatus", "") or ""),
+        "在线计数": str(server_info.get("7", "") or ""),
+    }
+
+
+def _annotate_notice_changes(rows: list[dict[str, Any]]) -> None:
+    """对房间动态做前后 diff：只把变化的字段写进 detail，让通知可读。"""
+    last_by_channel: dict[str, dict[str, str]] = {}
+    for row in rows:
+        if row.get("msg_type") != "QCHAT_SERVER_NOTICE":
+            continue
+        channel = str(row.get("room_channel_id", "") or "")
+        ext = _loads_json(row.get("raw_extInfo", ""))
+        snapshot = _notice_snapshot(ext)
+        prev = last_by_channel.get(channel)
+        if prev is None:
+            row["detail"] = "首次观测到房间状态广播"
+        else:
+            changes = [f"{key}：{prev[key]} → {snapshot[key]}" for key in snapshot if prev[key] != snapshot[key]]
+            if changes:
+                row["detail"] = "；".join(changes)
+            else:
+                row["detail"] = "房间状态心跳（无资料变化）"
+        last_by_channel[channel] = snapshot
+
+
 def _load_jsonl_rows(
     main_path: Path,
     transcripts: dict[str, dict[str, Any]],
@@ -647,6 +683,7 @@ def _load_jsonl_rows(
             if entry and entry.get("zip_path"):
                 row["gift_effect_url"] = _effect_url_from_zip_path(str(entry["zip_path"]))
                 row["gift_effect_play_time"] = _to_int(entry.get("play_time"), 0)
+    _annotate_notice_changes(rows)
     return rows, str(metadata_dir), main_path.stat().st_mtime
 
 
@@ -799,6 +836,7 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "gift_effect_url": "",
         "gift_effect_play_time": 0,
         "msg_time": _to_int(row.get("msg_time"), 0),
+        "raw_extInfo": row.get("raw_extInfo", ""),
         "_search_text": search_text,
     }
 
@@ -990,21 +1028,18 @@ def _parse_content(row: dict[str, str]) -> dict[str, str]:
         }
 
     if msg_type == "QCHAT_SERVER_NOTICE":
-        # QChat 房间资料广播：raw_extInfo 里 key3=房间名、key4=背景图、key5=内嵌状态 JSON
+        # QChat 房间资料广播：raw_extInfo 里 key3=房间名、key4=背景图。
+        # detail 由 _annotate_notice_changes 做前后 diff 后覆盖为具体变化。
         ext = _loads_json(row.get("raw_extInfo", ""))
         server_info = ext.get("serverInfo", {}) if isinstance(ext, dict) else {}
         room_name = str(server_info.get("3", "") or "")
         cover = str(server_info.get("4", "") or "")
         if cover and not cover.startswith("http"):
             cover = "https://source.48.cn" + (cover if cover.startswith("/") else "/" + cover)
-        detail_parts = []
-        inner = _loads_json(str(server_info.get("5", "") or ""))
-        if isinstance(inner, dict) and inner.get("serverStatus"):
-            detail_parts.append(f"房间状态 {inner['serverStatus']}")
         return {
             "title": "房间动态",
-            "body": f"房间资料更新：{room_name}" if room_name else "房间资料更新",
-            "detail": "；".join(detail_parts),
+            "body": f"房间「{room_name}」状态广播" if room_name else "房间状态广播",
+            "detail": "",
             "media_url": cover,
             "media_kind": "image",
         }

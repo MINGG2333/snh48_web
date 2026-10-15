@@ -856,8 +856,12 @@
       border: 1px solid rgba(167, 139, 250, 0.35);
       border-radius: 14px;
       padding: 12px;
-      max-width: min(92vw, 520px);
+      max-width: min(92vw, 420px);
       width: 100%;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
     }
 
     .gift-effect-header {
@@ -868,11 +872,13 @@
       font-size: 14px;
       font-weight: 700;
       margin-bottom: 8px;
+      flex-shrink: 0;
     }
 
     #giftEffectCanvas {
       width: 100%;
-      aspect-ratio: 3 / 4;
+      max-height: 66vh;
+      object-fit: contain;
       background: #000;
       border-radius: 10px;
     }
@@ -2135,11 +2141,11 @@
       if (!pagLibPromise) {
         pagLibPromise = new Promise(function (resolve, reject) {
           var script = document.createElement("script");
-          script.src = "https://cdn.jsdelivr.net/npm/libpag@4.4.20/lib/libpag.min.js";
+          script.src = "/static/vendor/libpag/libpag.min.js";
           script.onload = function () {
             window.libpag.PAGInit({
               locateFile: function (file) {
-                return "https://cdn.jsdelivr.net/npm/libpag@4.4.20/lib/" + file;
+                return "/static/vendor/libpag/" + file;
               }
             }).then(resolve, reject);
           };
@@ -2164,10 +2170,11 @@
         var PAG = await loadPagLib();
         var zipResp = await fetch(url);
         var zipBuffer = await zipResp.arrayBuffer();
-        var blob = new Blob([zipBuffer], { type: "application/zip" });
-        var pagFile = await PAG.PAGFile.load(blob);
-        canvas.width = pagFile.width() * 2;
-        canvas.height = pagFile.height() * 2;
+        var pagFile = await PAG.PAGFile.load(zipBuffer);
+        var scale = Math.min(2, 640 / Math.max(1, pagFile.width()));
+        canvas.width = Math.round(pagFile.width() * scale);
+        canvas.height = Math.round(pagFile.height() * scale);
+        canvas.style.aspectRatio = pagFile.width() + " / " + pagFile.height();
         var view = await PAG.PAGView.init(pagFile, canvas);
         view.setRepeatCount(0);
         await view.play();
@@ -2188,6 +2195,11 @@
 
     document.getElementById("giftEffectClose").addEventListener("click", closeGiftEffect);
     document.getElementById("giftEffectBackdrop").addEventListener("click", closeGiftEffect);
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !document.getElementById("giftEffectModal").hidden) {
+        closeGiftEffect();
+      }
+    });
 
     function createGiftBodyNode(item) {
       var line = document.createElement("div");
