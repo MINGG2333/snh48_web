@@ -486,6 +486,7 @@ _CSV_VIEW_KEYS = (
     "text_content", "reply_to_id", "reply_text", "gift_name", "gift_count",
     "gift_score", "media_url", "media_path", "meta_path", "jsonl_lineno",
     "room_type", "room_label", "room_channel_id", "room_server_id",
+    "deleted", "deleted_detected_at",
 )
 
 
@@ -663,6 +664,8 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "detail": parsed.get("detail", ""),
         "action_url": _safe_http_url(str(parsed.get("action_url", ""))),
         "raw_content": row.get("text_content", ""),
+        "deleted": str(row.get("deleted", "") or "").strip().lower() in {"true", "1", "yes"},
+        "deleted_detected_at": row.get("deleted_detected_at", ""),
         "_search_text": search_text,
     }
 

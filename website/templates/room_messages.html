@@ -785,6 +785,24 @@
       line-height: 1.35;
     }
 
+    .deleted-tag {
+      border: 1px solid rgba(227, 111, 111, 0.46);
+      border-radius: 8px;
+      background: rgba(227, 111, 111, 0.12);
+      color: #f1b2b2;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+      align-self: center;
+    }
+
+    .deleted-card .body,
+    .deleted-card .gift-line,
+    .deleted-card .detail {
+      opacity: 0.55;
+    }
+
     .jump-status {
       position: absolute;
       left: 50%;
@@ -1952,6 +1970,16 @@
       tag.className = "type-tag";
       tag.textContent = item.type_label || item.msg_type || "未知";
       head.appendChild(tag);
+      if (item.deleted) {
+        var deletedTag = document.createElement("span");
+        deletedTag.className = "deleted-tag";
+        deletedTag.textContent = "已撤回";
+        if (item.deleted_detected_at) {
+          deletedTag.title = "撤回检测时间：" + item.deleted_detected_at;
+        }
+        head.appendChild(deletedTag);
+        card.classList.add("deleted-card");
+      }
       card.appendChild(head);
 
       if (item.reply_target) {
