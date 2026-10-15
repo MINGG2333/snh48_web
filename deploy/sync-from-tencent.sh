@@ -97,7 +97,6 @@ install -d -o root -g snh48-web -m 0750 \
   /home/snh48-fan-hub/performance_record/陈嘉仪_161808449 \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies \
-  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays \
@@ -164,8 +163,9 @@ if [ "$sync_core" -eq 1 ]; then
   # 5b. 陈嘉仪直播录制之外的房间原始数据（消息、元数据和房间媒体）
   # 直播录制/下载回放视频位于 live_record，单独排除并归档 COS；房间原始
   # 数据属于用户要求的陈嘉仪完整副本，继续同步到阿里云网站节点。
+  # 房间消息事实表 metadata/messages.jsonl 与月封存文件也经此组同步。
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial \
-    --exclude='gift_replies/' --exclude='messages_shards/' \
+    --exclude='gift_replies/' \
     --exclude='audio_transcripts/' --exclude='score_gifts/' \
     --exclude='room_voice_replays/' --exclude='live_covers/' \
     --exclude='*.lock' --exclude='*.tmp' \
@@ -179,11 +179,7 @@ if [ "$sync_dynamic" -eq 1 ]; then
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/
   echo "$LOG_TAG gift_replies done"
 
-  # 7. messages_shards（房间消息页分片小数据；旧分片稳定，新消息只更新最后一个小文件和 manifest）
-  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/
-  echo "$LOG_TAG messages_shards done"
-
-  # 8. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
+  # 7. audio_transcripts（房间消息页语音转录小数据，不同步语音原文件）
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/
   echo "$LOG_TAG audio_transcripts done"
 

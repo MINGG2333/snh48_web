@@ -104,7 +104,6 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_covers done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] chenjiayi room raw non-video data done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] gift_replies done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] messages_shards done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] audio_transcripts done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] score_gifts done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays payload done
@@ -123,7 +122,7 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 - 腾讯云生产 cron 没有启用 `sync-to-aliyun-loop.sh`、`sync-to-aliyun-if-changed.sh` 或 `sync-to-aliyun.sh`；旧任务注释行可以保留。
 - 腾讯云 `/var/log/snh48/sync-to-aliyun.log` 不再持续产生新记录。
 - `chenjiayi_events.csv`、`chenjiayi_milestones.csv`、`schedule.csv`、`social_record/timeline/chenjiayi_social_timeline.json` 两端 hash 一致（里程碑文件两端均不存在也算一致）；四个可写状态按下一节核对 revision，不用普通 rsync 日志作为一致性依据。社交时间轴只同步轻量 JSON，不同步原始社交 CSV、Cookie 或采集器。
-- 动态目录如 `gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/`、`flip_data/audio/`、`flip_data/video/`、`social_record/fan_counts/`、`pocket48_ranks/陈嘉仪_161808449/` 以及陈嘉仪房间白名单数据如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟；`live_record/` 大视频不在同步范围内。
+- 动态目录如 `gift_replies/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/`、`flip_data/audio/`、`flip_data/video/`、`social_record/fan_counts/`、`pocket48_ranks/陈嘉仪_161808449/` 以及陈嘉仪房间白名单数据如果腾讯云正在生成新数据，阿里云允许有 1 到 2 分钟同步延迟；`live_record/` 大视频不在同步范围内。
 - 翻牌同步后，`web/accounts.json` 必须只包含口袋号、昵称、生成时间和摘要；其 mtime 应晚于或等于本轮账号 JSON。阿里云不得出现 `flip_data/metadata/`、`flip_data/transcripts/` 或 `notifications/flip_web_admin/` 的同步副本。
 - `room_voice_replays manifest committed` 只能出现在 `payload done` 之后；如果同步在提交 manifest 前失败，网站继续读取旧回放是预期的安全降级，下一分钟应重试。
 - 只有动态小数据变化时，日志应优先显示 `groups=dynamic`；不应每次都同步 `live_covers` 和 `live_push_replays`。

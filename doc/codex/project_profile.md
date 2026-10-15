@@ -87,7 +87,7 @@
 - `live_record/陈嘉仪_161808449/`（场次目录，含官方回放和弹幕）
 - `room_record/陈嘉仪_161808449/live_covers/`
 - `room_record/陈嘉仪_161808449/gift_replies/`
-- `room_record/陈嘉仪_161808449/messages_shards/`（包含公开房间和小房间消息，按 `room_type` / `room_label` 标识来源）
+- `room_record/陈嘉仪_161808449/metadata/messages.jsonl` 与 `metadata/messages_YYYY-MM.jsonl` 月封存文件（房间消息 jsonl 事实表，按 `room_type` / `room_label` 标识来源；2026-10-16 起替代已退役的 `messages_shards/` 分片）
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
 - `room_record/陈嘉仪_161808449/room_voice_replays/`（同步默认 AAC-LC 单声道兼容版、源 AAC 原始音质版 M4A、会话元数据和同期消息；不含原始 FLV）
 - `room_record/陈嘉仪_161808449/score_gifts/`
@@ -118,7 +118,7 @@ bash deploy/sync-to-aliyun-if-changed.sh
 
 同步分组：`core` 包含统一事件/行程 CSV、社交时间轴、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、脱敏 `flip_data/web/` 和账号级翻牌音视频依赖。翻牌数据先同步账号 JSON，再原子提交 `web/accounts.json`。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
 
-排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`messages_shards/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
+排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
 
 修改同步方向、频率、源路径、目标路径或服务器 IP 时，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`；并验证阿里云 cron 已启用、腾讯云旧推送 cron/进程已停用、稳定小文件两端 hash 一致。
 
@@ -181,7 +181,7 @@ node script/obfuscate_js.cjs
 
 - 页面入口：`/room-messages`，短入口：`/room`。
 - API：`/api/room-messages/verify`、`/api/room-messages/data`、`/api/room-messages/summary`、`/api/room-messages/ignore-latest-batch`、`/api/room-messages/undo-ignore`
-- 数据源：优先读取 `ROOM_MESSAGES_SHARDS_DIR`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/`；没有分片时回退到 `ROOM_MESSAGES_CSV_PATH`；消息字段中的 `room_type=main/small` 和 `room_label=公开房间/小房间` 用于页面标识公开房间或小房间
+- 数据源：优先读取 `ROOM_MESSAGES_METADATA_DIR` 的 jsonl 事实表（`messages.jsonl` 主文件 + `messages_YYYY-MM.jsonl` 月封存），默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/metadata/`；回退顺序为历史分片目录、已退役的 `ROOM_MESSAGES_CSV_PATH`；消息字段中的 `room_type=main/small` 和 `room_label=公开房间/小房间` 用于页面标识公开房间或小房间
 - 语音转录参考：`ROOM_AUDIO_TRANSCRIPTS_PATH`，默认 `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/room_audio_transcripts.jsonl`
 - 忽略状态：`ROOM_MESSAGES_IGNORE_PATH`，默认 `/home/snh48_web/website/data/room_messages_ignored_batches.json`
 - 鉴权：默认复用 `GIFT_REPLIES_PASSWORD`；如需单独密码可设置 `ROOM_MESSAGES_PASSWORD`；请求头 `X-Room-Messages-Password`
@@ -191,7 +191,7 @@ node script/obfuscate_js.cjs
 - 页面不进入公开导航，仅 URL 访问并要求密码。
 - 交互是聊天记录式加载：首次读取最新一批，向上滚动加载更早消息，不使用页码切换。
 - 语音转录参考是按 `message_id` 关联的派生小文本数据；缺失时页面隐藏转录块，不影响音频消息展示。
-- 为支持阿里云房间消息页，数据同步清单同步派生的 `messages_shards/` 分片目录，不再每轮传完整 `messages.csv`。忽略状态文件位于 `website/data/room_messages_ignored_batches.json`，不由 Git 跟踪；两端按钮都发送操作到腾讯云权威节点串行提交并保存历史，再复制 revision 到阿里云。不要恢复 GitHub 同步或整文件双向覆盖。
+- 为支持阿里云房间消息页，数据同步清单通过房间原始数据组同步 `metadata/` 下的 jsonl 事实表（主文件 + 月封存文件 + 封存清单）；`messages_shards/` 分片目录与完整 `messages.csv` 均已退役（2026-10-16，最终快照归档 COS `raw/backups/critical/2026-10-16/`）。忽略状态文件位于 `website/data/room_messages_ignored_batches.json`，不由 Git 跟踪；两端按钮都发送操作到腾讯云权威节点串行提交并保存历史，再复制 revision 到阿里云。不要恢复 GitHub 同步或整文件双向覆盖。
 
 ### 成员房间上麦回放页
 

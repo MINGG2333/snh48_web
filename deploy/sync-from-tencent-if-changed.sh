@@ -46,7 +46,6 @@ case "$group" in
       /home/snh48-fan-hub/live_record/陈嘉仪_161808449
       /home/snh48-fan-hub/performance_record/陈嘉仪_161808449
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
-      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages.csv
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/metadata
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/images
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/videos
@@ -58,7 +57,6 @@ case "$group" in
   dynamic)
     sources=(
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
-      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays

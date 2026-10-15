@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-16 房间消息页切换 jsonl 事实表，messages_shards 分片退役
+
+- 网站提交 `53359e5`：房间消息 API 数据源优先级改为 jsonl 事实表（fan-hub `metadata/messages.jsonl` 主文件 + `messages_YYYY-MM.jsonl` 月封存）→ 历史分片 → 退役 CSV；新增 `ROOM_MESSAGES_METADATA_DIR` 与 `ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS`（默认 20s 最小重建间隔，防实时逐条写入引发重建抖动）；jsonl-only 类型（DELETE/PRESENT/QCHAT_* 等）不进网站视图。
+- 同步脚本：`sync-from-tencent.sh` 移除 messages_shards 同步步骤与建目录项（jsonl 事实表已由 core 组"房间原始数据"覆盖）；`sync-from-tencent-if-changed.sh` 指纹清单移除 `messages.csv`（已退役删除）和 `messages_shards`。
+- 分片退役：腾讯云 root crontab 的 `shard_exporter_guard.sh` 行已删除、watch 进程已停止；两端 `messages_shards/` 本地副本已删除；最终快照归档 COS `raw/backups/critical/2026-10-16/messages_shards_final_20261016.tar.gz`（同目录另有 `messages_final_20261016.csv.gz`）。
+- 部署：腾讯云 `snh48-web.service` 重启后 `/room-messages` 200、API 401（密码保护正常）；阿里云经 `deploy.py deploy aliyun` 到 `53359e5`，`metadata/` 12 个月文件与主文件已在阿里云就位，`/api/room-messages/verify` 401 正常。
+- `doc/security/security_baseline.md` 无分片/房间消息同步条目，本次无需变更；数据契约详见 fan-hub `doc/room_messages_data_contract.md`。
+
 ## 2026-10-11 口袋48榜单快照同步
 
 - `dynamic` 组新增 `pocket48_ranks/陈嘉仪_161808449/`（陈嘉仪口袋48榜单快照：粉丝鸡腿贡献榜、鸡腿年榜等，公开只读小 JSONL，排除 `.collector.lock`）；指纹脚本 `sync-from-tencent-if-changed.sh` 同步加入该目录。
@@ -256,7 +264,7 @@ systemctl status nginx
 | `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards/` | 同路径 | 房间消息分片小数据 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/metadata/messages.jsonl` 与 `messages_YYYY-MM.jsonl` | 同路径 | 房间消息 jsonl 事实表（主文件+月封存，2026-10-16 起替代已退役的 messages_shards/ 分片） |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 语音转录文本数据 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；包含兼容版/原始音质版派生 M4A、元数据和同期消息，原始 FLV 不同步 |
 | `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物只读派生文件；排除 `live_business_fulfillments.json` 和 `.*.lock`，可写业务状态走版本化共享状态 |
