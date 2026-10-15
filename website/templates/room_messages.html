@@ -436,9 +436,9 @@
 
     .message {
       display: grid;
-      grid-template-columns: 148px minmax(0, 1fr);
-      gap: 12px;
-      margin-bottom: 12px;
+      grid-template-columns: 132px minmax(0, 1fr);
+      gap: 10px;
+      margin-bottom: 7px;
       align-items: start;
       overflow-anchor: none;
     }
@@ -447,7 +447,7 @@
       color: var(--muted);
       font-size: 12px;
       text-align: right;
-      padding-top: 9px;
+      padding-top: 6px;
       position: sticky;
       top: 0;
     }
@@ -457,7 +457,7 @@
       border-left-width: 4px;
       border-radius: 8px;
       background: var(--panel);
-      padding: 11px 12px;
+      padding: 8px 10px;
       min-width: 0;
     }
 
@@ -499,8 +499,8 @@
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 6px;
+      gap: 8px;
+      margin-bottom: 3px;
     }
 
     .sender {
@@ -618,7 +618,7 @@
 
     .detail {
       color: var(--muted);
-      margin-top: 6px;
+      margin-top: 3px;
       font-size: 12px;
       word-break: break-word;
     }
@@ -1393,6 +1393,8 @@
           <button class="refresh-btn" id="refreshBtn" type="button">刷新</button>
         </div>
       </div>
+    </header>
+
       <div class="gift-effect-modal" id="giftEffectModal" hidden>
         <div class="gift-effect-backdrop" id="giftEffectBackdrop"></div>
         <div class="gift-effect-card">
@@ -1490,7 +1492,6 @@
           </div>
         </div>
       </div>
-    </header>
 
     <main class="chat-shell" id="chatShell">
       <div class="jump-status hidden" id="jumpStatus">正在加载目标消息...</div>
