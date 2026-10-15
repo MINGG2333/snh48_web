@@ -471,6 +471,30 @@
     .family-share .card { border-left-color: var(--pink); }
     .family-event .card { border-left-color: var(--red); }
 
+    /* 陈嘉仪本人发送的消息：紫色高亮卡片（覆盖消息族配色） */
+    .card.own-card {
+      border-left-color: #c084fc;
+      border-left-width: 5px;
+      background: rgba(192, 132, 252, 0.10);
+      box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.25);
+    }
+
+    .card.own-card .sender {
+      color: #c084fc;
+    }
+
+    .own-badge {
+      border: 1px solid rgba(192, 132, 252, 0.55);
+      border-radius: 8px;
+      background: rgba(192, 132, 252, 0.14);
+      color: #c084fc;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+      align-self: center;
+    }
+
     .msg-head {
       display: flex;
       align-items: baseline;
@@ -2105,6 +2129,9 @@
 
       var card = document.createElement("div");
       card.className = "card";
+      if (String(item.sender_id) === "161808449") {
+        card.classList.add("own-card");
+      }
 
       var head = document.createElement("div");
       head.className = "msg-head";
@@ -2112,6 +2139,12 @@
       sender.className = "sender";
       sender.textContent = item.sender_name || "未知用户";
       head.appendChild(sender);
+      if (String(item.sender_id) === "161808449") {
+        var ownBadge = document.createElement("span");
+        ownBadge.className = "own-badge";
+        ownBadge.textContent = "小偶像";
+        head.appendChild(ownBadge);
+      }
       var roomTag = document.createElement("span");
       roomTag.className = "room-tag";
       roomTag.textContent = item.room_label || (item.room_type === "small" ? "小房间" : "公开房间");
