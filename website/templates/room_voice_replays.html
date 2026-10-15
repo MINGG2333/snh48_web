@@ -141,6 +141,25 @@
     .sender { font-weight: 700; font-size: 13px; }
     .content { margin-top: 4px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
     .message-note { margin-top: 4px; color: var(--warn); font-size: 11px; }
+    .message-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .msg-type-chip {
+      font-size: 11px; font-weight: 700; color: var(--rose-dark);
+      border: 1px solid var(--rose-soft, #f3d7e2); border-radius: 6px;
+      padding: 1px 7px; background: rgba(255,255,255,.6);
+    }
+    .msg-tag { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 7px; }
+    .msg-tag.deleted { color: #b34040; border: 1px solid rgba(227,111,111,.5); background: rgba(227,111,111,.1); }
+    .msg-tag.essence { color: #a4700a; border: 1px solid rgba(240,180,60,.55); background: rgba(240,180,60,.12); }
+    .message.deleted-msg .content { opacity: .55; }
+    .quote {
+      margin-top: 4px; padding: 4px 10px; font-size: 12px; color: var(--muted);
+      border-left: 3px solid var(--rose-soft, #f3d7e2); background: rgba(0,0,0,.03);
+      border-radius: 0 6px 6px 0; white-space: pre-wrap; word-break: break-word;
+    }
+    .gift-content { display: flex; align-items: center; gap: 8px; }
+    .gift-icon { width: 28px; height: 28px; object-fit: contain; }
+    .msg-media-img { margin-top: 6px; max-width: min(320px, 100%); border-radius: 8px; display: block; }
+    .msg-media-audio { margin-top: 6px; width: min(320px, 100%); height: 36px; display: block; }
     [hidden] { display: none !important; }
     @media (prefers-reduced-motion: reduce) {
       .playback-spinner { animation-duration: 1.8s; }
@@ -530,7 +549,7 @@
           segment => Number(segment.segment_no) === Number(item.segment_no)
         ));
         const row = document.createElement("div");
-        row.className = "message" + (playable ? " seekable" : " gap");
+        row.className = "message" + (playable ? " seekable" : " gap") + (item.deleted ? " deleted-msg" : "");
         row.dataset.index = String(index);
         if (playable) {
           row.tabIndex = 0;
@@ -556,8 +575,47 @@
         seek.textContent = timeLabel((item.offset_ms || 0) / 1000);
         row.appendChild(seek);
         const body = document.createElement("div");
-        addText(body, "div", "sender", item.sender_name || "未知用户");
-        addText(body, "div", "content", messageText(item));
+        const head = document.createElement("div");
+        head.className = "message-head";
+        addText(head, "span", "sender", item.sender_name || "未知用户");
+        if (item.type_label) addText(head, "span", "msg-type-chip", item.type_label);
+        if (item.deleted) addText(head, "span", "msg-tag deleted", "已撤回");
+        if (item.essence) addText(head, "span", "msg-tag essence", "精华");
+        body.appendChild(head);
+        if (item.quote) addText(body, "div", "quote", "引用：" + item.quote);
+        if (item.family === "gift") {
+          const giftLine = document.createElement("div");
+          giftLine.className = "content gift-content";
+          if (item.media_url && item.media_kind === "image") {
+            const icon = document.createElement("img");
+            icon.className = "gift-icon";
+            icon.src = item.media_url;
+            icon.alt = "";
+            giftLine.appendChild(icon);
+          }
+          addText(giftLine, "span", "", "礼物：" + (item.gift_name || "礼物") + (item.gift_count ? " × " + item.gift_count : ""));
+          body.appendChild(giftLine);
+        } else {
+          addText(body, "div", "content", item.body || item.title || messageText(item));
+        }
+        if (item.detail) addText(body, "div", "message-note", item.detail);
+        if (item.media_url && item.family !== "gift") {
+          if (item.media_kind === "image") {
+            const img = document.createElement("img");
+            img.className = "msg-media-img";
+            img.src = item.media_url;
+            img.alt = "图片消息";
+            img.loading = "lazy";
+            body.appendChild(img);
+          } else if (item.media_kind === "audio") {
+            const audio = document.createElement("audio");
+            audio.controls = true;
+            audio.preload = "none";
+            audio.src = item.media_url;
+            audio.className = "msg-media-audio";
+            body.appendChild(audio);
+          }
+        }
         if (!playable) addText(body, "div", "message-note", "该消息位于录音缺口，不能精确跳转");
         row.appendChild(body);
         messagesBox.appendChild(row);

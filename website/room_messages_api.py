@@ -724,6 +724,15 @@ def _manifest_source_mtime(manifest: dict[str, Any], manifest_path: Path) -> flo
         return manifest_path.stat().st_mtime
 
 
+def normalise_message_row(row: dict[str, str]) -> dict[str, Any]:
+    """公开入口：CSV 视图行 → 前端展示行（body/title/quote/media/type_label 等）。
+
+    供 room_voice_replays 等同样需要房间消息可视化的页面复用，
+    保证各页面展示格式一致。
+    """
+    return _normalise_row(row)
+
+
 def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
     msg_type = row.get("msg_type", "")
     family = TYPE_FAMILIES.get(msg_type, "event")

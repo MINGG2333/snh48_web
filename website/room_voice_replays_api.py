@@ -12,6 +12,8 @@ from typing import AsyncIterator
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
+
+from website.room_messages_api import normalise_message_row
 from pydantic import BaseModel
 
 from website import config as cfg
@@ -221,8 +223,14 @@ async def session_detail(
             }
         )
     messages = _read_jsonl(session_dir / "messages.jsonl")
+    # 与 Room 页共用同一套消息可视化字段（body/title/quote/media/type_label/tag）
+    enriched_messages = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        enriched_messages.append({**message, **normalise_message_row(message)})
     response.headers["Cache-Control"] = "no-store"
-    return {"session": {**session, "segments": segments}, "messages": messages}
+    return {"session": {**session, "segments": segments}, "messages": enriched_messages}
 
 
 def _parse_range(value: str, size: int) -> tuple[int, int, bool]:
