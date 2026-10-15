@@ -482,7 +482,7 @@ _JSONL_TO_CSV_KEYS = {
     "reply_to": "reply_to_id",
 }
 _CSV_VIEW_KEYS = (
-    "id", "server_id", "bj_time", "msg_type", "sender_name", "sender_id",
+    "id", "server_id", "bj_time", "msg_time", "msg_type", "sender_name", "sender_id",
     "text_content", "reply_to_id", "reply_text", "gift_name", "gift_count",
     "gift_score", "media_url", "media_path", "meta_path", "jsonl_lineno",
     "room_type", "room_label", "room_channel_id", "room_server_id",
@@ -499,6 +499,72 @@ def _jsonl_row_to_csv_view(row: dict[str, Any]) -> dict[str, str]:
     return view
 
 
+def _effect_url_from_zip_path(zip_path: str) -> str:
+    zip_path = str(zip_path or "").strip()
+    if not zip_path:
+        return ""
+    if zip_path.startswith("http://") or zip_path.startswith("https://"):
+        return zip_path
+    return "https://source.48.cn" + (zip_path if zip_path.startswith("/") else "/" + zip_path)
+
+
+def _collect_jsonl_annotations(payload: dict[str, Any], annotations: dict[str, Any]) -> None:
+    """从 JSONL_ONLY 行中提取要叠加到可见消息上的标注（精华/礼物动效）。"""
+    msg_type = str(payload.get("msg_type", "") or "")
+    text = str(payload.get("text", "") or "")
+    if msg_type == "ESSENCE_OPERATE" and text:
+        try:
+            info = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return
+        message_api = (info.get("essenceInfo") or {}).get("messageApi") or {}
+        target = str(message_api.get("msgIdClient") or "")
+        if target:
+            annotations["essence_ids"][target] = str(payload.get("bj_time", "") or "")
+        return
+    if msg_type in {"PRESENT_NORMAL", "PRESENT_FULLSCREEN_TWO"} and text:
+        try:
+            info = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return
+        gift_info = info.get("giftInfo") or {}
+        effect_url = _effect_url_from_zip_path(str(gift_info.get("zipPath") or ""))
+        if not effect_url:
+            return
+        annotations["gift_effects"].append(
+            {
+                "msg_time": int(payload.get("msg_time") or 0),
+                "sender_id": str(gift_info.get("sourceId") or ""),
+                "gift_name": str(gift_info.get("giftName") or ""),
+                "effect_url": effect_url,
+                "play_time": int(gift_info.get("playTime") or 0),
+            }
+        )
+
+
+def _match_gift_effect(row: dict[str, Any], gift_effects: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """把礼物动效帧关联到礼物消息：同送礼人 + 同礼物名 + 时间差 <= 10 秒。"""
+    if row.get("msg_type") != "GIFT_TEXT":
+        return None
+    row_time = _to_int(row.get("msg_time"), 0)
+    row_sender = str(row.get("sender_id", "") or "")
+    row_gift = str(row.get("gift_name", "") or "")
+    if not row_gift:
+        return None
+    best: dict[str, Any] | None = None
+    best_delta = 10_001
+    for effect in gift_effects:
+        if row_sender and effect["sender_id"] and effect["sender_id"] != row_sender:
+            continue
+        if effect["gift_name"] != row_gift:
+            continue
+        delta = abs(effect["msg_time"] - row_time)
+        if delta < best_delta:
+            best = effect
+            best_delta = delta
+    return best
+
+
 def _load_jsonl_rows(
     main_path: Path,
     transcripts: dict[str, dict[str, Any]],
@@ -507,6 +573,7 @@ def _load_jsonl_rows(
     # 月封存文件按文件名时间序，主文件（近期数据）在最后。
     month_files = sorted(metadata_dir.glob("messages_2*.jsonl"))
     rows: list[dict[str, Any]] = []
+    annotations: dict[str, Any] = {"essence_ids": {}, "gift_effects": []}
     for file_path in [*month_files, main_path]:
         try:
             with file_path.open("r", encoding="utf-8") as handle:
@@ -520,7 +587,9 @@ def _load_jsonl_rows(
                         continue
                     if not isinstance(payload, dict):
                         continue
-                    if str(payload.get("msg_type", "") or "") in JSONL_ONLY_MSG_TYPES:
+                    msg_type = str(payload.get("msg_type", "") or "")
+                    if msg_type in JSONL_ONLY_MSG_TYPES:
+                        _collect_jsonl_annotations(payload, annotations)
                         continue
                     normalised = _normalise_row(_jsonl_row_to_csv_view(payload))
                     _attach_audio_transcript(normalised, transcripts)
@@ -528,6 +597,18 @@ def _load_jsonl_rows(
                     rows.append(normalised)
         except OSError as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
+    essence_ids = annotations["essence_ids"]
+    gift_effects = annotations["gift_effects"]
+    if essence_ids or gift_effects:
+        for row in rows:
+            essence_at = essence_ids.get(str(row.get("id", "") or ""))
+            if essence_at:
+                row["essence"] = True
+                row["essence_at"] = essence_at
+            effect = _match_gift_effect(row, gift_effects)
+            if effect:
+                row["gift_effect_url"] = effect["effect_url"]
+                row["gift_effect_play_time"] = effect["play_time"]
     return rows, str(metadata_dir), main_path.stat().st_mtime
 
 
@@ -666,6 +747,11 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "raw_content": row.get("text_content", ""),
         "deleted": str(row.get("deleted", "") or "").strip().lower() in {"true", "1", "yes"},
         "deleted_detected_at": row.get("deleted_detected_at", ""),
+        "essence": False,
+        "essence_at": "",
+        "gift_effect_url": "",
+        "gift_effect_play_time": 0,
+        "msg_time": _to_int(row.get("msg_time"), 0),
         "_search_text": search_text,
     }
 

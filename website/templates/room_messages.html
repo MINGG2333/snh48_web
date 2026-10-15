@@ -803,6 +803,87 @@
       opacity: 0.55;
     }
 
+    .essence-tag {
+      border: 1px solid rgba(240, 180, 60, 0.55);
+      border-radius: 8px;
+      background: rgba(240, 180, 60, 0.14);
+      color: #f6cd7a;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+      align-self: center;
+    }
+
+    .gift-effect-btn {
+      margin-top: 8px;
+      border: 1px solid rgba(167, 139, 250, 0.5);
+      border-radius: 8px;
+      background: rgba(167, 139, 250, 0.12);
+      color: #c4b5fd;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .gift-effect-btn:hover {
+      background: rgba(167, 139, 250, 0.22);
+    }
+
+    .gift-effect-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gift-effect-modal[hidden] {
+      display: none;
+    }
+
+    .gift-effect-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 8, 18, 0.82);
+    }
+
+    .gift-effect-card {
+      position: relative;
+      background: #17131f;
+      border: 1px solid rgba(167, 139, 250, 0.35);
+      border-radius: 14px;
+      padding: 12px;
+      max-width: min(92vw, 520px);
+      width: 100%;
+    }
+
+    .gift-effect-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #e7e2f3;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    #giftEffectCanvas {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      background: #000;
+      border-radius: 10px;
+    }
+
+    .gift-effect-status {
+      margin-top: 8px;
+      color: var(--faint);
+      font-size: 12px;
+      text-align: center;
+    }
+
     .jump-status {
       position: absolute;
       left: 50%;
@@ -1228,6 +1309,17 @@
           <span>总数 <strong id="totalMessages">0</strong></span>
           <span id="latestTime">更新时间：-</span>
           <button class="refresh-btn" id="refreshBtn" type="button">刷新</button>
+        </div>
+      </div>
+      <div class="gift-effect-modal" id="giftEffectModal" hidden>
+        <div class="gift-effect-backdrop" id="giftEffectBackdrop"></div>
+        <div class="gift-effect-card">
+          <div class="gift-effect-header">
+            <span>礼物全屏动效</span>
+            <button class="room-modal-close" id="giftEffectClose" type="button">关闭</button>
+          </div>
+          <canvas id="giftEffectCanvas"></canvas>
+          <div class="gift-effect-status" id="giftEffectStatus">加载中…</div>
         </div>
       </div>
       <div class="filter-modal" id="filterModal">
@@ -1980,6 +2072,15 @@
         head.appendChild(deletedTag);
         card.classList.add("deleted-card");
       }
+      if (item.essence) {
+        var essenceTag = document.createElement("span");
+        essenceTag.className = "essence-tag";
+        essenceTag.textContent = "精华";
+        if (item.essence_at) {
+          essenceTag.title = "设为精华时间：" + item.essence_at;
+        }
+        head.appendChild(essenceTag);
+      }
       card.appendChild(head);
 
       if (item.reply_target) {
@@ -2008,6 +2109,16 @@
         card.appendChild(createMediaNode(item));
       }
 
+      if (item.gift_effect_url) {
+        var effectBtn = document.createElement("button");
+        effectBtn.className = "gift-effect-btn";
+        effectBtn.textContent = "查看全屏动效";
+        effectBtn.addEventListener("click", function () {
+          showGiftEffect(item.gift_effect_url);
+        });
+        card.appendChild(effectBtn);
+      }
+
       var links = createLinkActionsNode(item);
       if (links) {
         card.appendChild(links);
@@ -2016,6 +2127,67 @@
       wrap.appendChild(card);
       return wrap;
     }
+
+    var pagLibPromise = null;
+    var pagActiveView = null;
+
+    function loadPagLib() {
+      if (!pagLibPromise) {
+        pagLibPromise = new Promise(function (resolve, reject) {
+          var script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/libpag@4.4.20/lib/libpag.min.js";
+          script.onload = function () {
+            window.libpag.PAGInit({
+              locateFile: function (file) {
+                return "https://cdn.jsdelivr.net/npm/libpag@4.4.20/lib/" + file;
+              }
+            }).then(resolve, reject);
+          };
+          script.onerror = function () { reject(new Error("PAG 播放器加载失败")); };
+          document.head.appendChild(script);
+        });
+      }
+      return pagLibPromise;
+    }
+
+    async function showGiftEffect(url) {
+      var modal = document.getElementById("giftEffectModal");
+      var status = document.getElementById("giftEffectStatus");
+      var canvas = document.getElementById("giftEffectCanvas");
+      modal.hidden = false;
+      status.textContent = "加载中…";
+      if (pagActiveView) {
+        try { pagActiveView.stop(); } catch (e) {}
+        pagActiveView = null;
+      }
+      try {
+        var PAG = await loadPagLib();
+        var zipResp = await fetch(url);
+        var zipBuffer = await zipResp.arrayBuffer();
+        var blob = new Blob([zipBuffer], { type: "application/zip" });
+        var pagFile = await PAG.PAGFile.load(blob);
+        canvas.width = pagFile.width() * 2;
+        canvas.height = pagFile.height() * 2;
+        var view = await PAG.PAGView.init(pagFile, canvas);
+        view.setRepeatCount(0);
+        await view.play();
+        pagActiveView = view;
+        status.textContent = "时长约 " + (pagFile.duration() / 1000000).toFixed(1) + " 秒（循环播放）";
+      } catch (err) {
+        status.textContent = "动效加载失败：" + (err && err.message ? err.message : err);
+      }
+    }
+
+    function closeGiftEffect() {
+      document.getElementById("giftEffectModal").hidden = true;
+      if (pagActiveView) {
+        try { pagActiveView.stop(); } catch (e) {}
+        pagActiveView = null;
+      }
+    }
+
+    document.getElementById("giftEffectClose").addEventListener("click", closeGiftEffect);
+    document.getElementById("giftEffectBackdrop").addEventListener("click", closeGiftEffect);
 
     function createGiftBodyNode(item) {
       var line = document.createElement("div");
