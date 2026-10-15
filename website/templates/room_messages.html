@@ -202,7 +202,9 @@
     }
 
     .mobile-filter-toggle {
-      display: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       min-height: 34px;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -212,6 +214,7 @@
       font-size: 13px;
       font-weight: 720;
       white-space: nowrap;
+      cursor: pointer;
     }
 
     .refresh-btn {
@@ -240,6 +243,55 @@
     .filter-modal-backdrop,
     .filter-modal-header {
       display: none;
+    }
+
+    /* PC 端：筛选面板收进弹层，页面默认不占空间 */
+    @media (min-width: 721px) {
+      .filter-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .filter-modal.open { display: flex; }
+      .filter-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        display: block;
+        background: rgba(4, 8, 13, 0.72);
+      }
+      .filter-modal-card {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+        max-width: min(92vw, 900px);
+        width: 100%;
+        max-height: 84vh;
+      }
+      .filter-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      .filter-modal-header h2 { margin: 0; font-size: 15px; }
+      .filter-modal-scroll {
+        display: block;
+        overflow: auto;
+        padding: 16px 18px;
+      }
+      .filter-modal .filters {
+        padding: 0;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
 
     .filters {
@@ -836,8 +888,7 @@
       inset: 0;
       z-index: 80;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      overflow: auto;
     }
 
     .gift-effect-modal[hidden] {
@@ -845,13 +896,14 @@
     }
 
     .gift-effect-backdrop {
-      position: absolute;
+      position: fixed;
       inset: 0;
       background: rgba(10, 8, 18, 0.82);
     }
 
     .gift-effect-card {
       position: relative;
+      margin: auto;
       background: #17131f;
       border: 1px solid rgba(167, 139, 250, 0.35);
       border-radius: 14px;
@@ -2135,25 +2187,41 @@
     }
 
     var pagLibPromise = null;
+    var jszipLibPromise = null;
     var pagActiveView = null;
+
+    function loadScriptOnce(src, check, promiseRef) {
+      return new Promise(function (resolve, reject) {
+        if (check()) { resolve(); return; }
+        var script = document.createElement("script");
+        script.src = src;
+        script.onload = function () { resolve(); };
+        script.onerror = function () { reject(new Error(src + " 加载失败")); };
+        document.head.appendChild(script);
+      });
+    }
 
     function loadPagLib() {
       if (!pagLibPromise) {
-        pagLibPromise = new Promise(function (resolve, reject) {
-          var script = document.createElement("script");
-          script.src = "/static/vendor/libpag/libpag.min.js";
-          script.onload = function () {
-            window.libpag.PAGInit({
+        pagLibPromise = loadScriptOnce("/static/vendor/libpag/libpag.min.js",
+          function () { return !!window.libpag; })
+          .then(function () {
+            return window.libpag.PAGInit({
               locateFile: function (file) {
                 return "/static/vendor/libpag/" + file;
               }
-            }).then(resolve, reject);
-          };
-          script.onerror = function () { reject(new Error("PAG 播放器加载失败")); };
-          document.head.appendChild(script);
-        });
+            });
+          });
       }
       return pagLibPromise;
+    }
+
+    function loadJszip() {
+      if (!jszipLibPromise) {
+        jszipLibPromise = loadScriptOnce("/static/vendor/jszip/jszip.min.js",
+          function () { return !!window.JSZip; });
+      }
+      return jszipLibPromise;
     }
 
     async function showGiftEffect(url) {
@@ -2167,10 +2235,20 @@
         pagActiveView = null;
       }
       try {
+        await loadJszip();
         var PAG = await loadPagLib();
+        status.textContent = "下载动效资源…";
         var zipResp = await fetch(url);
         var zipBuffer = await zipResp.arrayBuffer();
-        var pagFile = await PAG.PAGFile.load(zipBuffer);
+        var zip = await window.JSZip.loadAsync(zipBuffer);
+        var pagEntry = null;
+        zip.forEach(function (path, entry) {
+          if (!pagEntry && /\.pag$/i.test(path)) pagEntry = entry;
+        });
+        if (!pagEntry) throw new Error("资源包中未找到 .pag 动效文件");
+        status.textContent = "解压动效…";
+        var pagBuffer = await pagEntry.async("arraybuffer");
+        var pagFile = await PAG.PAGFile.load(pagBuffer);
         var scale = Math.min(2, 640 / Math.max(1, pagFile.width()));
         canvas.width = Math.round(pagFile.width() * scale);
         canvas.height = Math.round(pagFile.height() * scale);
