@@ -164,10 +164,15 @@ if [ "$sync_core" -eq 1 ]; then
   # 直播录制/下载回放视频位于 live_record，单独排除并归档 COS；房间原始
   # 数据属于用户要求的陈嘉仪完整副本，继续同步到阿里云网站节点。
   # 房间消息事实表 metadata/messages.jsonl 与月封存文件也经此组同步。
+  # 排除：QChat 原始帧/影子排障文件（大且仅排障用）、封存备份、跨房间扫描
+  # 产物（契约规定不进阿里云）。
   rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial \
     --exclude='gift_replies/' \
     --exclude='audio_transcripts/' --exclude='score_gifts/' \
     --exclude='room_voice_replays/' --exclude='live_covers/' \
+    --exclude='cross_room/' \
+    --exclude='metadata/qchat_frames*.jsonl*' --exclude='metadata/qchat_shadow.jsonl' \
+    --exclude='metadata/backups/' \
     --exclude='*.lock' --exclude='*.tmp' \
     -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/" \
     /home/snh48-fan-hub/room_record/陈嘉仪_161808449/
