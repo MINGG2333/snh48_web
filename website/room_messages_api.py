@@ -54,6 +54,7 @@ TYPE_LABELS = {
     "FLIPCARD_VIDEO": "视频翻牌",
     "SHARE_POSTS": "动态分享",
     "RED_PACKET_2026": "红包",
+    "QCHAT_SERVER_NOTICE": "房间动态",
 }
 
 TYPE_FAMILIES = {
@@ -73,6 +74,7 @@ TYPE_FAMILIES = {
     "LIVEPUSH": "live",
     "SHARE_POSTS": "share",
     "RED_PACKET_2026": "event",
+    "QCHAT_SERVER_NOTICE": "event",
 }
 
 _cache_lock = threading.Lock()
@@ -464,29 +466,29 @@ def _source_mtime_ns(source_kind: str, path: Path) -> int:
     return max((p.stat().st_mtime_ns for p in candidates), default=0)
 
 
-# QChat 实时链路独有、不进网站视图的类型（与 fan-hub room_message_store 的
-# JSONL_ONLY_MSG_TYPES 保持一致；契约见 doc/room_messages_data_contract.md）。
+# QChat 实时链路独有、不直接进网站视图的消息行（DELETE/ESSENCE/PRESENT 会
+# 被折叠成可见消息的标注；CONTROL/UNKNOWN 无展示价值只存档）。
+# 契约见 doc/room_messages_data_contract.md。
 JSONL_ONLY_MSG_TYPES = frozenset({
     "DELETE",
     "ESSENCE_OPERATE",
     "PRESENT_NORMAL",
     "PRESENT_FULLSCREEN_TWO",
-    "QCHAT_SERVER_NOTICE",
     "QCHAT_CONTROL",
     "QCHAT_JSON_UNKNOWN",
 })
 
-# jsonl 行字段名 → CSV 视角字段名（其余字段同名直传）。
+# CSV 视角字段名 → jsonl 行字段名（其余字段同名直传）。
 _JSONL_TO_CSV_KEYS = {
-    "text": "text_content",
-    "reply_to": "reply_to_id",
+    "text_content": "text",
+    "reply_to_id": "reply_to",
 }
 _CSV_VIEW_KEYS = (
     "id", "server_id", "bj_time", "msg_time", "msg_type", "sender_name", "sender_id",
     "text_content", "reply_to_id", "reply_text", "gift_name", "gift_count",
     "gift_score", "media_url", "media_path", "meta_path", "jsonl_lineno",
     "room_type", "room_label", "room_channel_id", "room_server_id",
-    "deleted", "deleted_detected_at",
+    "deleted", "deleted_detected_at", "raw_extInfo",
 )
 
 
@@ -509,9 +511,15 @@ def _effect_url_from_zip_path(zip_path: str) -> str:
 
 
 def _collect_jsonl_annotations(payload: dict[str, Any], annotations: dict[str, Any]) -> None:
-    """从 JSONL_ONLY 行中提取要叠加到可见消息上的标注（精华/礼物动效）。"""
+    """从 JSONL_ONLY 行中提取要叠加到可见消息上的标注（撤回/精华/礼物动效）。"""
     msg_type = str(payload.get("msg_type", "") or "")
     text = str(payload.get("text", "") or "")
+    if msg_type == "DELETE":
+        # 撤回事件实时生效：reply_to 即被撤回消息 id，无需等待离线回填打标
+        target = str(payload.get("reply_to", "") or payload.get("reply_to_id", "") or "")
+        if target:
+            annotations["deleted_ids"][target] = str(payload.get("bj_time", "") or "")
+        return
     if msg_type == "ESSENCE_OPERATE" and text:
         try:
             info = json.loads(text)
@@ -565,6 +573,21 @@ def _match_gift_effect(row: dict[str, Any], gift_effects: list[dict[str, Any]]) 
     return best
 
 
+def _load_gift_effect_map(metadata_dir: Path) -> dict[str, dict[str, Any]]:
+    """读取礼物名→全屏动效映射表（QChat 实时积累 + spike 样本回填）。
+
+    动效 zip 按礼物名固定，历史（REST 时代）礼物消息没有动效帧，
+    用映射表按礼物名补挂。
+    """
+    map_path = metadata_dir / "gift_effect_map.json"
+    try:
+        doc = json.loads(map_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+    gifts = doc.get("gifts")
+    return gifts if isinstance(gifts, dict) else {}
+
+
 def _load_jsonl_rows(
     main_path: Path,
     transcripts: dict[str, dict[str, Any]],
@@ -573,7 +596,7 @@ def _load_jsonl_rows(
     # 月封存文件按文件名时间序，主文件（近期数据）在最后。
     month_files = sorted(metadata_dir.glob("messages_2*.jsonl"))
     rows: list[dict[str, Any]] = []
-    annotations: dict[str, Any] = {"essence_ids": {}, "gift_effects": []}
+    annotations: dict[str, Any] = {"essence_ids": {}, "gift_effects": [], "deleted_ids": {}}
     for file_path in [*month_files, main_path]:
         try:
             with file_path.open("r", encoding="utf-8") as handle:
@@ -599,8 +622,13 @@ def _load_jsonl_rows(
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
     essence_ids = annotations["essence_ids"]
     gift_effects = annotations["gift_effects"]
-    if essence_ids or gift_effects:
+    deleted_ids = annotations["deleted_ids"]
+    if essence_ids or gift_effects or deleted_ids:
         for row in rows:
+            deleted_at = deleted_ids.get(str(row.get("id", "") or ""))
+            if deleted_at and not row.get("deleted"):
+                row["deleted"] = True
+                row["deleted_detected_at"] = row.get("deleted_detected_at") or deleted_at
             essence_at = essence_ids.get(str(row.get("id", "") or ""))
             if essence_at:
                 row["essence"] = True
@@ -609,6 +637,16 @@ def _load_jsonl_rows(
             if effect:
                 row["gift_effect_url"] = effect["effect_url"]
                 row["gift_effect_play_time"] = effect["play_time"]
+    # 历史礼物消息（无动效帧）按礼物名从映射表补挂动效
+    effect_map = _load_gift_effect_map(metadata_dir)
+    if effect_map:
+        for row in rows:
+            if row.get("gift_effect_url") or row.get("msg_type") != "GIFT_TEXT":
+                continue
+            entry = effect_map.get(str(row.get("gift_name", "") or ""))
+            if entry and entry.get("zip_path"):
+                row["gift_effect_url"] = _effect_url_from_zip_path(str(entry["zip_path"]))
+                row["gift_effect_play_time"] = _to_int(entry.get("play_time"), 0)
     return rows, str(metadata_dir), main_path.stat().st_mtime
 
 
@@ -939,6 +977,26 @@ def _parse_content(row: dict[str, str]) -> dict[str, str]:
             "body": str(data.get("blessMessage") or "红包消息") if isinstance(data, dict) else raw,
             "detail": f"来自 {data.get('creatorName')}" if isinstance(data, dict) and data.get("creatorName") else "",
             "media_url": str(data.get("coverUrl") or "") if isinstance(data, dict) else "",
+            "media_kind": "image",
+        }
+
+    if msg_type == "QCHAT_SERVER_NOTICE":
+        # QChat 房间资料广播：raw_extInfo 里 key3=房间名、key4=背景图、key5=内嵌状态 JSON
+        ext = _loads_json(row.get("raw_extInfo", ""))
+        server_info = ext.get("serverInfo", {}) if isinstance(ext, dict) else {}
+        room_name = str(server_info.get("3", "") or "")
+        cover = str(server_info.get("4", "") or "")
+        if cover and not cover.startswith("http"):
+            cover = "https://source.48.cn" + (cover if cover.startswith("/") else "/" + cover)
+        detail_parts = []
+        inner = _loads_json(str(server_info.get("5", "") or ""))
+        if isinstance(inner, dict) and inner.get("serverStatus"):
+            detail_parts.append(f"房间状态 {inner['serverStatus']}")
+        return {
+            "title": "房间动态",
+            "body": f"房间资料更新：{room_name}" if room_name else "房间资料更新",
+            "detail": "；".join(detail_parts),
+            "media_url": cover,
             "media_kind": "image",
         }
 
