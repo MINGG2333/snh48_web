@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>礼物全屏动效</title>
+  <style>
+    body { margin: 0; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+           background: #17131f; font-family: -apple-system, "Noto Sans SC", sans-serif; }
+    .player-card { text-align: center; padding: 28px 24px; max-width: 92vw; }
+    .title { color: #e7e2f3; font-size: 15px; font-weight: 700; margin-bottom: 18px; }
+    canvas { max-width: min(560px, 88vw); max-height: 70dvh; border-radius: 10px; }
+    .status { color: #b7aec9; font-size: 13px; margin-top: 14px; }
+    .error { color: #f1b2b2; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="player-card">
+    <div class="title">🎁 {{ gift_name or "礼物全屏动效" }}</div>
+    {% if zip_url %}
+    <canvas id="stage"></canvas>
+    <div class="status" id="status">加载播放组件…</div>
+    {% else %}
+    <div class="error">无效或不支持的动效地址</div>
+    {% endif %}
+  </div>
+  {% if zip_url %}
+  <script>
+    (function () {
+      var status = document.getElementById("status");
+      var canvas = document.getElementById("stage");
+      var step = "加载播放组件";
+      var watchdog = setTimeout(function () {
+        status.textContent = "动效加载超时（卡在：" + step + "），请刷新重试";
+      }, 25000);
+
+      function loadScriptOnce(src) {
+        return new Promise(function (resolve, reject) {
+          var s = document.createElement("script");
+          s.src = src;
+          s.onload = function () { resolve(); };
+          s.onerror = function () { reject(new Error(src + " 加载失败")); };
+          document.head.appendChild(s);
+        });
+      }
+
+      async function main() {
+        // libpag.min.js 顶层含 import.meta.url，必须按 ES module 加载
+        await loadScriptOnce("/static/vendor/jszip/jszip.min.js");
+        step = "初始化播放器";
+        status.textContent = step + "…";
+        await import("/static/vendor/libpag/libpag.min.js");
+        var PAG = await window.libpag.PAGInit({
+          locateFile: function (file) { return "/static/vendor/libpag/" + file; }
+        });
+        step = "下载动效资源";
+        status.textContent = step + "…";
+        var resp = await fetch({{ zip_url | tojson }});
+        var buf = await resp.arrayBuffer();
+        var zip = await window.JSZip.loadAsync(buf);
+        var entry = null;
+        zip.forEach(function (path, e) { if (!entry && /\.pag$/i.test(path)) entry = e; });
+        if (!entry) throw new Error("资源包中未找到 .pag 动效文件");
+        step = "解压动效";
+        status.textContent = step + "…";
+        var pagBuf = await entry.async("arraybuffer");
+        var pagFile = await PAG.PAGFile.load(pagBuf);
+        var scale = Math.min(2, 640 / Math.max(1, pagFile.width()));
+        canvas.width = Math.round(pagFile.width() * scale);
+        canvas.height = Math.round(pagFile.height() * scale);
+        step = "渲染动效";
+        status.textContent = step + "…";
+        var view = await PAG.PAGView.init(pagFile, canvas);
+        view.setRepeatCount(0);
+        await view.play();
+        clearTimeout(watchdog);
+        status.textContent = "时长约 " + (pagFile.duration() / 1000000).toFixed(1) + " 秒（循环播放）";
+      }
+
+      main().catch(function (err) {
+        clearTimeout(watchdog);
+        status.textContent = "动效加载失败（" + step + "）：" + (err && err.message ? err.message : err);
+        status.classList.add("error");
+      });
+    })();
+  </script>
+  {% endif %}
+</body>
+</html>

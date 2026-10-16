@@ -169,6 +169,25 @@ async def audio_player(request: Request, url: str = ""):
     )
 
 
+@app.get("/gift-effect", response_class=HTMLResponse)
+async def gift_effect_player(request: Request, zip: str = "", name: str = ""):
+    """礼物全屏动效在线播放页（QQ/飞书等外链点开时避免浏览器直接下载 zip）。"""
+    from urllib.parse import urlparse
+
+    zip_url = ""
+    try:
+        parsed = urlparse(zip)
+        if parsed.scheme == "https" and parsed.hostname in _AUDIO_PLAYER_ALLOWED_HOSTS:
+            zip_url = zip
+    except ValueError:
+        zip_url = ""
+    gift_name = " ".join(str(name or "").split())[:30]
+    return templates.TemplateResponse(
+        "gift_effect.html",
+        {"request": request, "site_title": cfg.SITE_TITLE, "zip_url": zip_url, "gift_name": gift_name},
+    )
+
+
 @app.get("/about", response_class=HTMLResponse)
 async def about(request: Request):
     """About page."""
