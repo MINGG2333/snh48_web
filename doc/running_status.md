@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-16 fan-hub 数据加工迁移阿里云，同步拓扑改为双向
+
+- 背景：fan-hub 数据加工/AI 生成迁到阿里云（`root@8.210.188.184`），采集留腾讯云。派生数据路径不变，产地变为阿里云。
+- 正向（腾讯云→阿里云，阿里云 cron 每分钟 `sync-from-tencent-if-changed.sh` 不变）：`core` 移除 `schedule_record` 三个 CSV；`dynamic` 移除 `gift_replies/`、`audio_transcripts/`、`score_gifts/` 与 `flip_data/{web,audio,video}/`（转为阿里云产出，继续正拉会覆盖新数据）；新增 `hub` 组投递 fan-hub 自动化输入（`social_record/weibo/*.jsonl`、`social_record/bilibili/*.csv`、`notifications/admin_feedback_center.md`、`notifications/codex_social_event_queue.json`、`config/accounts.json`、`config/koudai_token.json`、`private_handover/移交包/行程组/`）。hub 组含 Token/账号配置，保持源端 root 权限，不套用网站组只读接收参数；行程组正向用 `--update` 防旧副本回滚。
+- 反向（阿里云→腾讯云）：新增 `deploy/sync-from-aliyun.sh` 与 `deploy/sync-from-aliyun-if-changed.sh`，腾讯云 root cron 每分钟运行，日志 `/var/log/snh48/sync-from-aliyun.log`。`derived` 组回流行程 CSV 与 `schedule_record/backups/`、`gift_replies/`、`audio_transcripts/`、`score_gifts/`、`room_record/pk_scores/`、`flip_data/{web,audio,video}/`、`assistant_schedule_draft_state.json`、`移交包/行程组/`（2026-10-16 起阿里云权威，腾讯云不再写）；`notify` 组回流 `notifications/codex_runs/`（供 COS 归档）与 `notification_events.jsonl`（落地 `notifications/aliyun_relay/notification_events.jsonl`，绝不覆盖腾讯云本地同名文件）。
+- 反向所有目录不用 `--delete`、源缺失只跳过不删本地文件；`score_gifts` 仍排除 `live_business_fulfillments.json` 与 `.*.lock`（可写业务状态走腾讯云权威版本化复制）；`flip_data/web` 反向保留 `accounts.json` 最后原子提交。
+- 部署：阿里云 `/home/snh48_web/deploy/` 原正向脚本备份为 `.bak.premigration` 后经 GitHub 对齐；腾讯云 crontab 新增反向行，既有条目全部保留。两端分组清单快照存 `/root/.config/server-migration/20261016_tencent_to_aliyun/w5a_sync_topology.log`。
+
 ## 2026-10-16 房间消息页切换 jsonl 事实表，messages_shards 分片退役
 
 - 网站提交 `53359e5`：房间消息 API 数据源优先级改为 jsonl 事实表（fan-hub `metadata/messages.jsonl` 主文件 + `messages_YYYY-MM.jsonl` 月封存）→ 历史分片 → 退役 CSV；新增 `ROOM_MESSAGES_METADATA_DIR` 与 `ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS`（默认 20s 最小重建间隔，防实时逐条写入引发重建抖动）；jsonl-only 类型（DELETE/PRESENT/QCHAT_* 等）不进网站视图。
@@ -206,9 +214,11 @@ systemctl status nginx
 
 操作细节见 `doc/ops/https_certificate_reminder.md`。证书仍有效且 Certbot 自动续期存在时，不要手动替换证书。
 
-## 腾讯云到阿里云的数据同步任务
+## 腾讯云与阿里云之间的双向数据同步任务
 
-当前生产自动同步是“阿里云主动拉取腾讯云”，不是腾讯云主动推送。
+2026-10-16 起生产自动同步为双向：正向"阿里云主动拉取腾讯云"（采集与网站数据），反向"腾讯云主动拉取阿里云"（阿里云产出的派生数据）。腾讯云主动推送（`sync-to-aliyun*`）仍是退役兜底，不应恢复。
+
+### 正向（腾讯云→阿里云）
 
 > 2026-08-16 03:18 观察页浏览器档案聚合腾讯云阶段发布：功能提交 `3d7cf5e` 已推送并由腾讯云 screen 加载。`/ob` 不再按 IP 合并旧会话；上线后的访问使用本域浏览器档案估算访客，可把同一浏览器切换 IP 后的访问合并，并逐次显示粗粒度设备、IP 和页面。实现不查询城市、经纬度，不保存完整 User-Agent，也不使用 Canvas、字体、GPU 等主动指纹。603 条旧会话保留为单独历史记录但不计入估算人数，稳定档案从上线后的真实浏览器访问开始累积。公网 `/ob` 返回 200，未授权 `/api/ob/data` 返回 401，服务器内鉴权接口返回 200、`Cache-Control: no-store`，数据字段检查未发现城市、经纬度或完整 UA。项目部署工具因腾讯云本机回连公网 SSH 无可用密钥而未执行远端步骤，随后直接核对本机 checkout 并重启 `snh48` screen；首次按标准命令启动触发既有 QA 预热导致短时等待，最终恢复既有 `QA_WARMUP_ON_STARTUP=false` 覆盖后本机和公网 `/ob` 分别约 0.04 秒和 0.05 秒返回。阿里云尚未部署，等待用户验收腾讯云页面后再继续。
 
@@ -240,7 +250,7 @@ systemctl status nginx
 | cron | `* * * * * bash /home/snh48_web/deploy/sync-from-tencent-if-changed.sh >> /var/log/snh48/sync-from-tencent.log 2>&1` |
 | 轻量检查脚本 | `/home/snh48_web/deploy/sync-from-tencent-if-changed.sh` |
 | 实际拉取脚本 | `/home/snh48_web/deploy/sync-from-tencent.sh` |
-| 状态文件 | `/tmp/snh48_sync_from_tencent.state.core`、`/tmp/snh48_sync_from_tencent.state.dynamic` |
+| 状态文件 | `/tmp/snh48_sync_from_tencent.state.core`、`/tmp/snh48_sync_from_tencent.state.dynamic`、`/tmp/snh48_sync_from_tencent.state.hub` |
 | 锁文件 | `/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock` |
 | 同步日志 | `/var/log/snh48/sync-from-tencent.log` |
 | 源服务器 | 腾讯云 `root@124.222.72.203` |
@@ -248,42 +258,79 @@ systemctl status nginx
 
 脚本逻辑：
 
-1. 阿里云每分钟 SSH 到腾讯云，分别计算 `core` 和 `dynamic` 两组源数据指纹。
-2. 两组指纹都没有变化时只写入 `no source changes, skipped`。
+1. 阿里云每分钟 SSH 到腾讯云，分别计算 `core`、`dynamic`、`hub` 三组源数据指纹。
+2. 三组指纹都没有变化时只写入 `no source changes, skipped`。
 3. 某组指纹变化时调用 `sync-from-tencent.sh <group>`，在一次同步内复用同一条 SSH ControlMaster 连接并用 `rsync` 拉取对应分组。
-4. 同步成功后更新 `/tmp/snh48_sync_from_tencent.state.core` 和 `/tmp/snh48_sync_from_tencent.state.dynamic`。
+4. 同步成功后更新 `/tmp/snh48_sync_from_tencent.state.<group>`。
+
+### 反向（阿里云→腾讯云，2026-10-16 新增）
+
+| 项 | 当前值 |
+|----|--------|
+| 自动任务所在服务器 | 腾讯云 |
+| cron | `* * * * * bash /home/snh48_web/deploy/sync-from-aliyun-if-changed.sh >> /var/log/snh48/sync-from-aliyun.log 2>&1` |
+| 轻量检查脚本 | `/home/snh48_web/deploy/sync-from-aliyun-if-changed.sh` |
+| 实际拉取脚本 | `/home/snh48_web/deploy/sync-from-aliyun.sh` |
+| 状态文件 | `/tmp/snh48_sync_from_aliyun.state.derived`、`/tmp/snh48_sync_from_aliyun.state.notify` |
+| 锁文件 | `/tmp/snh48_sync_from_aliyun_change.lock`、`/tmp/snh48_sync_from_aliyun.lock` |
+| 同步日志 | `/var/log/snh48/sync-from-aliyun.log` |
+| 源服务器 | 阿里云 `root@8.210.188.184` |
+| 目标服务器 | 腾讯云本机 |
+
+反向脚本逻辑与正向镜像（分组指纹 + flock + ControlMaster 复用 rsync），差异规则：
+
+- 所有目录同步不用 `--delete`；源文件/目录缺失只跳过，绝不删除腾讯云本地文件。
+- `notifications/notification_events.jsonl` 落地为腾讯云 `notifications/aliyun_relay/notification_events.jsonl`，不覆盖本地同名文件。
+- `private_handover/移交包/行程组/` 为阿里云权威、腾讯云不再写；正向 hub 组对该目录用 `--update` 防回滚。
+- `score_gifts` 排除 `live_business_fulfillments.json` 与 `.*.lock`（可写业务状态走腾讯云权威版本化复制）；全局排除 `*.lock`/`*.tmp`/`.*.sync.*`。
+- `flip_data/web` 反向保留发布顺序：先 payload，最后 `accounts.json` 临时文件原子改名。
 
 同步内容：
 
-| 腾讯云源路径 | 阿里云目标路径 | 说明 |
-|--------------|----------------|------|
-| `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 同路径 | 事件/行程主文件，网站优先读取 |
-| `/home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv` | 同路径 | 里程碑独立文件，列结构同主文件；源端可能尚未创建 |
-| `/home/snh48-fan-hub/schedule_record/schedule.csv` | 同路径 | 兼容副本 |
-| `/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json` | 同路径 | 微博/抖音已过滤的轻量时间轴数据；不包含原始社交 CSV、Cookie 或采集器 |
-| `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/` | 同路径 | 直播回放汇总 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 同路径 | 直播封面 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 同路径 | 礼物回复派生小数据 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/metadata/messages.jsonl` 与 `messages_YYYY-MM.jsonl` | 同路径 | 房间消息 jsonl 事实表（主文件+月封存，2026-10-16 起替代已退役的 messages_shards/ 分片） |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 同路径 | 语音转录文本数据 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 同路径 | 密码保护的上麦回放发布包；包含兼容版/原始音质版派生 M4A、元数据和同期消息，原始 FLV 不同步 |
-| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 同路径 | 计分礼物只读派生文件；排除 `live_business_fulfillments.json` 和 `.*.lock`，可写业务状态走版本化共享状态 |
-| `/home/snh48-fan-hub/flip_data/web/` | 同路径 | 脱敏账号清单、schema v4 账号 JSON 和默认兼容副本；逐条包含回复成员身份，`accounts.json` 最后原子提交，不含手机号、Token 或完整 metadata |
-| `/home/snh48-fan-hub/flip_data/audio/{account_id}/`、`/home/snh48-fan-hub/flip_data/video/{account_id}/` | 同路径 | 账号级翻牌音视频依赖；不含 `metadata/`、`transcripts/`、登录会话或任务日志 |
+| 路径 | 方向 | 说明 |
+|------|------|------|
+| `/home/snh48-fan-hub/schedule_record/chenjiayi_events.csv` | 阿里云→腾讯云 | 事件/行程主文件，2026-10-16 起阿里云产出 |
+| `/home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv` | 阿里云→腾讯云 | 里程碑独立文件，列结构同主文件 |
+| `/home/snh48-fan-hub/schedule_record/schedule.csv` | 阿里云→腾讯云 | 兼容副本 |
+| `/home/snh48-fan-hub/schedule_record/backups/` | 阿里云→腾讯云 | 行程自动维护备份回流归档 |
+| `/home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json` | 腾讯云→阿里云 | 微博/抖音已过滤的轻量时间轴数据；不包含原始社交 CSV、Cookie 或采集器 |
+| `/home/snh48-fan-hub/live_record/live_index.csv` 与 `live_record/陈嘉仪_161808449/` | 腾讯云→阿里云 | 直播回放汇总与录像索引；排除 `live.ts`/`live.capture.ts` 大文件 |
+| `/home/snh48-fan-hub/performance_record/陈嘉仪_161808449/` | 腾讯云→阿里云 | 公演公开互动文本白名单（json/jsonl/csv/lrc） |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers/` | 腾讯云→阿里云 | 直播封面 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/` 房间原始数据 | 腾讯云→阿里云 | metadata/messages*.jsonl 事实表与月封存、房间媒体；排除 `cross_room/`、qchat 排障文件、`metadata/backups/`、锁/临时文件及派生子目录 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies/` | 阿里云→腾讯云 | 礼物回复派生小数据，2026-10-16 起阿里云产出 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/` | 阿里云→腾讯云 | 语音转录文本数据，2026-10-16 起阿里云产出 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays/` | 腾讯云→阿里云 | 密码保护的上麦回放发布包；manifest 原子提交顺序不变，原始 FLV 不同步 |
+| `/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/` | 阿里云→腾讯云 | 计分礼物只读派生文件，2026-10-16 起阿里云产出；两个方向都排除 `live_business_fulfillments.json` 和 `.*.lock`，可写业务状态走版本化共享状态 |
+| `/home/snh48-fan-hub/room_record/pk_scores/` | 阿里云→腾讯云 | 房间计分 PK 派生小数据，2026-10-16 起阿里云产出 |
+| `/home/snh48-fan-hub/flip_data/web/` | 阿里云→腾讯云 | 脱敏账号清单与账号 JSON，2026-10-16 起阿里云产出；`accounts.json` 最后原子提交，不含手机号、Token 或完整 metadata |
+| `/home/snh48-fan-hub/flip_data/audio/`、`/home/snh48-fan-hub/flip_data/video/` | 阿里云→腾讯云 | 账号级翻牌音视频依赖，2026-10-16 起阿里云产出；不含 `metadata/`、`transcripts/`、登录会话或任务日志 |
+| `/home/snh48-fan-hub/social_record/fan_counts/` | 腾讯云→阿里云 | 粉丝数记录页公开只读小数据 |
+| `/home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449/` | 腾讯云→阿里云 | 口袋48榜单快照公开只读小数据（排除采集锁） |
+| `/home/snh48-fan-hub/social_record/weibo/*.jsonl`、`social_record/bilibili/*.csv` | 腾讯云→阿里云（hub） | fan-hub 自动化监控清单输入；目录内转发器状态文件不同步 |
+| `/home/snh48-fan-hub/notifications/admin_feedback_center.md`、`codex_social_event_queue.json` | 腾讯云→阿里云（hub） | 管理员反馈中心与社交事件队列，供阿里云侧自动化消费 |
+| `/home/snh48-fan-hub/config/accounts.json`、`config/koudai_token.json` | 腾讯云→阿里云（hub） | 口袋48账号配置，保持 root-only 权限，不套网站组 |
+| `/home/snh48-fan-hub/private_handover/移交包/行程组/` | 双向但阿里云权威 | 2026-10-16 起阿里云权威、腾讯云不再写；正向 hub 仅迁移窗口初始投递且 `--update` 防回滚，更新经反向回流 |
+| `/home/snh48-fan-hub/notifications/assistant_schedule_draft_state.json` | 阿里云→腾讯云 | 小助理行程草稿状态回流 |
+| `/home/snh48-fan-hub/notifications/codex_runs/` | 阿里云→腾讯云 | 阿里云 codex 运行记录，回流供腾讯云侧 COS 归档 |
+| `/home/snh48-fan-hub/notifications/notification_events.jsonl` | 阿里云→腾讯云 | 落地 `notifications/aliyun_relay/notification_events.jsonl`，绝不覆盖腾讯云本地同名文件 |
 
 同步分组：
 
-| 分组 | 内容 | 典型频率 |
-|------|------|----------|
-| `core` | 统一事件/行程 CSV、社交时间轴、直播回放汇总、直播封面 | 低频或人工更新 |
-| `dynamic` | 礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、脱敏翻牌 `web/`、账号级翻牌音视频 | 后台导出、上麦会话结束或翻牌批处理更新时变化 |
+| 分组 | 方向 | 内容 | 典型频率 |
+|------|------|------|----------|
+| `core` | 腾讯云→阿里云 | 社交时间轴、直播回放汇总与录像索引、公演互动文本、直播封面、房间原始数据白名单 | 直播/房间消息更新时变化 |
+| `dynamic` | 腾讯云→阿里云 | 成员房间上麦回放发布包、粉丝数记录、口袋48榜单快照 | 上麦会话结束或采集更新时变化 |
+| `hub` | 腾讯云→阿里云 | 微博/B站监控清单、管理员反馈中心、社交事件队列、口袋48账号配置、行程组初始投递 | 监控更新或管理员反馈时变化 |
+| `derived` | 阿里云→腾讯云 | 行程 CSV 与 backups、礼物回复、语音转录、计分礼物只读派生、pk_scores、翻牌三组产物、小助理草稿状态、行程组回流 | 阿里云派生服务更新时变化 |
+| `notify` | 阿里云→腾讯云 | codex_runs、notification_events.jsonl 中继 | codex 运行或通知事件追加时变化 |
 
 不作为常规同步项：
 
 - `schedule_record/images/`：图片通过网站 `/image-proxy/` 访问。
-- 完整原始房间消息、普通语音原文件、上麦原始 FLV、Cookie、Token、`.env`、`config/`、日志和缓存。
+- 完整原始房间消息、普通语音原文件、上麦原始 FLV、Cookie、`.env`、日志和缓存。Token/账号配置仅限 hub 组两个 `config/` 清单文件按 root-only 权限正向投递，不进入其他任何分组。
 - 首页背景词、房间忽略、计分业务和记忆页是非 Git 版本化共享状态；腾讯云和阿里云均已启用统一提交、历史和 outbox。不得用普通 rsync 或 Git 覆盖这四个当前文件；腾讯云 outbox 如果短时保留待补发文件，应按共享状态工具排查，不要手工覆盖阿里云。
-- 阿里云不是 `snh48-fan-hub` 的 Git checkout，不在阿里云生成 fan-hub 数据。
+- 2026-10-16 起阿里云承担 fan-hub 数据加工/AI 生成（派生数据产地），腾讯云保留采集与全量归档；除 `移交包/行程组/`（阿里云权威、只反向）外，两个方向不同步任何相同路径。
 
 ## 旧推送方案状态
 
@@ -299,7 +346,7 @@ systemctl status nginx
 
 - 腾讯云 `crontab -l` 不应有未注释的 `sync-to-aliyun*` 任务。
 - `/var/log/snh48/sync-to-aliyun.log` 不应持续更新。
-- `ps` 不应长期出现 `sync-to-aliyun-loop.sh`、推送方向的 `rsync` 或连接阿里云 `8.210.188.184` 的同步进程。
+- `ps` 不应长期出现 `sync-to-aliyun-loop.sh` 或推送方向的 `rsync`；2026-10-16 起腾讯云连接阿里云 `8.210.188.184` 的 `sync-from-aliyun*` 反向拉取进程属正常运行。
 
 2026-07-03 排查结论：
 
@@ -310,9 +357,9 @@ systemctl status nginx
 
 ## 排查注意
 
-- `source changed groups=dynamic, pulling...` 每分钟出现不一定异常。礼物回复、计分礼物、房间消息分片、语音转录、上麦发布包或翻牌应用数据等运行数据更新时，动态组源数据指纹会变化。
-- `source changed groups=core,dynamic, pulling...` 如果长期每分钟出现，需要确认 `core` 组是否真的持续变化；否则检查状态文件是否被删除或无法写入。
-- 稳定单向文件如 `chenjiayi_events.csv`、`chenjiayi_milestones.csv`、`schedule.csv` 和社交时间轴 JSON 应可以用 `sha256sum` 严格比对；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
+- 正向 `source changed groups=dynamic, pulling...` 每分钟出现不一定异常；上麦发布包、粉丝数或榜单快照更新时动态组指纹会变化。2026-10-16 起礼物回复、语音转录、计分礼物和翻牌产物不再走正向，改在阿里云产出并由反向 `derived` 组回流，腾讯云侧 `/var/log/snh48/sync-from-aliyun.log` 每分钟出现 `groups=derived, pulling...` 同理属预期。
+- `source changed groups=core,dynamic,hub, pulling...` 如果长期每分钟出现，需要确认这些组是否真的持续变化；否则检查状态文件是否被删除或无法写入。
+- 稳定文件如 `chenjiayi_events.csv`、`chenjiayi_milestones.csv`、`schedule.csv` 和社交时间轴 JSON 应可以用 `sha256sum` 严格比对（行程 CSV 以阿里云为源、腾讯云为副本）；四个可写共享状态改为核对 `_state.revision` 和 outbox，不能用普通 rsync 修复。
 - 动态目录只能按同步日志、mtime 和 1 到 2 分钟延迟判断，不要要求瞬时 hash 完全一致。
 - 修改同步目录、同步方向或云服务器 IP 时，必须同步更新 `doc/codex/project_profile.md`、`doc/daily_website_check.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`。
 - 如果新增同步目标或更换阿里云 IP，需要提醒用户更新腾讯云登录风险白名单。

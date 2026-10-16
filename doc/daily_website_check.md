@@ -4,20 +4,21 @@
 
 HTTPS 证书不是每日必查项；阿里云已建立月度提醒机制，详见 `doc/ops/https_certificate_reminder.md`。处理 HTTPS、Nginx、证书或阿里云部署问题时，应额外检查 `certbot.timer`、月度提醒 cron 和 `/var/log/snh48/https-cert-reminder.log`。
 
-## 1. 腾讯云到阿里云必要数据同步
+## 1. 腾讯云与阿里云双向数据同步
 
-目的：确认阿里云正在主动从腾讯云拉取网站必要运行数据，并确认旧的腾讯云主动推送任务没有恢复。
+目的：确认阿里云正在主动从腾讯云拉取采集与网站数据、腾讯云正在主动从阿里云拉取派生数据，并确认旧的腾讯云主动推送任务没有恢复。
 
-当前方案：
+当前方案（2026-10-16 迁移后）：
 
-- 自动任务运行在阿里云香港服务器 `/home/snh48_web`。
-- 阿里云 root cron 每分钟执行 `deploy/sync-from-tencent-if-changed.sh`。
-- 脚本先通过 SSH 分别检查腾讯云 `core` 和 `dynamic` 两组源数据指纹；只有某组指纹变化时才调用 `deploy/sync-from-tencent.sh` 拉取对应分组。
-- 四个可写业务状态不进入这两组；计分目录指纹和 rsync 都排除 `live_business_fulfillments.json`、`.*.lock`。
-- 粉丝数记录页数据 `social_record/fan_counts/` 属公开只读小数据，在 `dynamic` 组同步；口袋48榜单快照 `pocket48_ranks/陈嘉仪_161808449/` 同属公开只读小数据，在 `dynamic` 组同步（排除 `.collector.lock`）；应援会业务管理页数据 `private_handover/web_state/` 含暗账名单，不进入任何同步分组。
-- 陈嘉仪直播录制之外的房间原始数据和派生数据按 `core` 白名单同步；`live_record/` 下的直播录制和下载回放视频不进阿里云，历史视频只在腾讯云 COS manifest 校验后清理本地。
+- 正向自动任务运行在阿里云香港服务器 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分别检查腾讯云 `core`、`dynamic`、`hub` 三组源数据指纹；只有某组指纹变化时才调用 `deploy/sync-from-tencent.sh` 拉取对应分组。
+- 反向自动任务运行在腾讯云 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-aliyun-if-changed.sh`，同样按指纹触发 `deploy/sync-from-aliyun.sh` 拉取 `derived`、`notify` 组。反向所有目录不用 `--delete`，源缺失只跳过不删本地文件。
+- 派生数据（行程 CSV、礼物回复、语音转录、计分礼物、pk_scores、翻牌产物、行程组稿件）2026-10-16 起在阿里云产出，经反向组回流腾讯云；`private_handover/移交包/行程组/` 为阿里云权威，腾讯云不再写。
+- `notifications/notification_events.jsonl` 两端各自产生；阿里云侧只中继到腾讯云 `notifications/aliyun_relay/`，不覆盖腾讯云本地同名文件。
+- 四个可写业务状态不进入这些组；计分目录指纹和 rsync 都排除 `live_business_fulfillments.json`、`.*.lock`。
+- 粉丝数记录页数据 `social_record/fan_counts/` 属公开只读小数据，在正向 `dynamic` 组同步；口袋48榜单快照 `pocket48_ranks/陈嘉仪_161808449/` 同属公开只读小数据，在 `dynamic` 组同步（排除 `.collector.lock`）；应援会业务管理页数据 `private_handover/web_state/` 含暗账名单，不进入任何同步分组。
+- 陈嘉仪直播录制之外的房间原始数据按 `core` 白名单同步；`live_record/` 下的直播录制和下载回放视频不进阿里云，历史视频只在腾讯云 COS manifest 校验后清理本地。
 - 上麦回放目录先同步 session、消息和音频，再原子提交 `manifest.json`，最后清理旧文件；同步中途旧 manifest 仍保持可播放。
-- 翻牌多账号先同步脱敏账号 JSON 和账号级媒体，再原子提交 `flip_data/web/accounts.json`；手机号、Token、登录会话、完整 metadata 和转录中间产物不进入阿里云。
+- 翻牌多账号先同步脱敏账号 JSON 和账号级媒体，再原子提交 `flip_data/web/accounts.json`（正反向一致）；手机号、Token、登录会话、完整 metadata 和转录中间产物不进入网站消费数据。hub 组两个 `config/` 账号文件仅作 fan-hub 自动化输入，保持 root-only。
 - 腾讯云侧 `sync-to-aliyun.sh`、`sync-to-aliyun-if-changed.sh`、`sync-to-aliyun-loop.sh` 只作为手动兜底，不应放回生产 cron。
 
 ### 阿里云检查命令
@@ -39,7 +40,8 @@ tail -n 80 /var/log/snh48/sync-from-tencent.log
 # 4. 确认没有卡住的同步进程；同步执行瞬间可能短暂出现 bash、ssh、rsync
 pgrep -af 'sync-from-tencent|sync-to-aliyun|rsync|124.222.72.203' || true
 
-# 5. 比对稳定小文件。动态导出文件可能有 1 到 2 分钟延迟，不适合做严格瞬时 hash 判断
+# 5. 比对稳定小文件。2026-10-16 起行程 CSV 以阿里云为产地、腾讯云为回流副本，
+#    腾讯云侧允许 1 到 2 分钟延迟；不适合做严格瞬时 hash 判断
 sha256sum /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
 ssh -o BatchMode=yes -o ConnectTimeout=8 root@124.222.72.203 \
   "sha256sum /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv"
@@ -65,15 +67,22 @@ wc -c /tmp/aliyun_schedule.json
 ```bash
 cd /home/snh48_web
 
-# 1. 腾讯云生产 cron 不应恢复主动推送任务；注释行可以存在
-crontab -l | grep -E 'sync-to-aliyun|sync-from-tencent' || true
+# 1. 确认腾讯云 cron 正在每分钟运行反向拉取检查（2026-10-16 新增）
+crontab -l | grep 'sync-from-aliyun-if-changed'
 
-# 2. 旧推送日志不应持续更新
+# 2. 查看最近反向同步日志
+tail -n 80 /var/log/snh48/sync-from-aliyun.log
+
+# 3. 腾讯云生产 cron 不应恢复主动推送任务；注释行可以存在
+crontab -l | grep -E 'sync-to-aliyun' || true
+
+# 4. 旧推送日志不应持续更新
 stat -c '%y %s %n' /var/log/snh48/sync-to-aliyun.log 2>/dev/null || true
 tail -n 20 /var/log/snh48/sync-to-aliyun.log 2>/dev/null || true
 
-# 3. 确认当前没有腾讯云主动推送进程
-pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
+# 5. 确认没有卡住的同步进程；sync-from-aliyun 拉取进程属正常运行，
+#    不应出现 sync-to-aliyun* 推送进程
+pgrep -af 'sync-from-aliyun|sync-to-aliyun|rsync|8.210.188.184' || true
 ```
 
 ### 合格标准
@@ -84,39 +93,67 @@ pgrep -af 'sync-to-aliyun|rsync|8.210.188.184' || true
 * * * * * bash /home/snh48_web/deploy/sync-from-tencent-if-changed.sh >> /var/log/snh48/sync-from-tencent.log 2>&1
 ```
 
-- `/var/log/snh48/sync-from-tencent.log` 最近 2 到 3 分钟内出现一次检查记录。
+- 腾讯云 `crontab -l` 中存在这一行或等价配置（2026-10-16 新增反向）：
+
+```cron
+* * * * * bash /home/snh48_web/deploy/sync-from-aliyun-if-changed.sh >> /var/log/snh48/sync-from-aliyun.log 2>&1
+```
+
+- `/var/log/snh48/sync-from-tencent.log`（阿里云）与 `/var/log/snh48/sync-from-aliyun.log`（腾讯云）最近 2 到 3 分钟内各出现一次检查记录。
 - 无变化时允许出现：
 
 ```text
 [sync-from-tencent-if-changed][YYYY-MM-DD HH:MM:SS] no source changes, skipped
+[sync-from-aliyun-if-changed][YYYY-MM-DD HH:MM:SS] no source changes, skipped
 ```
 
-- 有变化时应出现一次完整成功记录：
+- 有变化时应出现一次完整成功记录。正向示例（分组按实际触发子集出现）：
 
 ```text
-[sync-from-tencent-if-changed][YYYY-MM-DD HH:MM:SS] source changed groups=core,dynamic, pulling...
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] Starting sync groups=core,dynamic...
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] chenjiayi_events.csv done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] chenjiayi_milestones.csv done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] schedule.csv done
+[sync-from-tencent-if-changed][YYYY-MM-DD HH:MM:SS] source changed groups=core,dynamic,hub, pulling...
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] Starting sync groups=core,dynamic,hub...
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] social timeline done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_push_replays done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_index.csv done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_record done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] performance interaction text done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] live_covers done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] chenjiayi room raw non-video data done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] gift_replies done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] audio_transcripts done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] score_gifts done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays payload done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays manifest committed
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays obsolete payload cleaned
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] room_voice_replays done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/web done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/audio done
-[sync-from-tencent][YYYY-MM-DD HH:MM:SS] flip_data/video done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] fan_counts done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] pocket48_ranks done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] hub weibo jsonl done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] hub bilibili csv done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] hub admin_feedback_center done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] hub codex_social_event_queue done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] hub pocket48 config done
+[sync-from-tencent][YYYY-MM-DD HH:MM:SS] hub 行程组 done
 [sync-from-tencent][YYYY-MM-DD HH:MM:SS] All sync completed
 [sync-from-tencent-if-changed][YYYY-MM-DD HH:MM:SS] state updated
+```
+
+- 反向示例（分组按实际触发子集出现；阿里云侧暂缺的路径只出现 `skipped`，不删除腾讯云本地文件）：
+
+```text
+[sync-from-aliyun-if-changed][YYYY-MM-DD HH:MM:SS] source changed groups=derived,notify, pulling...
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] Starting sync groups=derived,notify...
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] schedule CSVs done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] schedule_record/backups done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] gift_replies done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] audio_transcripts done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] score_gifts done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] pk_scores done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] flip_data/audio done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] flip_data/video done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] flip_data/web done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] assistant_schedule_draft_state done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] 行程组 done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] codex_runs done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] notification_events relay done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] All sync completed
+[sync-from-aliyun-if-changed][YYYY-MM-DD HH:MM:SS] state updated
 ```
 
 - 腾讯云生产 cron 没有启用 `sync-to-aliyun-loop.sh`、`sync-to-aliyun-if-changed.sh` 或 `sync-to-aliyun.sh`；旧任务注释行可以保留。

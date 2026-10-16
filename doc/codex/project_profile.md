@@ -102,23 +102,29 @@
 python3 deploy/deploy.py sync-data tencent aliyun
 bash deploy/sync-from-tencent.sh
 bash deploy/sync-from-tencent-if-changed.sh
+bash deploy/sync-from-aliyun.sh
+bash deploy/sync-from-aliyun-if-changed.sh
 bash deploy/sync-to-aliyun.sh
 bash deploy/sync-to-aliyun-if-changed.sh
 ```
 
-线上自动同步在阿里云执行：cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 从腾讯云主动拉取对应分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。拉取和手动推送 shell 脚本在每次 rsync 接收时强制 `root:snh48-web`、目录 `0750`、文件 `0640`，因此原子替换文件后网站进程仍保持只读访问；不能改回继承腾讯云 `root:root 0640` 的接收方式。四个 `core` 单文件（事件主文件、里程碑文件、兼容副本、社交时间轴）采用显式存在性检查：源文件确认不存在时删除阿里云对应文件，SSH 检查失败则不删除；这样源端删除不会留下陈旧副本。`room_voice_replays/` 在三个入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话。管理员新增的事件和行程统一写入 fan-hub 事件/行程 CSV 并按 `core` 单向拉取。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的其他只读派生文件继续走 `dynamic`，但所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。已退役的 `website/data/manual_events.csv` 不加入任何同步源，两个同步入口会主动清理阿里云旧副本。
+线上自动同步为双向（2026-10-16 迁移后）：正向由阿里云 cron 每分钟运行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分组检查腾讯云源数据指纹，只有变化时调用 `deploy/sync-from-tencent.sh` 拉取 `core`/`dynamic`/`hub` 分组；反向由腾讯云 cron 每分钟运行 `deploy/sync-from-aliyun-if-changed.sh`，变化时调用 `deploy/sync-from-aliyun.sh` 把阿里云产出的派生数据拉回 `derived`/`notify` 分组。`deploy/sync-to-aliyun.sh`、`deploy/sync-to-aliyun-if-changed.sh` 和 `deploy/sync-to-aliyun-loop.sh` 只作为腾讯云临时手动推送兜底，不应放回腾讯云生产 cron 或常驻进程。`deploy.py sync-data` 是本地手动触发入口。正向网站消费数据和手动推送 shell 脚本在每次 rsync 接收时强制 `root:snh48-web`、目录 `0750`、文件 `0640`，因此原子替换文件后网站进程仍保持只读访问；不能改回继承腾讯云 `root:root 0640` 的接收方式。正向 `hub` 组是例外：它投递 fan-hub 自动化输入（含 `config/accounts.json`、`config/koudai_token.json` 等 Token 配置），保持源端 root 权限，不套用网站组参数。正向单文件（社交时间轴、直播汇总及 hub 组单文件）采用显式存在性检查：源文件确认不存在时删除阿里云对应文件，SSH 检查失败则不删除；这样源端删除不会留下陈旧副本。`room_voice_replays/` 在正向入口中都采用 payload 先同步、`manifest.json` 临时文件原子改名、旧 payload 最后清理的发布顺序，避免大音频传输期间网站提前看到半个新会话；反向 `flip_data/web` 同样先 payload 后原子提交 `accounts.json`。管理员新增的事件和行程自 2026-10-16 起在阿里云写入 fan-hub 事件/行程 CSV，经反向 `derived` 组回流腾讯云。四个可写业务状态不进入普通分组同步，也不走 Git；即时一致性由 `doc/shared_runtime_state.md` 的腾讯云权威提交、阿里云操作转发、版本复制和持久 outbox 保证。计分礼物目录的只读派生文件走反向 `derived`，正反向所有 rsync 入口都排除可写的 `live_business_fulfillments.json` 和 `.*.lock`。反向同步所有目录不用 `--delete`、源缺失只跳过不删腾讯云本地文件；`notifications/notification_events.jsonl` 只落地腾讯云 `notifications/aliyun_relay/`，不覆盖本地同名文件；`private_handover/移交包/行程组/` 为阿里云权威、腾讯云不再写，正向 hub 对该目录用 `--update` 防旧副本回滚。已退役的 `website/data/manual_events.csv` 不加入任何同步源，正向两个同步入口会主动清理阿里云旧副本。
 
 自动同步运行状态口径：
 
 - 阿里云 cron：`* * * * * bash /home/snh48_web/deploy/sync-from-tencent-if-changed.sh >> /var/log/snh48/sync-from-tencent.log 2>&1`
 - 阿里云日志：`/var/log/snh48/sync-from-tencent.log`
-- 阿里云状态文件：`/tmp/snh48_sync_from_tencent.state.core`、`/tmp/snh48_sync_from_tencent.state.dynamic`
+- 阿里云状态文件：`/tmp/snh48_sync_from_tencent.state.core`、`/tmp/snh48_sync_from_tencent.state.dynamic`、`/tmp/snh48_sync_from_tencent.state.hub`
 - 阿里云锁文件：`/tmp/snh48_sync_from_tencent_change.lock`、`/tmp/snh48_sync_from_tencent.lock`
+- 腾讯云 cron（2026-10-16 新增反向）：`* * * * * bash /home/snh48_web/deploy/sync-from-aliyun-if-changed.sh >> /var/log/snh48/sync-from-aliyun.log 2>&1`
+- 腾讯云反向日志：`/var/log/snh48/sync-from-aliyun.log`
+- 腾讯云反向状态文件：`/tmp/snh48_sync_from_aliyun.state.derived`、`/tmp/snh48_sync_from_aliyun.state.notify`
+- 腾讯云反向锁文件：`/tmp/snh48_sync_from_aliyun_change.lock`、`/tmp/snh48_sync_from_aliyun.lock`
 - 腾讯云旧推送日志：`/var/log/snh48/sync-to-aliyun.log`，新方案接管后不应持续更新。
 
-同步分组：`core` 包含统一事件/行程 CSV、社交时间轴、直播回放汇总和直播封面；`dynamic` 包含礼物回复、房间消息分片、语音转录、成员房间上麦回放发布包、计分礼物只读派生文件、脱敏 `flip_data/web/` 和账号级翻牌音视频依赖。翻牌数据先同步账号 JSON，再原子提交 `web/accounts.json`。手动运行 `bash deploy/sync-from-tencent.sh` 不带参数时仍拉取全部分组，也可以显式传 `core` 或 `dynamic`。
+同步分组（2026-10-16 迁移后）：正向 `core` 包含社交时间轴、直播回放汇总与录像索引、公演互动文本、直播封面和房间原始数据白名单；`dynamic` 包含成员房间上麦回放发布包、粉丝数记录和口袋48榜单快照；`hub` 包含微博/B站监控清单、管理员反馈中心、社交事件队列、口袋48账号配置和行程组初始投递（`--update` 防回滚）。反向 `derived` 包含事件/行程 CSV 与 `schedule_record/backups/`、礼物回复、语音转录、计分礼物只读派生文件、`room_record/pk_scores/`、脱敏 `flip_data/web/` 和账号级翻牌音视频、小助理草稿状态、行程组回流；`notify` 包含 `codex_runs/` 和 `notification_events.jsonl` 中继（落地 `aliyun_relay/`）。翻牌数据先同步账号 JSON，再原子提交 `web/accounts.json`（两个方向一致）。手动运行 `bash deploy/sync-from-tencent.sh` 或 `bash deploy/sync-from-aliyun.sh` 不带参数时拉取该方向全部分组，也可以显式传分组名。
 
-排查时不要把每分钟 `source changed groups=dynamic, pulling...` 直接判定为异常。`gift_replies/`、`audio_transcripts/`、`room_voice_replays/`、`score_gifts/`、`flip_data/web/` 和翻牌音视频等派生数据在后台更新时，动态组源数据指纹会变化，阿里云每分钟拉取是预期行为。判断是否异常时，应结合腾讯云最近 mtime、阿里云同步日志和 1 到 2 分钟延迟。如果长期出现 `groups=core,dynamic`，需要确认 `core` 组是否真的持续变化，或检查状态文件是否被清理。
+排查时不要把每分钟 `source changed groups=dynamic, pulling...`（或反向 `groups=derived`）直接判定为异常。`room_voice_replays/`、`fan_counts/`、`pocket48_ranks/` 与阿里云侧礼物回复、语音转录、计分礼物、翻牌产物等派生数据在后台更新时，对应组指纹会变化，每分钟拉取是预期行为。判断是否异常时，应结合产地最近 mtime、两端同步日志和 1 到 2 分钟延迟。如果长期出现多组同时每分钟触发，需要确认是否真的有持续变化，或检查状态文件是否被清理。
 
 修改同步方向、频率、源路径、目标路径或服务器 IP 时，必须同时更新 `doc/daily_website_check.md`、`doc/running_status.md`、`doc/security/security_baseline.md` 和 `AGENTS.md`；并验证阿里云 cron 已启用、腾讯云旧推送 cron/进程已停用、稳定小文件两端 hash 一致。
 

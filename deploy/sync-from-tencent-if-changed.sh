@@ -1,5 +1,7 @@
 #!/bin/bash
 # Run Aliyun pull from Tencent only when Tencent source data files changed.
+# 2026-10-16 迁移：分组调整为 core/dynamic/hub（派生数据移出正向，详见
+# sync-from-tencent.sh 头部）；阿里云产出经腾讯云侧 sync-from-aliyun 反向回流。
 
 set -euo pipefail
 
@@ -36,11 +38,11 @@ set -euo pipefail
 
 group=$1
 case "$group" in
+  # 2026-10-16 迁移：schedule_record 三个 CSV 转为阿里云产出（反向回流），
+  # 移出 core 指纹；dynamic 移除 gift_replies/audio_transcripts/score_gifts
+  # 与 flip_data/{web,audio,video}（同因）；新增 hub 组。
   core)
     sources=(
-      /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
-      /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv
-      /home/snh48-fan-hub/schedule_record/schedule.csv
       /home/snh48-fan-hub/social_record/timeline/chenjiayi_social_timeline.json
       /home/snh48-fan-hub/live_record/live_index.csv
       /home/snh48-fan-hub/live_record/陈嘉仪_161808449
@@ -56,16 +58,36 @@ case "$group" in
     ;;
   dynamic)
     sources=(
-      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
-      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
-      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays
-      /home/snh48-fan-hub/flip_data/web
-      /home/snh48-fan-hub/flip_data/audio
-      /home/snh48-fan-hub/flip_data/video
       /home/snh48-fan-hub/social_record/fan_counts
       /home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449
     )
+    ;;
+  hub)
+    {
+      files=(
+        /home/snh48-fan-hub/notifications/admin_feedback_center.md
+        /home/snh48-fan-hub/notifications/codex_social_event_queue.json
+        /home/snh48-fan-hub/config/accounts.json
+        /home/snh48-fan-hub/config/koudai_token.json
+      )
+      for f in "${files[@]}"; do
+        if [ -f "$f" ]; then
+          stat -c '%n	%s	%Y' "$f"
+        else
+          printf '%s\tmissing\t0\n' "$f"
+        fi
+      done
+      # 只跟踪自动化消费的清单文件；目录内转发器状态文件不进指纹
+      find /home/snh48-fan-hub/social_record/weibo -maxdepth 1 -type f -name '*.jsonl' -printf '%p\t%s\t%T@\n' 2>/dev/null || true
+      find /home/snh48-fan-hub/social_record/bilibili -maxdepth 1 -type f -name '*.csv' -printf '%p\t%s\t%T@\n' 2>/dev/null || true
+      if [ -d /home/snh48-fan-hub/private_handover/移交包/行程组 ]; then
+        find /home/snh48-fan-hub/private_handover/移交包/行程组 -type f ! -name '*.lock' ! -name '*.tmp' -printf '%p\t%s\t%T@\n' 2>/dev/null
+      else
+        printf '%s\tmissing\t0\n' /home/snh48-fan-hub/private_handover/移交包/行程组
+      fi
+    } | sort | sha256sum | awk '{print $1}'
+    exit 0
     ;;
   *)
     echo "unknown sync group: $group" >&2
@@ -90,7 +112,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-groups=(core dynamic)
+groups=(core dynamic hub)
 changed_groups=()
 current_values=()
 
