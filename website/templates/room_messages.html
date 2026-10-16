@@ -2265,15 +2265,22 @@
       var status = document.getElementById("giftEffectStatus");
       var canvas = document.getElementById("giftEffectCanvas");
       modal.hidden = false;
-      status.textContent = "加载中…";
+      var step = "加载播放组件";
+      status.textContent = step + "…";
+      var watchdog = setTimeout(function () {
+        status.textContent = "动效加载超时（卡在：" + step + "），请截图反馈";
+      }, 25000);
       if (pagActiveView) {
         try { pagActiveView.stop(); } catch (e) {}
         pagActiveView = null;
       }
       try {
         await loadJszip();
+        step = "初始化播放器";
+        status.textContent = step + "…";
         var PAG = await loadPagLib();
-        status.textContent = "下载动效资源…";
+        step = "下载动效资源";
+        status.textContent = step + "…";
         var zipResp = await fetch(url);
         var zipBuffer = await zipResp.arrayBuffer();
         var zip = await window.JSZip.loadAsync(zipBuffer);
@@ -2282,9 +2289,12 @@
           if (!pagEntry && /\.pag$/i.test(path)) pagEntry = entry;
         });
         if (!pagEntry) throw new Error("资源包中未找到 .pag 动效文件");
-        status.textContent = "解压动效…";
+        step = "解压动效";
+        status.textContent = step + "…";
         var pagBuffer = await pagEntry.async("arraybuffer");
         var pagFile = await PAG.PAGFile.load(pagBuffer);
+        step = "渲染动效";
+        status.textContent = step + "…";
         var scale = Math.min(2, 640 / Math.max(1, pagFile.width()));
         canvas.width = Math.round(pagFile.width() * scale);
         canvas.height = Math.round(pagFile.height() * scale);
@@ -2293,9 +2303,11 @@
         view.setRepeatCount(0);
         await view.play();
         pagActiveView = view;
+        clearTimeout(watchdog);
         status.textContent = "时长约 " + (pagFile.duration() / 1000000).toFixed(1) + " 秒（循环播放）";
       } catch (err) {
-        status.textContent = "动效加载失败：" + (err && err.message ? err.message : err);
+        clearTimeout(watchdog);
+        status.textContent = "动效加载失败（" + step + "）：" + (err && err.message ? err.message : err);
       }
     }
 
