@@ -5,7 +5,7 @@
 - 背景：fan-hub 数据加工/AI 生成迁到阿里云（`root@8.210.188.184`），采集留腾讯云。派生数据路径不变，产地变为阿里云。
 - 正向（腾讯云→阿里云，阿里云 cron 每分钟 `sync-from-tencent-if-changed.sh` 不变）：`core` 移除 `schedule_record` 三个 CSV；`dynamic` 移除 `gift_replies/`、`audio_transcripts/`、`score_gifts/` 与 `flip_data/{web,audio,video}/`（转为阿里云产出，继续正拉会覆盖新数据）；新增 `hub` 组投递 fan-hub 自动化输入（`social_record/weibo/*.jsonl`、`social_record/bilibili/*.csv`、`notifications/admin_feedback_center.md`、`notifications/codex_social_event_queue.json`、`config/accounts.json`、`config/koudai_token.json`、`private_handover/移交包/行程组/`）。hub 组含 Token/账号配置，保持源端 root 权限，不套用网站组只读接收参数；行程组正向用 `--update` 防旧副本回滚。
 - 反向（阿里云→腾讯云）：新增 `deploy/sync-from-aliyun.sh` 与 `deploy/sync-from-aliyun-if-changed.sh`，腾讯云 root cron 每分钟运行，日志 `/var/log/snh48/sync-from-aliyun.log`。`derived` 组回流行程 CSV 与 `schedule_record/backups/`、`gift_replies/`、`audio_transcripts/`、`score_gifts/`、`room_record/pk_scores/`、`flip_data/{web,audio,video}/`、`assistant_schedule_draft_state.json`、`移交包/行程组/`（2026-10-16 起阿里云权威，腾讯云不再写）；`notify` 组回流 `notifications/codex_runs/`（供 COS 归档）与 `notification_events.jsonl`（落地 `notifications/aliyun_relay/notification_events.jsonl`，绝不覆盖腾讯云本地同名文件）。
-- 反向所有目录不用 `--delete`、源缺失只跳过不删本地文件；`score_gifts` 仍排除 `live_business_fulfillments.json` 与 `.*.lock`（可写业务状态走腾讯云权威版本化复制）；`flip_data/web` 反向保留 `accounts.json` 最后原子提交。
+- 反向所有目录不用 `--delete`、rsync 统一加 `--update` 防回滚（迁移窗口内腾讯云本地文件更新时不被阿里云旧副本覆盖）、源缺失只跳过不删本地文件；`score_gifts` 仍排除 `live_business_fulfillments.json` 与 `.*.lock`（可写业务状态走腾讯云权威版本化复制）；`flip_data/web` 反向保留 `accounts.json` 最后原子提交（本地更新时保留本地）。
 - 部署：阿里云 `/home/snh48_web/deploy/` 原正向脚本备份为 `.bak.premigration` 后经 GitHub 对齐；腾讯云 crontab 新增反向行，既有条目全部保留。两端分组清单快照存 `/root/.config/server-migration/20261016_tencent_to_aliyun/w5a_sync_topology.log`。
 
 ## 2026-10-16 房间消息页切换 jsonl 事实表，messages_shards 分片退役
@@ -279,7 +279,7 @@ systemctl status nginx
 
 反向脚本逻辑与正向镜像（分组指纹 + flock + ControlMaster 复用 rsync），差异规则：
 
-- 所有目录同步不用 `--delete`；源文件/目录缺失只跳过，绝不删除腾讯云本地文件。
+- 所有目录同步不用 `--delete`，rsync 统一加 `--update` 防回滚；源文件/目录缺失只跳过，绝不删除腾讯云本地文件。
 - `notifications/notification_events.jsonl` 落地为腾讯云 `notifications/aliyun_relay/notification_events.jsonl`，不覆盖本地同名文件。
 - `private_handover/移交包/行程组/` 为阿里云权威、腾讯云不再写；正向 hub 组对该目录用 `--update` 防回滚。
 - `score_gifts` 排除 `live_business_fulfillments.json` 与 `.*.lock`（可写业务状态走腾讯云权威版本化复制）；全局排除 `*.lock`/`*.tmp`/`.*.sync.*`。

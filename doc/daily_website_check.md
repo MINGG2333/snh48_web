@@ -11,7 +11,7 @@ HTTPS 证书不是每日必查项；阿里云已建立月度提醒机制，详�
 当前方案（2026-10-16 迁移后）：
 
 - 正向自动任务运行在阿里云香港服务器 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分别检查腾讯云 `core`、`dynamic`、`hub` 三组源数据指纹；只有某组指纹变化时才调用 `deploy/sync-from-tencent.sh` 拉取对应分组。
-- 反向自动任务运行在腾讯云 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-aliyun-if-changed.sh`，同样按指纹触发 `deploy/sync-from-aliyun.sh` 拉取 `derived`、`notify` 组。反向所有目录不用 `--delete`，源缺失只跳过不删本地文件。
+- 反向自动任务运行在腾讯云 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-aliyun-if-changed.sh`，同样按指纹触发 `deploy/sync-from-aliyun.sh` 拉取 `derived`、`notify` 组。反向所有目录不用 `--delete` 且统一加 `--update` 防回滚，源缺失只跳过不删本地文件。
 - 派生数据（行程 CSV、礼物回复、语音转录、计分礼物、pk_scores、翻牌产物、行程组稿件）2026-10-16 起在阿里云产出，经反向组回流腾讯云；`private_handover/移交包/行程组/` 为阿里云权威，腾讯云不再写。
 - `notifications/notification_events.jsonl` 两端各自产生；阿里云侧只中继到腾讯云 `notifications/aliyun_relay/`，不覆盖腾讯云本地同名文件。
 - 四个可写业务状态不进入这些组；计分目录指纹和 rsync 都排除 `live_business_fulfillments.json`、`.*.lock`。

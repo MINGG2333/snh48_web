@@ -16,6 +16,9 @@
 # - 所有目录同步不使用 --delete：迁移窗口内腾讯云派生服务可能仍在写，
 #   避免阿里云侧尚缺的新文件被回流误删；派生目录为追加式，删除不传播
 #   可接受。
+# - 所有 rsync 加 --update 防回滚：迁移窗口内腾讯云本地文件可能更新，
+#   只有阿里云源更新的文件才回流；切换完成后阿里云是唯一产地，
+#   --update 行为等同普通镜像（删除仍不传播）。
 # - 单文件源缺失时跳过，绝不删除腾讯云本地文件（本地文件可能是现役
 #   权威副本）。
 # - notifications/notification_events.jsonl 只落地到腾讯云
@@ -60,7 +63,7 @@ sync_file_from_aliyun() {
   fi
   case "$source_state" in
     present)
-      rsync -az --partial -e "$RSYNC_RSH" "$ALIYUN:$source_path" "$destination_path"
+      rsync -az --update --partial -e "$RSYNC_RSH" "$ALIYUN:$source_path" "$destination_path"
       ;;
     absent)
       echo "$LOG_TAG source missing, skipped: $source_path"
@@ -78,7 +81,7 @@ sync_dir_from_aliyun() {
   local destination_dir=$2
   shift 2
   if ssh "${SSH_OPTS[@]}" -S "$CONTROL_PATH" "$ALIYUN" "test -d '$source_dir'"; then
-    rsync -az --partial --exclude='*.lock' --exclude='*.tmp' --exclude='.*.sync.*' "$@" -e "$RSYNC_RSH" "$ALIYUN:$source_dir/" "$destination_dir/"
+    rsync -az --update --partial --exclude='*.lock' --exclude='*.tmp' --exclude='.*.sync.*' "$@" -e "$RSYNC_RSH" "$ALIYUN:$source_dir/" "$destination_dir/"
   else
     echo "$LOG_TAG source missing, skipped: $source_dir"
   fi
@@ -166,10 +169,16 @@ if [ "$sync_derived" -eq 1 ]; then
     FLIP_WEB_SOURCE="$ALIYUN:/home/snh48-fan-hub/flip_data/web/"
     FLIP_WEB_DEST="/home/snh48-fan-hub/flip_data/web"
     FLIP_ACCOUNTS_TMP="$FLIP_WEB_DEST/.accounts.json.sync.$$"
-    rsync -az --partial --delay-updates --exclude='/accounts.json' --exclude='*.tmp' --exclude='.*.sync.*' --exclude='*.lock' -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE" "$FLIP_WEB_DEST/"
+    rsync -az --update --partial --delay-updates --exclude='/accounts.json' --exclude='*.tmp' --exclude='.*.sync.*' --exclude='*.lock' -e "$RSYNC_RSH" "$FLIP_WEB_SOURCE" "$FLIP_WEB_DEST/"
     if ssh "${SSH_OPTS[@]}" -S "$CONTROL_PATH" "$ALIYUN" 'test -f /home/snh48-fan-hub/flip_data/web/accounts.json'; then
       rsync -az --partial -e "$RSYNC_RSH" "${FLIP_WEB_SOURCE}accounts.json" "$FLIP_ACCOUNTS_TMP"
-      mv -f "$FLIP_ACCOUNTS_TMP" "$FLIP_WEB_DEST/accounts.json"
+      # 与 --update 等效：本地副本更新时保留本地（迁移窗口防回滚）
+      if [ ! -e "$FLIP_WEB_DEST/accounts.json" ] || [ "$FLIP_ACCOUNTS_TMP" -nt "$FLIP_WEB_DEST/accounts.json" ]; then
+        mv -f "$FLIP_ACCOUNTS_TMP" "$FLIP_WEB_DEST/accounts.json"
+      else
+        rm -f -- "$FLIP_ACCOUNTS_TMP"
+        echo "$LOG_TAG flip_data/web accounts.json local copy newer, kept"
+      fi
     fi
     echo "$LOG_TAG flip_data/web done"
   else
