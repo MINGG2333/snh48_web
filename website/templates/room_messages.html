@@ -2237,8 +2237,9 @@
 
     function loadPagLib() {
       if (!pagLibPromise) {
-        pagLibPromise = loadScriptOnce("/static/vendor/libpag/libpag.min.js",
-          function () { return !!window.libpag; })
+        // libpag.min.js 顶层含 import.meta.url，只能按 ES module 加载；
+        // 作为 module 执行时 UMD 兜底会把全局挂到 globalThis.libpag。
+        pagLibPromise = import("/static/vendor/libpag/libpag.min.js")
           .then(function () {
             return window.libpag.PAGInit({
               locateFile: function (file) {
@@ -2246,6 +2247,7 @@
               }
             });
           });
+        pagLibPromise.catch(function () { pagLibPromise = null; });
       }
       return pagLibPromise;
     }
