@@ -81,6 +81,12 @@ case "$group" in
       # 只跟踪自动化消费的清单文件；目录内转发器状态文件不进指纹
       find /home/snh48-fan-hub/social_record/weibo -maxdepth 1 -type f -name '*.jsonl' -printf '%p\t%s\t%T@\n' 2>/dev/null || true
       find /home/snh48-fan-hub/social_record/bilibili -maxdepth 1 -type f -name '*.csv' -printf '%p\t%s\t%T@\n' 2>/dev/null || true
+      # 翻牌采集原始媒体（H7，供阿里云 flip_update_feedback 消费）
+      for d in /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video; do
+        if [ -d "$d" ]; then
+          find "$d" -type f ! -name '*.lock' ! -name '*.tmp' -printf '%p\t%s\t%T@\n' 2>/dev/null
+        fi
+      done
       if [ -d /home/snh48-fan-hub/private_handover/移交包/行程组 ]; then
         find /home/snh48-fan-hub/private_handover/移交包/行程组 -type f ! -name '*.lock' ! -name '*.tmp' -printf '%p\t%s\t%T@\n' 2>/dev/null
       else

@@ -293,6 +293,17 @@ if [ "$sync_hub" -eq 1 ]; then
     --exclude='*.lock' --exclude='*.tmp' \
     -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/private_handover/移交包/行程组/" /home/snh48-fan-hub/private_handover/移交包/行程组/
   echo "$LOG_TAG hub 行程组 done"
+
+  # H7. 翻牌采集原始媒体（腾讯云特权桥采集产出）→ 阿里云供 flip_update_feedback 处理。
+  # --update 防回滚：阿里云侧处理后的同名较新文件不会被旧副本覆盖；
+  # 处理产物经 sync-from-aliyun.sh 反向回流腾讯云。
+  rsync -az --update --partial \
+    --exclude='*.lock' --exclude='*.tmp' --exclude='.DS_Store' \
+    -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/audio/" /home/snh48-fan-hub/flip_data/audio/
+  rsync -az --update --partial \
+    --exclude='*.lock' --exclude='*.tmp' --exclude='.DS_Store' \
+    -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/flip_data/video/" /home/snh48-fan-hub/flip_data/video/
+  echo "$LOG_TAG hub flip_data media done"
 fi
 
 if [ "${PREWARM_IMAGE_PROXY:-0}" = "1" ]; then
