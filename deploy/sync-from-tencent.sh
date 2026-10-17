@@ -281,6 +281,13 @@ if [ "$sync_hub" -eq 1 ]; then
   sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/codex_social_event_queue.json /home/snh48-fan-hub/notifications/codex_social_event_queue.json
   echo "$LOG_TAG hub codex_social_event_queue done"
 
+  # H4b. 通知中心三件套（2026-10-17 起退出 git 同步，改走本组分钟级同步；
+  # 权威端=腾讯云，阿里云侧自动化只读消费）
+  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/notification_center.md /home/snh48-fan-hub/notifications/notification_center.md
+  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/notification_state.json /home/snh48-fan-hub/notifications/notification_state.json
+  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/notification_events.jsonl /home/snh48-fan-hub/notifications/notification_events.jsonl
+  echo "$LOG_TAG hub notification_center done"
+
   # H5. 口袋48账号配置（含 Token，保持 root-only 权限）
   sync_hub_file_from_tencent /home/snh48-fan-hub/config/accounts.json /home/snh48-fan-hub/config/accounts.json
   sync_hub_file_from_tencent /home/snh48-fan-hub/config/koudai_token.json /home/snh48-fan-hub/config/koudai_token.json

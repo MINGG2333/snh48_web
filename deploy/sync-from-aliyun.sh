@@ -135,6 +135,10 @@ if [ "$sync_derived" -eq 1 ]; then
   sync_file_from_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
   sync_file_from_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv /home/snh48-fan-hub/schedule_record/chenjiayi_milestones.csv
   sync_file_from_aliyun /home/snh48-fan-hub/schedule_record/schedule.csv /home/snh48-fan-hub/schedule_record/schedule.csv
+  # D1b. 行程管线状态与校对报告（2026-10-17 起退出 git，随本组回流）
+  sync_file_from_aliyun /home/snh48-fan-hub/schedule_record/automaintenance_state.json /home/snh48-fan-hub/schedule_record/automaintenance_state.json
+  sync_file_from_aliyun /home/snh48-fan-hub/schedule_record/reconcile_state.json /home/snh48-fan-hub/schedule_record/reconcile_state.json
+  sync_file_from_aliyun "/home/snh48-fan-hub/schedule_record/人工分析记录/公演场次权威校对_latest.md" "/home/snh48-fan-hub/schedule_record/人工分析记录/公演场次权威校对_latest.md"
   echo "$LOG_TAG schedule CSVs done"
 
   # D2. schedule_record/backups（阿里云自动维护备份回流归档）
