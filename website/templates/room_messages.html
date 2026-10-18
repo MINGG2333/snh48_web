@@ -2223,6 +2223,7 @@
     var pagLibPromise = null;
     var jszipLibPromise = null;
     var pagActiveView = null;
+    var pagActiveFile = null;
 
     function loadScriptOnce(src, check, promiseRef) {
       return new Promise(function (resolve, reject) {
@@ -2260,20 +2261,38 @@
       return jszipLibPromise;
     }
 
+    function destroyGiftEffect() {
+      var hadView = !!pagActiveView;
+      if (pagActiveView) {
+        try { pagActiveView.stop(); } catch (e) {}
+        try { pagActiveView.destroy(); } catch (e) {}
+        pagActiveView = null;
+      }
+      if (pagActiveFile) {
+        try { pagActiveFile.destroy(); } catch (e) {}
+        pagActiveFile = null;
+      }
+      if (hadView) {
+        // 换一个全新 canvas 节点：旧节点上的 WebGL context/surface 不会随
+        // PAGView.destroy() 可靠释放，复用会导致 iOS 触顶 context 上限后异常
+        var oldCanvas = document.getElementById("giftEffectCanvas");
+        if (oldCanvas && oldCanvas.parentNode) {
+          oldCanvas.parentNode.replaceChild(oldCanvas.cloneNode(false), oldCanvas);
+        }
+      }
+    }
+
     async function showGiftEffect(url) {
       var modal = document.getElementById("giftEffectModal");
       var status = document.getElementById("giftEffectStatus");
-      var canvas = document.getElementById("giftEffectCanvas");
       modal.hidden = false;
       var step = "加载播放组件";
       status.textContent = step + "…";
       var watchdog = setTimeout(function () {
         status.textContent = "动效加载超时（卡在：" + step + "），请截图反馈";
       }, 25000);
-      if (pagActiveView) {
-        try { pagActiveView.stop(); } catch (e) {}
-        pagActiveView = null;
-      }
+      destroyGiftEffect();
+      var canvas = document.getElementById("giftEffectCanvas");
       try {
         await loadJszip();
         step = "初始化播放器";
@@ -2293,6 +2312,7 @@
         status.textContent = step + "…";
         var pagBuffer = await pagEntry.async("arraybuffer");
         var pagFile = await PAG.PAGFile.load(pagBuffer);
+        pagActiveFile = pagFile;
         step = "渲染动效";
         status.textContent = step + "…";
         var scale = Math.min(2, 640 / Math.max(1, pagFile.width()));
@@ -2300,9 +2320,9 @@
         canvas.height = Math.round(pagFile.height() * scale);
         canvas.style.aspectRatio = pagFile.width() + " / " + pagFile.height();
         var view = await PAG.PAGView.init(pagFile, canvas);
+        pagActiveView = view;
         view.setRepeatCount(0);
         await view.play();
-        pagActiveView = view;
         clearTimeout(watchdog);
         status.textContent = "时长约 " + (pagFile.duration() / 1000000).toFixed(1) + " 秒（循环播放）";
       } catch (err) {
@@ -2313,10 +2333,7 @@
 
     function closeGiftEffect() {
       document.getElementById("giftEffectModal").hidden = true;
-      if (pagActiveView) {
-        try { pagActiveView.stop(); } catch (e) {}
-        pagActiveView = null;
-      }
+      destroyGiftEffect();
     }
 
     document.getElementById("giftEffectClose").addEventListener("click", closeGiftEffect);

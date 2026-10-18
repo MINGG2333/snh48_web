@@ -12,6 +12,8 @@
     canvas { max-width: min(560px, 88vw); max-height: 70dvh; border-radius: 10px; }
     .status { color: #b7aec9; font-size: 13px; margin-top: 14px; }
     .error { color: #f1b2b2; font-size: 13px; }
+    .retry-btn { display: block; margin: 12px auto 0; padding: 8px 24px; font-size: 14px;
+                 border: 0; border-radius: 8px; background: #7a5cff; color: #fff; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -28,11 +30,49 @@
   <script>
     (function () {
       var status = document.getElementById("status");
-      var canvas = document.getElementById("stage");
       var step = "加载播放组件";
-      var watchdog = setTimeout(function () {
-        status.textContent = "动效加载超时（卡在：" + step + "），请刷新重试";
-      }, 25000);
+      var jszipPromise = null;
+      var pagLibPromise = null;
+      var watchdog = null;
+      var retryBtn = null;
+
+      function armWatchdog() {
+        clearWatchdog();
+        watchdog = setTimeout(function () {
+          showFailure("动效加载超时（卡在：" + step + "）");
+        }, 25000);
+      }
+
+      function clearWatchdog() {
+        if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+      }
+
+      function formatErr(err) {
+        if (!err) return "未知错误";
+        var name = err.name || (err.constructor && err.constructor.name) || "";
+        var msg = err.message || (typeof err === "string" ? err : "");
+        if (name || msg) return (name ? name + ": " : "") + msg;
+        try { return JSON.stringify(err); } catch (e) { return String(err); }
+      }
+
+      function showFailure(message) {
+        clearWatchdog();
+        status.textContent = message;
+        status.classList.add("error");
+        if (!retryBtn) {
+          retryBtn = document.createElement("button");
+          retryBtn.type = "button";
+          retryBtn.className = "retry-btn";
+          retryBtn.textContent = "点击重试";
+          retryBtn.addEventListener("click", function () { main().catch(onFail); });
+          status.parentNode.appendChild(retryBtn);
+        }
+        retryBtn.hidden = false;
+      }
+
+      function onFail(err) {
+        showFailure("动效加载失败（" + step + "）：" + formatErr(err));
+      }
 
       function loadScriptOnce(src) {
         return new Promise(function (resolve, reject) {
@@ -44,15 +84,72 @@
         });
       }
 
+      function loadJszip() {
+        if (!jszipPromise) {
+          jszipPromise = loadScriptOnce("/static/vendor/jszip/jszip.min.js");
+          jszipPromise.catch(function () { jszipPromise = null; });
+        }
+        return jszipPromise;
+      }
+
+      function waitForLibpagGlobal(timeoutMs) {
+        return new Promise(function (resolve, reject) {
+          var deadline = Date.now() + timeoutMs;
+          (function poll() {
+            if (window.libpag) { resolve(); return; }
+            if (Date.now() > deadline) {
+              reject(new Error("libpag 加载后未出现 window.libpag 全局对象"));
+              return;
+            }
+            setTimeout(poll, 100);
+          })();
+        });
+      }
+
+      function loadPagLib() {
+        if (!pagLibPromise) {
+          // libpag.min.js 顶层含 import.meta.url，必须按 ES module 加载；
+          // 作为 module 执行时 UMD 兜底会把全局挂到 globalThis.libpag。
+          pagLibPromise = import("/static/vendor/libpag/libpag.min.js")
+            .catch(function () {
+              // 兜底路径：部分 webview 拒绝/不支持动态 import()，
+              // 改为注入内联 module 脚本并轮询 window.libpag
+              var s = document.createElement("script");
+              s.type = "module";
+              s.textContent = 'import "/static/vendor/libpag/libpag.min.js";';
+              document.head.appendChild(s);
+              return waitForLibpagGlobal(6000);
+            })
+            .then(function () {
+              if (!window.libpag) throw new Error("libpag 全局对象缺失");
+              return window.libpag.PAGInit({
+                locateFile: function (file) { return "/static/vendor/libpag/" + file; }
+              });
+            });
+          pagLibPromise.catch(function () { pagLibPromise = null; });
+        }
+        return pagLibPromise;
+      }
+
+      function freshCanvas() {
+        // 换一个全新 canvas 节点，保证干净的 WebGL surface
+        var old = document.getElementById("stage");
+        if (old && old.parentNode) {
+          old.parentNode.replaceChild(old.cloneNode(false), old);
+        }
+        return document.getElementById("stage");
+      }
+
       async function main() {
-        // libpag.min.js 顶层含 import.meta.url，必须按 ES module 加载
-        await loadScriptOnce("/static/vendor/jszip/jszip.min.js");
+        step = "加载播放组件";
+        status.classList.remove("error");
+        status.textContent = step + "…";
+        if (retryBtn) retryBtn.hidden = true;
+        armWatchdog();
+        await loadJszip();
         step = "初始化播放器";
         status.textContent = step + "…";
-        await import("/static/vendor/libpag/libpag.min.js");
-        var PAG = await window.libpag.PAGInit({
-          locateFile: function (file) { return "/static/vendor/libpag/" + file; }
-        });
+        var PAG = await loadPagLib();
         step = "下载动效资源";
         status.textContent = step + "…";
         var resp = await fetch({{ zip_url | tojson }});
@@ -66,6 +163,7 @@
         var pagBuf = await entry.async("arraybuffer");
         var pagFile = await PAG.PAGFile.load(pagBuf);
         var scale = Math.min(2, 640 / Math.max(1, pagFile.width()));
+        var canvas = freshCanvas();
         canvas.width = Math.round(pagFile.width() * scale);
         canvas.height = Math.round(pagFile.height() * scale);
         step = "渲染动效";
@@ -73,15 +171,11 @@
         var view = await PAG.PAGView.init(pagFile, canvas);
         view.setRepeatCount(0);
         await view.play();
-        clearTimeout(watchdog);
+        clearWatchdog();
         status.textContent = "时长约 " + (pagFile.duration() / 1000000).toFixed(1) + " 秒（循环播放）";
       }
 
-      main().catch(function (err) {
-        clearTimeout(watchdog);
-        status.textContent = "动效加载失败（" + step + "）：" + (err && err.message ? err.message : err);
-        status.classList.add("error");
-      });
+      main().catch(onFail);
     })();
   </script>
   {% endif %}
