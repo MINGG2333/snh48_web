@@ -12,7 +12,7 @@ EnvironmentFile=/home/snh48_web/.env
 Environment=HOME=/var/lib/snh48-web
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/snh48_web/venv/bin/python -m website.main
-Restart=on-failure
+Restart=always
 RestartSec=5
 UMask=0077
 NoNewPrivileges=yes
