@@ -14,7 +14,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment="SOCIAL_CREDENTIALS_ADMIN_COMMAND=/usr/local/bin/snh48-privileged-bridge-client social"
 Environment="FLIP_CARDS_ACCOUNT_ADMIN_COMMAND=/usr/local/bin/snh48-privileged-bridge-client flip"
 ExecStart=/home/snh48_web/venv/bin/python -m website.main
-Restart=on-failure
+Restart=always
 RestartSec=5
 UMask=0077
 # Sensitive account operations use separate root services over credential-checked
