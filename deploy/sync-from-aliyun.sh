@@ -208,6 +208,11 @@ if [ "$sync_notify" -eq 1 ]; then
   # 绝不覆盖腾讯云本地 notifications/notification_events.jsonl
   sync_file_from_aliyun /home/snh48-fan-hub/notifications/notification_events.jsonl /home/snh48-fan-hub/notifications/aliyun_relay/notification_events.jsonl
   echo "$LOG_TAG notification_events relay done"
+
+  # N3. xlsx 云文档代推 outbox（阿里云 automaintenance 写请求，腾讯云
+  # xlsx-push-relay.timer 校验 md5 后代推飞书云文档；relay 按 md5 幂等）
+  sync_file_from_aliyun /home/snh48-fan-hub/notifications/xlsx_push_request.json /home/snh48-fan-hub/notifications/xlsx_push_request.json
+  echo "$LOG_TAG xlsx_push_request done"
 fi
 
 echo "$LOG_TAG All sync completed"
