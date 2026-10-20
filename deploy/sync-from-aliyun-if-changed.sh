@@ -42,8 +42,6 @@ case "$group" in
   notify)
     sources=(
       /home/snh48-fan-hub/notifications/codex_runs
-      /home/snh48-fan-hub/notifications/notification_events.jsonl
-      /home/snh48-fan-hub/notifications/xlsx_push_request.json
     )
     ;;
   *)

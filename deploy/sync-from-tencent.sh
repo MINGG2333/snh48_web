@@ -281,12 +281,11 @@ if [ "$sync_hub" -eq 1 ]; then
   sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/codex_social_event_queue.json /home/snh48-fan-hub/notifications/codex_social_event_queue.json
   echo "$LOG_TAG hub codex_social_event_queue done"
 
-  # H4b. 通知中心三件套（2026-10-17 起退出 git 同步，改走本组分钟级同步；
-  # 权威端=腾讯云，阿里云侧自动化只读消费）
-  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/notification_center.md /home/snh48-fan-hub/notifications/notification_center.md
-  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/notification_state.json /home/snh48-fan-hub/notifications/notification_state.json
-  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/notification_events.jsonl /home/snh48-fan-hub/notifications/notification_events.jsonl
-  echo "$LOG_TAG hub notification_center done"
+  # H4b. 通知中心三件套（2026-10-20 起停止同步）：飞书通知已本地化——两端各自
+  # 维护本机 notification 三件套并各跑 feishu-notification-forwarder 直推，
+  # 不再以腾讯云为权威端整文件覆盖阿里云（覆盖会丢失阿里云本地生产者的写入，
+  # 并导致阿里云 forwarder 重复推送腾讯云事件）。
+  echo "$LOG_TAG hub notification_center skipped (localized 2026-10-20)"
 
   # H5. 口袋48账号配置（含 Token，保持 root-only 权限）
   sync_hub_file_from_tencent /home/snh48-fan-hub/config/accounts.json /home/snh48-fan-hub/config/accounts.json

@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-20 飞书操作阿里云本地化：同步组移除通知中继与 xlsx outbox
+
+- 用户决策废除"阿里云经腾讯云 relay 代执行飞书操作"：安全桥 Bot 与通知转发 Bot 凭据已部署阿里云本地（600/700 权限，scp 直传），阿里云的通知推送与 xlsx 云文档推送均由本机直推（阿里云新增 `feishu-notification-forwarder.service`，以腾讯云投递状态为种子启动）。
+- 同步变更：正向 `hub` 组移除通知中心三件套（`notification_center.md`/`notification_state.json`/`notification_events.jsonl`，此前腾讯云权威覆盖阿里云，2026-10-20 起两端各自维护本机副本、互不同步）；反向 `notify` 组移除 `notification_events.jsonl` 中继（落地 `aliyun_relay/`）与 `xlsx_push_request.json` outbox，仅保留 `notifications/codex_runs/`。改动文件：`deploy/sync-from-tencent.sh`、`deploy/sync-from-aliyun.sh`、`deploy/sync-from-aliyun-if-changed.sh`。
+- 腾讯云侧 `aliyun-notification-relay.timer` 与 `xlsx-push-relay.timer` 已 `disable --now`（脚本/unit 保留作兜底）；relay 停前已确认无 in-flight（relay offset=源文件大小、腾讯云 forwarder 无 pending）。
+- 验证：阿里云 `push_xlsx_to_cloud()` 实测 returncode 0 直推云文档成功；阿里云写入 severity=info 测试通知由本机 forwarder 直推成功（腾讯云 events 与该通知投递记录均为 0 命中，无双推），测后已 resolve。
+
 ## 2026-10-16 fan-hub 数据加工迁移阿里云，同步拓扑改为双向
 
 - 背景：fan-hub 数据加工/AI 生成迁到阿里云（`root@8.210.188.184`），采集留腾讯云。派生数据路径不变，产地变为阿里云。
@@ -280,7 +287,7 @@ systemctl status nginx
 反向脚本逻辑与正向镜像（分组指纹 + flock + ControlMaster 复用 rsync），差异规则：
 
 - 所有目录同步不用 `--delete`，rsync 统一加 `--update` 防回滚；源文件/目录缺失只跳过，绝不删除腾讯云本地文件。
-- `notifications/notification_events.jsonl` 落地为腾讯云 `notifications/aliyun_relay/notification_events.jsonl`，不覆盖本地同名文件。
+- ~~`notifications/notification_events.jsonl` 落地为腾讯云 `notifications/aliyun_relay/`~~（2026-10-20 飞书本地化起移除：两端各自直推飞书，事件不再回流）。
 - `private_handover/移交包/行程组/` 为阿里云权威、腾讯云不再写；正向 hub 组对该目录用 `--update` 防回滚。
 - `score_gifts` 排除 `live_business_fulfillments.json` 与 `.*.lock`（可写业务状态走腾讯云权威版本化复制）；全局排除 `*.lock`/`*.tmp`/`.*.sync.*`。
 - `flip_data/web` 反向保留发布顺序：先 payload，最后 `accounts.json` 临时文件原子改名。
@@ -313,7 +320,7 @@ systemctl status nginx
 | `/home/snh48-fan-hub/private_handover/移交包/行程组/` | 双向但阿里云权威 | 2026-10-16 起阿里云权威、腾讯云不再写；正向 hub 仅迁移窗口初始投递且 `--update` 防回滚，更新经反向回流 |
 | `/home/snh48-fan-hub/notifications/assistant_schedule_draft_state.json` | 阿里云→腾讯云 | 小助理行程草稿状态回流 |
 | `/home/snh48-fan-hub/notifications/codex_runs/` | 阿里云→腾讯云 | 阿里云 codex 运行记录，回流供腾讯云侧 COS 归档 |
-| `/home/snh48-fan-hub/notifications/notification_events.jsonl` | 阿里云→腾讯云 | 落地 `notifications/aliyun_relay/notification_events.jsonl`，绝不覆盖腾讯云本地同名文件 |
+| ~~`/home/snh48-fan-hub/notifications/notification_events.jsonl`~~ | ~~阿里云→腾讯云~~ | 2026-10-20 飞书本地化起移除：两端各自直推飞书，不再中继 |
 
 同步分组：
 
@@ -323,7 +330,7 @@ systemctl status nginx
 | `dynamic` | 腾讯云→阿里云 | 成员房间上麦回放发布包、粉丝数记录、口袋48榜单快照 | 上麦会话结束或采集更新时变化 |
 | `hub` | 腾讯云→阿里云 | 微博/B站监控清单、管理员反馈中心、社交事件队列、口袋48账号配置、行程组初始投递 | 监控更新或管理员反馈时变化 |
 | `derived` | 阿里云→腾讯云 | 行程 CSV 与 backups、礼物回复、语音转录、计分礼物只读派生、pk_scores、翻牌三组产物、小助理草稿状态、行程组回流 | 阿里云派生服务更新时变化 |
-| `notify` | 阿里云→腾讯云 | codex_runs、notification_events.jsonl 中继 | codex 运行或通知事件追加时变化 |
+| `notify` | 阿里云→腾讯云 | codex_runs（2026-10-20 前还含 notification_events.jsonl 中继，飞书本地化后移除） | codex 运行时变化 |
 
 不作为常规同步项：
 

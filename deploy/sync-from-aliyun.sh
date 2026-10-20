@@ -21,9 +21,9 @@
 #   --update 行为等同普通镜像（删除仍不传播）。
 # - 单文件源缺失时跳过，绝不删除腾讯云本地文件（本地文件可能是现役
 #   权威副本）。
-# - notifications/notification_events.jsonl 只落地到腾讯云
-#   notifications/aliyun_relay/notification_events.jsonl；两端各自产生
-#   通知事件，绝不能覆盖腾讯云本地同名文件。
+# - notifications/notification_events.jsonl 历史上只落地到腾讯云
+#   notifications/aliyun_relay/ 供 relay 代推；2026-10-20 飞书本地化后该回流
+#   已移除，两端各自维护本机通知三件套并各自直推飞书。
 # - score_gifts 排除可写业务状态 live_business_fulfillments.json 与
 #   .*.lock（该状态按 doc/shared_runtime_state.md 走腾讯云权威版本化复制）。
 # - 全局排除锁文件与临时文件（*.lock / *.tmp / .*.sync.*）。
@@ -204,15 +204,10 @@ if [ "$sync_notify" -eq 1 ]; then
   sync_dir_from_aliyun /home/snh48-fan-hub/notifications/codex_runs /home/snh48-fan-hub/notifications/codex_runs
   echo "$LOG_TAG codex_runs done"
 
-  # N2. 阿里云通知事件总线中继：落地 aliyun_relay 子目录，
-  # 绝不覆盖腾讯云本地 notifications/notification_events.jsonl
-  sync_file_from_aliyun /home/snh48-fan-hub/notifications/notification_events.jsonl /home/snh48-fan-hub/notifications/aliyun_relay/notification_events.jsonl
-  echo "$LOG_TAG notification_events relay done"
-
-  # N3. xlsx 云文档代推 outbox（阿里云 automaintenance 写请求，腾讯云
-  # xlsx-push-relay.timer 校验 md5 后代推飞书云文档；relay 按 md5 幂等）
-  sync_file_from_aliyun /home/snh48-fan-hub/notifications/xlsx_push_request.json /home/snh48-fan-hub/notifications/xlsx_push_request.json
-  echo "$LOG_TAG xlsx_push_request done"
+  # N2/N3 已于 2026-10-20 移除：飞书操作本地化后，阿里云通知事件由阿里云本机
+  # feishu-notification-forwarder 直推（不再 relay 回腾讯云代推），xlsx 云文档
+  # 也由阿里云本机 lark-cli 直推（outbox/relay 机制停用，脚本保留作兜底）。
+  echo "$LOG_TAG notification_events relay / xlsx_push_request skipped (localized 2026-10-20)"
 fi
 
 echo "$LOG_TAG All sync completed"

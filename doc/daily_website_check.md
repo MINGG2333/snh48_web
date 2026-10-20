@@ -13,7 +13,7 @@ HTTPS 证书不是每日必查项；阿里云已建立月度提醒机制，详�
 - 正向自动任务运行在阿里云香港服务器 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-tencent-if-changed.sh`，通过 SSH 分别检查腾讯云 `core`、`dynamic`、`hub` 三组源数据指纹；只有某组指纹变化时才调用 `deploy/sync-from-tencent.sh` 拉取对应分组。
 - 反向自动任务运行在腾讯云 `/home/snh48_web`：root cron 每分钟执行 `deploy/sync-from-aliyun-if-changed.sh`，同样按指纹触发 `deploy/sync-from-aliyun.sh` 拉取 `derived`、`notify` 组。反向所有目录不用 `--delete` 且统一加 `--update` 防回滚，源缺失只跳过不删本地文件。
 - 派生数据（行程 CSV、礼物回复、语音转录、计分礼物、pk_scores、翻牌产物、行程组稿件）2026-10-16 起在阿里云产出，经反向组回流腾讯云；`private_handover/移交包/行程组/` 为阿里云权威，腾讯云不再写。
-- `notifications/notification_events.jsonl` 两端各自产生；阿里云侧只中继到腾讯云 `notifications/aliyun_relay/`，不覆盖腾讯云本地同名文件。
+- `notifications/notification_events.jsonl` 两端各自产生、各自直推飞书（2026-10-20 飞书本地化起）；此前阿里云侧只中继到腾讯云 `notifications/aliyun_relay/` 的机制已停用，反向 notify 组不再回流该文件与 `xlsx_push_request.json`。
 - 四个可写业务状态不进入这些组；计分目录指纹和 rsync 都排除 `live_business_fulfillments.json`、`.*.lock`。
 - 粉丝数记录页数据 `social_record/fan_counts/` 属公开只读小数据，在正向 `dynamic` 组同步；口袋48榜单快照 `pocket48_ranks/陈嘉仪_161808449/` 同属公开只读小数据，在 `dynamic` 组同步（排除 `.collector.lock`）；应援会业务管理页数据 `private_handover/web_state/` 含暗账名单，不进入任何同步分组。
 - 陈嘉仪直播录制之外的房间原始数据按 `core` 白名单同步；`live_record/` 下的直播录制和下载回放视频不进阿里云，历史视频只在腾讯云 COS manifest 校验后清理本地。
@@ -151,7 +151,7 @@ pgrep -af 'sync-from-aliyun|sync-to-aliyun|rsync|8.210.188.184' || true
 [sync-from-aliyun][YYYY-MM-DD HH:MM:SS] assistant_schedule_draft_state done
 [sync-from-aliyun][YYYY-MM-DD HH:MM:SS] 行程组 done
 [sync-from-aliyun][YYYY-MM-DD HH:MM:SS] codex_runs done
-[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] notification_events relay done
+[sync-from-aliyun][YYYY-MM-DD HH:MM:SS] notification_events relay / xlsx_push_request skipped (localized 2026-10-20)
 [sync-from-aliyun][YYYY-MM-DD HH:MM:SS] All sync completed
 [sync-from-aliyun-if-changed][YYYY-MM-DD HH:MM:SS] state updated
 ```
