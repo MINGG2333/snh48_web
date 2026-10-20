@@ -281,6 +281,12 @@ if [ "$sync_hub" -eq 1 ]; then
   sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/codex_social_event_queue.json /home/snh48-fan-hub/notifications/codex_social_event_queue.json
   echo "$LOG_TAG hub codex_social_event_queue done"
 
+  # H4c. 通知黑板跨端指令通道（2026-10-20 用户批准，设计稿 §4.3）：腾讯云 receiver
+  # 把指向阿里云黑板的按钮/文本指令追加到该文件，阿里云黑板服务按游标消费。
+  # 追加型 JSONL，只做交互指令路由，不代执行飞书操作（区别于已废除的 relay）。
+  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/blackboard_remote_commands.jsonl /home/snh48-fan-hub/notifications/blackboard_remote_commands.jsonl
+  echo "$LOG_TAG hub blackboard_remote_commands done"
+
   # H4b. 通知中心三件套（2026-10-20 起停止同步）：飞书通知已本地化——两端各自
   # 维护本机 notification 三件套并各跑 feishu-notification-forwarder 直推，
   # 不再以腾讯云为权威端整文件覆盖阿里云（覆盖会丢失阿里云本地生产者的写入，

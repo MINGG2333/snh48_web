@@ -68,6 +68,7 @@ case "$group" in
       files=(
         /home/snh48-fan-hub/notifications/admin_feedback_center.md
         /home/snh48-fan-hub/notifications/codex_social_event_queue.json
+        /home/snh48-fan-hub/notifications/blackboard_remote_commands.jsonl
         /home/snh48-fan-hub/config/accounts.json
         /home/snh48-fan-hub/config/koudai_token.json
       )
