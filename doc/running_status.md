@@ -1,5 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-23 19:35 CST 礼物回复页新增 PNG 导出（两端）
+
+- 功能：`/room/gifts` 新增「导出时间线图」，按当前已应用的筛选（回复状态/礼物/用户/回复类型/日期）导出逐条时间线 PNG；`/room/gift-senders` 新增「导出回复情况图」，按当前筛选导出按送礼人聚合的两列卡片 PNG。两页导出都不受分页影响，按钮显示生成中/失败/已开始下载。
+- 接口：`GET /api/gift-replies/export/timeline`、`GET /api/gift-replies/export/senders`，沿用 `X-Gift-Replies-Password`；时间线上限 1500 条、回复情况上限 3000 条礼物，超限返回 413 并提示缩小日期；进程内单飞锁，避免并发大图渲染。
+- 渲染：`website/gift_reply_export.py` 使用 Pillow（新增依赖 `Pillow==12.2.0`）+ 系统 CJK 字体（阿里云文泉驿、腾讯云 Noto），红=待回/绿=已回；非陈嘉仪媒体不下载；emoji/组合符号在导出前清理，避免方框。
+- 部署：网站提交 `1ab2399` 已推送，两端 `git pull --ff-only`；两端网站 venv 已安装 Pillow 12.2.0；腾讯云 `snh48-web.service` PID `2133643`、`19:33:30` 启动，阿里云 `snh48-aliyun.service` PID `1596481`、`19:33:58` 启动，均 active/running、`NRestarts=0`。
+- 烟测：两端本机 8000 端口未带密码均 401；带密码请求时间线/回复情况均 200 `image/png`（阿里云 968,871 / 819,985 字节；腾讯云回复情况 810,999 字节）。`tests/test_gift_reply_export.py` 4 项、原有 `tests/test_gift_replies_api.py` 10 项全部通过；两页模板内联 JS 通过 `node --check`。
+- 文档：`doc/website_pages.md` 已登记两个导出接口与条数上限。
+
 ## 2026-10-20 飞书操作阿里云本地化：同步组移除通知中继与 xlsx outbox
 
 - 用户决策废除"阿里云经腾讯云 relay 代执行飞书操作"：安全桥 Bot 与通知转发 Bot 凭据已部署阿里云本地（600/700 权限，scp 直传），阿里云的通知推送与 xlsx 云文档推送均由本机直推（阿里云新增 `feishu-notification-forwarder.service`，以腾讯云投递状态为种子启动）。
