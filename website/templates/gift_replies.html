@@ -432,6 +432,8 @@
       cursor: wait;
       opacity: 0.72;
     }
+    .export-status { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .export-status.error { color: var(--bad); }
 
     .update-pill {
       position: fixed;
@@ -963,6 +965,8 @@
           <span id="activeFilters">全部状态</span>
           <span id="refreshLabel">每 30 秒检查更新</span>
           <button class="stats-toggle" id="manualRefreshBtn" type="button">刷新</button>
+          <button class="stats-toggle" id="exportTimelineBtn" type="button">导出时间线图</button>
+          <span id="exportStatus" class="export-status" role="status" aria-live="polite"></span>
           <span id="generatedAt">生成时间：-</span>
           <button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button>
         </div>
@@ -1052,6 +1056,8 @@
     var activeFilters = document.getElementById("activeFilters");
     var refreshLabel = document.getElementById("refreshLabel");
     var manualRefreshBtn = document.getElementById("manualRefreshBtn");
+    var exportTimelineBtn = document.getElementById("exportTimelineBtn");
+    var exportStatus = document.getElementById("exportStatus");
     var generatedAt = document.getElementById("generatedAt");
     var statsToggle = document.getElementById("statsToggle");
     var updatePill = document.getElementById("updatePill");
@@ -1477,6 +1483,74 @@
       });
     }
 
+    function exportPeriodLabel() {
+      if (appliedDateFrom && appliedDateTo) return appliedDateFrom + "_" + appliedDateTo;
+      if (appliedDateFrom) return appliedDateFrom + "起";
+      if (appliedDateTo) return "截至" + appliedDateTo;
+      return "全部";
+    }
+
+    function setExportStatus(message, isError) {
+      if (!exportStatus) return;
+      exportStatus.textContent = message || "";
+      exportStatus.classList.toggle("error", Boolean(isError));
+    }
+
+    function buildExportQuery() {
+      var params = new URLSearchParams();
+      params.set("status", statusFilter);
+      params.set("gift_name", giftSelect.value || "");
+      params.set("sender", senderInput.value.trim());
+      params.set("reply_type", replyTypeSelect.value || "all");
+      params.set("date_from", appliedDateFrom);
+      params.set("date_to", appliedDateTo);
+      return params.toString();
+    }
+
+    async function exportTimelineImage() {
+      if (!password || exportTimelineBtn.disabled) return;
+      exportTimelineBtn.disabled = true;
+      var original = exportTimelineBtn.textContent;
+      exportTimelineBtn.textContent = "生成中…";
+      setExportStatus("正在生成图片…", false);
+      try {
+        var resp = await fetch("/api/gift-replies/export/timeline?" + buildExportQuery(), {
+          headers: { "X-Gift-Replies-Password": password },
+          cache: "no-store"
+        });
+        if (resp.status === 401 || resp.status === 403) {
+          resetLoginForPassword("密码已失效，请重新输入");
+          loginOverlay.classList.remove("hidden");
+          pageEl.classList.remove("ready");
+          stopRefresh();
+          throw new Error("密码已失效，请重新输入");
+        }
+        if (!resp.ok) {
+          throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        }
+        var blob = await resp.blob();
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "礼物回复时间线_" + exportPeriodLabel() + ".png";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+        setExportStatus("已开始下载", false);
+        trackAdminEvent("admin_export", Object.assign(giftRepliesFilterPayload("export_timeline"), {
+          format: "png"
+        }));
+        window.setTimeout(function() { if (!exportStatus.classList.contains("error")) setExportStatus("", false); }, 5000);
+      } catch (error) {
+        setExportStatus(error.message || "导出失败", true);
+        window.setTimeout(function() { setExportStatus("", false); }, 8000);
+      } finally {
+        exportTimelineBtn.disabled = false;
+        exportTimelineBtn.textContent = original;
+      }
+    }
+
     function applyFilters(action, options) {
       options = options || {};
       if (options.commitDates) {
@@ -1650,6 +1724,7 @@
     });
     updatePill.addEventListener("click", loadLatestData);
     manualRefreshBtn.addEventListener("click", manualRefresh);
+    exportTimelineBtn.addEventListener("click", exportTimelineImage);
     window.addEventListener("scroll", syncUpdatePill, { passive: true });
     senderInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") applyFilters("sender_filter");

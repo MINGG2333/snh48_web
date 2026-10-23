@@ -10,6 +10,7 @@ import csv
 import hmac
 import json
 import re
+import threading
 from math import ceil
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,9 @@ VALID_SENDER_STATUSES = {"all", "unreplied", "all_replied"}
 VALID_REPLY_TYPES = {"all", "text", "audio"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DEFAULT_SENDER_DATE_FROM = "2026-05-30"
+MAX_TIMELINE_EXPORT_ROWS = 1500
+MAX_OVERVIEW_EXPORT_ROWS = 3000
+_export_lock = threading.Lock()
 
 
 async def verify_gift_replies_password(
@@ -144,6 +148,106 @@ def get_gift_replies_summary(
     }
 
 
+@router.get("/export/timeline")
+def export_gift_replies_timeline(
+    status_filter: str = Query("all", alias="status"),
+    gift_name: str = Query(""),
+    sender: str = Query(""),
+    reply_type: str = Query("all"),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    _=Depends(verify_gift_replies_password),
+):
+    """导出当前筛选条件下的礼物回复时间线 PNG（不受分页限制）。"""
+    status_filter = status_filter.strip().lower()
+    reply_type = reply_type.strip().lower()
+    if status_filter not in VALID_STATUSES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的回复状态")
+    if reply_type not in VALID_REPLY_TYPES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的回复类型")
+    _validate_date("date_from", date_from)
+    _validate_date("date_to", date_to)
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="日期范围无效")
+
+    rows = _load_gift_rows()
+    filtered = _filter_rows(
+        rows,
+        status_filter=status_filter,
+        gift_name=gift_name.strip(),
+        sender=sender.strip(),
+        reply_type=reply_type,
+        date_from=date_from.strip(),
+        date_to=date_to.strip(),
+    )
+    if len(filtered) > MAX_TIMELINE_EXPORT_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"筛选结果 {len(filtered)} 条，单张时间线图最多 {MAX_TIMELINE_EXPORT_ROWS} 条，请缩小日期范围",
+        )
+
+    period = _export_period_text(date_from.strip(), date_to.strip())
+    filter_text = _timeline_filter_text(status_filter, gift_name, sender, reply_type)
+    updated = max((str(row.get("gift_bj_time") or "") for row in rows), default="")[:16]
+    png = _render_export(
+        lambda: _timeline_png(filtered, period=period, filter_text=filter_text, updated=updated)
+    )
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": 'attachment; filename="gift-replies-timeline.png"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/export/senders")
+def export_gift_reply_senders(
+    status_filter: str = Query("all", alias="status"),
+    sender: str = Query(""),
+    date_from: str = Query(DEFAULT_SENDER_DATE_FROM),
+    date_to: str = Query(""),
+    _=Depends(verify_gift_replies_password),
+):
+    """导出当前筛选条件下的按送礼人回复情况 PNG（不受分页限制）。"""
+    status_filter = status_filter.strip().lower()
+    if status_filter not in VALID_SENDER_STATUSES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的回复状态")
+    date_from, date_to = _normalise_date_range(date_from, date_to)
+
+    rows = _load_gift_rows()
+    dated = _filter_rows_by_date(rows, date_from=date_from, date_to=date_to)
+    groups = _group_rows_by_sender(dated)
+    sender_query = sender.strip().casefold()
+    filtered = [
+        group
+        for group in groups
+        if _sender_group_matches(group, status_filter=status_filter, sender_query=sender_query)
+    ]
+    row_count = sum(len(group.get("items") or []) for group in filtered)
+    if row_count > MAX_OVERVIEW_EXPORT_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"筛选结果 {row_count} 条礼物，单张回复情况图最多 {MAX_OVERVIEW_EXPORT_ROWS} 条，请缩小日期范围",
+        )
+
+    period = _export_period_text(date_from, date_to)
+    filter_text = _sender_filter_text(status_filter, sender)
+    updated = max((str(row.get("gift_bj_time") or "") for row in rows), default="")[:16]
+    png = _render_export(
+        lambda: _overview_png(filtered, period=period, filter_text=filter_text, updated=updated)
+    )
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": 'attachment; filename="gift-replies-overview.png"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/senders")
 def get_gift_reply_senders(
     response: Response,
@@ -219,6 +323,74 @@ def get_gift_reply_sender_history(
         "date_to": date_to,
         "item": group,
     }
+
+
+def _export_period_text(date_from: str, date_to: str) -> str:
+    if date_from and date_to:
+        return f"{date_from} 至 {date_to}"
+    if date_from:
+        return f"{date_from} 起"
+    if date_to:
+        return f"截至 {date_to}"
+    return "全部时间"
+
+
+def _timeline_filter_text(
+    status_filter: str,
+    gift_name: str,
+    sender: str,
+    reply_type: str,
+) -> str:
+    parts: list[str] = []
+    status_labels = {"all": "全部状态", "replied": "已回复", "unreplied": "未回复"}
+    parts.append(status_labels.get(status_filter, status_filter))
+    if gift_name.strip():
+        parts.append(f"礼物：{gift_name.strip()}")
+    if sender.strip():
+        parts.append(f"用户：{sender.strip()}")
+    reply_labels = {"all": "", "text": "文字回复", "audio": "语音回复"}
+    if reply_labels.get(reply_type):
+        parts.append(reply_labels[reply_type])
+    return " · ".join(parts)
+
+
+def _sender_filter_text(status_filter: str, sender: str) -> str:
+    labels = {"all": "全部", "unreplied": "有未回复", "all_replied": "已全部回复"}
+    parts = [labels.get(status_filter, status_filter)]
+    if sender.strip():
+        parts.append(f"送礼人：{sender.strip()}")
+    return " · ".join(parts)
+
+
+def _render_export(render) -> bytes:
+    if not _export_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="正在生成另一张导出图，请稍后再试",
+        )
+    try:
+        return render()
+    except HTTPException:
+        raise
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="图片导出组件未安装，请联系管理员",
+        ) from exc
+    finally:
+        _export_lock.release()
+
+
+def _timeline_png(rows, **kwargs) -> bytes:
+    from website.gift_reply_export import render_timeline_png
+
+    return render_timeline_png(rows, **kwargs)
+
+
+def _overview_png(groups, **kwargs) -> bytes:
+    from website.gift_reply_export import render_overview_png
+
+    return render_overview_png(groups, **kwargs)
 
 
 def _data_dir() -> Path:
