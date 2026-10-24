@@ -305,23 +305,6 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
     }
 
 
-def _season_meta(board: dict[str, Any], season: str) -> dict[str, Any]:
-    seasons = board.get("seasons") if isinstance(board.get("seasons"), dict) else {}
-    meta = seasons.get(season) if isinstance(seasons.get(season), dict) else {}
-    coverage = board.get("coverage") if isinstance(board.get("coverage"), dict) else {}
-    season_coverage = (coverage.get("seasons") or {}).get(season) if isinstance(coverage.get("seasons"), dict) else {}
-    return {
-        "season": meta,
-        "coverage": season_coverage or {},
-        "archive_coverage": {
-            "room_archive_first_date": coverage.get("room_archive_first_date", ""),
-            "room_archive_latest_date": coverage.get("room_archive_latest_date", ""),
-            "live_archive_first_date": coverage.get("live_archive_first_date", ""),
-            "live_archive_latest_date": coverage.get("live_archive_latest_date", ""),
-        },
-    }
-
-
 @router.get("/verify")
 def verify_score_all_members_login(
     response: Response,
@@ -340,15 +323,12 @@ def get_score_all_members_summary(
     response.headers["Cache-Control"] = "no-store"
     board = _load_board()
     key = _season_key(board, season)
-    meta = _season_meta(board, key)
     return {
         "generated_at": str(board.get("generated_at", "")),
         "timezone": str(board.get("timezone", "Asia/Shanghai")),
         "season": key,
         "seasons": board.get("seasons", {}),
         "latest_season": board.get("latest_season", ""),
-        "coverage": meta["coverage"],
-        "archive_coverage": meta["archive_coverage"],
         "gift_authority": board.get("gift_authority", []),
         "facets": _facets(board, key),
     }
@@ -408,15 +388,12 @@ def get_score_all_members_data(
     total = len(rows)
     start = (page - 1) * page_size
     end = start + page_size
-    meta = _season_meta(board, key)
     return {
         "generated_at": str(board.get("generated_at", "")),
         "timezone": str(board.get("timezone", "Asia/Shanghai")),
         "season": key,
         "seasons": board.get("seasons", {}),
         "latest_season": board.get("latest_season", ""),
-        "coverage": meta["coverage"],
-        "archive_coverage": meta["archive_coverage"],
         "gift_authority": board.get("gift_authority", []),
         "facets": _facets(board, key),
         "summary": aggregated["summary"],

@@ -146,6 +146,7 @@
     .refresh-actions { margin-top: 9px; }
     .refresh-btn { min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); font-size: 12px; }
     .refresh-btn:hover, .refresh-btn:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .filter-trigger { border-color: var(--teal); color: var(--teal); font-weight: 700; }
     .refresh-btn:disabled { cursor: wait; opacity: 0.72; }
 
     main {
@@ -822,11 +823,12 @@
       .page-actions { margin-bottom: 10px; }
       .filter-btn { min-height: 34px; }
       .active-filters { font-size: 11px; }
-      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      .kpi { min-height: 0; padding: 10px; }
-      .kpi .label { font-size: 11px; margin-bottom: 4px; }
-      .kpi .value { font-size: 19px; }
-      .kpi .sub { font-size: 10px; margin-top: 2px; }
+      .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+      .refresh-hint { display: none; }
+      .kpi { min-height: 0; padding: 6px 3px; text-align: center; }
+      .kpi .label { font-size: clamp(9px, 2.4vw, 10px); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .kpi .value { font-size: clamp(11px, 3.4vw, 14px); line-height: 1.2; }
+      .kpi .sub { display: none; }
       .toolbar-grid { grid-template-columns: 1fr; }
       .jump-grid { grid-template-columns: 1fr; }
       .modal .toolbar-grid, .modal .jump-grid { grid-template-columns: 1fr; }
@@ -868,9 +870,10 @@
           </div>
         </div>
         <div class="refresh">
-          <div>手动刷新获取最新数据</div>
+          <div class="refresh-hint">手动刷新获取最新数据</div>
           <div id="generatedAt">生成时间：-</div>
           <div class="refresh-actions">
+            <button class="refresh-btn filter-trigger" id="openFiltersBtn" type="button">筛选</button>
             <button class="refresh-btn" id="manualRefreshBtn" type="button">刷新</button>
           </div>
         </div>
@@ -880,11 +883,6 @@
     <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新条目，点击查看最新</button>
 
     <main id="dashboard">
-      <div class="page-actions">
-        <button class="filter-btn" id="openFiltersBtn" type="button">筛选</button>
-        <span class="active-filters" id="activeFiltersTop">全部来源</span>
-      </div>
-
       <section class="kpi-grid" aria-label="计分礼物统计">
         <div class="kpi total">
           <div class="label">总分</div>
@@ -1162,7 +1160,6 @@
     var senderDistributionCount = document.getElementById("senderDistributionCount");
     var resultSummary = document.getElementById("resultSummary");
     var activeFilters = document.getElementById("activeFilters");
-    var activeFiltersTop = document.getElementById("activeFiltersTop");
     var filtersModal = document.getElementById("filtersModal");
     var openFiltersBtn = document.getElementById("openFiltersBtn");
     var closeFiltersBtn = document.getElementById("closeFiltersBtn");
@@ -1931,9 +1928,7 @@
       if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
       if (senderInput.value.trim()) parts.push("用户：" + senderInput.value.trim());
       if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
-      var text = parts.join(" · ");
-      activeFilters.textContent = text;
-      if (activeFiltersTop) activeFiltersTop.textContent = text;
+      activeFilters.textContent = parts.join(" · ");
     }
 
     function closeFiltersModal() {
