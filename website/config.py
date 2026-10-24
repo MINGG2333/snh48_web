@@ -351,6 +351,27 @@ SCORE_GIFTS_DATA_PATH = os.getenv(
         / "score_gifts.json"
     ),
 )
+SCORE_GIFTS_WINTER_DATA_PATH = os.getenv(
+    "SCORE_GIFTS_WINTER_DATA_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "score_gifts"
+        / "score_gifts_winter.json"
+    ),
+)
+SCORE_ALL_MEMBERS_DATA_PATH = os.getenv(
+    "SCORE_ALL_MEMBERS_DATA_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "all_members"
+        / "score_board.json"
+    ),
+)
 
 # ── Business Tasks (应援会业务管理页) ────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 BUSINESS_ADMIN_PASSWORD。

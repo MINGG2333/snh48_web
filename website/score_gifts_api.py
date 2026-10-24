@@ -30,6 +30,8 @@ router = APIRouter(prefix="/api/score-gifts", tags=["计分礼物页"])
 
 VALID_SOURCES = {"all", "room", "live"}
 VALID_SORTS = {"time_desc", "score_desc"}
+VALID_SEASONS = {"2026-summer", "2026-winter"}
+DEFAULT_SEASON = "2026-summer"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 UNKNOWN_SENDER_VALUES = {"", "?"}
 BJ_TZ = timezone(timedelta(hours=8))
@@ -53,6 +55,7 @@ SIGNATURE_FIELDS = (
 )
 
 _cache_lock = threading.Lock()
+_cache_path = ""
 _cache_mtime_ns = -1
 _cache_doc: dict[str, Any] = {}
 
@@ -108,12 +111,14 @@ def get_score_gifts_data(
     date_from: str = Query(""),
     date_to: str = Query(""),
     sort: str = Query("time_desc"),
+    season: str = Query(DEFAULT_SEASON),
     _=Depends(verify_score_gifts_password),
 ):
     """Return filtered score gift statistics and paginated detail rows."""
     response.headers["Cache-Control"] = "no-store"
 
     doc, rows = _filtered_detail_rows(
+        season=season,
         source=source,
         gift_name=gift_name,
         sender=sender,
@@ -130,6 +135,7 @@ def get_score_gifts_data(
     return {
         "generated_at": str(doc.get("generated_at", "")),
         "timezone": str(doc.get("timezone", "Asia/Shanghai")),
+        "season": doc.get("season", {}),
         "refresh_interval_seconds": _to_int(doc.get("refresh_interval_seconds"), 30),
         "default_page_size": _to_int(doc.get("default_page_size"), 100),
         "summary": doc.get("summary", {}),
@@ -155,10 +161,12 @@ def export_score_gifts_xlsx(
     date_from: str = Query(""),
     date_to: str = Query(""),
     sort: str = Query("time_desc"),
+    season: str = Query(DEFAULT_SEASON),
     _=Depends(verify_score_gifts_password),
 ):
     """Export all filtered score gift detail rows as an XLSX workbook."""
     doc, rows = _filtered_detail_rows(
+        season=season,
         source=source,
         gift_name=gift_name,
         sender=sender,
@@ -186,10 +194,12 @@ def export_score_gift_senders_xlsx(
     date_from: str = Query(""),
     date_to: str = Query(""),
     sort: str = Query("time_desc"),
+    season: str = Query(DEFAULT_SEASON),
     _=Depends(verify_score_gifts_password),
 ):
     """Export filtered sender totals and every matching score-gift detail row."""
     doc, rows = _filtered_detail_rows(
+        season=season,
         source=source,
         gift_name=gift_name,
         sender=sender,
@@ -212,14 +222,16 @@ def export_score_gift_senders_xlsx(
 @router.get("/summary")
 def get_score_gifts_summary(
     response: Response,
+    season: str = Query(DEFAULT_SEASON),
     _=Depends(verify_score_gifts_password),
 ):
     """Return score gift summary metadata without detail rows."""
     response.headers["Cache-Control"] = "no-store"
-    doc = _load_dataset()
+    doc = _load_dataset(season)
     return {
         "generated_at": str(doc.get("generated_at", "")),
         "timezone": str(doc.get("timezone", "Asia/Shanghai")),
+        "season": doc.get("season", {}),
         "refresh_interval_seconds": _to_int(doc.get("refresh_interval_seconds"), 30),
         "default_page_size": _to_int(doc.get("default_page_size"), 100),
         "summary": doc.get("summary", {}),
@@ -233,6 +245,7 @@ def get_score_gifts_summary(
 @router.post("/business-review")
 async def update_score_gift_business_review(
     request: Request,
+    season: str = Query(DEFAULT_SEASON),
     _=Depends(verify_score_gifts_password),
 ):
     """Verify or manually override one live score-gift business result."""
@@ -246,6 +259,7 @@ async def update_score_gift_business_review(
 
     action = _clean_text(payload.get("action"))
     item_id = _clean_text(payload.get("item_id"))
+    payload["season"] = season
     if action not in {"verify", "override"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效操作")
     if not item_id:
@@ -279,7 +293,8 @@ def _business_review_mutator(
     if not item_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少记录 ID")
 
-    doc = _load_dataset()
+    season = _clean_text(payload.get("season")) or DEFAULT_SEASON
+    doc = _load_dataset(season)
     item = next((row for row in _normalise_items(doc.get("items", [])) if row["id"] == item_id), None)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
@@ -346,7 +361,12 @@ def _business_review_mutator(
 register_mutator("score_business", "business_review", _business_review_mutator)
 
 
-def _data_path() -> Path:
+def _data_path(season: str = DEFAULT_SEASON) -> Path:
+    season = _clean_text(season) or DEFAULT_SEASON
+    if season not in VALID_SEASONS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的赛季")
+    if season == "2026-winter":
+        return Path(cfg.SCORE_GIFTS_WINTER_DATA_PATH)
     return Path(cfg.SCORE_GIFTS_DATA_PATH)
 
 
@@ -356,6 +376,7 @@ def _business_state_path() -> Path:
 
 def _filtered_detail_rows(
     *,
+    season: str,
     source: str,
     gift_name: str,
     sender: str,
@@ -374,7 +395,7 @@ def _filtered_detail_rows(
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="日期范围无效")
 
-    doc = _load_dataset()
+    doc = _load_dataset(season)
     items = _normalise_items(doc.get("items", []))
     _apply_business_state_overrides(items)
     rows = _filter_rows(
@@ -388,20 +409,20 @@ def _filtered_detail_rows(
     return doc, _sort_rows(rows, sort)
 
 
-def _load_dataset() -> dict[str, Any]:
-    global _cache_mtime_ns, _cache_doc
+def _load_dataset(season: str = DEFAULT_SEASON) -> dict[str, Any]:
+    global _cache_path, _cache_mtime_ns, _cache_doc
 
-    path = _data_path()
+    path = _data_path(season)
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="计分礼物数据未生成")
 
     stat = path.stat()
-    if _cache_mtime_ns == stat.st_mtime_ns:
+    if _cache_path == str(path) and _cache_mtime_ns == stat.st_mtime_ns:
         return _cache_doc
 
     with _cache_lock:
         stat = path.stat()
-        if _cache_mtime_ns == stat.st_mtime_ns:
+        if _cache_path == str(path) and _cache_mtime_ns == stat.st_mtime_ns:
             return _cache_doc
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
@@ -409,6 +430,7 @@ def _load_dataset() -> dict[str, Any]:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="计分礼物数据读取失败") from exc
         if not isinstance(doc, dict):
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="计分礼物数据格式无效")
+        _cache_path = str(path)
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_doc = doc
         return _cache_doc

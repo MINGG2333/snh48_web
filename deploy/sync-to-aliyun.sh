@@ -64,7 +64,7 @@ remove_retired_aliyun_file() {
 # old ignored copy cannot survive on the public node.
 remove_retired_aliyun_file /home/snh48_web/website/data/manual_events.csv
 
-"${SSH_MUX[@]}" "$ALIYUN" 'getent group snh48-web >/dev/null && install -d -o root -g snh48-web -m 0750 /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/social_record/timeline /home/snh48-fan-hub/live_record/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/web /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video && mkdir -p /home/snh48_web/website/data /home/snh48_web/website/data/memories'
+"${SSH_MUX[@]}" "$ALIYUN" 'getent group snh48-web >/dev/null && install -d -o root -g snh48-web -m 0750 /home/snh48-fan-hub/schedule_record /home/snh48-fan-hub/social_record/timeline /home/snh48-fan-hub/live_record/陈嘉仪_161808449 /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/all_members /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays /home/snh48-fan-hub/flip_data/web /home/snh48-fan-hub/flip_data/audio /home/snh48-fan-hub/flip_data/video && mkdir -p /home/snh48_web/website/data /home/snh48_web/website/data/memories'
 
 # 1. chenjiayi_events.csv（事件/行程主文件，网站优先读取）
 sync_file_to_aliyun /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv /home/snh48-fan-hub/schedule_record/chenjiayi_events.csv
@@ -107,6 +107,14 @@ echo "$LOG_TAG audio_transcripts done"
 # 9. score_gifts（只读派生小数据；可写业务状态走版本化复制）
 rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='.*.lock' --exclude='live_business_fulfillments.json' -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"
+
+# 9b. all_members（全员计分榜派生小数据；缓存只在腾讯云）
+if [ -d /home/snh48-fan-hub/room_record/all_members ]; then
+  rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='cache/' -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/all_members/ "$ALIYUN:/home/snh48-fan-hub/room_record/all_members/"
+  echo "$LOG_TAG all_members done"
+else
+  echo "$LOG_TAG all_members skipped (source missing)"
+fi
 
 # 10. room_voice_replays（内容先到，manifest 最后原子提交，避免网站读到半个发布包）
 ROOM_VOICE_SOURCE="/home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays"

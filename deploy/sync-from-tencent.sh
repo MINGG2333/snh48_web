@@ -138,6 +138,7 @@ install -d -o root -g snh48-web -m 0750 \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts \
+  /home/snh48-fan-hub/room_record/all_members \
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays \
   /home/snh48-fan-hub/flip_data/web \
   /home/snh48-fan-hub/flip_data/audio \
@@ -254,6 +255,14 @@ if [ "$sync_dynamic" -eq 1 ]; then
     echo "$LOG_TAG pocket48_ranks done"
   else
     echo "$LOG_TAG pocket48_ranks skipped (source missing)"
+  fi
+
+  # 9. all_members（全员计分榜派生小数据；缓存只在腾讯云，不同步）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/room_record/all_members'; then
+    rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='cache/' -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/all_members/" /home/snh48-fan-hub/room_record/all_members/
+    echo "$LOG_TAG all_members done"
+  else
+    echo "$LOG_TAG all_members skipped (source missing)"
   fi
 fi
 

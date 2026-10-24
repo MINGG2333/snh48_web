@@ -164,6 +164,8 @@ SHARED_STATE_IS_PRIMARY=true 或 false
 SHARED_STATE_PEER=root@另一台服务器IP
 SCORE_GIFTS_PASSWORD=xxx       # 计分礼物页密码（可选，默认复用礼物回复页密码）
 SCORE_GIFTS_DATA_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/score_gifts.json
+SCORE_GIFTS_WINTER_DATA_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/score_gifts_winter.json
+SCORE_ALL_MEMBERS_DATA_PATH=/home/snh48-fan-hub/room_record/all_members/score_board.json
 SITE_TITLE=心上珍藏集           # 网站标题
 SITE_DOMAIN=cjy.plus           # 网站域名
 QA_DAILY_QUOTA_PER_USER=20     # 用户日配额
@@ -222,7 +224,8 @@ TRUSTED_PROXY_PEERS=127.0.0.1,::1 # 默认仅信任本机 Nginx 的代理头
 | `/api/room-voice-replays/sessions/{session_id}/segments/{filename}` | 上麦音频 Range 读取 | 同上；不经公共静态目录 |
 | `/api/flip-cards/status`、`/api/flip-cards/data` | 翻牌记录应用数据状态和受保护内容 | `FLIP_CARDS_PASSWORD` 或 `OB_PASSWORD`（失败尝试 IP 限速） |
 | `/api/flip-cards/flip_data/audio/{filename}`、`/api/flip-cards/flip_data/video/{filename}` | 翻牌本地音视频 Range 读取 | 同上；不经公共静态目录 |
-| `/api/score-gifts/data` | 计分礼物统计和明细 | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/score-gifts/data` | 计分礼物统计和明细（`season=2026-summer\|2026-winter`） | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
+| `/api/score-all-members/data` | 全员计分榜（赛季/团体/队伍/成员/礼物/来源/日期筛选） | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/score-gifts/summary` | 计分礼物汇总 | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/score-gifts/export.xlsx` | 按当前筛选条件导出计分礼物逐笔明细 Excel | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |
 | `/api/score-gifts/sender-export.xlsx` | 按当前筛选条件导出送礼用户汇总与逐笔投分明细 Excel | `SCORE_GIFTS_PASSWORD` 或 `GIFT_REPLIES_PASSWORD`（失败尝试 IP 限速） |

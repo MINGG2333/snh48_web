@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ site_title }} · 计分礼物</title>
+  <title>{{ site_title }} · 计分礼物 · {{ season_label }}</title>
   <meta name="robots" content="noindex, nofollow">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -820,7 +820,7 @@
 <body>
   <div id="loginOverlay">
     <div class="login-box">
-      <h1>计分礼物</h1>
+      <h1>计分礼物 · {{ season_label }}</h1>
       <p>请输入计分礼物页密码</p>
       <input type="password" id="passwordInput" placeholder="密码" autocomplete="new-password" autofocus>
       <button class="login-btn" id="loginBtn">进入</button>
@@ -832,8 +832,14 @@
     <header class="topbar">
       <div class="topbar-inner">
         <div class="title">
-          <h1>计分礼物</h1>
-          <p>房间与直播弹幕的计分送礼统计</p>
+          <h1>计分礼物 · {{ season_label }}</h1>
+          <p>{{ season_start }} 至 {{ season_end or "进行中" }} · 房间与直播弹幕的计分送礼统计</p>
+          <div class="score-nav">
+            <a href="/score/2026-winter">2026 冬季 · 红蓝歌会</a>
+            <a href="/score/2026-summer">2026 夏季 · 青春盛典</a>
+            <a href="/score/all-members">全员计分榜</a>
+            <a href="/score-pk">计分 PK</a>
+          </div>
         </div>
         <div class="refresh">
           <div>手动刷新获取最新数据</div>
@@ -1037,6 +1043,7 @@
     var password = "";
     var page = 1;
     var pageSize = 100;
+    var SEASON = "{{ season }}";
     var totalPages = 1;
     var totalItems = 0;
     var hasMore = false;
@@ -1214,6 +1221,7 @@
       params.set("date_from", dateFromInput.value || "");
       params.set("date_to", dateToInput.value || "");
       params.set("sort", sortSelect.value || "time_desc");
+      params.set("season", SEASON);
       return params.toString();
     }
 
@@ -1525,7 +1533,7 @@
       businessError.textContent = "";
       setBusinessSaving(true);
       try {
-        var resp = await fetch("/api/score-gifts/business-review", {
+        var resp = await fetch("/api/score-gifts/business-review?season=" + encodeURIComponent(SEASON), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2101,7 +2109,7 @@
       if (!password || checkingUpdates || !pageEl.classList.contains("ready")) return;
       checkingUpdates = true;
       try {
-        var resp = await fetch("/api/score-gifts/summary", {
+        var resp = await fetch("/api/score-gifts/summary?season=" + encodeURIComponent(SEASON), {
           headers: { "X-Score-Gifts-Password": password },
           cache: "no-store"
         });

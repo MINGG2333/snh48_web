@@ -59,6 +59,7 @@ case "$group" in
   dynamic)
     sources=(
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/room_voice_replays
+      /home/snh48-fan-hub/room_record/all_members
       /home/snh48-fan-hub/social_record/fan_counts
       /home/snh48-fan-hub/pocket48_ranks/陈嘉仪_161808449
     )

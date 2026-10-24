@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site_title }} · 全员计分榜</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0c1016;
+      --panel: #151b24;
+      --panel-2: #1b2430;
+      --line: #2c394b;
+      --text: #e8eef6;
+      --muted: #95a4b6;
+      --faint: #657386;
+      --ink: #091017;
+      --teal: #41b9aa;
+      --gold: #f0b84b;
+      --blue: #67a8ff;
+      --pink: #e87da7;
+      --green: #4dc27c;
+      --red: #e36f6f;
+    }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(180deg, rgba(65, 185, 170, 0.08), transparent 240px), var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      line-height: 1.45;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    #loginOverlay {
+      position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); padding: 24px;
+    }
+    #loginOverlay.hidden { display: none; }
+    .login-box { width: min(360px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 28px; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
+    .login-box h1 { font-size: 20px; font-weight: 720; margin-bottom: 8px; }
+    .login-box p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .login-box input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); color: var(--text); padding: 0 12px; outline: none; }
+    .login-box input:focus { border-color: var(--teal); }
+    .login-btn { width: 100%; min-height: 44px; margin-top: 12px; border: 0; border-radius: 8px; background: var(--teal); color: var(--ink); font-weight: 760; }
+    .login-btn:disabled { cursor: wait; opacity: .72; }
+    .login-error { display: none; margin-top: 10px; color: var(--red); font-size: 13px; }
+    .login-error.show { display: block; }
+    .page { display: none; min-height: 100vh; }
+    .page.ready { display: block; }
+    .topbar { position: sticky; top: 0; z-index: 10; background: rgba(12,16,22,.96); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
+    .topbar-inner { width: min(1500px, 100%); margin: 0 auto; padding: 18px 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .title h1 { font-size: 21px; font-weight: 760; }
+    .title p { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .score-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+    .score-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); text-decoration: none; font-size: 12px; }
+    .score-nav a:hover, .score-nav a:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .refresh { text-align: right; color: var(--muted); font-size: 13px; white-space: nowrap; }
+    .refresh-btn { min-height: 30px; margin-top: 9px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); font-size: 12px; }
+    .refresh-btn:hover { border-color: var(--teal); color: var(--teal); }
+    main { width: min(1500px, 100%); margin: 0 auto; padding: 22px 24px 36px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpi { min-height: 92px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015)), var(--panel); padding: 14px; }
+    .kpi .label { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .kpi .value { font-size: 25px; font-weight: 780; }
+    .kpi .sub { color: var(--faint); font-size: 12px; margin-top: 4px; }
+    .kpi.total .value { color: var(--gold); }
+    .kpi.room .value { color: var(--teal); }
+    .kpi.live .value { color: var(--pink); }
+    .toolbar { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 14px; margin-bottom: 16px; }
+    .toolbar-grid { display: grid; grid-template-columns: repeat(8, minmax(110px, 1fr)); gap: 10px; align-items: end; }
+    .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .field input, .field select { width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); color: var(--text); padding: 0 9px; outline: none; }
+    .field input:focus, .field select:focus { border-color: var(--teal); }
+    .segment { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .segment button { flex: 1; min-height: 38px; border: 0; background: var(--ink); color: var(--muted); font-size: 12px; }
+    .segment button.active { background: var(--teal); color: var(--ink); font-weight: 700; }
+    .actions { display: flex; gap: 8px; }
+    .btn { min-height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); }
+    .btn.primary { background: var(--teal); border-color: var(--teal); color: var(--ink); font-weight: 700; }
+    .coverage { display: none; margin-bottom: 16px; border: 1px solid #6b5320; border-radius: 8px; background: rgba(240,184,75,.08); color: #f2d38b; padding: 11px 14px; font-size: 13px; }
+    .coverage.show { display: block; }
+    .two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 15px; border-bottom: 1px solid var(--line); }
+    .panel-head h2 { font-size: 15px; font-weight: 720; }
+    .panel-head span { color: var(--faint); font-size: 12px; }
+    .bar-list { padding: 12px 15px 15px; display: grid; gap: 10px; }
+    .bar-row { display: grid; grid-template-columns: minmax(80px, 150px) 1fr 72px; gap: 10px; align-items: center; font-size: 13px; }
+    .bar-track { height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--blue)); }
+    .bar-row .num { text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }
+    .table-panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
+    .table-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--line); }
+    .table-head h2 { font-size: 15px; font-weight: 720; }
+    .table-head .meta { color: var(--faint); font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+    th { color: var(--muted); font-size: 12px; font-weight: 600; background: rgba(255,255,255,.02); position: sticky; top: 0; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr.member-row { cursor: pointer; }
+    tbody tr.member-row:hover { background: rgba(65,185,170,.06); }
+    .rank { color: var(--faint); font-variant-numeric: tabular-nums; }
+    .member-name { font-weight: 650; }
+    .member-sub { color: var(--faint); font-size: 11px; margin-top: 2px; }
+    .tag { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; }
+    .score-main { color: var(--gold); font-weight: 760; }
+    .detail-row td { background: var(--panel-2); padding: 0; }
+    .detail-box { padding: 12px 16px 16px; }
+    .detail-title { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .gift-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .gift-chip { border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; background: var(--panel); font-size: 12px; }
+    .gift-chip strong { color: var(--gold); }
+    .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 15px; color: var(--muted); font-size: 12px; }
+    .pagination .actions { gap: 6px; }
+    .empty { padding: 34px 20px; text-align: center; color: var(--faint); }
+    .footer { color: var(--faint); text-align: center; font-size: 12px; padding: 20px 12px 30px; }
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+      .toolbar-grid { grid-template-columns: repeat(4, 1fr); }
+      .two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .topbar-inner { flex-direction: column; }
+      .refresh { text-align: left; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .toolbar-grid { grid-template-columns: repeat(2, 1fr); }
+      .bar-row { grid-template-columns: 1fr; gap: 4px; }
+      .bar-row .num { text-align: left; }
+      th, td { padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h1>全员计分榜</h1>
+      <p>请输入全员计分榜密码</p>
+      <input type="password" id="passwordInput" placeholder="密码" autocomplete="new-password" autofocus>
+      <button class="login-btn" id="loginBtn">进入</button>
+      <div class="login-error" id="loginError">密码错误</div>
+    </div>
+  </div>
+
+  <div class="page" id="page">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="title">
+          <h1>全员计分榜</h1>
+          <p>Score all members · 按赛程统计全部成员的计分礼物</p>
+          <div class="score-nav">
+            <a href="/score/2026-winter">2026 冬季 · 红蓝歌会</a>
+            <a href="/score/2026-summer">2026 夏季 · 青春盛典</a>
+            <a href="/score/all-members">全员计分榜</a>
+            <a href="/score-pk">计分 PK</a>
+          </div>
+        </div>
+        <div class="refresh">
+          <div id="generatedAt">生成时间：-</div>
+          <button class="refresh-btn" id="manualRefreshBtn" type="button">刷新</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="kpi-grid" aria-label="全员计分统计">
+        <div class="kpi total"><div class="label">总分</div><div class="value" id="kpiScore">0</div><div class="sub" id="kpiScoreSub">礼物数 0</div></div>
+        <div class="kpi"><div class="label">计分成员</div><div class="value" id="kpiMembers">0</div><div class="sub" id="kpiRecords">0 条记录</div></div>
+        <div class="kpi room"><div class="label">房间分</div><div class="value" id="kpiRoom">0</div><div class="sub">成员房间消息</div></div>
+        <div class="kpi live"><div class="label">直播分</div><div class="value" id="kpiLive">0</div><div class="sub">成员直播间</div></div>
+        <div class="kpi"><div class="label">计分礼物种类</div><div class="value" id="kpiGifts">0</div><div class="sub" id="kpiSeason">-</div></div>
+        <div class="kpi"><div class="label">覆盖区间</div><div class="value" id="kpiCoverage">-</div><div class="sub" id="kpiCoverageSub">-</div></div>
+      </section>
+
+      <div class="coverage" id="coverageNote"></div>
+
+      <section class="toolbar" aria-label="筛选条件">
+        <div class="toolbar-grid">
+          <div class="field"><label for="seasonSelect">赛季</label><select id="seasonSelect"></select></div>
+          <div class="field"><label for="groupSelect">团体</label><select id="groupSelect"><option value="">全部团体</option></select></div>
+          <div class="field"><label for="teamSelect">队伍</label><select id="teamSelect"><option value="">全部队伍</option></select></div>
+          <div class="field"><label for="memberInput">成员</label><input id="memberInput" type="search" placeholder="昵称或 ID"></div>
+          <div class="field"><label for="giftSelect">礼物</label><select id="giftSelect"><option value="">全部计分礼物</option></select></div>
+          <div class="field"><label>来源</label><div class="segment" id="sourceSegment"><button type="button" data-source="all" class="active">全部</button><button type="button" data-source="room">房间</button><button type="button" data-source="live">直播</button></div></div>
+          <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date"></div>
+          <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
+        </div>
+        <div class="toolbar-grid" style="grid-template-columns: repeat(4, minmax(110px,1fr)); margin-top:10px;">
+          <div class="field"><label for="sortSelect">排序</label><select id="sortSelect"><option value="score_desc">按总分</option><option value="team_asc">按队伍</option><option value="name_asc">按成员名</option></select></div>
+          <div class="actions" style="grid-column: span 2;"><button class="btn primary" id="applyBtn" type="button">筛选</button><button class="btn" id="resetBtn" type="button">重置</button></div>
+        </div>
+      </section>
+
+      <section class="two-col">
+        <div class="panel">
+          <div class="panel-head"><h2>队伍分布</h2><span id="teamMeta">-</span></div>
+          <div class="bar-list" id="teamBars"><div class="empty">暂无数据</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>礼物分布</h2><span id="giftMeta">-</span></div>
+          <div class="bar-list" id="giftBars"><div class="empty">暂无数据</div></div>
+        </div>
+      </section>
+
+      <section class="table-panel">
+        <div class="table-head"><h2>成员排名</h2><span class="meta" id="tableMeta">-</span></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num">记录</th></tr></thead>
+            <tbody id="memberRows"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination"><span id="pageMeta">-</span><div class="actions"><button class="btn" id="prevBtn" type="button">上一页</button><button class="btn" id="nextBtn" type="button">下一页</button></div></div>
+      </section>
+    </main>
+    <div class="footer">{{ site_title }} · 仅限管理员访问</div>
+  </div>
+
+  <script>
+    (function () {
+      var password = "";
+      var loginBusy = false;
+      var data = null;
+      var page = 1;
+      var pageSize = 100;
+      var totalPages = 1;
+      var sourceFilter = "all";
+      var expanded = {};
+      var SEASON_LABELS = {};
+
+      var loginOverlay = document.getElementById("loginOverlay");
+      var passwordInput = document.getElementById("passwordInput");
+      var loginBtn = document.getElementById("loginBtn");
+      var loginError = document.getElementById("loginError");
+      var pageEl = document.getElementById("page");
+      var seasonSelect = document.getElementById("seasonSelect");
+      var groupSelect = document.getElementById("groupSelect");
+      var teamSelect = document.getElementById("teamSelect");
+      var memberInput = document.getElementById("memberInput");
+      var giftSelect = document.getElementById("giftSelect");
+      var dateFromInput = document.getElementById("dateFromInput");
+      var dateToInput = document.getElementById("dateToInput");
+      var sortSelect = document.getElementById("sortSelect");
+      var sourceSegment = document.getElementById("sourceSegment");
+      var memberRows = document.getElementById("memberRows");
+      var coverageNote = document.getElementById("coverageNote");
+      var generatedAt = document.getElementById("generatedAt");
+
+      function formatScore(value) {
+        var n = Number(value || 0);
+        if (!isFinite(n)) return "0";
+        return n.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+      }
+      function formatNumber(value) {
+        return Number(value || 0).toLocaleString("zh-CN");
+      }
+      function escapeHtml(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+          return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch];
+        });
+      }
+      function setLoginError(text) {
+        loginError.textContent = text || "密码错误";
+        loginError.classList.add("show");
+      }
+      function clearLoginError() {
+        loginError.textContent = "";
+        loginError.classList.remove("show");
+      }
+      async function readError(resp) {
+        try { var body = await resp.json(); return body.detail || ""; } catch (err) { return ""; }
+      }
+      async function verifyLogin() {
+        var resp = await fetch("/api/score-all-members/verify", {
+          headers: { "X-Score-Gifts-Password": password }, cache: "no-store"
+        });
+        if (!resp.ok) throw new Error(await readError(resp) || "密码验证失败");
+      }
+      function buildQuery(targetPage) {
+        var params = new URLSearchParams();
+        params.set("season", seasonSelect.value || "");
+        params.set("group", groupSelect.value || "");
+        params.set("team", teamSelect.value || "");
+        params.set("member", memberInput.value.trim());
+        params.set("gift_name", giftSelect.value || "");
+        params.set("source", sourceFilter);
+        params.set("date_from", dateFromInput.value || "");
+        params.set("date_to", dateToInput.value || "");
+        params.set("sort", sortSelect.value || "score_desc");
+        params.set("page", String(targetPage || 1));
+        params.set("page_size", String(pageSize));
+        return params.toString();
+      }
+      async function fetchSummary() {
+        var params = new URLSearchParams();
+        if (seasonSelect.value) params.set("season", seasonSelect.value);
+        var resp = await fetch("/api/score-all-members/summary?" + params.toString(), {
+          headers: { "X-Score-Gifts-Password": password }, cache: "no-store"
+        });
+        if (!resp.ok) throw new Error(await readError(resp) || "摘要加载失败");
+        return resp.json();
+      }
+      async function fetchData(targetPage) {
+        page = targetPage || 1;
+        memberRows.innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
+        var resp = await fetch("/api/score-all-members/data?" + buildQuery(page), {
+          headers: { "X-Score-Gifts-Password": password }, cache: "no-store"
+        });
+        if (resp.status === 401 || resp.status === 403) {
+          loginOverlay.classList.remove("hidden");
+          pageEl.classList.remove("ready");
+          setLoginError(await readError(resp) || "密码失效，请重新输入");
+          return;
+        }
+        if (!resp.ok) throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        data = await resp.json();
+        totalPages = Number(data.total_pages || 1);
+        render();
+      }
+      function renderSummary(summaryData) {
+        SEASON_LABELS = summaryData.seasons || {};
+        var current = summaryData.season || summaryData.latest_season || "";
+        var seasons = summaryData.seasons || {};
+        seasonSelect.innerHTML = Object.keys(seasons).map(function (key) {
+          var meta = seasons[key] || {};
+          return '<option value="' + escapeHtml(key) + '">' + escapeHtml(meta.label || key) + '</option>';
+        }).join("");
+        if (!seasonSelect.value && current && seasons[current]) seasonSelect.value = current;
+        var gifts = (summaryData.facets && summaryData.facets.gifts) || summaryData.gift_authority || [];
+        giftSelect.innerHTML = '<option value="">全部计分礼物</option>' + gifts.map(function (gift) {
+          return '<option value="' + escapeHtml(gift.gift_name) + '">' + escapeHtml(gift.gift_name) + '</option>';
+        }).join("");
+      }
+      function renderCoverage() {
+        var coverage = data.coverage || {};
+        var archive = data.archive_coverage || {};
+        var season = data.seasons && data.seasons[data.season] || {};
+        if (coverage.complete) {
+          coverageNote.classList.remove("show");
+          coverageNote.textContent = "";
+        } else {
+          coverageNote.classList.add("show");
+          coverageNote.textContent = "该赛程的全成员归档不完整：全房间归档从 " + (archive.room_archive_first_date || "未知") +
+            " 开始，全直播归档从 " + (archive.live_archive_first_date || "未知") + " 开始。夏季全成员数据无法完整回溯，请以单人计分页为准。";
+        }
+        document.getElementById("kpiCoverage").textContent = coverage.complete ? "完整" : "部分";
+        document.getElementById("kpiCoverageSub").textContent = season.start_date ? (season.start_date + " 至 " + (season.end_date || "进行中")) : "-";
+        document.getElementById("kpiSeason").textContent = season.label || data.season || "-";
+      }
+      function renderBars(container, rows, total, labelFn) {
+        if (!rows || !rows.length) {
+          container.innerHTML = '<div class="empty">暂无数据</div>';
+          return;
+        }
+        var max = Math.max.apply(null, rows.map(function (row) { return Number(row.score || 0); }).concat([1]));
+        container.innerHTML = rows.slice(0, 8).map(function (row) {
+          var width = Math.max(2, Number(row.score || 0) / max * 100);
+          return '<div class="bar-row"><div>' + escapeHtml(labelFn(row)) + '</div>' +
+            '<div class="bar-track"><div class="bar-fill" style="width:' + width.toFixed(2) + '%"></div></div>' +
+            '<div class="num">' + formatScore(row.score) + '</div></div>';
+        }).join("");
+      }
+      function renderMemberRows(rows) {
+        if (!rows || !rows.length) {
+          memberRows.innerHTML = '<tr><td colspan="8" class="empty">当前筛选条件下没有计分记录</td></tr>';
+          return;
+        }
+        memberRows.innerHTML = rows.map(function (row) {
+          var id = escapeHtml(row.member_id);
+          var detail = expanded[row.member_id] ?
+            '<tr class="detail-row"><td colspan="8"><div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
+            (row.gifts || []).map(function (gift) {
+              return '<span class="gift-chip">' + escapeHtml(gift.gift_name || gift.gift_id) +
+                ' <strong>' + formatScore(gift.score) + '</strong> 分 · ' + formatNumber(gift.count) + ' 个</span>';
+            }).join("") + '</div></div></td></tr>' : "";
+          return '<tr class="member-row" data-member-id="' + id + '">' +
+            '<td class="num rank">' + escapeHtml(row.rank) + '</td>' +
+            '<td><div class="member-name">' + escapeHtml(row.member_name) + '</div><div class="member-sub">ID ' + id + (row.period_name ? " · " + escapeHtml(row.period_name) : "") + '</div></td>' +
+            '<td><span class="tag">' + escapeHtml(row.group || "-") + '</span> <span class="tag">' + escapeHtml(row.team_label || "未分组") + '</span></td>' +
+            '<td class="num score-main">' + formatScore(row.total_score) + '</td>' +
+            '<td class="num">' + formatScore(row.room_score) + '</td>' +
+            '<td class="num">' + formatScore(row.live_score) + '</td>' +
+            '<td class="num">' + formatNumber(row.total_count) + '</td>' +
+            '<td class="num">' + formatNumber(row.records) + '</td></tr>' + detail;
+        }).join("");
+        memberRows.querySelectorAll("tr.member-row").forEach(function (tr) {
+          tr.addEventListener("click", function () {
+            var id = tr.getAttribute("data-member-id");
+            expanded[id] = !expanded[id];
+            renderMemberRows(data.members || []);
+          });
+        });
+      }
+      function render() {
+        if (!data) return;
+        generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
+        var summary = data.summary || {};
+        document.getElementById("kpiScore").textContent = formatScore(summary.total_score);
+        document.getElementById("kpiScoreSub").textContent = "礼物数 " + formatNumber(summary.total_count);
+        document.getElementById("kpiMembers").textContent = formatNumber(summary.members);
+        document.getElementById("kpiRecords").textContent = formatNumber(summary.records) + " 条记录";
+        document.getElementById("kpiRoom").textContent = formatScore(summary.room_score);
+        document.getElementById("kpiLive").textContent = formatScore(summary.live_score);
+        document.getElementById("kpiGifts").textContent = formatNumber(summary.gift_kinds);
+        renderCoverage();
+        var teams = (data.team_distribution || []).slice();
+        var gifts = (data.gift_distribution || []).slice();
+        renderBars(document.getElementById("teamBars"), teams, summary.total_score, function (row) {
+          return (row.group ? row.group + " · " : "") + (row.team_label || row.team || "未分组");
+        });
+        renderBars(document.getElementById("giftBars"), gifts, summary.total_score, function (row) {
+          return row.gift_name || row.gift_id || "未命名礼物";
+        });
+        document.getElementById("teamMeta").textContent = teams.length + " 个队伍有记录";
+        document.getElementById("giftMeta").textContent = gifts.length + " 种计分礼物";
+        document.getElementById("tableMeta").textContent = "共 " + formatNumber(data.total) + " 名成员";
+        document.getElementById("pageMeta").textContent = "第 " + page + " / " + totalPages + " 页";
+        document.getElementById("prevBtn").disabled = page <= 1;
+        document.getElementById("nextBtn").disabled = page >= totalPages;
+        renderMemberRows(data.members || []);
+        renderFacetOptions();
+      }
+      function renderFacetOptions() {
+        var currentGroup = groupSelect.value;
+        var currentTeam = teamSelect.value;
+        var facets = data.facets || {};
+        var groups = facets.groups || [];
+        var teams = facets.teams || [];
+        var groupHtml = '<option value="">全部团体</option>' + groups.map(function (g) {
+          return '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>';
+        }).join("");
+        groupSelect.innerHTML = groupHtml;
+        if (groups.indexOf(currentGroup) >= 0) groupSelect.value = currentGroup;
+        var teamHtml = '<option value="">全部队伍</option>' + teams.filter(function (item) {
+          return !groupSelect.value || item.group === groupSelect.value;
+        }).map(function (item) {
+          return '<option value="' + escapeHtml(item.team) + '">' + escapeHtml(item.team_label || item.team) + '</option>';
+        }).join("");
+        teamSelect.innerHTML = teamHtml;
+        var exists = false;
+        Array.prototype.forEach.call(teamSelect.options, function (opt) { if (opt.value === currentTeam) exists = true; });
+        teamSelect.value = exists ? currentTeam : "";
+      }
+      async function boot() {
+        if (loginBusy) return;
+        var value = passwordInput.value.trim();
+        if (!value) return;
+        password = value;
+        loginBusy = true;
+        loginBtn.disabled = true;
+        loginBtn.textContent = "验证中…";
+        clearLoginError();
+        try {
+          await verifyLogin();
+          var summaryData = await fetchSummary();
+          renderSummary(summaryData);
+          await fetchData(1);
+          loginOverlay.classList.add("hidden");
+          pageEl.classList.add("ready");
+        } catch (err) {
+          setLoginError(err.message || "密码错误");
+          loginBtn.disabled = false;
+          loginBtn.textContent = "进入";
+        } finally {
+          loginBusy = false;
+        }
+      }
+      async function reload() {
+        if (!password) return;
+        try { await fetchData(1); } catch (err) { setLoginError(err.message || "加载失败"); }
+      }
+      loginBtn.addEventListener("click", boot);
+      passwordInput.addEventListener("keydown", function (event) { if (event.key === "Enter") boot(); });
+      document.getElementById("manualRefreshBtn").addEventListener("click", reload);
+      document.getElementById("applyBtn").addEventListener("click", function () { expanded = {}; reload(); });
+      document.getElementById("resetBtn").addEventListener("click", function () {
+        memberInput.value = "";
+        giftSelect.value = "";
+        groupSelect.value = "";
+        teamSelect.value = "";
+        dateFromInput.value = "";
+        dateToInput.value = "";
+        sortSelect.value = "score_desc";
+        setSource("all");
+        expanded = {};
+        reload();
+      });
+      document.getElementById("prevBtn").addEventListener("click", function () { if (page > 1) { expanded = {}; fetchData(page - 1); } });
+      document.getElementById("nextBtn").addEventListener("click", function () { if (page < totalPages) { expanded = {}; fetchData(page + 1); } });
+      groupSelect.addEventListener("change", function () { teamSelect.value = ""; reload(); });
+      teamSelect.addEventListener("change", reload);
+      seasonSelect.addEventListener("change", async function () {
+        groupSelect.value = "";
+        teamSelect.value = "";
+        giftSelect.value = "";
+        expanded = {};
+        try {
+          var summaryData = await fetchSummary();
+          renderSummary(summaryData);
+          await fetchData(1);
+        } catch (err) {
+          setLoginError(err.message || "赛季切换失败");
+        }
+      });
+      function setSource(value) {
+        sourceFilter = value;
+        sourceSegment.querySelectorAll("button").forEach(function (btn) {
+          btn.classList.toggle("active", btn.getAttribute("data-source") === value);
+        });
+      }
+      sourceSegment.querySelectorAll("button").forEach(function (btn) {
+        btn.addEventListener("click", function () { setSource(btn.getAttribute("data-source")); reload(); });
+      });
+    })();
+  </script>
+</body>
+</html>

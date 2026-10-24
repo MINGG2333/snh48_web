@@ -522,12 +522,56 @@ async def flip_cards_page(request: Request):
     )
 
 
-@app.get("/score", response_class=HTMLResponse)
-@app.get("/score-gifts", response_class=HTMLResponse)
+SCORE_SEASON_META = {
+    "2026-summer": {
+        "label": "2026 青春盛典",
+        "start": "2026-05-30",
+        "end": "2026-08-08",
+    },
+    "2026-winter": {
+        "label": "2026 红蓝歌会",
+        "start": "2026-10-24",
+        "end": "",
+    },
+}
+
+
+@app.get("/score")
+@app.get("/score-gifts")
+async def score_gifts_redirect():
+    """Keep old entry points pointing at the latest scoring season."""
+    return RedirectResponse("/score/2026-winter", status_code=308)
+
+
+@app.get("/score/2026-summer", response_class=HTMLResponse)
+@app.get("/score/2026-winter", response_class=HTMLResponse)
 async def score_gifts_page(request: Request):
     """Admin page for scoring gift statistics."""
+    season = request.url.path.rstrip("/").rsplit("/", 1)[-1]
+    meta = SCORE_SEASON_META.get(season) or SCORE_SEASON_META["2026-winter"]
     return templates.TemplateResponse(
         "score_gifts.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+            "season": season,
+            "season_label": meta["label"],
+            "season_start": meta["start"],
+            "season_end": meta["end"],
+        },
+    )
+
+
+@app.get("/score/all-members", response_class=HTMLResponse)
+@app.get("/score/all", response_class=HTMLResponse)
+async def score_all_members_page(request: Request):
+    """Admin page for the all-member scoring board."""
+    return templates.TemplateResponse(
+        "score_all_members.html",
         {
             "request": request,
             "site_title": cfg.SITE_TITLE,
@@ -704,6 +748,9 @@ app.include_router(flip_cards_router)
 
 from website.score_gifts_api import router as score_gifts_router
 app.include_router(score_gifts_router)
+
+from website.score_all_members_api import router as score_all_members_router
+app.include_router(score_all_members_router)
 
 from website.business_api import router as business_router
 app.include_router(business_router)
