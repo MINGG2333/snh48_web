@@ -1863,6 +1863,33 @@
       return businessNeedsReview(item) ? "（待核实）" : "";
     }
 
+    function fulfillmentPrimary(item) {
+      if (item.fulfillment_label) return item.fulfillment_label;
+      if (item.source === "live") return "待分析";
+      return item.room_has_reply ? "已回复" : "未回复";
+    }
+
+    function fulfillmentSecondary(item) {
+      if (item.source === "live") {
+        if (item.business_status === "redeemed") {
+          var businessParts = [];
+          if (item.business_type) businessParts.push(item.business_type);
+          if (item.business_content) businessParts.push(item.business_content);
+          if (item.business_offset) businessParts.push("弹幕 " + item.business_offset);
+          return businessParts.join(" · ");
+        }
+        if (item.business_status === "uncertain") {
+          return item.business_content || item.business_evidence || item.business_analysis_reasoning || item.fulfillment_detail || "";
+        }
+        return item.fulfillment_detail && item.fulfillment_detail !== "未兑换业务" ? item.fulfillment_detail : "";
+      }
+      var parts = [];
+      if (item.room_reply_count) parts.push(formatNumber(item.room_reply_count) + " 条");
+      if (item.room_first_reply_time) parts.push(item.room_first_reply_time);
+      if (item.room_first_reply_content) parts.push(item.room_first_reply_content);
+      return parts.join(" · ");
+    }
+
     function renderLoadState() {
       var text = "已加载 " + formatNumber(loadedItems.length) + " / " + formatNumber(totalItems) + " 条";
       if (hasMore) text += "，继续向下滚动";
