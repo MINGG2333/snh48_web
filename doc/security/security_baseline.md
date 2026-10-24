@@ -32,6 +32,7 @@
 | 观察页访客估算最小化 | tracker 保留 QA 的 `sessionStorage` 会话 ID，但不再自行生成 `visitor_id`；服务器仅在 `page_view` 时签发带 HMAC 校验的 `HttpOnly` 第一方 `ob_device_profile` Cookie，并把页面、请求 IP 和粗粒度设备标签写入本机 `interaction_logs/session_*/visitor_page_views.jsonl`；`/ob` 密码验证后才返回逐次 IP；API 返回只用于展示整理的 `association_groups` 和 `ip_network_graph`，后者按 IP 节点共同档案/旧会话的集合交集生成边权；经鉴权读取 OB 数据时可用本机 DB-IP Lite MMDB 临时生成 IP 的粗略国家、省级地区或城市标签 | 同一浏览器跨标签页和 IP 变化仍归为一个估算访客；IP 关联组和 3D 图可减少管理页首层条目并帮助查看共用网络环境的档案，但不改变访客/会话估计，不把共享 IP 解释为同一自然人；地区标签可用于筛选网络出口的大致区域 | Cookie 只是浏览器档案，不等于实名自然人、物理设备或硬件指纹；共享 IP 关联可能包含多个自然人，组内必须保留成员和连接 IP；地区库必须本地读取，不得逐 IP 调用外部查询服务，不得把地区、经纬度写入逐次访问日志或生成地区时间线；不得加入完整 User-Agent、Canvas、字体、GPU、音频等主动指纹；地区只代表网络出口且可能不准确；该日志保持节点本地，不进入 Git 或双服务器业务状态复制；旧记录无法可靠倒推逐次设备/IP，历史关联不得伪造成逐次访问 |
 | 成员房间上麦回放访问控制 | `/api/room-voice-replays/*` 要求独立密码或复用房间消息密码；成功后使用 `HttpOnly`、`SameSite=Strict`、API 路径限定 Cookie；跨云检查另用独立只读 Token；元数据、同期消息、兼容版及原始音质版音频都鉴权，M4A 只通过固定文件名和 HTTP Range API 提供 | 避免公开房间/小房间音频与同期消息被公共静态目录或搜索引擎直接获取，同时避免两台服务器复用用户密码 | Token 只允许 GET 和 Range，不能调用 `/login` 或签发 Cookie；页面仍设置 `noindex,nofollow`，不得把 `ROOM_VOICE_REPLAYS_DIR` 挂到 `/static`；真实密码和 Token 只放 root `0600` 配置 |
 | 翻牌记录与账号管理访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD` 和路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；账号管理 POST 还校验同源，仅腾讯云权威节点启用。手机号和验证码经本机 Socket 请求体交给独立受限服务，手机号只写腾讯云本机短期 `0600` 会话，验证码不落盘，Token 只写私有账号库；短信有冷却/小时限额，验证码最多尝试 5 次 | 避免个人翻牌、媒体和口袋48登录凭据被公开、跨站触发或同步到阿里云 | 两端页面和代码一致；阿里云同一弹窗只返回当前节点不开放操作且无跳转。网页进程无 sudo 和 fan-hub 写权限；翻牌桥的系统 `/tmp` 保持只读，只将短信限速、翻牌更新、转录串行化和账号清单提交四个预创建锁文件以 `root:root 0600` 放行，PyTorch 临时文件仅写 `notifications/flip_web_admin/tmp` 私有目录，部署脚本不得改为放行整个 `/tmp`；本地 Whisper 以 Hugging Face 离线模式运行，不向外部上传音频或下载模型；媒体按清单允许的账号 ID、固定文件名和 Range API 提供；不得把 `flip_data/` 挂到 `/static` |
+| 红蓝计分台账访问控制 | `/api/redblue/*` 要求 `REDBLUE_LEDGER_PASSWORD`；`POST /api/redblue/login` 成功后签发路径限定的 `HttpOnly`、`Secure`、`SameSite=Strict` Cookie，`/logout` 删除 Cookie；前端不再把密码写入 `sessionStorage`/`localStorage`，数据、导出、轮询和同步请求统一使用 Cookie；`X-Redblue-Password` 仅保留旧客户端兼容 | 避免明文后台密码长期留在浏览器存储并被同源 XSS、恶意扩展或共享设备读取；默认复用业务管理/礼物回复密码时降低连带泄露影响 | Cookie 仅对 `/api/redblue` 生效，服务重启后旧 Cookie 失效需重新登录；不得恢复 `autocomplete="current-password"` 或 Web Storage 保存密码；静态护栏见 `tests/test_password_page_security.py`，实现规范见 `doc/security/password_page_best_practices.md` |
 | 社交 Cookie 隐藏管理 | `/api/social-credentials/*` 要求独立密码或迁移期复用 `OB_PASSWORD`，使用 30 分钟、路径限定的 `HttpOnly`、`SameSite=Strict` Cookie；更新 POST 校验同源并受 `SHARED_STATE_IS_PRIMARY` 硬门禁；固定命令由独立受限服务执行 | 避免微博/抖音/B站 Cookie 被公开、跨站替换或进入阿里云，同时避免网页进程直接获得 root 或凭据目录写权限 | Cookie 只经 HTTPS、Unix Socket 请求体和 stdin-only 短进程传递；响应、状态、命令行和日志不得回显；严格桥先验证再原子保存，失败保留旧配置；页面不进导航并设置 `noindex,nofollow` |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
@@ -84,6 +85,7 @@ FLIP_CARDS_ACCOUNTS_PATH=/home/snh48-fan-hub/flip_data/web/accounts.json
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
 FLIP_CARDS_ACCOUNT_ADMIN_ENABLED=腾讯云 true；阿里云 false
 SOCIAL_CREDENTIALS_ADMIN_PASSWORD=独立社交凭据管理密码
+REDBLUE_LEDGER_PASSWORD=独立红蓝计分台账密码或留空复用 BUSINESS_ADMIN_PASSWORD
 SOCIAL_CREDENTIALS_ADMIN_ENABLED=腾讯云 true；阿里云 false
 SOCIAL_CREDENTIALS_ADMIN_PYTHON=/home/snh48-fan-hub/venv/bin/python3
 SOCIAL_CREDENTIALS_ADMIN_SCRIPT=/home/snh48-fan-hub/scripts/web/social_credentials_admin.py
@@ -111,6 +113,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/api/room-voice-replays/sessions
 curl -sS -D - -o /dev/null https://cjy.plus/flip-cards
 curl -sS -D - -o /dev/null https://cjy.plus/api/flip-cards/status
 curl -sS -D - -o /dev/null https://cjy.plus/social-credentials-admin
+curl -sS -D - -o /dev/null https://cjy.plus/business/redblue2026
+curl -sS -o /dev/null -w '%{http_code}\n' https://cjy.plus/api/redblue/data
 curl -sS -D - -o /dev/null https://cjy.plus/api/social-credentials/status
 curl -sS -D - -o /dev/null https://cjy.plus/image-proxy/health
 curl -sS -D - -o /dev/null https://cjy.plus/static/js/main.js
@@ -130,6 +134,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - `/room-voice-replays` 页面返回 200；未登录访问 `/api/room-voice-replays/sessions` 返回 401；使用真实密码后列表、详情和音频 Range 请求正常，响应不暴露服务器文件路径或流 URL。
 - `/flip-cards` 页面返回 200；未登录访问 `/api/flip-cards/status` 返回 401；使用真实密码后应用 JSON、MP3/MP4 Range 请求正常，响应不暴露服务器文件路径或口袋48 Token。
 - `/social-credentials-admin` 页面返回 200 且带 `X-Robots-Tag: noindex, nofollow`；腾讯云未登录访问 status 返回 401，登录后只返回各槽位是否配置和最近验证时间，不含 Cookie。阿里云 API 返回 403，即使误设 enable 也不能写入。
+- `/business/redblue2026` 页面返回 200；未登录访问 `/api/redblue/data` 返回 401；登录响应的 Cookie 带 `HttpOnly`、`Secure`、`SameSite=strict`、`Path=/api/redblue`，带 Cookie 访问数据和导出返回 200，登出后恢复 401；页面源码不含 `sessionStorage`/`localStorage` 保存密码。
 - 腾讯云和阿里云云安全组均已删除公网 `TCP:8000` 和 `TCP:8899` 入站规则；公网只保留 `80/443` 和必要 SSH `22`；这是云控制台操作，不能只靠代码库变更完成。
 
 涉及图片代理、URL 白名单、CSP 或弹幕抓取的安全加固时，还必须做用户体验验收：

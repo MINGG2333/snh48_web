@@ -35,7 +35,9 @@ class PasswordLoginFeedbackTests(unittest.TestCase):
         self.assertIn('id="memoriesLogin">', template)
         self.assertIn('id="memoriesApp" hidden', template)
         self.assertIn("/api/memories/verify", script)
-        self.assertIn("localStorage.getItem(storageKey)", script)
+        self.assertIn("localStorage.removeItem(storageKey)", script)
+        self.assertNotIn("localStorage.getItem(storageKey)", script)
+        self.assertNotIn("localStorage.setItem(storageKey", script)
         self.assertIn("密码正确，正在加载记忆…", script)
         self.assertIn("重试加载", script)
 

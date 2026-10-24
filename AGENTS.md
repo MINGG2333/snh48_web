@@ -15,6 +15,7 @@
 先判断任务类型，再采用对应工作流：
 
 - 安全审计或安全修复：`doc/codex/workflows/security_review.md`
+- 新增或修改带密码页面、管理后台鉴权、登录 Cookie/Token 会话：`doc/security/password_page_best_practices.md`
 - 功能 bug 修复或新增功能：`doc/codex/workflows/feature_or_bugfix.md`
 - 数据生成工程或跨仓库数据依赖：`doc/codex/workflows/data_dependency.md`
 - 通过 GitHub 同步服务器：`doc/codex/workflows/deploy_via_git.md`
@@ -27,6 +28,7 @@
 - 默认通过 GitHub 同步服务器：本地提交推送后，服务器执行 `git pull`。不要用 `rsync` 覆盖代码，除非用户明确要求临时直传。
 - 涉及网站页面、API、运行行为或用户可见功能的多服务器更新：腾讯云 `cjy.plus` 部署并机器烟测后**直接同步部署阿里云**，不用再等用户确认（2026-10-10 用户改定）。例外：涉及账号/密钥/隐私数据/对外数据契约变更的敏感改动，仍走"腾讯云先验→用户确认→阿里云"的分阶段流程。
 - `.env` 不提交真实值。新增或修改环境变量时，必须先更新 `.env.example`；在让配置生效前，必须明确提醒用户按 `.env.example` 检查并修改服务器 `.env`。部署时只在服务器上补齐必要项，且不要输出密码明文。
+- 密码保护页面和后台不得把密码写入 `localStorage`/`sessionStorage`，不得使用 `autocomplete="current-password"`；新页面默认使用路径限定的 HttpOnly Cookie 登录会话，详见 `doc/security/password_page_best_practices.md`。
 - 修改源 JS/CSS 后必须运行 `node script/obfuscate_js.cjs`，并提交 `website/static/js-dist/`、`website/static/css-dist/`。
 - 修改 Nginx 配置时必须运行 `nginx -t`。部署验收按本次任务目标选择，不把专项检查固化成所有任务的通用标准。
 - 阿里云 HTTPS 证书由 Certbot 管理，月度提醒机制见 `doc/ops/https_certificate_reminder.md`；处理阿里云、HTTPS、Nginx 或证书问题时先读该文档并运行 `script/check_https_certificate.py`，证书仍有效时不要手动替换。
