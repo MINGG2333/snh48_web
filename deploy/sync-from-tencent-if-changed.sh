@@ -49,12 +49,16 @@ case "$group" in
       /home/snh48-fan-hub/performance_record/陈嘉仪_161808449
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/metadata
-      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/images
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/videos
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/expressions
       /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gifts
+    )
+    ;;
+  realtime)
+    sources=(
+      /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json
     )
     ;;
   dynamic)
@@ -121,7 +125,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-groups=(core dynamic hub)
+groups=(core realtime dynamic hub)
 changed_groups=()
 current_values=()
 

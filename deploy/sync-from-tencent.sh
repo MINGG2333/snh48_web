@@ -109,20 +109,22 @@ remove_retired_local_file() {
 }
 
 if [ "$#" -eq 0 ]; then
-  SYNC_GROUPS=(core dynamic hub)
+  SYNC_GROUPS=(core realtime dynamic hub)
 else
   SYNC_GROUPS=("$@")
 fi
 
 sync_core=0
+sync_realtime=0
 sync_dynamic=0
 sync_hub=0
 for group in "${SYNC_GROUPS[@]}"; do
   case "$group" in
     core) sync_core=1 ;;
+    realtime) sync_realtime=1 ;;
     dynamic) sync_dynamic=1 ;;
     hub) sync_hub=1 ;;
-    all) sync_core=1; sync_dynamic=1; sync_hub=1 ;;
+    all) sync_core=1; sync_realtime=1; sync_dynamic=1; sync_hub=1 ;;
     *) echo "$LOG_TAG unknown sync group: $group"; exit 2 ;;
   esac
 done
@@ -219,6 +221,12 @@ if [ "$sync_core" -eq 1 ]; then
     -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/" \
     /home/snh48-fan-hub/room_record/陈嘉仪_161808449/
   echo "$LOG_TAG chenjiayi room raw non-video data done"
+fi
+
+if [ "$sync_realtime" -eq 1 ]; then
+  # 实时直播礼物小数据：独立轻量组，避免每分钟因 7KB 文件触发 core 全量同步
+  sync_file_from_tencent /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json
+  echo "$LOG_TAG realtime_live_gifts done"
 fi
 
 if [ "$sync_dynamic" -eq 1 ]; then
