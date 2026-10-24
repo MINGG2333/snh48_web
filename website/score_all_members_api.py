@@ -266,6 +266,7 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
     groups: set[str] = set()
     teams: dict[tuple[str, str], dict[str, str]] = {}
     member_ids: set[str] = set()
+    gift_keys: set[str] = set()
     for cell in board.get("cells") or []:
         if not isinstance(cell, dict) or cell.get("season") != season:
             continue
@@ -284,9 +285,13 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
                 "team": team,
                 "team_label": str(meta.get("team_label") or team),
             }
+        gift_keys.add(str(cell.get("gift_id") or cell.get("gift_name") or ""))
     gifts = []
     for entry in board.get("gift_authority") or []:
         if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("gift_id") or entry.get("gift_name") or "")
+        if key not in gift_keys:
             continue
         seasons = entry.get("seasons") if isinstance(entry.get("seasons"), list) else []
         if seasons and season not in seasons:
