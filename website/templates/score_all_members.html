@@ -321,11 +321,13 @@
         SEASON_LABELS = summaryData.seasons || {};
         var current = summaryData.season || summaryData.latest_season || "";
         var seasons = summaryData.seasons || {};
+        var selectedSeason = seasonSelect.value;
         seasonSelect.innerHTML = Object.keys(seasons).map(function (key) {
           var meta = seasons[key] || {};
           return '<option value="' + escapeHtml(key) + '">' + escapeHtml(meta.label || key) + '</option>';
         }).join("");
-        if (!seasonSelect.value && current && seasons[current]) seasonSelect.value = current;
+        if (selectedSeason && seasons[selectedSeason]) seasonSelect.value = selectedSeason;
+        else if (current && seasons[current]) seasonSelect.value = current;
         var gifts = (summaryData.facets && summaryData.facets.gifts) || summaryData.gift_authority || [];
         giftSelect.innerHTML = '<option value="">全部计分礼物</option>' + gifts.map(function (gift) {
           return '<option value="' + escapeHtml(gift.gift_name) + '">' + escapeHtml(gift.gift_name) + '</option>';
