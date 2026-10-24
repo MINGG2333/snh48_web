@@ -262,7 +262,7 @@ node script/obfuscate_js.cjs
 
 入口和文档：
 
-- 页面入口：`/score-pk`
+- 页面入口：`/score-pk`，仅 URL 访问；计分礼物页不再显示 PK 入口
 - API：`/api/pk-score/verify`、`/api/pk-score/data`
 - 数据源：`/home/snh48-fan-hub/room_record/pk_scores/current.json`
 - 鉴权：复用 `SCORE_GIFTS_PASSWORD`，请求头 `X-PK-Score-Password`
