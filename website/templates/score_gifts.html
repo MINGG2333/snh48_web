@@ -134,9 +134,14 @@
 
     .refresh strong { color: var(--teal); font-weight: 740; }
 
-    .score-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 9px; }
-    .score-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); text-decoration: none; font-size: 12px; }
-    .score-nav a:hover, .score-nav a:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .score-nav-wrap { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .score-nav-wrap label { color: var(--faint); font-size: 12px; white-space: nowrap; }
+    .score-nav-select { min-height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 12px; outline: none; }
+    .score-nav-select:hover, .score-nav-select:focus-visible { border-color: var(--teal); color: var(--teal); }
+    .page-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .filter-btn { min-height: 36px; padding: 0 14px; border: 1px solid var(--teal); border-radius: 8px; background: rgba(65,185,170,.12); color: var(--teal); font-weight: 700; }
+    .filter-btn:hover, .filter-btn:focus-visible { background: var(--teal); color: var(--ink); outline: none; }
+    .active-filters { color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .refresh-actions { margin-top: 9px; }
     .refresh-btn { min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); font-size: 12px; }
@@ -751,6 +756,9 @@
 
     .modal-head h2 { font-size: 16px; font-weight: 740; }
     .modal-body { overflow: auto; }
+    .modal .toolbar { border: 0; background: transparent; margin: 0; padding: 14px; }
+    .modal .toolbar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .modal .jump-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
     .business-form {
       padding: 14px;
@@ -803,11 +811,27 @@
         flex-direction: column;
       }
 
-      .refresh { text-align: left; }
-      main { padding: 16px; }
-      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .refresh { text-align: left; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .refresh-actions { margin-top: 0; }
+      .refresh-btn { margin-top: 0; }
+      .title h1 { font-size: 18px; }
+      .title p { font-size: 12px; }
+      .score-nav-wrap { width: 100%; margin-top: 6px; }
+      .score-nav-select { flex: 1; min-width: 0; }
+      main { padding: 12px 14px 28px; }
+      .page-actions { margin-bottom: 10px; }
+      .filter-btn { min-height: 34px; }
+      .active-filters { font-size: 11px; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .kpi { min-height: 0; padding: 10px; }
+      .kpi .label { font-size: 11px; margin-bottom: 4px; }
+      .kpi .value { font-size: 19px; }
+      .kpi .sub { font-size: 10px; margin-top: 2px; }
       .toolbar-grid { grid-template-columns: 1fr; }
       .jump-grid { grid-template-columns: 1fr; }
+      .modal .toolbar-grid, .modal .jump-grid { grid-template-columns: 1fr; }
+      .modal { padding: 12px; align-items: flex-end; }
+      .modal-dialog { max-height: calc(100vh - 24px); }
       .actions .btn { flex: 1; }
       .table-head, .pagination { align-items: flex-start; flex-direction: column; }
       .detail-list { padding: 12px; }
@@ -834,10 +858,13 @@
         <div class="title">
           <h1>计分礼物 · {{ season_label }}</h1>
           <p>{{ season_start }} 至 {{ season_end or "进行中" }} · 房间与直播弹幕的计分送礼统计</p>
-          <div class="score-nav">
-            <a href="/score/2026-winter">2026 冬季 · 红蓝歌会</a>
-            <a href="/score/2026-summer">2026 夏季 · 青春盛典</a>
-            <a href="/score/all-members">全员计分榜</a>
+          <div class="score-nav-wrap">
+            <label for="scoreNavSelect">页面</label>
+            <select class="score-nav-select" id="scoreNavSelect" aria-label="计分页面">
+              <option value="/score/2026-winter">2026 冬季 · 红蓝歌会</option>
+              <option value="/score/2026-summer">2026 夏季 · 青春盛典</option>
+              <option value="/score/all-members">全员计分榜</option>
+            </select>
           </div>
         </div>
         <div class="refresh">
@@ -853,6 +880,11 @@
     <button class="update-pill" id="updatePill" type="button" aria-live="polite">有新条目，点击查看最新</button>
 
     <main id="dashboard">
+      <div class="page-actions">
+        <button class="filter-btn" id="openFiltersBtn" type="button">筛选</button>
+        <span class="active-filters" id="activeFiltersTop">全部来源</span>
+      </div>
+
       <section class="kpi-grid" aria-label="计分礼物统计">
         <div class="kpi total">
           <div class="label">总分</div>
@@ -886,6 +918,57 @@
         </div>
       </section>
 
+      <section class="analytics-grid" aria-label="计分分布">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>礼物分布</h2>
+            <span id="giftDistributionCount">0 种</span>
+          </div>
+          <div class="bar-list" id="giftBars"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>送礼用户分布</h2>
+            <div class="panel-actions">
+              <span id="senderDistributionCount">0 人</span>
+              <button class="mini-btn" id="exportSendersBtn" type="button">导出 Excel</button>
+              <button class="mini-btn" id="openSenderModalBtn" type="button">全部</button>
+              <span class="export-status" id="senderExportStatus" aria-live="polite"></span>
+            </div>
+          </div>
+          <div class="bar-list" id="senderBars"></div>
+          <button class="distribution-more" id="senderMoreBar" type="button" aria-haspopup="dialog" aria-controls="senderModal" aria-hidden="true">
+            <span class="distribution-more-text" id="senderMoreText"></span>
+            <span class="distribution-more-action">查看全部</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="table-panel" id="detailPanel">
+        <div class="table-head">
+          <div id="resultSummary">共 0 条</div>
+          <div class="table-head-actions">
+            <div id="activeFilters">全部来源</div>
+            <button class="mini-btn" id="exportDetailsBtn" type="button">导出 Excel</button>
+            <span class="export-status" id="exportStatus"></span>
+          </div>
+        </div>
+        <div class="detail-list" id="detailList"></div>
+        <div class="empty" id="emptyState">当前筛选条件下没有计分礼物</div>
+        <div class="load-more" id="loadMoreState">已加载 0 条</div>
+        <div id="loadMoreSentinel"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="filtersModal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
+    <div class="modal-backdrop" id="filtersModalBackdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h2 id="filtersModalTitle">筛选条件</h2>
+        <button class="mini-btn" id="closeFiltersBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body">
       <section class="toolbar" aria-label="筛选条件">
         <div class="toolbar-grid">
           <div class="field">
@@ -938,47 +1021,8 @@
         </div>
       </section>
 
-      <section class="analytics-grid" aria-label="计分分布">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>礼物分布</h2>
-            <span id="giftDistributionCount">0 种</span>
-          </div>
-          <div class="bar-list" id="giftBars"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h2>送礼用户分布</h2>
-            <div class="panel-actions">
-              <span id="senderDistributionCount">0 人</span>
-              <button class="mini-btn" id="exportSendersBtn" type="button">导出 Excel</button>
-              <button class="mini-btn" id="openSenderModalBtn" type="button">全部</button>
-              <span class="export-status" id="senderExportStatus" aria-live="polite"></span>
-            </div>
-          </div>
-          <div class="bar-list" id="senderBars"></div>
-          <button class="distribution-more" id="senderMoreBar" type="button" aria-haspopup="dialog" aria-controls="senderModal" aria-hidden="true">
-            <span class="distribution-more-text" id="senderMoreText"></span>
-            <span class="distribution-more-action">查看全部</span>
-          </button>
-        </div>
-      </section>
-
-      <section class="table-panel" id="detailPanel">
-        <div class="table-head">
-          <div id="resultSummary">共 0 条</div>
-          <div class="table-head-actions">
-            <div id="activeFilters">全部来源</div>
-            <button class="mini-btn" id="exportDetailsBtn" type="button">导出 Excel</button>
-            <span class="export-status" id="exportStatus"></span>
-          </div>
-        </div>
-        <div class="detail-list" id="detailList"></div>
-        <div class="empty" id="emptyState">当前筛选条件下没有计分礼物</div>
-        <div class="load-more" id="loadMoreState">已加载 0 条</div>
-        <div id="loadMoreSentinel"></div>
-      </section>
-    </main>
+      </div>
+    </div>
   </div>
 
   <div class="modal hidden" id="senderModal" role="dialog" aria-modal="true" aria-labelledby="senderModalTitle">
@@ -1118,6 +1162,12 @@
     var senderDistributionCount = document.getElementById("senderDistributionCount");
     var resultSummary = document.getElementById("resultSummary");
     var activeFilters = document.getElementById("activeFilters");
+    var activeFiltersTop = document.getElementById("activeFiltersTop");
+    var filtersModal = document.getElementById("filtersModal");
+    var openFiltersBtn = document.getElementById("openFiltersBtn");
+    var closeFiltersBtn = document.getElementById("closeFiltersBtn");
+    var filtersModalBackdrop = document.getElementById("filtersModalBackdrop");
+    var scoreNavSelect = document.getElementById("scoreNavSelect");
     var exportDetailsBtn = document.getElementById("exportDetailsBtn");
     var exportStatus = document.getElementById("exportStatus");
     var detailList = document.getElementById("detailList");
@@ -1881,7 +1931,17 @@
       if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
       if (senderInput.value.trim()) parts.push("用户：" + senderInput.value.trim());
       if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
-      activeFilters.textContent = parts.join(" · ");
+      var text = parts.join(" · ");
+      activeFilters.textContent = text;
+      if (activeFiltersTop) activeFiltersTop.textContent = text;
+    }
+
+    function closeFiltersModal() {
+      filtersModal.classList.add("hidden");
+    }
+
+    function openFiltersModal() {
+      filtersModal.classList.remove("hidden");
     }
 
     async function exportWorkbook(options) {
@@ -1944,6 +2004,7 @@
     function applyFilters(action) {
       page = 1;
       jumpStatus.textContent = "";
+      closeFiltersModal();
       trackAdminEvent("admin_filter", scoreFilterPayload(action || "apply_filters"));
       fetchData({ resetTimer: true });
     }
@@ -1997,6 +2058,7 @@
     async function jumpToDate() {
       var target = jumpDateInput.value;
       if (!target) return;
+      closeFiltersModal();
       trackAdminEvent("admin_filter", {
         area: "score_gifts",
         action: "jump_to_date",
@@ -2269,10 +2331,12 @@
       var button = event.target.closest("button[data-source]");
       if (!button) return;
       setSource(button.getAttribute("data-source"));
-      applyFilters();
     });
     applyBtn.addEventListener("click", applyFilters);
     resetBtn.addEventListener("click", resetFilters);
+    openFiltersBtn.addEventListener("click", openFiltersModal);
+    closeFiltersBtn.addEventListener("click", closeFiltersModal);
+    filtersModalBackdrop.addEventListener("click", closeFiltersModal);
     updatePill.addEventListener("click", loadLatestData);
     manualRefreshBtn.addEventListener("click", manualRefresh);
     exportDetailsBtn.addEventListener("click", exportDetails);
@@ -2287,11 +2351,17 @@
     businessForm.addEventListener("submit", saveBusinessOverride);
     document.addEventListener("keydown", function(event) {
       if (event.key === "Escape") {
+        closeFiltersModal();
         closeSenderModal();
         closeBusinessModal();
       }
     });
     jumpDateBtn.addEventListener("click", jumpToDate);
+    if (scoreNavSelect) {
+      var navPath = location.pathname.replace(/\/$/, "");
+      if (scoreNavSelect.querySelector('option[value="' + navPath + '"]')) scoreNavSelect.value = navPath;
+      scoreNavSelect.addEventListener("change", function() { location.href = scoreNavSelect.value; });
+    }
     jumpDateInput.addEventListener("keydown", function(event) {
       if (event.key === "Enter") jumpToDate();
     });

@@ -52,9 +52,14 @@
     .topbar-inner { width: min(1500px, 100%); margin: 0 auto; padding: 18px 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
     .title h1 { font-size: 21px; font-weight: 760; }
     .title p { color: var(--muted); font-size: 13px; margin-top: 3px; }
-    .score-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
-    .score-nav a { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); text-decoration: none; font-size: 12px; }
-    .score-nav a:hover, .score-nav a:focus-visible { border-color: var(--teal); color: var(--teal); outline: none; }
+    .score-nav-wrap { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .score-nav-wrap label { color: var(--faint); font-size: 12px; white-space: nowrap; }
+    .score-nav-select { min-height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 12px; outline: none; }
+    .score-nav-select:hover, .score-nav-select:focus-visible { border-color: var(--teal); color: var(--teal); }
+    .page-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .filter-btn { min-height: 36px; padding: 0 14px; border: 1px solid var(--teal); border-radius: 8px; background: rgba(65,185,170,.12); color: var(--teal); font-weight: 700; }
+    .filter-btn:hover, .filter-btn:focus-visible { background: var(--teal); color: var(--ink); outline: none; }
+    .active-filters { color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .refresh { text-align: right; color: var(--muted); font-size: 13px; white-space: nowrap; }
     .refresh-btn { min-height: 30px; margin-top: 9px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); font-size: 12px; }
     .refresh-btn:hover { border-color: var(--teal); color: var(--teal); }
@@ -115,19 +120,66 @@
     .pagination .actions { gap: 6px; }
     .empty { padding: 34px 20px; text-align: center; color: var(--faint); }
     .footer { color: var(--faint); text-align: center; font-size: 12px; padding: 20px 12px 30px; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .modal.hidden { display: none; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(5,8,12,.72); backdrop-filter: blur(8px); }
+    .modal-dialog {
+      position: relative;
+      width: min(780px, 100%);
+      max-height: min(760px, calc(100vh - 48px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 22px 70px rgba(0,0,0,.36);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-head { min-height: 52px; padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .modal-head h2 { font-size: 16px; font-weight: 740; }
+    .modal-body { overflow: auto; }
+    .modal .toolbar { border: 0; background: transparent; margin: 0; padding: 14px; }
+    .modal .toolbar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .modal .filter-actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     @media (max-width: 1100px) {
       .kpi-grid { grid-template-columns: repeat(3, 1fr); }
       .toolbar-grid { grid-template-columns: repeat(4, 1fr); }
       .two-col { grid-template-columns: 1fr; }
     }
     @media (max-width: 680px) {
-      .topbar-inner { flex-direction: column; }
-      .refresh { text-align: left; }
-      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .toolbar-grid { grid-template-columns: repeat(2, 1fr); }
+      .topbar-inner { flex-direction: column; padding: 12px 14px; gap: 8px; }
+      .title h1 { font-size: 18px; }
+      .title p { font-size: 12px; }
+      .score-nav-wrap { width: 100%; margin-top: 6px; }
+      .score-nav-select { flex: 1; min-width: 0; }
+      .refresh { text-align: left; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      #generatedAt { font-size: 11px; }
+      .refresh-btn { margin-top: 0; }
+      main { padding: 12px 14px 26px; }
+      .page-actions { margin-bottom: 10px; }
+      .filter-btn { min-height: 34px; }
+      .active-filters { font-size: 11px; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+      .kpi { min-height: 0; padding: 10px; }
+      .kpi .label { font-size: 11px; margin-bottom: 4px; }
+      .kpi .value { font-size: 19px; }
+      .kpi .sub { font-size: 10px; margin-top: 2px; }
+      .toolbar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .modal .toolbar-grid, .modal .filter-actions-grid { grid-template-columns: 1fr; }
       .bar-row { grid-template-columns: 1fr; gap: 4px; }
       .bar-row .num { text-align: left; }
+      .col-records { display: none; }
       th, td { padding: 8px; }
+      .modal { padding: 12px; align-items: flex-end; }
+      .modal-dialog { max-height: calc(100vh - 24px); }
     }
   </style>
 </head>
@@ -148,10 +200,13 @@
         <div class="title">
           <h1>全员计分榜</h1>
           <p>Score all members · 按赛程统计全部成员的计分礼物</p>
-          <div class="score-nav">
-            <a href="/score/2026-winter">2026 冬季 · 红蓝歌会</a>
-            <a href="/score/2026-summer">2026 夏季 · 青春盛典</a>
-            <a href="/score/all-members">全员计分榜</a>
+          <div class="score-nav-wrap">
+            <label for="scoreNavSelect">页面</label>
+            <select class="score-nav-select" id="scoreNavSelect" aria-label="计分页面">
+              <option value="/score/2026-winter">2026 冬季 · 红蓝歌会</option>
+              <option value="/score/2026-summer">2026 夏季 · 青春盛典</option>
+              <option value="/score/all-members">全员计分榜</option>
+            </select>
           </div>
         </div>
         <div class="refresh">
@@ -162,32 +217,18 @@
     </header>
 
     <main>
+      <div class="page-actions">
+        <button class="filter-btn" id="openFiltersBtn" type="button">筛选</button>
+        <span class="active-filters" id="activeFiltersTop">全部成员</span>
+      </div>
+
       <section class="kpi-grid" aria-label="全员计分统计">
         <div class="kpi total"><div class="label">总分</div><div class="value" id="kpiScore">0</div><div class="sub" id="kpiScoreSub">礼物数 0</div></div>
         <div class="kpi"><div class="label">计分成员</div><div class="value" id="kpiMembers">0</div><div class="sub" id="kpiRecords">0 条记录</div></div>
         <div class="kpi room"><div class="label">房间分</div><div class="value" id="kpiRoom">0</div><div class="sub">成员房间消息</div></div>
         <div class="kpi live"><div class="label">直播分</div><div class="value" id="kpiLive">0</div><div class="sub">成员直播间</div></div>
         <div class="kpi"><div class="label">计分礼物种类</div><div class="value" id="kpiGifts">0</div><div class="sub" id="kpiSeason">-</div></div>
-        <div class="kpi"><div class="label">覆盖区间</div><div class="value" id="kpiCoverage">-</div><div class="sub" id="kpiCoverageSub">-</div></div>
-      </section>
-
-      <div class="coverage" id="coverageNote"></div>
-
-      <section class="toolbar" aria-label="筛选条件">
-        <div class="toolbar-grid">
-          <div class="field"><label for="seasonSelect">赛季</label><select id="seasonSelect"></select></div>
-          <div class="field"><label for="groupSelect">团体</label><select id="groupSelect"><option value="">全部团体</option></select></div>
-          <div class="field"><label for="teamSelect">队伍</label><select id="teamSelect"><option value="">全部队伍</option></select></div>
-          <div class="field"><label for="memberInput">成员</label><input id="memberInput" type="search" placeholder="昵称或 ID"></div>
-          <div class="field"><label for="giftSelect">礼物</label><select id="giftSelect"><option value="">全部计分礼物</option></select></div>
-          <div class="field"><label>来源</label><div class="segment" id="sourceSegment"><button type="button" data-source="all" class="active">全部</button><button type="button" data-source="room">房间</button><button type="button" data-source="live">直播</button></div></div>
-          <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date"></div>
-          <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
-        </div>
-        <div class="toolbar-grid" style="grid-template-columns: repeat(4, minmax(110px,1fr)); margin-top:10px;">
-          <div class="field"><label for="sortSelect">排序</label><select id="sortSelect"><option value="score_desc">按总分</option><option value="team_asc">按队伍</option><option value="name_asc">按成员名</option></select></div>
-          <div class="actions" style="grid-column: span 2;"><button class="btn primary" id="applyBtn" type="button">筛选</button><button class="btn" id="resetBtn" type="button">重置</button></div>
-        </div>
+        <div class="kpi"><div class="label">赛季区间</div><div class="value" id="kpiCoverage">-</div><div class="sub" id="kpiCoverageSub">-</div></div>
       </section>
 
       <section class="two-col">
@@ -205,7 +246,7 @@
         <div class="table-head"><h2>成员排名</h2><span class="meta" id="tableMeta">-</span></div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num">记录</th></tr></thead>
+            <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
             <tbody id="memberRows"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
@@ -213,6 +254,35 @@
       </section>
     </main>
     <div class="footer">{{ site_title }} · 仅限管理员访问</div>
+  </div>
+
+  <div class="modal hidden" id="filtersModal" role="dialog" aria-modal="true" aria-labelledby="filtersModalTitle">
+    <div class="modal-backdrop" id="filtersModalBackdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h2 id="filtersModalTitle">筛选条件</h2>
+        <button class="btn" id="closeFiltersBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body">
+      <section class="toolbar" aria-label="筛选条件">
+        <div class="toolbar-grid">
+          <div class="field"><label for="seasonSelect">赛季</label><select id="seasonSelect"></select></div>
+          <div class="field"><label for="groupSelect">团体</label><select id="groupSelect"><option value="">全部团体</option></select></div>
+          <div class="field"><label for="teamSelect">队伍</label><select id="teamSelect"><option value="">全部队伍</option></select></div>
+          <div class="field"><label for="memberInput">成员</label><input id="memberInput" type="search" placeholder="昵称或 ID"></div>
+          <div class="field"><label for="giftSelect">礼物</label><select id="giftSelect"><option value="">全部计分礼物</option></select></div>
+          <div class="field"><label>来源</label><div class="segment" id="sourceSegment"><button type="button" data-source="all" class="active">全部</button><button type="button" data-source="room">房间</button><button type="button" data-source="live">直播</button></div></div>
+          <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date"></div>
+          <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
+        </div>
+        <div class="toolbar-grid filter-actions-grid" style="margin-top:10px;">
+          <div class="field"><label for="sortSelect">排序</label><select id="sortSelect"><option value="score_desc">按总分</option><option value="team_asc">按队伍</option><option value="name_asc">按成员名</option></select></div>
+          <div class="actions"><button class="btn primary" id="applyBtn" type="button">筛选</button><button class="btn" id="resetBtn" type="button">重置</button></div>
+        </div>
+      </section>
+
+      </div>
+    </div>
   </div>
 
   <script>
@@ -242,8 +312,13 @@
       var sortSelect = document.getElementById("sortSelect");
       var sourceSegment = document.getElementById("sourceSegment");
       var memberRows = document.getElementById("memberRows");
-      var coverageNote = document.getElementById("coverageNote");
       var generatedAt = document.getElementById("generatedAt");
+      var activeFiltersTop = document.getElementById("activeFiltersTop");
+      var filtersModal = document.getElementById("filtersModal");
+      var openFiltersBtn = document.getElementById("openFiltersBtn");
+      var closeFiltersBtn = document.getElementById("closeFiltersBtn");
+      var filtersModalBackdrop = document.getElementById("filtersModalBackdrop");
+      var scoreNavSelect = document.getElementById("scoreNavSelect");
 
       function formatScore(value) {
         var n = Number(value || 0);
@@ -332,21 +407,29 @@
           return '<option value="' + escapeHtml(gift.gift_name) + '">' + escapeHtml(gift.gift_name) + '</option>';
         }).join("");
       }
-      function renderCoverage() {
-        var coverage = data.coverage || {};
-        var archive = data.archive_coverage || {};
+      function renderSeasonKPIs() {
         var season = data.seasons && data.seasons[data.season] || {};
-        if (coverage.complete) {
-          coverageNote.classList.remove("show");
-          coverageNote.textContent = "";
-        } else {
-          coverageNote.classList.add("show");
-          coverageNote.textContent = "该赛程的全成员归档不完整：全房间归档从 " + (archive.room_archive_first_date || "未知") +
-            " 开始，全直播归档从 " + (archive.live_archive_first_date || "未知") + " 开始。夏季全成员数据无法完整回溯，请以单人计分页为准。";
-        }
-        document.getElementById("kpiCoverage").textContent = coverage.complete ? "完整" : "部分";
-        document.getElementById("kpiCoverageSub").textContent = season.start_date ? (season.start_date + " 至 " + (season.end_date || "进行中")) : "-";
+        document.getElementById("kpiCoverage").textContent = season.start_date ? season.start_date.slice(5) : "-";
+        document.getElementById("kpiCoverageSub").textContent = season.end_date ? ("至 " + season.end_date.slice(5)) : "进行中";
         document.getElementById("kpiSeason").textContent = season.label || data.season || "-";
+      }
+      function closeFiltersModal() {
+        filtersModal.classList.add("hidden");
+      }
+      function openFiltersModal() {
+        filtersModal.classList.remove("hidden");
+      }
+      function updateActiveFilters() {
+        var parts = [];
+        var seasonOption = seasonSelect.options[seasonSelect.selectedIndex];
+        if (seasonOption && seasonOption.text) parts.push(seasonOption.text);
+        if (groupSelect.value) parts.push(groupSelect.value);
+        if (teamSelect.value) parts.push(teamSelect.options[teamSelect.selectedIndex].text);
+        if (memberInput.value.trim()) parts.push("成员：" + memberInput.value.trim());
+        if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
+        if (sourceFilter !== "all") parts.push(sourceFilter === "room" ? "房间" : "直播");
+        if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
+        if (activeFiltersTop) activeFiltersTop.textContent = parts.join(" · ") || "全部成员";
       }
       function renderBars(container, rows, total, labelFn) {
         if (!rows || !rows.length) {
@@ -382,7 +465,7 @@
             '<td class="num">' + formatScore(row.room_score) + '</td>' +
             '<td class="num">' + formatScore(row.live_score) + '</td>' +
             '<td class="num">' + formatNumber(row.total_count) + '</td>' +
-            '<td class="num">' + formatNumber(row.records) + '</td></tr>' + detail;
+            '<td class="num col-records">' + formatNumber(row.records) + '</td></tr>' + detail;
         }).join("");
         memberRows.querySelectorAll("tr.member-row").forEach(function (tr) {
           tr.addEventListener("click", function () {
@@ -403,7 +486,8 @@
         document.getElementById("kpiRoom").textContent = formatScore(summary.room_score);
         document.getElementById("kpiLive").textContent = formatScore(summary.live_score);
         document.getElementById("kpiGifts").textContent = formatNumber(summary.gift_kinds);
-        renderCoverage();
+        renderSeasonKPIs();
+        updateActiveFilters();
         var teams = (data.team_distribution || []).slice();
         var gifts = (data.gift_distribution || []).slice();
         renderBars(document.getElementById("teamBars"), teams, summary.total_score, function (row) {
@@ -473,7 +557,7 @@
       loginBtn.addEventListener("click", boot);
       passwordInput.addEventListener("keydown", function (event) { if (event.key === "Enter") boot(); });
       document.getElementById("manualRefreshBtn").addEventListener("click", reload);
-      document.getElementById("applyBtn").addEventListener("click", function () { expanded = {}; reload(); });
+      document.getElementById("applyBtn").addEventListener("click", function () { closeFiltersModal(); expanded = {}; reload(); });
       document.getElementById("resetBtn").addEventListener("click", function () {
         memberInput.value = "";
         giftSelect.value = "";
@@ -484,21 +568,23 @@
         sortSelect.value = "score_desc";
         setSource("all");
         expanded = {};
+        closeFiltersModal();
         reload();
       });
       document.getElementById("prevBtn").addEventListener("click", function () { if (page > 1) { expanded = {}; fetchData(page - 1); } });
       document.getElementById("nextBtn").addEventListener("click", function () { if (page < totalPages) { expanded = {}; fetchData(page + 1); } });
-      groupSelect.addEventListener("change", function () { teamSelect.value = ""; reload(); });
-      teamSelect.addEventListener("change", reload);
+      groupSelect.addEventListener("change", function () { renderFacetOptions(); updateActiveFilters(); });
+      teamSelect.addEventListener("change", updateActiveFilters);
       seasonSelect.addEventListener("change", async function () {
         groupSelect.value = "";
         teamSelect.value = "";
         giftSelect.value = "";
-        expanded = {};
         try {
           var summaryData = await fetchSummary();
+          if (data) data.facets = summaryData.facets;
           renderSummary(summaryData);
-          await fetchData(1);
+          renderFacetOptions();
+          updateActiveFilters();
         } catch (err) {
           setLoginError(err.message || "赛季切换失败");
         }
@@ -509,9 +595,21 @@
           btn.classList.toggle("active", btn.getAttribute("data-source") === value);
         });
       }
-      sourceSegment.querySelectorAll("button").forEach(function (btn) {
-        btn.addEventListener("click", function () { setSource(btn.getAttribute("data-source")); reload(); });
+      openFiltersBtn.addEventListener("click", openFiltersModal);
+      closeFiltersBtn.addEventListener("click", closeFiltersModal);
+      filtersModalBackdrop.addEventListener("click", closeFiltersModal);
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && !filtersModal.classList.contains("hidden")) closeFiltersModal();
       });
+      sourceSegment.querySelectorAll("button").forEach(function (btn) {
+        btn.addEventListener("click", function () { setSource(btn.getAttribute("data-source")); updateActiveFilters(); });
+      });
+      if (scoreNavSelect) {
+        var navPath = location.pathname.replace(/\/$/, "");
+        if (navPath === "/score/all") navPath = "/score/all-members";
+        if (scoreNavSelect.querySelector('option[value="' + navPath + '"]')) scoreNavSelect.value = navPath;
+        scoreNavSelect.addEventListener("change", function () { location.href = scoreNavSelect.value; });
+      }
     })();
   </script>
 </body>
