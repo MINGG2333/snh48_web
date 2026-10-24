@@ -104,6 +104,10 @@ echo "$LOG_TAG messages_shards done"
 rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts/"
 echo "$LOG_TAG audio_transcripts done"
 
+# 8b. 实时直播礼物小数据（腾讯云 cross_live 派生，供阿里云计算页使用）
+sync_file_to_aliyun /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json
+echo "$LOG_TAG realtime_live_gifts done"
+
 # 9. score_gifts（只读派生小数据；可写业务状态走版本化复制）
 rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial --exclude='.*.lock' --exclude='live_business_fulfillments.json' -e "$RSYNC_RSH" /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/ "$ALIYUN:/home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts/"
 echo "$LOG_TAG score_gifts done"

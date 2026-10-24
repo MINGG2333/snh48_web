@@ -14,6 +14,7 @@ sources=(
   /home/snh48-fan-hub/live_record/live_index.csv
   /home/snh48-fan-hub/live_record/陈嘉仪_161808449
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers
+  /home/snh48-fan-hub/room_record/陈嘉仪_161808449/realtime_live_gifts.json
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/gift_replies
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/messages_shards
   /home/snh48-fan-hub/room_record/陈嘉仪_161808449/audio_transcripts
