@@ -66,7 +66,7 @@
     .refresh-btn:hover { border-color: var(--teal); color: var(--teal); }
     .filter-trigger { border-color: var(--teal); color: var(--teal); font-weight: 700; }
     main { width: min(1500px, 100%); margin: 0 auto; padding: 22px 24px 36px; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
     .kpi { min-height: 92px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015)), var(--panel); padding: 14px; }
     .kpi .label { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
     .kpi .value { font-size: 25px; font-weight: 780; }
@@ -169,7 +169,7 @@
       .page-actions { margin-bottom: 10px; }
       .filter-btn { min-height: 34px; }
       .active-filters { font-size: 11px; }
-      .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; margin-bottom: 12px; }
+      .kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; margin-bottom: 12px; }
       .kpi { min-height: 56px; padding: 9px 2px 8px; text-align: center; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
       .kpi .label { font-size: clamp(9.5px, 2.5vw, 11px); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .kpi .value { font-size: clamp(11px, 3.5vw, 15px); line-height: 1.15; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
@@ -227,7 +227,6 @@
         <div class="kpi"><div class="label">计分成员</div><div class="value" id="kpiMembers">0</div><div class="sub" id="kpiRecords">0 条记录</div></div>
         <div class="kpi room"><div class="label">房间分</div><div class="value" id="kpiRoom">0</div><div class="sub">成员房间消息</div></div>
         <div class="kpi live"><div class="label">直播分</div><div class="value" id="kpiLive">0</div><div class="sub">成员直播间</div></div>
-        <div class="kpi"><div class="label">礼物种类</div><div class="value" id="kpiGifts">0</div><div class="sub" id="kpiSeason">-</div></div>
         <div class="kpi"><div class="label">赛季</div><div class="value" id="kpiCoverage">-</div><div class="sub" id="kpiCoverageSub">-</div></div>
       </section>
 
@@ -411,7 +410,6 @@
         var season = data.seasons && data.seasons[data.season] || {};
         document.getElementById("kpiCoverage").textContent = season.start_date ? season.start_date.slice(5) : "-";
         document.getElementById("kpiCoverageSub").textContent = season.end_date ? ("至 " + season.end_date.slice(5)) : "进行中";
-        document.getElementById("kpiSeason").textContent = season.label || data.season || "-";
       }
       function closeFiltersModal() {
         filtersModal.classList.add("hidden");
@@ -485,7 +483,6 @@
         document.getElementById("kpiRecords").textContent = formatNumber(summary.records) + " 条记录";
         document.getElementById("kpiRoom").textContent = formatScore(summary.room_score);
         document.getElementById("kpiLive").textContent = formatScore(summary.live_score);
-        document.getElementById("kpiGifts").textContent = formatNumber(summary.gift_kinds);
         renderSeasonKPIs();
         updateActiveFilters();
         var teams = (data.team_distribution || []).slice();

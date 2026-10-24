@@ -157,7 +157,7 @@
 
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(6, minmax(140px, 1fr));
+      grid-template-columns: repeat(5, minmax(140px, 1fr));
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -584,7 +584,7 @@
 
     .detail-row {
       display: grid;
-      grid-template-columns: 150px minmax(145px, 0.75fr) minmax(190px, 0.95fr) minmax(112px, 0.45fr) minmax(150px, 0.7fr) minmax(205px, 1fr);
+      grid-template-columns: 150px minmax(145px, 0.75fr) minmax(190px, 0.95fr) minmax(112px, 0.45fr) minmax(130px, 0.5fr) minmax(220px, 1fr);
       gap: 12px;
       padding: 12px;
       border-bottom: 1px solid rgba(44, 57, 75, 0.55);
@@ -610,6 +610,8 @@
     .detail-row.source-live .source-tag { background: var(--pink); }
 
     .time-text { color: var(--text); font-size: 13px; }
+    .live-title-text { color: var(--muted); font-size: 12px; margin-bottom: 3px; word-break: break-word; }
+    .remark-cell .primary-text { font-weight: 500; color: var(--muted); }
     .primary-text { color: var(--text); font-size: 13px; font-weight: 680; word-break: break-word; }
     .secondary-text { color: var(--muted); font-size: 12px; margin-top: 3px; word-break: break-word; }
     .score-text { color: var(--gold); font-size: 16px; font-weight: 780; }
@@ -802,7 +804,7 @@
       .analytics-grid { grid-template-columns: 1fr; }
       .detail-row { grid-template-columns: 138px minmax(150px, 0.8fr) minmax(190px, 1fr) minmax(120px, 0.55fr); }
       .detail-row .fulfillment-cell,
-      .detail-row .context-cell { grid-column: 2 / -1; }
+      .detail-row .remark-cell { grid-column: 2 / -1; }
     }
 
     @media (max-width: 760px) {
@@ -823,7 +825,7 @@
       .page-actions { margin-bottom: 10px; }
       .filter-btn { min-height: 34px; }
       .active-filters { font-size: 11px; }
-      .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+      .kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
       .refresh-hint { display: none; }
       .kpi { min-height: 56px; padding: 9px 2px 8px; text-align: center; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
       .kpi .label { font-size: clamp(9.5px, 2.5vw, 11px); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -838,7 +840,7 @@
       .table-head, .pagination { align-items: flex-start; flex-direction: column; }
       .detail-list { padding: 12px; }
       .detail-row { grid-template-columns: 1fr; gap: 7px; }
-      .detail-row .context-cell { grid-column: auto; }
+      .detail-row .remark-cell { grid-column: auto; }
       .day-head { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -908,11 +910,6 @@
           <div class="label">送礼用户</div>
           <div class="value" id="uniqueSenders">0</div>
           <div class="sub">账号 ID 优先合并</div>
-        </div>
-        <div class="kpi">
-          <div class="label">礼物种类</div>
-          <div class="value" id="giftKinds">0</div>
-          <div class="sub" id="liveSessions">直播 0 场</div>
         </div>
       </section>
 
@@ -1120,8 +1117,6 @@
     var totalRecords = document.getElementById("totalRecords");
     var activeDays = document.getElementById("activeDays");
     var uniqueSenders = document.getElementById("uniqueSenders");
-    var giftKinds = document.getElementById("giftKinds");
-    var liveSessions = document.getElementById("liveSessions");
     var sourceSegment = document.getElementById("sourceSegment");
     var giftSelect = document.getElementById("giftSelect");
     var senderInput = document.getElementById("senderInput");
@@ -1405,12 +1400,10 @@
       liveScore.textContent = formatScore(summary.live_score);
       totalCount.textContent = "礼物数 " + formatNumber(summary.total_count || 0);
       roomRecords.textContent = formatNumber(summary.room_records || 0) + " 条房间记录";
-      liveRecords.textContent = formatNumber(summary.live_records || 0) + " 条直播记录";
+      liveRecords.textContent = formatNumber(summary.live_records || 0) + " 条直播记录 · " + formatNumber(summary.live_sessions || 0) + " 场";
       totalRecords.textContent = formatNumber(summary.total_records || 0);
       activeDays.textContent = formatNumber(summary.active_days || 0) + " 天";
       uniqueSenders.textContent = formatNumber(summary.unique_senders || 0);
-      giftKinds.textContent = formatNumber(summary.gift_kinds || 0);
-      liveSessions.textContent = "直播 " + formatNumber(summary.live_sessions || 0) + " 场";
 
       syncGiftOptions(data.gift_catalog || []);
       renderGiftBars(data.gift_distribution || []);
@@ -1753,6 +1746,12 @@
       tag.className = "source-tag";
       tag.textContent = item.source_label || sourceLabel(item.source);
       time.appendChild(tag);
+      if (item.source === "live" && item.live_title) {
+        var liveTitle = document.createElement("div");
+        liveTitle.className = "live-title-text";
+        liveTitle.textContent = item.live_title;
+        time.appendChild(liveTitle);
+      }
       var t = document.createElement("div");
       t.className = "time-text";
       t.textContent = item.event_time || "-";
@@ -1806,10 +1805,10 @@
       }
       row.appendChild(fulfillment);
 
-      var context = document.createElement("div");
-      context.className = "context-cell";
-      context.appendChild(textBlock(contextPrimary(item), contextSecondary(item)));
-      row.appendChild(context);
+      var remark = document.createElement("div");
+      remark.className = "remark-cell";
+      remark.appendChild(textBlock(fulfillmentSecondary(item) || "—", ""));
+      row.appendChild(remark);
       return row;
     }
 
@@ -1831,7 +1830,7 @@
     function fulfillmentBlock(item) {
       var primary = fulfillmentPrimary(item);
       var displayPrimary = primary + businessReviewSuffix(item);
-      var wrap = textBlock(displayPrimary, fulfillmentSecondary(item));
+      var wrap = textBlock(displayPrimary, "");
       var primaryNode = wrap.querySelector(".primary-text");
       if (primaryNode && item.source === "live" && businessNeedsReview(item)) {
         primaryNode.textContent = primary;
@@ -1862,54 +1861,6 @@
 
     function businessReviewSuffix(item) {
       return businessNeedsReview(item) ? "（待核实）" : "";
-    }
-
-    function contextPrimary(item) {
-      if (item.source === "live") {
-        return item.live_title || item.live_bj_time || "直播弹幕";
-      }
-      return item.message_id ? "房间消息" : "房间记录";
-    }
-
-    function fulfillmentPrimary(item) {
-      if (item.fulfillment_label) return item.fulfillment_label;
-      if (item.source === "live") return "待分析";
-      return item.room_has_reply ? "已回复" : "未回复";
-    }
-
-    function fulfillmentSecondary(item) {
-      if (item.source === "live") {
-        if (item.business_status === "redeemed") {
-          var businessParts = [];
-          if (item.business_type) businessParts.push(item.business_type);
-          if (item.business_content) businessParts.push(item.business_content);
-          if (item.business_offset) businessParts.push("弹幕 " + item.business_offset);
-          return businessParts.join(" · ");
-        }
-        if (item.business_status === "uncertain") {
-          return item.business_content || item.business_evidence || item.business_analysis_reasoning || item.fulfillment_detail || "";
-        }
-        return item.fulfillment_detail && item.fulfillment_detail !== "未兑换业务" ? item.fulfillment_detail : "";
-      }
-      var parts = [];
-      if (item.room_reply_count) parts.push(formatNumber(item.room_reply_count) + " 条");
-      if (item.room_first_reply_time) parts.push(item.room_first_reply_time);
-      if (item.room_first_reply_content) parts.push(item.room_first_reply_content);
-      return parts.join(" · ");
-    }
-
-    function contextSecondary(item) {
-      if (item.source === "live") {
-        var parts = [];
-        if (item.live_bj_time) parts.push(item.live_bj_time);
-        if (item.danmu_offset) parts.push("弹幕 " + item.danmu_offset);
-        if (item.live_id) parts.push("live_id " + item.live_id);
-        return parts.join(" · ");
-      }
-      var roomParts = [];
-      if (item.server_id) roomParts.push("服务端 " + item.server_id);
-      if (item.source_jsonl_lineno) roomParts.push("行 " + item.source_jsonl_lineno);
-      return roomParts.join(" · ");
     }
 
     function renderLoadState() {
