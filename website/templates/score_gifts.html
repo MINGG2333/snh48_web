@@ -836,7 +836,7 @@
           <p>房间与直播弹幕的计分送礼统计</p>
         </div>
         <div class="refresh">
-          <div>每 <strong id="refreshSeconds">30</strong> 秒检查更新</div>
+          <div>手动刷新获取最新数据</div>
           <div id="generatedAt">生成时间：-</div>
           <div class="refresh-actions">
             <button class="refresh-btn" id="manualRefreshBtn" type="button">刷新</button>
@@ -1344,7 +1344,7 @@
     function render(data) {
       var summary = data.filtered_summary || data.summary || {};
       refreshSeconds = Number(data.refresh_interval_seconds || 30);
-      refreshSecondsEl.textContent = String(refreshSeconds);
+      if (refreshSecondsEl) refreshSecondsEl.textContent = String(refreshSeconds);
       generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
       lastDatasetSnapshot = datasetSnapshot(data);
       updatePill.classList.remove("show");
@@ -2113,7 +2113,7 @@
 
         var data = await resp.json();
         refreshSeconds = Number(data.refresh_interval_seconds || refreshSeconds || 30);
-        refreshSecondsEl.textContent = String(refreshSeconds);
+        if (refreshSecondsEl) refreshSecondsEl.textContent = String(refreshSeconds);
         var currentSnapshot = datasetSnapshot(data);
         if (hasNewItems(currentSnapshot)) {
           updatePill.classList.add("show");
@@ -2173,7 +2173,6 @@
 
     function resetRefreshTimer() {
       stopRefresh();
-      refreshTimer = window.setInterval(checkUpdates, Math.max(refreshSeconds, 15) * 1000);
     }
 
     function formatNumber(value) {

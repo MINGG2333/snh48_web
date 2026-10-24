@@ -728,7 +728,7 @@
 
       <div class="result-head">
         <span id="resultSummary">共 0 人，当前显示 0 人</span>
-        <div class="result-actions"><span id="refreshLabel">每 30 秒检查更新</span><button class="stats-toggle" id="manualRefreshBtn" type="button">刷新</button><button class="stats-toggle" id="exportSendersBtn" type="button">导出回复情况图</button><span id="exportStatus" class="export-status" role="status" aria-live="polite"></span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
+        <div class="result-actions"><span id="refreshLabel">手动刷新获取最新数据</span><button class="stats-toggle" id="manualRefreshBtn" type="button">刷新</button><button class="stats-toggle" id="exportSendersBtn" type="button">导出回复情况图</button><span id="exportStatus" class="export-status" role="status" aria-live="polite"></span><button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false">统计</button></div>
       </div>
       <button class="update-pill" id="updatePill" type="button" aria-live="polite">跳到最新</button>
       <section class="sender-list" id="senderList" aria-label="按送礼人整理的礼物历史"></section>
@@ -1228,7 +1228,7 @@
       document.getElementById("filteredSenders").textContent = String(senderSummary.filtered_senders || 0);
       document.getElementById("generatedAt").textContent = "生成时间：" + (data.generated_at || "-");
       document.getElementById("resultSummary").textContent = "共 " + Number(data.total || 0) + " 人，当前显示 " + (data.items || []).length + " 人";
-      document.getElementById("refreshLabel").textContent = "每 " + refreshSeconds + " 秒检查更新";
+      document.getElementById("refreshLabel").textContent = "手动刷新获取最新数据";
       renderSenders(data.items || []);
       resetRefreshTimer();
       syncUpdatePill();
@@ -1582,7 +1582,7 @@
           refreshSeconds = nextRefreshSeconds;
           resetRefreshTimer();
         }
-        document.getElementById("refreshLabel").textContent = "每 " + refreshSeconds + " 秒检查更新";
+        document.getElementById("refreshLabel").textContent = "手动刷新获取最新数据";
         if (hasDataUpdate(datasetSnapshot(data))) dataUpdateAvailable = true;
         syncUpdatePill();
       } catch (error) {
@@ -1648,8 +1648,10 @@
     }
 
     function resetRefreshTimer() {
-      if (refreshTimer) window.clearInterval(refreshTimer);
-      refreshTimer = window.setInterval(checkUpdates, refreshSeconds * 1000);
+      if (refreshTimer) {
+        window.clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
     }
 
     loginBtn.addEventListener("click", async function() {

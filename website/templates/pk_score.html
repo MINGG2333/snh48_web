@@ -104,6 +104,9 @@
     .section-head h2 { margin: 0; font-size: 19px; }
     .section-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
     .ghost { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: white; color: var(--ink); }
+    .pk-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .realtime-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
+    .realtime-toggle input { accent-color: var(--green); }
     .timeline { border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--paper); }
     .gift-row { display: grid; grid-template-columns: 155px 110px minmax(120px, 1fr) minmax(130px, 1fr) 90px; gap: 12px; align-items: center; padding: 14px 17px; border-bottom: 1px solid var(--line); font-size: 13px; }
     .gift-row:last-child { border-bottom: 0; }
@@ -181,7 +184,10 @@
       <section>
         <div class="section-head">
           <div><h2>17:15 后计分明细</h2><p id="detailMeta">等待数据</p></div>
-          <button id="refreshBtn" class="ghost" type="button">立即刷新</button>
+          <div class="pk-actions">
+            <label class="realtime-toggle"><input id="realtimeToggle" type="checkbox"> 实时更新（5 秒）</label>
+            <button id="refreshBtn" class="ghost" type="button">立即刷新</button>
+          </div>
         </div>
         <div id="timeline" class="timeline"><div class="empty">正在加载计分数据…</div></div>
       </section>
@@ -208,6 +214,9 @@
     var loginState = document.getElementById("loginState");
     var app = document.getElementById("app");
     var refreshBtn = document.getElementById("refreshBtn");
+    var realtimeToggle = document.getElementById("realtimeToggle");
+    var realtimeEnabled = false;
+    var loadingData = false;
 
     function track(eventType, data) {
       if (typeof window.trackEvent === "function") {
@@ -246,6 +255,7 @@
         app.hidden = false;
         passwordInput.value = "";
         track("login_attempt", { action: "pk_score_login", result: "success" });
+        if (realtimeToggle.checked) startRealtime();
       } catch (error) {
         if (loginVerified) {
           setLoginState((error.message || "数据加载失败") + "，可直接重试加载");
@@ -264,9 +274,48 @@
       loadData(true);
     });
 
+    function stopRealtime() {
+      realtimeEnabled = false;
+      if (refreshTimer) {
+        window.clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    }
+
+    function startRealtime() {
+      stopRealtime();
+      realtimeEnabled = true;
+      refreshTimer = window.setInterval(function() {
+        if (!document.hidden) loadData(false);
+      }, 5000);
+    }
+
+    realtimeToggle.addEventListener("change", function() {
+      if (realtimeToggle.checked) startRealtime();
+      else stopRealtime();
+    });
+
+    document.addEventListener("visibilitychange", function() {
+      if (!realtimeEnabled) return;
+      if (document.hidden) {
+        if (refreshTimer) {
+          window.clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+      } else if (!refreshTimer) {
+        refreshTimer = window.setInterval(function() {
+          if (!document.hidden) loadData(false);
+        }, 5000);
+      }
+    });
+
     async function loadData(manual) {
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = "刷新中…";
+      if (loadingData) return;
+      loadingData = true;
+      if (manual) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = "刷新中…";
+      }
       try {
         var doc = await request("/api/pk-score/data");
         render(doc);
@@ -275,8 +324,11 @@
         document.getElementById("generatedText").textContent = error.message || "刷新失败";
         if (manual) track("admin_update", { action: "pk_score_refresh", result: "failure" });
       } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.textContent = "立即刷新";
+        loadingData = false;
+        if (manual) {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = "立即刷新";
+        }
       }
     }
 
@@ -297,8 +349,6 @@
       renderShare(competitors);
       renderItems(Array.isArray(doc.items) ? doc.items : []);
 
-      window.clearInterval(refreshTimer);
-      refreshTimer = window.setInterval(function() { loadData(false); }, Math.max(10, Number(doc.refresh_interval_seconds || 30)) * 1000);
     }
 
     function renderCompetitor(node, item, leaderName) {

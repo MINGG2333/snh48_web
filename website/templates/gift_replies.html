@@ -963,7 +963,7 @@
         <span id="resultSummary">共 0 条</span>
         <div class="result-actions">
           <span id="activeFilters">全部状态</span>
-          <span id="refreshLabel">每 30 秒检查更新</span>
+          <span id="refreshLabel">手动刷新获取最新数据</span>
           <button class="stats-toggle" id="manualRefreshBtn" type="button">刷新</button>
           <button class="stats-toggle" id="exportTimelineBtn" type="button">导出时间线图</button>
           <span id="exportStatus" class="export-status" role="status" aria-live="polite"></span>
@@ -1307,7 +1307,7 @@
       refreshSeconds = Math.max(15, Number(data.refresh_interval_seconds || 30));
       lastDatasetSnapshot = datasetSnapshot(data);
       dataUpdateAvailable = false;
-      refreshLabel.textContent = "每 " + refreshSeconds + " 秒检查更新";
+      refreshLabel.textContent = "手动刷新获取最新数据";
       generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
 
       var total = Number(summary.total_gift_messages || 0);
@@ -1613,7 +1613,7 @@
           refreshSeconds = nextRefreshSeconds;
           resetRefreshTimer();
         }
-        refreshLabel.textContent = "每 " + refreshSeconds + " 秒检查更新";
+        refreshLabel.textContent = "手动刷新获取最新数据";
         if (hasDataUpdate(datasetSnapshot(data))) dataUpdateAvailable = true;
         syncUpdatePill();
       } catch (error) {
@@ -1680,7 +1680,6 @@
 
     function resetRefreshTimer() {
       stopRefresh();
-      refreshTimer = window.setInterval(checkUpdates, Math.max(refreshSeconds, 1) * 1000);
     }
 
     loginBtn.addEventListener("click", doLogin);
