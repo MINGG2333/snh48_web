@@ -501,6 +501,17 @@
   color: var(--text);
 }
 
+.timeline-fans-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+  text-decoration: none;
+}
+
 .timeline-card-badge.weibo, .timeline-modal-badge.weibo {
   background: rgba(255, 130, 91, 0.16);
   color: #ff9c7d;
@@ -1181,6 +1192,9 @@
                 <button class="timeline-filter-btn" data-source="weibo">微博</button>
                 <button class="timeline-filter-btn" data-source="douyin">抖音</button>
                 <button class="timeline-filter-btn" data-source="room">直播</button>
+                <a class="timeline-filter-btn timeline-fans-link" href="/fans-stats">
+                    <i class="fas fa-chart-line"></i> 粉丝数记录
+                </a>
             </div>
         </div>
 

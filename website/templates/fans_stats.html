@@ -66,6 +66,7 @@
     }
     .trend-block {
         margin-bottom: 0;
+        position: relative;
     }
     .trend-block h2 {
         font-size: 1.05rem;
@@ -78,6 +79,30 @@
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
+        cursor: crosshair;
+        touch-action: none;
+    }
+    .chart-tooltip {
+        position: absolute;
+        display: none;
+        pointer-events: none;
+        z-index: 5;
+        background: rgba(18, 20, 30, 0.96);
+        border: 1px solid rgba(255, 107, 157, 0.35);
+        border-radius: 8px;
+        padding: 6px 10px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+    .chart-tooltip .tt-date {
+        color: var(--text-dim, #9aa4b2);
+        font-size: 0.72rem;
+        margin-bottom: 2px;
+    }
+    .chart-tooltip .tt-value {
+        color: var(--primary, #ff6b9d);
+        font-size: 0.95rem;
+        font-weight: 700;
     }
     @media (max-width: 760px) {
         .fans-page .page-container {
@@ -226,6 +251,22 @@
         });
     }
 
+    function niceTicks(min, max, target) {
+        if (!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
+        if (min === max) { min -= 1; max += 1; }
+        var raw = (max - min) / Math.max(1, target - 1);
+        var magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+        var norm = raw / magnitude;
+        var mult = norm <= 1 ? 1 : (norm <= 2 ? 2 : (norm <= 5 ? 5 : 10));
+        var step = Math.max(1, mult * magnitude);
+        var lo = Math.floor(min / step) * step;
+        var hi = Math.ceil(max / step) * step;
+        if (lo === hi) hi = lo + step;
+        var ticks = [];
+        for (var v = lo; v <= hi + step * 1e-6; v += step) ticks.push(v);
+        return { lo: lo, hi: hi, ticks: ticks };
+    }
+
     function buildTrend(label, points) {
         var block = document.createElement("section");
         block.className = "trend-block";
@@ -236,19 +277,98 @@
 
         var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         block.appendChild(svg);
-        return { block: block, svg: svg, points: points };
+
+        var tooltip = document.createElement("div");
+        tooltip.className = "chart-tooltip";
+        var ttDate = document.createElement("div");
+        ttDate.className = "tt-date";
+        var ttValue = document.createElement("div");
+        ttValue.className = "tt-value";
+        tooltip.appendChild(ttDate);
+        tooltip.appendChild(ttValue);
+        block.appendChild(tooltip);
+
+        var chart = { block: block, svg: svg, tooltip: tooltip, points: points, data: null };
+        svg.addEventListener("pointermove", function (ev) { handlePointer(chart, ev); });
+        svg.addEventListener("pointerleave", function () { hideHover(chart); });
+        return chart;
+    }
+
+    function hideHover(chart) {
+        chart.tooltip.style.display = "none";
+        if (chart.data) {
+            if (chart.data.cross) chart.data.cross.style.display = "none";
+            if (chart.data.activeDot) chart.data.activeDot.style.display = "none";
+        }
+    }
+
+    function handlePointer(chart, ev) {
+        var d = chart.data;
+        if (!d || !d.xs.length) return;
+        var rect = chart.svg.getBoundingClientRect();
+        var mx = ev.clientX - rect.left;
+        var my = ev.clientY - rect.top;
+        if (mx < d.left || mx > d.width - d.right || my < 0 || my > d.height) {
+            hideHover(chart);
+            return;
+        }
+        var best = 0;
+        var bestDiff = Infinity;
+        for (var i = 0; i < d.xs.length; i += 1) {
+            var diff = Math.abs(d.xs[i] - mx);
+            if (diff < bestDiff) { bestDiff = diff; best = i; }
+        }
+        var px = d.xs[best];
+        var py = d.ys[best];
+        d.cross.setAttribute("x1", px);
+        d.cross.setAttribute("x2", px);
+        d.cross.setAttribute("y1", d.top);
+        d.cross.setAttribute("y2", d.bottom);
+        d.cross.style.display = "";
+        d.activeDot.setAttribute("cx", px);
+        d.activeDot.setAttribute("cy", py);
+        d.activeDot.style.display = "";
+
+        chart.tooltip.querySelector(".tt-date").textContent = d.points[best].ts;
+        chart.tooltip.querySelector(".tt-value").textContent = formatNumber(d.points[best].followers);
+        chart.tooltip.style.display = "block";
+
+        var blockRect = chart.block.getBoundingClientRect();
+        var bx = rect.left - blockRect.left + px;
+        var by = rect.top - blockRect.top + py;
+        var ttW = chart.tooltip.offsetWidth;
+        var ttH = chart.tooltip.offsetHeight;
+        var left = bx + 12;
+        if (left + ttW > chart.block.clientWidth - 6) left = bx - ttW - 12;
+        if (left < 6) left = 6;
+        var top = by - ttH - 12;
+        if (top < 0) top = by + 16;
+        chart.tooltip.style.left = left + "px";
+        chart.tooltip.style.top = top + "px";
     }
 
     function drawTrend(chart) {
         var svg = chart.svg;
         var points = chart.points;
+        hideHover(chart);
         while (svg.firstChild) svg.removeChild(svg.firstChild);
 
         // 用实际渲染宽度建立 viewBox，保证线条和文字不被非等比拉伸。
         var width = Math.max(240, Math.round(svg.clientWidth || (svg.parentNode && svg.parentNode.clientWidth) || 360));
         var height = 200;
-        var pad = 34;
+        var left = 48;
+        var right = 14;
+        var top = 14;
+        var bottom = 30;
         svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+
+        var bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        bg.setAttribute("x", 0);
+        bg.setAttribute("y", 0);
+        bg.setAttribute("width", width);
+        bg.setAttribute("height", height);
+        bg.setAttribute("fill", "transparent");
+        svg.appendChild(bg);
 
         if (!points || points.length < 2) {
             var tip = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -259,6 +379,7 @@
             tip.setAttribute("font-size", "13");
             tip.textContent = "数据点不足，积累几天后展示趋势";
             svg.appendChild(tip);
+            chart.data = null;
             return;
         }
 
@@ -275,25 +396,52 @@
         var timeSpan = validTime && t1 > t0;
 
         var values = points.map(function (p) { return Number(p.followers); });
-        var min = Math.min.apply(null, values);
-        var max = Math.max.apply(null, values);
-        if (min === max) { min -= 1; max += 1; }
-        var span = max - min;
-        min -= span * 0.1;
-        max += span * 0.1;
+        var dataMin = Math.min.apply(null, values);
+        var dataMax = Math.max.apply(null, values);
+        var axis = niceTicks(dataMin, dataMax, 5);
+        var yLo = axis.lo;
+        var yHi = axis.hi;
+
+        function plotLeft() { return left; }
+        function plotRight() { return width - right; }
+        function plotTop() { return top; }
+        function plotBottom() { return height - bottom; }
 
         function x(i) {
-            if (timeSpan) return pad + (width - pad * 2) * ((ms[i] - t0) / (t1 - t0));
-            return pad + (width - pad * 2) * (i / (points.length - 1));
+            if (timeSpan) return plotLeft() + (plotRight() - plotLeft()) * ((ms[i] - t0) / (t1 - t0));
+            return plotLeft() + (plotRight() - plotLeft()) * (i / (points.length - 1));
         }
-        function y(v) { return height - pad - (height - pad * 2) * ((v - min) / (max - min)); }
+        function y(v) {
+            return plotBottom() - (plotBottom() - plotTop()) * ((v - yLo) / (yHi - yLo));
+        }
+
+        // 纵轴取整刻度 + 网格线。
+        axis.ticks.forEach(function (value) {
+            var ty = y(value);
+            var grid = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            grid.setAttribute("x1", plotLeft());
+            grid.setAttribute("x2", plotRight());
+            grid.setAttribute("y1", ty);
+            grid.setAttribute("y2", ty);
+            grid.setAttribute("stroke", "rgba(255, 255, 255, 0.07)");
+            grid.setAttribute("stroke-width", "1");
+            svg.appendChild(grid);
+
+            var label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            label.setAttribute("x", 6);
+            label.setAttribute("y", ty + 4);
+            label.setAttribute("fill", "#95a4b6");
+            label.setAttribute("font-size", "11");
+            label.textContent = formatNumber(Math.round(value));
+            svg.appendChild(label);
+        });
 
         var d = points.map(function (p, i) {
             return (i === 0 ? "M" : "L") + x(i).toFixed(1) + "," + y(p.followers).toFixed(1);
         }).join(" ");
 
         var area = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        area.setAttribute("d", d + " L" + x(points.length - 1).toFixed(1) + "," + (height - pad) + " L" + x(0).toFixed(1) + "," + (height - pad) + " Z");
+        area.setAttribute("d", d + " L" + x(points.length - 1).toFixed(1) + "," + plotBottom() + " L" + x(0).toFixed(1) + "," + plotBottom() + " Z");
         area.setAttribute("fill", "rgba(255, 107, 157, 0.12)");
         svg.appendChild(area);
 
@@ -305,32 +453,35 @@
         svg.appendChild(line);
 
         var radius = points.length > 100 ? 2 : 3;
+        var xs = [];
+        var ys = [];
         points.forEach(function (p, i) {
+            var px = x(i);
+            var py = y(p.followers);
+            xs.push(px);
+            ys.push(py);
             var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            dot.setAttribute("cx", x(i));
-            dot.setAttribute("cy", y(p.followers));
+            dot.setAttribute("cx", px);
+            dot.setAttribute("cy", py);
             dot.setAttribute("r", radius);
             dot.setAttribute("fill", "#ff6b9d");
-            var tip = document.createElementNS("http://www.w3.org/2000/svg", "title");
-            tip.textContent = p.ts + "：" + formatNumber(p.followers);
-            dot.appendChild(tip);
             svg.appendChild(dot);
         });
 
-        var minLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        minLabel.setAttribute("x", 6);
-        minLabel.setAttribute("y", y(min + (max - min) * 0.06));
-        minLabel.setAttribute("fill", "#95a4b6");
-        minLabel.setAttribute("font-size", "11");
-        minLabel.textContent = formatNumber(Math.round(min));
-        svg.appendChild(minLabel);
-        var maxLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        maxLabel.setAttribute("x", 6);
-        maxLabel.setAttribute("y", y(max - (max - min) * 0.06) + 10);
-        maxLabel.setAttribute("fill", "#95a4b6");
-        maxLabel.setAttribute("font-size", "11");
-        maxLabel.textContent = formatNumber(Math.round(max));
-        svg.appendChild(maxLabel);
+        var cross = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        cross.setAttribute("stroke", "rgba(255, 255, 255, 0.45)");
+        cross.setAttribute("stroke-width", "1");
+        cross.setAttribute("stroke-dasharray", "3 3");
+        cross.style.display = "none";
+        svg.appendChild(cross);
+
+        var activeDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        activeDot.setAttribute("r", "4.5");
+        activeDot.setAttribute("fill", "#ff6b9d");
+        activeDot.setAttribute("stroke", "#fff");
+        activeDot.setAttribute("stroke-width", "1.5");
+        activeDot.style.display = "none";
+        svg.appendChild(activeDot);
 
         function fmtAxisTs(ts) {
             // "2026-09-26 15:53:17" -> "09-26 15:53"
@@ -367,6 +518,20 @@
             tick.textContent = fmtAxisTs(points[i].ts);
             svg.appendChild(tick);
         });
+
+        chart.data = {
+            points: points,
+            xs: xs,
+            ys: ys,
+            width: width,
+            height: height,
+            left: left,
+            right: right,
+            top: top,
+            bottom: height - bottom,
+            cross: cross,
+            activeDot: activeDot
+        };
     }
 
     async function load() {

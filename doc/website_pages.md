@@ -36,13 +36,13 @@
 | 首页 | `/` | 公开首页 | `website/templates/index.html` | `website/static/js/main.js`、`website/static/js/scroller.js`、`website/static/js/celebration.js`、`/api/scroller/texts`、`/api/balance` | 全屏背景和飘动文字；从出道第300天起，每逢整百天展示8天庆祝动画，已达到的整百天祝福永久进入飘屏 |
 | 关于 | `/about` | 公开导航 | `website/templates/about.html` | `website/static/js/about.js` | 站点介绍 |
 | AI 问答 | `/qa` | 公开导航 | `website/templates/qa.html` | `website/static/js/qa.js`、`/api/qa/*` | `QA_ENABLED=true` 的节点提供问答并要求 `SITE_PASSWORD`；关闭节点返回本机 503 页面且不注册 API，不跨站跳转 |
-| 时光轴 | `/timeline` | 公开导航 | `website/templates/timeline.html` | `website/static/js/timeline.js`、`/api/timeline/*` | 行程、直播、回放、记忆和地图入口；整百天里程碑到达后自动加入并永久保留 |
+| 时光轴 | `/timeline` | 公开导航 | `website/templates/timeline.html` | `website/static/js/timeline.js`、`/api/timeline/*` | 行程、直播、回放、记忆和地图入口；整百天里程碑到达后自动加入并永久保留；筛选面板内置「粉丝数记录」入口（`/fans-stats`） |
 | 记忆 | `/memories` | 从时光轴进入 | `website/templates/memories.html`、`website/static/js/memories.js` | `/api/memories/verify`、`/api/memories/data`、`/api/memories/submit`；管理模式使用 `/api/memories/manage`、`/api/memories/review` | 进入和提交使用 `MEMORIES_VIEW_PASSWORD` / `X-Memories-Password`，提交仍受提交开关、基础审核和 IP 限速约束；应援会模式使用 `MEMORIES_FANCLUB_PASSWORD` / `X-Memories-Fanclub-Password`，本人模式使用 `MEMORIES_IDOL_PASSWORD` / `X-Memories-Idol-Password`；不向普通访客返回平台 ID |
 | 直播/电台回放 | `/replay/{live_id}` | 由时光轴/直播卡片进入 | `website/templates/replay.html` | 回放数据来自统一 `live_record/live_index.csv`（兼容旧路径） | `live_id` 为动态参数；`live_type=2` 展示电台封面、播放控制和同步弹幕 |
 | 服务条款 | `/terms` | 页脚 | `website/templates/terms.html` | 无专用脚本 | 法务页面 |
 | 隐私政策 | `/privacy` | 页脚 | `website/templates/privacy.html` | 无专用脚本 | 法务页面 |
 | 投诉举报 | `/complaint` | 页脚 | `website/templates/complaint.html` | `/api/complaint/submit` | 含验证码和提交限速 |
-| 粉丝数记录 | `/fans-stats`（短链 `/fans` 302 跳转） | 仅 URL，公开只读 | `website/templates/fans_stats.html`（继承 base.html） | `/api/fans-stats` | fan-hub `social_record/fan_counts/`（`FAN_COUNTS_DATA_PATH`），由 `fan_count_collector.py` 每日一次采集、临里程碑由 `fan_count_booster.service` 动态补采；展示口袋48、微博、抖音最新粉丝数与近 30 天趋势（B站无账号时不显示），卡片与趋势图各并排一行，横轴按真实时间映射；口袋48读取陈嘉仪公开 `user.info.home -> baseUserInfo.followers`；属公开数据，随网站必要数据同步阿里云 |
+| 粉丝数记录 | `/fans-stats`（短链 `/fans` 302 跳转） | 仅 URL，公开只读 | `website/templates/fans_stats.html`（继承 base.html） | `/api/fans-stats` | fan-hub `social_record/fan_counts/`（`FAN_COUNTS_DATA_PATH`），由 `fan_count_collector.py` 每日一次采集、临里程碑由 `fan_count_booster.service` 动态补采；展示口袋48、微博、抖音最新粉丝数与近 30 天趋势（B站无账号时不显示），卡片与趋势图各并排一行，横轴按真实时间映射，纵轴取整刻度，悬停曲线显示最近数据点的日期与数值；口袋48读取陈嘉仪公开 `user.info.home -> baseUserInfo.followers`；属公开数据，随网站必要数据同步阿里云 |
 
 ## 管理和仅 URL 页面
 
