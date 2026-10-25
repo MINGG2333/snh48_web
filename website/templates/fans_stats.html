@@ -8,11 +8,14 @@
 
 {% block extra_head %}
 <style>
+    .fans-page .page-container {
+        max-width: 1200px;
+    }
     .fans-stats-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 16px;
-        margin: 20px 0 28px;
+        margin: 20px 0 24px;
     }
     .fans-card {
         background: var(--card-bg, rgba(255, 255, 255, 0.06));
@@ -54,20 +57,35 @@
     .status-dot.ok { background: #4dc27c; }
     .status-dot.error { background: #e36f6f; }
     .status-dot.unsupported { background: #95a4b6; }
-    .trend-block {
+    .fans-trend-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
         margin-bottom: 28px;
+        align-items: start;
+    }
+    .trend-block {
+        margin-bottom: 0;
     }
     .trend-block h2 {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         margin-bottom: 10px;
     }
     .trend-block svg {
         width: 100%;
-        height: 180px;
+        height: 200px;
         display: block;
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
+    }
+    @media (max-width: 760px) {
+        .fans-page .page-container {
+            max-width: 900px;
+        }
+        .fans-trend-grid {
+            grid-template-columns: 1fr;
+        }
     }
     .fans-empty {
         color: var(--text-dim, #9aa4b2);
@@ -123,13 +141,13 @@
 {% endblock %}
 
 {% block content %}
-<main class="page-content">
+<main class="page-content fans-page">
     <div class="page-container">
         <h1><i class="fas fa-chart-line"></i> 粉丝数记录</h1>
         <p class="fans-note">各平台粉丝数每天定时记录，此页展示最新值与近期趋势。<span id="fetchedAt"></span></p>
 
         <div class="fans-stats-grid" id="platformCards"></div>
-        <div id="trendList"></div>
+        <div class="fans-trend-grid" id="trendList"></div>
         <div class="fans-empty" id="emptyState" style="display:none">暂无粉丝数记录，等待首次采集。</div>
     </div>
 </main>
@@ -140,8 +158,9 @@
 (function () {
     "use strict";
 
-    var PLATFORM_ORDER = ["weibo", "douyin", "bilibili", "pocket48"];
+    var PLATFORM_ORDER = ["pocket48", "weibo", "douyin", "bilibili"];
     var STATUS_TEXT = { ok: "正常", error: "采集失败", unsupported: "暂不支持" };
+    var trendCharts = [];
 
     function formatNumber(value) {
         var n = Number(value);
@@ -149,12 +168,25 @@
         return n.toLocaleString("zh-CN");
     }
 
-    function renderCards(platforms) {
+    function tsToMs(ts) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(ts || "");
+        if (!m) return NaN;
+        return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 8, +m[5], +m[6]);
+    }
+
+    function hasSeries(points) {
+        return Array.isArray(points) && points.length > 0;
+    }
+
+    function renderCards(platforms, series) {
         var container = document.getElementById("platformCards");
         container.innerHTML = "";
         PLATFORM_ORDER.forEach(function (key) {
             var item = platforms[key];
-            if (!item) return;
+            var points = series[key];
+            if (!item || item.status === "unsupported") return;
+            if (item.followers == null && !hasSeries(points)) return;
+
             var card = document.createElement("div");
             card.className = "fans-card";
 
@@ -194,7 +226,7 @@
         });
     }
 
-    function renderTrend(platform, label, points) {
+    function buildTrend(label, points) {
         var block = document.createElement("section");
         block.className = "trend-block";
         var title = document.createElement("h2");
@@ -202,12 +234,23 @@
         title.appendChild(document.createTextNode(label + " 近趋势"));
         block.appendChild(title);
 
-        var width = 720, height = 180, pad = 34;
         var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("viewBox", "0 0 " + width + " " + height);
-        svg.setAttribute("preserveAspectRatio", "none");
+        block.appendChild(svg);
+        return { block: block, svg: svg, points: points };
+    }
 
-        if (points.length < 2) {
+    function drawTrend(chart) {
+        var svg = chart.svg;
+        var points = chart.points;
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        // 用实际渲染宽度建立 viewBox，保证线条和文字不被非等比拉伸。
+        var width = Math.max(240, Math.round(svg.clientWidth || (svg.parentNode && svg.parentNode.clientWidth) || 360));
+        var height = 200;
+        var pad = 34;
+        svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+
+        if (!points || points.length < 2) {
             var tip = document.createElementNS("http://www.w3.org/2000/svg", "text");
             tip.setAttribute("x", width / 2);
             tip.setAttribute("y", height / 2);
@@ -216,11 +259,22 @@
             tip.setAttribute("font-size", "13");
             tip.textContent = "数据点不足，积累几天后展示趋势";
             svg.appendChild(tip);
-            block.appendChild(svg);
-            return block;
+            return;
         }
 
-        var values = points.map(function (p) { return p.followers; });
+        // 横坐标按真实时间映射；口袋48临里程碑补采会产生密集点，不能按点序号均分。
+        var ms = points.map(function (p) { return tsToMs(p.ts); });
+        var validTime = ms.every(function (v) { return isFinite(v); });
+        if (validTime) {
+            var order = points.map(function (_p, i) { return i; }).sort(function (a, b) { return ms[a] - ms[b]; });
+            points = order.map(function (i) { return points[i]; });
+            ms = order.map(function (i) { return ms[i]; });
+        }
+        var t0 = ms[0];
+        var t1 = ms[ms.length - 1];
+        var timeSpan = validTime && t1 > t0;
+
+        var values = points.map(function (p) { return Number(p.followers); });
         var min = Math.min.apply(null, values);
         var max = Math.max.apply(null, values);
         if (min === max) { min -= 1; max += 1; }
@@ -228,7 +282,10 @@
         min -= span * 0.1;
         max += span * 0.1;
 
-        function x(i) { return pad + (width - pad * 2) * (i / (points.length - 1)); }
+        function x(i) {
+            if (timeSpan) return pad + (width - pad * 2) * ((ms[i] - t0) / (t1 - t0));
+            return pad + (width - pad * 2) * (i / (points.length - 1));
+        }
         function y(v) { return height - pad - (height - pad * 2) * ((v - min) / (max - min)); }
 
         var d = points.map(function (p, i) {
@@ -247,11 +304,12 @@
         line.setAttribute("stroke-width", "2");
         svg.appendChild(line);
 
+        var radius = points.length > 100 ? 2 : 3;
         points.forEach(function (p, i) {
             var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             dot.setAttribute("cx", x(i));
             dot.setAttribute("cy", y(p.followers));
-            dot.setAttribute("r", "3");
+            dot.setAttribute("r", radius);
             dot.setAttribute("fill", "#ff6b9d");
             var tip = document.createElementNS("http://www.w3.org/2000/svg", "title");
             tip.textContent = p.ts + "：" + formatNumber(p.followers);
@@ -281,10 +339,24 @@
             return m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
         }
 
-        var axisIdx = [0, points.length - 1];
+        var axisIdx = [0];
         if (points.length >= 3) {
-            axisIdx.splice(1, 0, Math.floor((points.length - 1) / 2));
+            var midIndex;
+            if (timeSpan) {
+                var midMs = (t0 + t1) / 2;
+                var best = 1;
+                var bestDiff = Infinity;
+                for (var i = 1; i < points.length - 1; i += 1) {
+                    var diff = Math.abs(ms[i] - midMs);
+                    if (diff < bestDiff) { bestDiff = diff; best = i; }
+                }
+                midIndex = best;
+            } else {
+                midIndex = Math.floor((points.length - 1) / 2);
+            }
+            if (midIndex > 0 && midIndex < points.length - 1) axisIdx.push(midIndex);
         }
+        axisIdx.push(points.length - 1);
         axisIdx.forEach(function (i) {
             var tick = document.createElementNS("http://www.w3.org/2000/svg", "text");
             tick.setAttribute("x", x(i));
@@ -295,9 +367,6 @@
             tick.textContent = fmtAxisTs(points[i].ts);
             svg.appendChild(tick);
         });
-
-        block.appendChild(svg);
-        return block;
     }
 
     async function load() {
@@ -310,16 +379,24 @@
                 return;
             }
             document.getElementById("fetchedAt").textContent = data.fetched_at ? "最近采集时间：" + data.fetched_at : "";
-            renderCards(data.platforms || {});
+            var platforms = data.platforms || {};
+            var series = data.series || {};
+            renderCards(platforms, series);
+
             var trendList = document.getElementById("trendList");
             trendList.innerHTML = "";
-            var series = data.series || {};
+            trendCharts = [];
             PLATFORM_ORDER.forEach(function (key) {
                 var points = series[key];
-                var item = (data.platforms || {})[key] || {};
-                if (!points || !points.length) return;
-                trendList.appendChild(renderTrend(key, item.label || key, points));
+                var item = platforms[key] || {};
+                if (!hasSeries(points)) return;
+                var chart = buildTrend(item.label || key, points);
+                trendList.appendChild(chart.block);
+                trendCharts.push(chart);
             });
+            // 先入 DOM 再绘制，才能拿到曲线块的真实宽度。
+            trendCharts.forEach(drawTrend);
+
             if (window._trackEvent) {
                 window._trackEvent("page_data_load", { area: "fans_stats", result: "success" });
             }
@@ -329,6 +406,14 @@
             empty.style.display = "block";
         }
     }
+
+    var resizeTimer = null;
+    window.addEventListener("resize", function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+            trendCharts.forEach(drawTrend);
+        }, 200);
+    });
 
     load();
 })();
