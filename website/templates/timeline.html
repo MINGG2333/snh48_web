@@ -501,16 +501,6 @@
   color: var(--text);
 }
 
-.timeline-fans-link {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--glass-border);
-  text-decoration: none;
-}
 
 .timeline-card-badge.weibo, .timeline-modal-badge.weibo {
   background: rgba(255, 130, 91, 0.16);
@@ -1122,6 +1112,20 @@
   .timeline-map-choice { flex: 1 1 120px; }
   .timeline-map-fallback { margin-left: 0; }
 }
+
+/* 时光轴页移动端环形菜单：5 个入口沿下半圆均匀排布 */
+.timeline-circular-menu {
+  left: auto !important;
+  right: 12px !important;
+  width: 280px;
+  height: 280px;
+}
+.timeline-circular-menu .circular-menu-item.item-memories { bottom: 102px; left: 205px; }
+.timeline-circular-menu .circular-menu-item.item-fans { bottom: 43px; left: 177px; transform: scale(0.3); }
+.timeline-circular-menu.open .circular-menu-item.item-fans { transform: scale(1); }
+.timeline-circular-menu .circular-menu-item.item-timeline { bottom: 10px; left: 110px; }
+.timeline-circular-menu .circular-menu-item.item-qa { bottom: 43px; left: 43px; }
+.timeline-circular-menu .circular-menu-item.item-about { bottom: 102px; left: 15px; }
 </style>
 {% endblock %}
 
@@ -1135,6 +1139,7 @@
             <a href="/"><i class="fas fa-home"></i> 首页</a>
             <a href="/about"><i class="fas fa-info-circle"></i> 关于</a>
             <a href="/timeline" class="active"><i class="fas fa-clock"></i> 时光轴</a>
+            <a href="/fans-stats"><i class="fas fa-chart-line"></i> 粉丝数</a>
             <a href="/memories"><i class="fas fa-book-open"></i> 记忆</a>
             <a href="/qa"><i class="fas fa-robot"></i> AI 问答</a>
         </div>
@@ -1145,7 +1150,7 @@
 </nav>
 
 <!-- Mobile Circular Menu -->
-<div class="circular-menu" id="circularMenu">
+<div class="circular-menu timeline-circular-menu" id="circularMenu">
     <div class="circular-menu-ring">
         <div class="circular-menu-close" id="circularMenuClose">
             <i class="fas fa-times"></i>
@@ -1154,6 +1159,10 @@
         <a href="/timeline" class="circular-menu-item item-timeline">
             <i class="fas fa-clock"></i>
             <span>时光轴</span>
+        </a>
+        <a href="/fans-stats" class="circular-menu-item item-fans">
+            <i class="fas fa-chart-line"></i>
+            <span>粉丝数</span>
         </a>
         <a href="/memories" class="circular-menu-item item-memories">
             <i class="fas fa-book-open"></i>
@@ -1192,9 +1201,6 @@
                 <button class="timeline-filter-btn" data-source="weibo">微博</button>
                 <button class="timeline-filter-btn" data-source="douyin">抖音</button>
                 <button class="timeline-filter-btn" data-source="room">直播</button>
-                <a class="timeline-filter-btn timeline-fans-link" href="/fans-stats">
-                    <i class="fas fa-chart-line"></i> 粉丝数记录
-                </a>
             </div>
         </div>
 
