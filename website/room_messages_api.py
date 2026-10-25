@@ -476,6 +476,8 @@ JSONL_ONLY_MSG_TYPES = frozenset({
     "PRESENT_FULLSCREEN_TWO",
     "QCHAT_CONTROL",
     "QCHAT_JSON_UNKNOWN",
+    "TEAM_VOICE",
+    "PERSONAL_VOICE",
 })
 
 # CSV 视角字段名 → jsonl 行字段名（其余字段同名直传）。
