@@ -115,9 +115,9 @@ assert.doesNotMatch(template, /id="logoutBtn"/);
 
 const elementIds = [
   "loginWrap", "app", "loginForm", "passwordInput", "loginError", "roomFilter",
-  "filterPanel", "filterSummary", "sessionList", "detailEmpty", "detailContent", "audioPlayer", "playbackMode", "playbackModeNote",
+  "filterPanel", "filterSummary", "sessionList", "refreshSessions", "detailEmpty", "detailContent", "audioPlayer", "playbackMode", "playbackModeNote",
   "playbackStatus", "playbackStatusText", "messages", "messageCount", "segmentLabel", "timelineLabel",
-  "stats", "participants", "sessionHeading", "roomTag"
+  "stats", "participants", "sessionHeading", "roomTag", "roomMessagesLink"
 ];
 const elements = Object.fromEntries(elementIds.map(id => [id, new FakeElement("div", id)]));
 elements.roomFilter.value = "all";
@@ -129,6 +129,9 @@ const trackedEvents = [];
 
 const context = {
   console,
+  URLSearchParams,
+  location: { search: "", pathname: "/room-voice-replays", hash: "" },
+  history: { replaceState: () => {} },
   HTMLMediaElement: { HAVE_METADATA: 1 },
   _trackEvent: (eventType, data) => trackedEvents.push({ eventType, data }),
   document: {

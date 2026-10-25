@@ -293,6 +293,8 @@
     const roomMessagesLink = document.getElementById("roomMessagesLink");
 
     let sessions = [];
+    let initialSessionId = new URLSearchParams(window.location.search).get("session") || "";
+    let initialSessionConsumed = false;
     let currentSessionId = "";
     let currentSession = null;
     let currentMessages = [];
@@ -495,7 +497,13 @@
         const body = await api("/sessions");
         sessions = Array.isArray(body.sessions) ? body.sessions : [];
         renderSessions();
-        if (sessions.length && (!currentSessionId || !currentSession)) {
+        const desired = !initialSessionConsumed && initialSessionId
+          ? sessions.find(item => item.session_id === initialSessionId)
+          : null;
+        if (desired) {
+          initialSessionConsumed = true;
+          await loadSession(desired.session_id, "url_session", { throwOnError: options.loginAttempt });
+        } else if (sessions.length && (!currentSessionId || !currentSession)) {
           await loadSession(sessions[0].session_id, "auto_first", { throwOnError: options.loginAttempt });
         }
         showApp();
@@ -710,11 +718,23 @@
       roomMessagesLink.dataset.targetId = targetId;
     }
 
+    function syncSessionUrl(sessionId) {
+      const params = new URLSearchParams(window.location.search);
+      if (sessionId) params.set("session", sessionId);
+      else params.delete("session");
+      const query = params.toString();
+      const next = window.location.pathname + (query ? "?" + query : "") + window.location.hash;
+      if (next !== window.location.pathname + window.location.search + window.location.hash) {
+        window.history.replaceState(null, "", next);
+      }
+    }
+
     async function loadSession(sessionId, source, options) {
       options = options || {};
       pauseBeforeMediaChange();
       segmentLoadToken += 1;
       currentSessionId = sessionId;
+      syncSessionUrl(sessionId);
       renderSessions();
       try {
         const body = await api("/sessions/" + encodeURIComponent(sessionId));

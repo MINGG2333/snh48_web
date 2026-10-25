@@ -685,6 +685,12 @@
       font-size: 12px;
     }
 
+    a.link-btn {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+
     .link-btn:hover,
     .link-btn:focus-visible {
       border-color: var(--teal);
@@ -1426,6 +1432,7 @@
                   <button class="chip" type="button" data-family="media">媒体</button>
                   <button class="chip" type="button" data-family="flipcard">翻牌</button>
                   <button class="chip" type="button" data-family="live">直播</button>
+                  <button class="chip" type="button" data-family="voice">上麦</button>
                   <button class="chip" type="button" data-family="share">分享</button>
                   <button class="chip" type="button" data-family="event">事件</button>
                 </div>
@@ -2387,6 +2394,22 @@
         actions.appendChild(createJumpButton(item.gift_message_id, "gift", "查看礼物"));
       } else if (item.reply_target && item.reply_target.id) {
         actions.appendChild(createJumpButton(item.reply_target.id, item.reply_target.family, "查看原消息"));
+      }
+
+      if (item.voice_session_url) {
+        var voiceLink = document.createElement("a");
+        voiceLink.className = "link-btn";
+        voiceLink.href = item.voice_session_url;
+        voiceLink.textContent = item.msg_type === "ROOM_VOICE_END" ? "查看本场上麦录音" : "查看上麦录音";
+        actions.appendChild(voiceLink);
+      }
+
+      if (item.live_replay_url) {
+        var liveLink = document.createElement("a");
+        liveLink.className = "link-btn";
+        liveLink.href = item.live_replay_url;
+        liveLink.textContent = "查看直播回放";
+        actions.appendChild(liveLink);
       }
 
       return actions.childNodes.length ? actions : null;

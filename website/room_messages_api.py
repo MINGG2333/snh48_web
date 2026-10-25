@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
@@ -28,7 +29,7 @@ from website.shared_runtime_state import SharedStateError, SharedStatePeerError,
 
 router = APIRouter(prefix="/api/room-messages", tags=["房间消息页"])
 
-VALID_FAMILIES = {"all", "text", "reply", "gift", "gift_reply", "media", "flipcard", "live", "share", "event"}
+VALID_FAMILIES = {"all", "text", "reply", "gift", "gift_reply", "media", "flipcard", "live", "share", "voice", "event"}
 VALID_MEDIA_FILTERS = {"all", "with", "without"}
 VALID_ROOM_TYPES = {"all", "main", "small"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -49,6 +50,8 @@ TYPE_LABELS = {
     "AUDIO_REPLY": "语音回复",
     "EXPRESSIMAGE": "表情包",
     "LIVEPUSH": "直播推送",
+    "ROOM_VOICE_START": "开始上麦",
+    "ROOM_VOICE_END": "结束上麦",
     "FLIPCARD": "文字翻牌",
     "FLIPCARD_AUDIO": "语音翻牌",
     "FLIPCARD_VIDEO": "视频翻牌",
@@ -72,6 +75,8 @@ TYPE_FAMILIES = {
     "FLIPCARD_AUDIO": "flipcard",
     "FLIPCARD_VIDEO": "flipcard",
     "LIVEPUSH": "live",
+    "ROOM_VOICE_START": "voice",
+    "ROOM_VOICE_END": "voice",
     "SHARE_POSTS": "share",
     "RED_PACKET_2026": "event",
     "QCHAT_SERVER_NOTICE": "event",
@@ -463,6 +468,9 @@ def _source_mtime_ns(source_kind: str, path: Path) -> int:
     manifest = _jsonl_archive_manifest_path()
     if manifest.exists():
         candidates.append(manifest)
+    voice_events = path.parent / "room_voice_events.jsonl"
+    if voice_events.exists():
+        candidates.append(voice_events)
     return max((p.stat().st_mtime_ns for p in candidates), default=0)
 
 
@@ -626,6 +634,69 @@ def _annotate_notice_changes(rows: list[dict[str, Any]]) -> None:
         last_by_channel[channel] = snapshot
 
 
+
+def _voice_event_time_ms(value: str) -> int:
+    try:
+        return int(
+            datetime.strptime(str(value or ""), "%Y-%m-%d %H:%M:%S")
+            .replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+            .timestamp()
+            * 1000
+        )
+    except (TypeError, ValueError):
+        return 0
+
+
+def _load_voice_event_rows(metadata_dir: Path) -> list[dict[str, Any]]:
+    """把录音器的上麦开始/结束事件合并成 Room 页可展示消息。
+
+    上麦信号原始行（TEAM_VOICE/PERSONAL_VOICE）含短时 streamUrl，仍被
+    JSONL_ONLY 过滤；这里只读取录音器产出的 ROOM_VOICE_START/END，
+    并附 session_id / duration，前端据此跳转 Radio 对应场次。
+    """
+    path = metadata_dir / "room_voice_events.jsonl"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        msg_type = str(payload.get("msg_type") or "").upper()
+        if msg_type not in {"ROOM_VOICE_START", "ROOM_VOICE_END"}:
+            continue
+        session_id = str(payload.get("session_id") or "")
+        bj_time = str(payload.get("bj_time") or "")
+        fallback_text = "陈嘉仪开始上麦" if msg_type == "ROOM_VOICE_START" else "陈嘉仪结束上麦"
+        raw = {
+            "id": str(payload.get("id") or f"{msg_type}:{session_id}"),
+            "server_id": str(payload.get("server_id") or ""),
+            "bj_time": bj_time,
+            "msg_time": _voice_event_time_ms(bj_time),
+            "msg_type": msg_type,
+            "sender_name": str(payload.get("sender_name") or "陈嘉仪"),
+            "sender_id": str(payload.get("sender_id") or "161808449"),
+            "text_content": str(payload.get("text") or fallback_text),
+            "room_type": str(payload.get("room_type") or "main"),
+            "room_label": str(payload.get("room_label") or ""),
+            "room_channel_id": str(payload.get("room_channel_id") or ""),
+            "room_server_id": str(payload.get("room_server_id") or ""),
+            "session_id": session_id,
+            "duration_seconds": str(payload.get("duration_seconds") or 0),
+        }
+        row = _normalise_row(raw)
+        row["_row_index"] = 0
+        rows.append(row)
+    return rows
+
 def _load_jsonl_rows(
     main_path: Path,
     transcripts: dict[str, dict[str, Any]],
@@ -685,6 +756,18 @@ def _load_jsonl_rows(
             if entry and entry.get("zip_path"):
                 row["gift_effect_url"] = _effect_url_from_zip_path(str(entry["zip_path"]))
                 row["gift_effect_play_time"] = _to_int(entry.get("play_time"), 0)
+    voice_rows = _load_voice_event_rows(metadata_dir)
+    if voice_rows:
+        rows.extend(voice_rows)
+        rows.sort(
+            key=lambda row: (
+                str(row.get("bj_time") or ""),
+                int(row.get("msg_time") or 0),
+                str(row.get("id") or ""),
+            )
+        )
+        for index, row in enumerate(rows):
+            row["_row_index"] = index
     _annotate_notice_changes(rows)
     return rows, str(metadata_dir), main_path.stat().st_mtime
 
@@ -830,6 +913,14 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "quote": parsed.get("quote", ""),
         "detail": parsed.get("detail", ""),
         "action_url": _safe_http_url(str(parsed.get("action_url", ""))),
+        "live_id": str(parsed.get("live_id", "") or ""),
+        "live_replay_url": str(parsed.get("live_replay_url", "") or ""),
+        "session_id": str(row.get("session_id", "") or ""),
+        "duration_seconds": _to_int(row.get("duration_seconds"), 0),
+        "voice_session_url": (
+            f"/room-voice-replays?session={quote(str(row.get('session_id') or ''))}"
+            if row.get("session_id") else ""
+        ),
         "raw_content": row.get("text_content", ""),
         "deleted": str(row.get("deleted", "") or "").strip().lower() in {"true", "1", "yes"},
         "deleted_detected_at": row.get("deleted_detected_at", ""),
@@ -987,11 +1078,32 @@ def _parse_content(row: dict[str, str]) -> dict[str, str]:
 
     if msg_type == "LIVEPUSH":
         info = data.get("livePushInfo", {}) if isinstance(data, dict) else {}
+        live_id = str(info.get("liveId") or "")
         return {
             "title": str(info.get("liveTitle") or "直播推送"),
-            "body": f"直播 ID {info.get('liveId')}" if info.get("liveId") else "直播推送",
+            "body": f"直播 ID {live_id}" if live_id else "直播推送",
             "action_url": str(info.get("shortPath") or ""),
             "media_kind": "image",
+            "live_id": live_id,
+            "live_replay_url": f"/replay/{quote(live_id)}" if live_id else "",
+        }
+
+    if msg_type in {"ROOM_VOICE_START", "ROOM_VOICE_END"}:
+        label = "开始上麦" if msg_type == "ROOM_VOICE_START" else "结束上麦"
+        sender = str(row.get("sender_name") or "陈嘉仪")
+        detail_parts = []
+        room_label = str(row.get("room_label") or "").strip()
+        if room_label:
+            detail_parts.append(room_label)
+        if msg_type == "ROOM_VOICE_END":
+            duration = _format_duration(_to_int(row.get("duration_seconds"), 0))
+            if duration:
+                detail_parts.append(duration)
+        return {
+            "title": label,
+            "body": f"{sender}{label}",
+            "detail": " · ".join(detail_parts),
+            "media_kind": "",
         }
 
     if msg_type.startswith("FLIPCARD"):
@@ -1460,8 +1572,21 @@ def _family_label(family: str) -> str:
         "flipcard": "翻牌",
         "live": "直播",
         "share": "分享",
+        "voice": "上麦",
         "event": "事件",
     }.get(family, family)
+
+
+def _format_duration(seconds: int) -> str:
+    if seconds <= 0:
+        return ""
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"时长 {hours} 小时 {minutes} 分 {sec} 秒"
+    if minutes:
+        return f"时长 {minutes} 分 {sec} 秒"
+    return f"时长 {sec} 秒"
 
 
 def _size_detail(info: dict[str, Any]) -> str:

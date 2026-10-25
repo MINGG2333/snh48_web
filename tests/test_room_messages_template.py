@@ -29,6 +29,10 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn("touch-action: none;", template)
         self.assertIn("touch-action: pan-y;", template)
         self.assertIn('href="/room-voice-replays"', template)
+        self.assertIn('data-family="voice"', template)
+        self.assertIn("voice_session_url", template)
+        self.assertIn("live_replay_url", template)
+        self.assertIn("a.link-btn", template)
         self.assertIn('initialTargetId', template)
         self.assertIn("function usesDocumentScroll()", template)
         self.assertIn("window.addEventListener(\"scroll\", function()", template)
@@ -63,6 +67,14 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertIn('function isGiftReplyFamilyView()', template)
         self.assertNotIn('id="feedbackNav"', template)
         self.assertNotIn('id="feedbackForm"', template)
+
+    def test_radio_page_supports_session_deep_link(self) -> None:
+        template = (ROOT / "website/templates/room_voice_replays.html").read_text(encoding="utf-8")
+        self.assertIn("initialSessionId", template)
+        self.assertIn("initialSessionConsumed", template)
+        self.assertIn("syncSessionUrl", template)
+        self.assertIn('"url_session"', template)
+        self.assertIn('params.set("session", sessionId)', template)
 
     def test_gift_senders_contains_customer_service_chat(self) -> None:
         template = (ROOT / "website/templates/gift_reply_senders.html").read_text(encoding="utf-8")
