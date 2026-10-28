@@ -13,7 +13,7 @@ reject() {
 [ "$#" -gt 0 ] || reject
 
 requested=
-for candidate in mutate install-replica inbox-put; do
+for candidate in mutate install-replica inbox-put weidian-admin; do
     expected="cd $WEB_ROOT && $PYTHON $PEER_SCRIPT $candidate"
     if [ "${SSH_ORIGINAL_COMMAND:-}" = "$expected" ]; then
         requested=$candidate
