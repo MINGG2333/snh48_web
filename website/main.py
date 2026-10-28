@@ -616,6 +616,40 @@ async def business_admin_page(request: Request):
     )
 
 
+@app.get("/business/redblue2026", response_class=HTMLResponse)
+@app.get("/business-admin/redblue2026", response_class=HTMLResponse)
+async def redblue_ledger_page(request: Request):
+    """Password-protected red-blue scoring ledger (2026)."""
+    return templates.TemplateResponse(
+        "redblue_ledger_2026.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
+@app.get("/business/weidian-orders", response_class=HTMLResponse)
+@app.get("/business-admin/weidian-orders", response_class=HTMLResponse)
+async def weidian_orders_page(request: Request):
+    """Password-protected general Weidian order management page."""
+    return templates.TemplateResponse(
+        "weidian_orders.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+        },
+    )
+
+
 @app.get("/memory", response_class=HTMLResponse)
 @app.get("/memories", response_class=HTMLResponse)
 async def memories_page(request: Request):
@@ -754,6 +788,12 @@ app.include_router(score_all_members_router)
 
 from website.business_api import router as business_router
 app.include_router(business_router)
+
+from website.redblue_ledger_api import router as redblue_ledger_router
+app.include_router(redblue_ledger_router)
+
+from website.weidian_orders_api import router as weidian_orders_router
+app.include_router(weidian_orders_router)
 
 from website.fan_stats_api import router as fan_stats_router
 app.include_router(fan_stats_router)

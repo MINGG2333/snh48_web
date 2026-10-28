@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>微店订单管理 · {{ site_title }}</title>
+  <style>
+    :root { --bg:#f5f6f8; --card:#fff; --line:#e4e7ec; --text:#1f2937; --muted:#6b7280; --pink:#d9467f; --green:#0f9f6e; --amber:#b45309; --red:#c0392b; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    .wrap { max-width:1400px; margin:0 auto; padding:18px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    h1 { font-size:20px; margin:0; }
+    .sub { color:var(--muted); font-size:12px; margin-top:4px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+    .toolbar input, .toolbar select { height:34px; border:1px solid var(--line); border-radius:8px; padding:0 10px; background:#fff; color:var(--text); }
+    .toolbar input[type=text] { min-width:220px; }
+    .btn { height:34px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--text); padding:0 12px; cursor:pointer; }
+    .btn:hover { border-color:var(--pink); color:var(--pink); }
+    .btn.primary { background:var(--pink); border-color:var(--pink); color:#fff; }
+    .btn.primary:hover { opacity:.9; color:#fff; }
+    .btn.mini { height:28px; padding:0 8px; font-size:12px; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .chk { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
+    tr:hover td { background:#fafafa; }
+    .name { font-weight:600; }
+    .raw { color:var(--muted); font-size:12px; }
+    .muted { color:var(--muted); }
+    .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; background:#eef2f7; color:#334155; white-space:nowrap; }
+    .pill.awaiting { background:#fff7e6; color:var(--amber); }
+    .pill.shipped, .pill.completed { background:#e8f7f0; color:var(--green); }
+    .pill.pending { background:#fff1f2; color:var(--red); }
+    .pill.final { background:#f1f5f9; color:#475569; }
+    .actions { display:flex; flex-wrap:wrap; gap:6px; }
+    .toast { position:fixed; right:18px; bottom:18px; background:#111827; color:#fff; padding:10px 14px; border-radius:10px; max-width:min(520px,90vw); opacity:0; transform:translateY(8px); transition:.2s; pointer-events:none; z-index:50; }
+    .toast.show { opacity:1; transform:none; }
+    .toast.err { background:#991b1b; }
+    .statusbar { color:var(--muted); font-size:12px; min-height:18px; margin-left:6px; }
+    .job { color:var(--muted); font-size:12px; }
+    @media (max-width: 900px) { th:nth-child(2), td:nth-child(2) { display:none; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>微店订单管理</h1>
+      <div class="sub">所有商品 · 数据来自本机 canonical 订单库 · 不展示地址/电话</div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/business/redblue2026">红蓝台账</a>
+      <a class="btn" href="/business">业务管理</a>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="toolbar">
+      <button class="btn primary" id="refreshBtn">立即刷新订单</button>
+      <select id="statusFilter">
+        <option value="all">全部状态</option>
+        <option value="awaiting_shipment">待发货</option>
+        <option value="shipped">已发货</option>
+        <option value="completed">交易成功</option>
+        <option value="pending_payment">待付款</option>
+        <option value="final">关闭/退款</option>
+        <option value="broadcast_none">未自动播报</option>
+      </select>
+      <select id="itemFilter"><option value="all">全部商品</option></select>
+      <input type="text" id="keyword" placeholder="订单号 / 昵称 / 备注 / 商品">
+      <label class="chk"><input type="checkbox" id="includeTest" checked> 重播含测试群</label>
+      <label class="chk"><input type="checkbox" id="marker" checked> 标记（更正播报）</label>
+      <span class="statusbar" id="statusBar"></span>
+    </div>
+    <div style="overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th><th>订单号</th><th>商品</th><th>状态</th><th>播报名 / 收货人</th>
+            <th>备注</th><th>金额 / 计分</th><th>发货</th><th>自动播报</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="10" class="muted">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var allOrders = [];
+  var loading = false;
+  var passwordTried = false;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch];
+    });
+  }
+  function toast(message, isError) {
+    var el = $("toast");
+    el.textContent = message;
+    el.className = "toast show" + (isError ? " err" : "");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { el.className = "toast"; }, 4200);
+  }
+  function setStatus(text) { $("statusBar").textContent = text || ""; }
+
+  async function ensureLogin(retry) {
+    if (passwordTried) throw new Error("需要登录");
+    passwordTried = true;
+    var password = window.prompt("请输入红蓝台账/业务管理密码");
+    if (!password) throw new Error("需要登录");
+    var resp = await fetch("/api/redblue/login", {
+      method: "POST", credentials: "same-origin",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({password: password})
+    });
+    if (!resp.ok) throw new Error("密码错误");
+    passwordTried = false;
+    if (retry) return retry();
+  }
+
+  async function api(path, options, retried) {
+    var resp = await fetch(path, Object.assign({credentials: "same-origin"}, options || {}));
+    if (resp.status === 401 || resp.status === 403) {
+      if (!retried) return ensureLogin(function () { return api(path, options, true); });
+      throw new Error("需要登录");
+    }
+    var data = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) throw new Error(data.detail || data.error || ("HTTP " + resp.status));
+    return data;
+  }
+
+  async function loadData() {
+    if (loading) return;
+    loading = true;
+    setStatus("加载中…");
+    try {
+      var data = await api("/api/weidian-orders/data");
+      allOrders = data.orders || [];
+      renderItems();
+      render();
+      setStatus("更新 " + (data.generated_at || "-") + " · 共 " + allOrders.length + " 单");
+    } catch (error) {
+      toast(error.message || "加载失败", true);
+      setStatus("");
+    } finally {
+      loading = false;
+    }
+  }
+
+  function renderItems() {
+    var select = $("itemFilter");
+    var current = select.value || "all";
+    var seen = {};
+    var options = ['<option value="all">全部商品</option>'];
+    allOrders.forEach(function (row) {
+      if (!row.item_id || seen[row.item_id]) return;
+      seen[row.item_id] = true;
+      options.push('<option value="' + esc(row.item_id) + '">' + esc(row.item_name) + '</option>');
+    });
+    select.innerHTML = options.join("");
+    select.value = seen[current] ? current : "all";
+  }
+
+  function statusPill(row) {
+    var kind = row.status_kind || "unknown";
+    return '<span class="pill ' + esc(kind) + '">' + esc(row.status_label || row.status || kind) + '</span>';
+  }
+
+  function broadcastText(row) {
+    if (!row.broadcast_at) return '<span class="muted">未自动播报</span>';
+    if (row.broadcast_at === "baseline") return '<span class="muted">历史基线</span>';
+    var text = '<span class="pill completed">已自动播报</span>';
+    if (row.manual_broadcast_count) text += '<div class="raw">手动 ' + row.manual_broadcast_count + ' 次</div>';
+    return text;
+  }
+
+  function moneyText(row) {
+    if (Number(row.score) > 0) return Number(row.score) + "分";
+    return "¥" + Number(row.amount || 0).toFixed(2);
+  }
+
+  function render() {
+    var status = $("statusFilter").value;
+    var item = $("itemFilter").value;
+    var keyword = $("keyword").value.trim().toLowerCase();
+    var rows = allOrders.filter(function (row) {
+      if (status === "broadcast_none") {
+        if (row.broadcast_at && row.broadcast_at !== "baseline") return false;
+      } else if (status !== "all" && row.status_kind !== status) {
+        return false;
+      }
+      if (item !== "all" && row.item_id !== item) return false;
+      if (keyword) {
+        var hay = [row.order_id, row.display_name, row.receiver_name, row.buyer_note, row.seller_note, row.item_name, row.sku_title].join(" ").toLowerCase();
+        if (hay.indexOf(keyword) === -1) return false;
+      }
+      return true;
+    });
+    if (!rows.length) {
+      $("rows").innerHTML = '<tr><td colspan="10" class="muted">没有匹配的订单</td></tr>';
+      return;
+    }
+    $("rows").innerHTML = rows.map(function (row) {
+      var notes = [];
+      if (row.seller_note) notes.push("商家：" + row.seller_note);
+      if (row.buyer_note) notes.push("买家：" + row.buyer_note);
+      var raw = row.receiver_name && row.receiver_name !== row.display_name ? '<div class="raw">收货人：' + esc(row.receiver_name) + '</div>' : "";
+      var ship = row.shipped
+        ? '<span class="pill shipped">已发货</span><div class="raw">' + esc(row.shipped_at || "") + '</div>'
+        : (row.status_kind === "awaiting_shipment" ? '<span class="pill awaiting">待发货</span>' : '<span class="muted">-</span>');
+      var shipBtn = (!row.shipped && row.status_kind === "awaiting_shipment")
+        ? '<button class="btn mini" data-ship="' + esc(row.order_id) + '" data-item="' + esc(row.item_id) + '">发货</button>' : "";
+      return '<tr>' +
+        '<td class="muted">' + esc(row.add_time || "") + '</td>' +
+        '<td class="raw">' + esc(row.order_id || "") + '</td>' +
+        '<td>' + esc(row.item_name || "") + (row.sku_title ? '<div class="raw">' + esc(row.sku_title) + '</div>' : "") + '</td>' +
+        '<td>' + statusPill(row) + '</td>' +
+        '<td><div class="name">' + esc(row.display_name || "") + '</div>' + raw + '</td>' +
+        '<td class="muted">' + (notes.length ? esc(notes.join(" / ")) : "-") + '</td>' +
+        '<td>' + moneyText(row) + '<div class="raw">¥' + Number(row.amount || 0).toFixed(2) + '</div></td>' +
+        '<td>' + ship + '</td>' +
+        '<td>' + broadcastText(row) + '</td>' +
+        '<td><div class="actions">' +
+          '<button class="btn mini" data-name="' + esc(row.order_id) + '" data-current="' + esc(row.display_name || "") + '">改名</button>' +
+          '<button class="btn mini" data-rebroadcast="' + esc(row.order_id) + '" data-current="' + esc(row.display_name || "") + '">重播</button>' +
+          shipBtn +
+        '</div></td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  async function waitJob(jobId) {
+    for (var i = 0; i < 60; i++) {
+      await new Promise(function (resolve) { setTimeout(resolve, 2000); });
+      var result = await api("/api/weidian-orders/jobs/" + encodeURIComponent(jobId));
+      if (result.status === "done") return result;
+      if (result.status === "error") throw new Error(result.error || "任务失败");
+      setStatus("任务处理中… (" + (i + 1) + "/60)");
+    }
+    throw new Error("任务超时，请到后台查看 worker 状态");
+  }
+
+  async function submitJob(payload, label) {
+    setStatus(label + "…");
+    var job = await api("/api/weidian-orders/jobs", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)
+    });
+    var result = await waitJob(job.job_id);
+    setStatus("");
+    return result;
+  }
+
+  async function refreshOrders() {
+    var btn = $("refreshBtn");
+    btn.disabled = true;
+    try {
+      await submitJob({type: "refresh"}, "刷新微店订单");
+      await loadData();
+      toast("订单已刷新");
+    } catch (error) {
+      toast(error.message || "刷新失败", true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function renameOrder(orderId, current) {
+    var name = window.prompt("新的播报昵称（写入本地覆盖，不自动播报）", current || "");
+    if (name == null) return;
+    name = name.trim();
+    if (!name) { toast("昵称不能为空", true); return; }
+    try {
+      var result = await api("/api/weidian-orders/name", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({order_id: orderId, name: name})
+      });
+      if (result.remote_synced === false) toast("本机已改，但对端同步失败：" + (result.remote_error || ""), true);
+      else toast("昵称已保存；需要播报请点「重播」");
+      await loadData();
+    } catch (error) {
+      toast(error.message || "改名失败", true);
+    }
+  }
+
+  async function rebroadcastOrder(orderId, current) {
+    var name = window.prompt("本次重播使用的昵称", current || "");
+    if (name == null) return;
+    name = name.trim();
+    if (!name) { toast("昵称不能为空", true); return; }
+    var includeTest = $("includeTest").checked;
+    var marker = $("marker").checked ? "（更正播报）" : "";
+    var target = "QQ 生产群" + (includeTest ? " + test 群" : "") + " + 飞书";
+    if (!window.confirm("确认重新播报？\n昵称：" + name + "\n目标：" + target)) return;
+    try {
+      await submitJob({
+        type: "rebroadcast", order_id: orderId, name: name,
+        include_test: includeTest, channels: ["qq", "feishu"], marker: marker
+      }, "重新播报");
+      await loadData();
+      toast("重播完成");
+    } catch (error) {
+      toast(error.message || "重播失败", true);
+    }
+  }
+
+  async function shipOrder(orderId, itemId) {
+    if (!window.confirm("确认将该订单标记为无需物流发货？")) return;
+    try {
+      var result = await submitJob({type: "ship", orders: [{order_id: orderId, item_id: itemId}]}, "发货");
+      var shipped = result.shipped || [];
+      var errors = result.errors || [];
+      if (errors.length) toast("发货失败：" + (errors[0].error || "未知错误"), true);
+      else toast(shipped[0] && shipped[0].already ? "该订单已发货" : "发货成功");
+      await loadData();
+    } catch (error) {
+      toast(error.message || "发货失败", true);
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || !target.dataset) return;
+    if (target.dataset.name) renameOrder(target.dataset.name, target.dataset.current);
+    else if (target.dataset.rebroadcast) rebroadcastOrder(target.dataset.rebroadcast, target.dataset.current);
+    else if (target.dataset.ship) shipOrder(target.dataset.ship, target.dataset.item);
+  });
+  $("refreshBtn").addEventListener("click", refreshOrders);
+  $("statusFilter").addEventListener("change", render);
+  $("itemFilter").addEventListener("change", render);
+  $("keyword").addEventListener("input", render);
+  loadData();
+  setInterval(loadData, 60000);
+})();
+</script>
+</body>
+</html>

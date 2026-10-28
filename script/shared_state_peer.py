@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ def _load_mutators() -> None:
     import website.room_messages_api  # noqa: F401
     import website.score_gifts_api  # noqa: F401
     import website.memories_api  # noqa: F401
+    import website.redblue_ledger_api  # noqa: F401
 
 
 def main() -> int:
@@ -71,6 +73,38 @@ def main() -> int:
         event = payload.get("event")
         installed = install_event(event)
         response = {"ok": True, "event_id": installed.get("event_id", "")}
+    elif command == "weidian-admin":
+        action = str(payload.get("action") or "")
+        if action not in {"snapshot", "job-submit", "job-result", "set-name"}:
+            raise SharedStateError("unsupported weidian admin action")
+        cli = "/home/snh48-fan-hub/scripts/weidian/order_admin.py"
+        python = "/home/snh48-fan-hub/venv/bin/python3"
+        try:
+            proc = subprocess.run(
+                [python, cli, action, "--json"],
+                input=json.dumps(payload.get("payload") or {}, ensure_ascii=False),
+                text=True,
+                capture_output=True,
+                timeout=50,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise SharedStateError(f"weidian admin helper failed: {exc}") from exc
+        if proc.returncode != 0:
+            detail = (proc.stdout or "").strip() or (proc.stderr or "").strip() or f"exit {proc.returncode}"
+            try:
+                parsed = json.loads(detail)
+                detail = str(parsed.get("error") or detail)
+            except json.JSONDecodeError:
+                pass
+            raise SharedStateError(detail[:300])
+        try:
+            data = json.loads((proc.stdout or "").strip())
+        except json.JSONDecodeError as exc:
+            raise SharedStateError("weidian admin helper returned invalid JSON") from exc
+        if not isinstance(data, dict):
+            raise SharedStateError("weidian admin helper returned invalid data")
+        response = {"ok": True} | data
     else:
         raise SharedStateError("unsupported shared-state command")
 
