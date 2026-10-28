@@ -9,6 +9,19 @@
     :root { --bg:#f5f6f8; --card:#fff; --line:#e4e7ec; --text:#1f2937; --muted:#6b7280; --pink:#d9467f; --green:#0f9f6e; --amber:#b45309; --red:#c0392b; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    .hidden { display:none !important; }
+    #loginOverlay { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
+    .login-box { width:min(380px,100%); background:var(--card); border:1px solid var(--line); border-radius:12px; padding:28px; box-shadow:0 18px 50px rgba(0,0,0,.15); }
+    .login-box h1 { font-size:20px; margin:0 0 8px; }
+    .login-box p { color:var(--muted); font-size:14px; margin:0 0 18px; }
+    .login-box input { width:100%; min-height:44px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--text); padding:0 12px; outline:none; }
+    .login-box input:focus { border-color:var(--pink); }
+    .login-btn { width:100%; min-height:44px; margin-top:12px; border:0; border-radius:8px; background:var(--pink); color:#fff; font-weight:700; cursor:pointer; }
+    .login-btn:disabled { opacity:.7; cursor:wait; }
+    .login-error { display:none; margin-top:10px; color:var(--red); font-size:13px; }
+    .login-error.show { display:block; }
+    .page { display:none; }
+    .page.ready { display:block; }
     .wrap { max-width:1400px; margin:0 auto; padding:18px; }
     header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
     h1 { font-size:20px; margin:0; }
@@ -46,6 +59,17 @@
   </style>
 </head>
 <body>
+<div id="loginOverlay">
+  <div class="login-box">
+    <h1>微店订单管理</h1>
+    <p>请输入管理密码</p>
+    <input id="passwordInput" type="password" autocomplete="new-password" placeholder="密码">
+    <button class="login-btn" id="loginBtn">进入</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="page" id="page">
 <div class="wrap">
   <header>
     <div>
@@ -89,15 +113,16 @@
     </div>
   </div>
 </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
 (function () {
   var allOrders = [];
   var loading = false;
-  var passwordTried = false;
 
   function $(id) { return document.getElementById(id); }
+  var page = $("page"), loginOverlay = $("loginOverlay"), loginError = $("loginError");
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
       return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch];
@@ -112,30 +137,61 @@
   }
   function setStatus(text) { $("statusBar").textContent = text || ""; }
 
-  async function ensureLogin(retry) {
-    if (passwordTried) throw new Error("需要登录");
-    passwordTried = true;
-    var password = window.prompt("请输入红蓝台账/业务管理密码");
-    if (!password) throw new Error("需要登录");
-    var resp = await fetch("/api/redblue/login", {
-      method: "POST", credentials: "same-origin",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({password: password})
-    });
-    if (!resp.ok) throw new Error("密码错误");
-    passwordTried = false;
-    if (retry) return retry();
+  function showLogin(message) {
+    page.classList.remove("ready");
+    loginOverlay.classList.remove("hidden");
+    $("passwordInput").value = "";
+    if (message) {
+      loginError.textContent = message;
+      loginError.classList.add("show");
+    }
+    setTimeout(function () { $("passwordInput").focus(); }, 30);
   }
 
-  async function api(path, options, retried) {
-    var resp = await fetch(path, Object.assign({credentials: "same-origin"}, options || {}));
+  function showApp() {
+    loginOverlay.classList.add("hidden");
+    page.classList.add("ready");
+  }
+
+  async function api(path, options) {
+    var resp = await fetch(path, Object.assign({credentials: "same-origin", cache: "no-store"}, options || {}));
     if (resp.status === 401 || resp.status === 403) {
-      if (!retried) return ensureLogin(function () { return api(path, options, true); });
-      throw new Error("需要登录");
+      showLogin("登录已失效，请重新输入密码");
+      throw new Error("登录已失效，请重新输入密码");
     }
     var data = await resp.json().catch(function () { return {}; });
     if (!resp.ok) throw new Error(data.detail || data.error || ("HTTP " + resp.status));
     return data;
+  }
+
+  async function doLogin() {
+    var value = $("passwordInput").value.trim();
+    if (!value) { loginError.textContent = "请输入密码"; loginError.classList.add("show"); return; }
+    $("loginBtn").disabled = true;
+    loginError.classList.remove("show");
+    try {
+      var response = await fetch("/api/redblue/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({password: value}),
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        var body = await response.json().catch(function () { return {}; });
+        throw new Error(body.detail || "密码错误");
+      }
+      $("passwordInput").value = "";
+      loginError.classList.remove("show");
+      showApp();
+      await loadData();
+    } catch (error) {
+      if (page.classList.contains("ready")) toast(error.message || "加载失败", true);
+      else {
+        loginError.textContent = error.message || "密码错误";
+        loginError.classList.add("show");
+      }
+    } finally { $("loginBtn").disabled = false; }
   }
 
   async function loadData() {
@@ -148,9 +204,11 @@
       renderItems();
       render();
       setStatus("更新 " + (data.generated_at || "-") + " · 共 " + allOrders.length + " 单");
+      return true;
     } catch (error) {
-      toast(error.message || "加载失败", true);
+      if (page.classList.contains("ready")) toast(error.message || "加载失败", true);
       setStatus("");
+      return false;
     } finally {
       loading = false;
     }
@@ -341,8 +399,18 @@
   $("statusFilter").addEventListener("change", render);
   $("itemFilter").addEventListener("change", render);
   $("keyword").addEventListener("input", render);
-  loadData();
-  setInterval(loadData, 60000);
+  $("loginBtn").addEventListener("click", doLogin);
+  $("passwordInput").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") doLogin();
+  });
+  (async function boot() {
+    var ok = await loadData();
+    if (ok) showApp();
+    else showLogin("请输入管理密码");
+  })();
+  setInterval(function () {
+    if (page.classList.contains("ready")) loadData();
+  }, 60000);
 })();
 </script>
 </body>
