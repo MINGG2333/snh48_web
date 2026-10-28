@@ -633,8 +633,7 @@ async def redblue_ledger_page(request: Request):
     )
 
 
-@app.get("/business/weidian-orders", response_class=HTMLResponse)
-@app.get("/business-admin/weidian-orders", response_class=HTMLResponse)
+@app.get("/weidian-orders", response_class=HTMLResponse)
 async def weidian_orders_page(request: Request):
     """Password-protected general Weidian order management page."""
     return templates.TemplateResponse(
