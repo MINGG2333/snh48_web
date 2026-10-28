@@ -178,7 +178,11 @@
   function broadcastText(row) {
     if (!row.broadcast_at) return '<span class="muted">未自动播报</span>';
     if (row.broadcast_at === "baseline") return '<span class="muted">历史基线</span>';
+    var channels = (row.broadcast_channels || []).map(function (value) {
+      return value === "prod" ? "生产" : (value === "test" ? "测试" : value);
+    });
     var text = '<span class="pill completed">已自动播报</span>';
+    if (channels.length) text += '<div class="raw">' + esc(channels.join(" / ")) + '</div>';
     if (row.manual_broadcast_count) text += '<div class="raw">手动 ' + row.manual_broadcast_count + ' 次</div>';
     return text;
   }
