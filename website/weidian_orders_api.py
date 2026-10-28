@@ -8,6 +8,7 @@ peer, so no Weidian credentials or QQ configs are needed on the public node.
 
 from __future__ import annotations
 
+import hmac
 import json
 import re
 import subprocess
@@ -16,13 +17,16 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Cookie, Depends, Header, HTTPException, Request, Response
 
 from website import config as cfg
-from website.redblue_ledger_api import verify_redblue_password
+from website import redblue_ledger_api
 from website.shared_runtime_state import SharedStatePeerError, peer_command
 
 router = APIRouter(prefix="/api/weidian-orders", tags=["微店订单"])
+
+AUTH_COOKIE = "weidian_orders_auth"
+AUTH_COOKIE_PATH = "/api/weidian-orders"
 
 FANHUB_ROOT = Path("/home/snh48-fan-hub")
 FANHUB_PYTHON = FANHUB_ROOT / "venv" / "bin" / "python3"
@@ -37,6 +41,63 @@ _cache_data: dict[str, Any] | None = None
 
 def _primary() -> bool:
     return bool(cfg.SHARED_STATE_IS_PRIMARY or not cfg.SHARED_STATE_SYNC_ENABLED)
+
+
+def _expected_password() -> str:
+    return str(cfg.REDBLUE_LEDGER_PASSWORD or "")
+
+
+def _cookie_token(password: str) -> str:
+    return redblue_ledger_api._cookie_token(password)
+
+
+def verify_weidian_orders_password(
+    request: Request,
+    x_redblue_password: str = Header(None, alias="X-Redblue-Password"),
+    x_weidian_password: str = Header(None, alias="X-Weidian-Orders-Password"),
+    weidian_orders_auth: str = Cookie(None, alias=AUTH_COOKIE),
+):
+    expected = _expected_password()
+    if not expected:
+        raise HTTPException(status_code=403, detail="微店订单页未启用")
+    token = _cookie_token(expected)
+    if weidian_orders_auth and hmac.compare_digest(weidian_orders_auth, token):
+        return True
+    for supplied in (x_redblue_password, x_weidian_password):
+        if supplied and hmac.compare_digest(supplied, expected):
+            return True
+    if not weidian_orders_auth and not x_redblue_password and not x_weidian_password:
+        redblue_ledger_api.check_redblue_login_limit(request)
+        raise HTTPException(status_code=401, detail="需要密码")
+    redblue_ledger_api.check_redblue_login_limit(request)
+    raise HTTPException(status_code=403, detail="密码错误")
+
+
+@router.post("/login")
+def login(payload: dict[str, Any], response: Response, request: Request):
+    expected = _expected_password()
+    if not expected:
+        raise HTTPException(status_code=403, detail="微店订单页未启用")
+    supplied = str(payload.get("password") or "")
+    if not hmac.compare_digest(supplied, expected):
+        redblue_ledger_api.check_redblue_login_limit(request)
+        raise HTTPException(status_code=403, detail="密码错误")
+    response.set_cookie(
+        key=AUTH_COOKIE,
+        value=_cookie_token(expected),
+        max_age=redblue_ledger_api.AUTH_COOKIE_MAX_AGE,
+        path=AUTH_COOKIE_PATH,
+        httponly=True,
+        secure=cfg.SECURE_COOKIES,
+        samesite="strict",
+    )
+    return {"ok": True}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(AUTH_COOKIE, path=AUTH_COOKIE_PATH)
+    return {"ok": True}
 
 
 def _clear_cache() -> None:
@@ -94,7 +155,7 @@ def _call(action: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/data")
-def weidian_orders_data(_=Depends(verify_redblue_password)):
+def weidian_orders_data(_=Depends(verify_weidian_orders_password)):
     global _cache_at, _cache_data
     now = time.time()
     with _cache_lock:
@@ -110,7 +171,7 @@ def weidian_orders_data(_=Depends(verify_redblue_password)):
 @router.post("/jobs")
 def create_weidian_order_job(
     payload: dict[str, Any] = Body(default={}),
-    _=Depends(verify_redblue_password),
+    _=Depends(verify_weidian_orders_password),
 ):
     job_type = str(payload.get("type") or "").strip()
     if job_type not in {"refresh", "ship", "rebroadcast"}:
@@ -120,7 +181,7 @@ def create_weidian_order_job(
 
 
 @router.get("/jobs/{job_id}")
-def get_weidian_order_job(job_id: str, _=Depends(verify_redblue_password)):
+def get_weidian_order_job(job_id: str, _=Depends(verify_weidian_orders_password)):
     if not JOB_ID_RE.fullmatch(job_id):
         raise HTTPException(status_code=422, detail="无效的任务 ID")
     result = _call("job-result", {"job_id": job_id})
@@ -132,7 +193,7 @@ def get_weidian_order_job(job_id: str, _=Depends(verify_redblue_password)):
 @router.post("/name")
 def set_weidian_order_name(
     payload: dict[str, Any] = Body(default={}),
-    _=Depends(verify_redblue_password),
+    _=Depends(verify_weidian_orders_password),
 ):
     order_id = str(payload.get("order_id") or "").strip()
     name = str(payload.get("name") or "").strip()

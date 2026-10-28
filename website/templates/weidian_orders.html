@@ -170,7 +170,7 @@
     $("loginBtn").disabled = true;
     loginError.classList.remove("show");
     try {
-      var response = await fetch("/api/redblue/login", {
+      var response = await fetch("/api/weidian-orders/login", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({password: value}),
