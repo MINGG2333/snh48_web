@@ -2,6 +2,18 @@
 
 本文件记录本仓库的长期协作规则。更详细的流程见 `doc/codex/`。
 
+<!-- cjy-project-maintenance:start -->
+## 安全桥普通维护能力
+
+- 本节适用于以 `codex-feishu` 运行的安全桥普通维护 Agent。首次接手、恢复旧 thread 或准备交给 root 前，先运行 `id -un`、`command -v cjy-project`、`cjy-project --help` 和 `cjy-project doctor`，以当前节点的实际结果为准。
+- 先读数据工程的 `doc/codex/project_maintainer_permissions.md`；在网站工程中读 `../snh48-fan-hub/doc/codex/project_maintainer_permissions.md`。不要沿用旧 thread 的只读判断，也不要仅因文件属于 root 就判定无法操作。
+- 服务维护用 `cjy-project service <status|start|stop|restart> UNIT`、`cjy-project logs UNIT`；只操作本节点已部署且与任务有关的白名单服务。通知等级用 `cjy-project notification-level <show|info|warning|error|none|default>`；只读任务不为验证权限执行重启或设置变更。
+- 源码修改、提交用普通 Git；推送用 `cjy-project git push <fan-hub|web>`，随后先 `cjy-project peer status <fan-hub|web>`，确认无覆盖风险后 `cjy-project peer pull <fan-hub|web>`。跨节点入口是受限普通账号同步，不提供任意 SSH shell。
+- 文件写入被拒绝时先核对节点和授权目录；对已授权目录可运行 `cjy-project permissions` 修复后重试。行程产出仅在阿里云权威端修改。`doctor` 成功不等于每个路径、GitHub 或对端操作都成功，仍需验证实际目标。
+- 现有授权不包含首次安装、维护策略/服务定义变更、系统软件、账号、网络、防火墙或 root 凭据。业务批准和严格凭据更新流程仍适用；已有工具也不替代用户对具体任务的授权。
+- 写“待 root”交接前，先检查上述入口；确实越界或受阻时写清目标、尝试的命令、脱敏错误和缺少的权限。不要只因普通账号身份把日常维护交给 root。
+<!-- cjy-project-maintenance:end -->
+
 ## Communication
 
 - 默认使用中文沟通。
@@ -18,6 +30,7 @@
 - 新增或修改带密码页面、管理后台鉴权、登录 Cookie/Token 会话：`doc/security/password_page_best_practices.md`
 - 功能 bug 修复或新增功能：`doc/codex/workflows/feature_or_bugfix.md`
 - 数据生成工程或跨仓库数据依赖：`doc/codex/workflows/data_dependency.md`
+- 安全桥普通维护账号的权限、服务维护、GitHub 与跨节点同步：`../snh48-fan-hub/doc/codex/project_maintainer_permissions.md`；优先检查和使用 `cjy-project`。
 - 通过 GitHub 同步服务器：`doc/codex/workflows/deploy_via_git.md`
 - 任务分解、确认方式、验收标准定义：`doc/codex/workflows/task_intake.md`
 
