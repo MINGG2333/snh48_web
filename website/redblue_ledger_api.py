@@ -1,0 +1,1770 @@
+"""红蓝计分台账 2026 API.
+
+数据由房间/直播计分、微店订单和手动暗票组成。台账本身走 shared_runtime_state
+版本化复制；微店拉单/无需物流发货和 Codex 昵称分析通过本机 root worker 队列执行。
+"""
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import os
+import re
+import threading
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Iterable
+
+from fastapi import APIRouter, Body, Cookie, Depends, Header, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel
+
+from website import config as cfg
+from website import identity_index
+from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website.shared_runtime_state import (
+    SharedStateError,
+    execute_mutation,
+    load_document,
+    register_mutator,
+)
+
+router = APIRouter(prefix="/api/redblue", tags=["红蓝计分台账 2026"])
+
+BJ_TZ = timezone(timedelta(hours=8))
+RESOURCE = "redblue_ledger"
+VALID_SOURCES = {"manual", "weidian", "room", "live"}
+SOURCE_LABELS = {"manual": "暗票", "weidian": "微店", "room": "房间", "live": "直播"}
+DEFAULT_SCORING_METHODS = {"manual": "计分卡", "weidian": "鸡腿", "room": "计分卡", "live": "计分卡"}
+SCORING_SOURCE_LABELS = {"manual": "暗票", "weidian": "应援会", "room": "房间", "live": "直播"}
+SCORING_METHODS = ("计分卡", "鸡腿")
+WEEKDAYS = ("一", "二", "三", "四", "五", "六", "日")
+TEXT_LIMIT = 500
+JOB_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+POCKET_ID_RE = re.compile(r"(?<!\d)(\d{4,12})(?!\d)")
+MUTATION_HEADER = "X-Redblue-Operation-Id"
+AUTH_COOKIE = "redblue_ledger_auth"
+AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
+_COOKIE_SECRET_CACHE: bytes | None = None
+
+
+def _cookie_secret() -> bytes:
+    """持久化 Cookie 签名密钥，避免网站重启后所有登录 Cookie 失效。"""
+    global _COOKIE_SECRET_CACHE
+    if _COOKIE_SECRET_CACHE is not None:
+        return _COOKIE_SECRET_CACHE
+    path = Path(cfg.REDBLUE_COOKIE_SECRET_PATH)
+    secret = b""
+    try:
+        secret = path.read_bytes()
+    except OSError:
+        pass
+    if len(secret) < 16:
+        secret = os.urandom(32)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(secret)
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+    _COOKIE_SECRET_CACHE = secret
+    return secret
+
+
+class LoginRequest(BaseModel):
+    password: str
+
+
+def _cookie_token(password: str) -> str:
+    return hmac.new(_cookie_secret(), password.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _now() -> str:
+    return datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _today() -> str:
+    return datetime.now(BJ_TZ).strftime("%Y-%m-%d")
+
+
+def _clean(value: Any, limit: int = TEXT_LIMIT) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()[:limit]
+
+
+def _to_float(value: Any, default: float = 0.0) -> float:
+    if value in (None, ""):
+        return default
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _weidian_order_score(order: dict[str, Any]) -> float:
+    """红蓝计分：优先用 worker 的 score；否则总价 / 26.25，最后回退 quantity。"""
+    explicit = _to_float(order.get("score"), -1.0)
+    if explicit >= 0:
+        return round(explicit, 4)
+    amount = _to_float(order.get("amount"), 0.0)
+    if amount > 0:
+        unit_price = max(_to_float(getattr(cfg, "REDBLUE_WEIDIAN_UNIT_PRICE", 26.25), 26.25), 0.01)
+        return round(amount / unit_price, 4)
+    return round(_to_float(order.get("quantity"), 0.0), 4)
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _norm_date(value: str) -> str:
+    value = _clean(value, 10)
+    if not value:
+        return ""
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="日期格式应为 YYYY-MM-DD")
+
+
+def _valid_job_id(value: str) -> str:
+    value = _clean(value, 64)
+    if not JOB_ID_RE.fullmatch(value):
+        raise HTTPException(status_code=422, detail="无效的任务 ID")
+    return value
+
+
+# ── 鉴权 ────────────────────────────────────────────────────────────────
+
+
+def verify_redblue_password(
+    request: Request,
+    x_redblue_password: str = Header(None, alias="X-Redblue-Password"),
+    redblue_ledger_auth: str = Cookie(None, alias=AUTH_COOKIE),
+):
+    expected = cfg.REDBLUE_LEDGER_PASSWORD
+    if not expected:
+        raise HTTPException(status_code=403, detail="红蓝计分台账页未启用")
+    if redblue_ledger_auth and hmac.compare_digest(
+        redblue_ledger_auth, _cookie_token(expected)
+    ):
+        return True
+    if x_redblue_password and hmac.compare_digest(x_redblue_password, expected):
+        return True
+    if not redblue_ledger_auth and not x_redblue_password:
+        check_redblue_login_limit(request)
+        raise HTTPException(status_code=401, detail="需要密码")
+    check_redblue_login_limit(request)
+    raise HTTPException(status_code=403, detail="密码错误")
+
+
+def check_redblue_login_limit(request: Request) -> None:
+    check_admin_login_limit(get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试")
+
+
+@router.post("/login")
+def login(payload: LoginRequest, response: Response, request: Request):
+    expected = cfg.REDBLUE_LEDGER_PASSWORD
+    if not expected:
+        raise HTTPException(status_code=403, detail="红蓝计分台账页未启用")
+    if not hmac.compare_digest(payload.password, expected):
+        check_redblue_login_limit(request)
+        raise HTTPException(status_code=403, detail="密码错误")
+    response.set_cookie(
+        key=AUTH_COOKIE,
+        value=_cookie_token(expected),
+        max_age=AUTH_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=cfg.SECURE_COOKIES,
+        samesite="strict",
+        path="/api/redblue",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"success": True}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(
+        key=AUTH_COOKIE,
+        path="/api/redblue",
+        httponly=True,
+        secure=cfg.SECURE_COOKIES,
+        samesite="strict",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"success": True}
+
+
+@router.get("/verify")
+def verify_redblue_login(response: Response, _=Depends(verify_redblue_password)):
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
+
+
+# ── 身份索引 ────────────────────────────────────────────────────────────
+
+_IDENTITY_LOCK = threading.Lock()
+_ROOM_LIVE_SYNC_LOCK = threading.Lock()
+_IDENTITY_CACHE: dict[str, Any] = {"signature": None, "index": None}
+
+
+def _empty_identity() -> dict[str, Any]:
+    return {"by_id": {}, "by_name": {}, "generated_at": "", "sources": []}
+
+
+def _add_identity(index: dict[str, Any], fan_id: str, name: str, seen: str = "") -> None:
+    fan_id = _clean(fan_id, 32)
+    name = _clean(name, 120)
+    if not fan_id and not name:
+        return
+    if fan_id:
+        account = index["by_id"].setdefault(
+            fan_id,
+            {"fan_id": fan_id, "names": set(), "latest_name": "", "last_seen": ""},
+        )
+        if name:
+            account["names"].add(name)
+            if not seen or seen >= str(account.get("last_seen") or ""):
+                account["latest_name"] = name
+                account["last_seen"] = seen or account.get("last_seen") or ""
+    if name:
+        nick = index["by_name"].setdefault(
+            name,
+            {"name": name, "ids": set(), "last_seen": ""},
+        )
+        if fan_id:
+            nick["ids"].add(fan_id)
+        if seen and seen >= str(nick.get("last_seen") or ""):
+            nick["last_seen"] = seen
+
+
+def _load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _fallback_identity_signature() -> tuple[Any, ...]:
+    paths: list[Path] = []
+    for key in ("sender_identity_map", "sender_profiles", "fan_name_map"):
+        value = (cfg.REDBLUE_IDENTITY_FALLBACK_PATHS or {}).get(key)
+        if value:
+            paths.append(Path(value))
+    signature: list[Any] = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            signature.append((str(path), stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            signature.append((str(path), 0, 0))
+    return tuple(signature)
+
+
+def _merge_sender_identity(index: dict[str, Any], data: dict[str, Any]) -> None:
+    for item in data.get("nicknames") or []:
+        if not isinstance(item, dict):
+            continue
+        name = _clean(item.get("sender_name"), 120)
+        ids = item.get("sender_ids") if isinstance(item.get("sender_ids"), list) else []
+        if not ids and item.get("sender_id"):
+            ids = [item.get("sender_id")]
+        seen = _clean(item.get("latest_seen"), 32)
+        for fan_id in ids:
+            _add_identity(index, str(fan_id), name, seen)
+        if not ids and name:
+            _add_identity(index, "", name, seen)
+    for item in data.get("accounts") or []:
+        if not isinstance(item, dict):
+            continue
+        fan_id = _clean(item.get("sender_id"), 32)
+        latest = _clean(item.get("latest_sender_name"), 120)
+        seen = _clean(item.get("latest_seen"), 32)
+        if latest:
+            _add_identity(index, fan_id, latest, seen)
+        for name in item.get("sender_names") or []:
+            _add_identity(index, fan_id, str(name), seen)
+
+
+def _merge_profiles(index: dict[str, Any], data: dict[str, Any]) -> None:
+    profiles = data.get("profile_data")
+    if not isinstance(profiles, dict):
+        return
+    for fan_id, profile in profiles.items():
+        if not isinstance(profile, dict):
+            continue
+        name = _clean(profile.get("nickName"), 120)
+        if name:
+            _add_identity(index, str(fan_id), name)
+
+
+def _merge_name_map(index: dict[str, Any], data: dict[str, Any]) -> None:
+    mapping = data.get("map")
+    if not isinstance(mapping, dict):
+        return
+    for raw_name, item in mapping.items():
+        if not isinstance(item, dict):
+            continue
+        fan_id = _clean(item.get("uid"), 32)
+        latest = _clean(item.get("latest") or raw_name, 120)
+        seen = _clean(item.get("last_seen"), 32)
+        _add_identity(index, fan_id, latest, seen)
+        if fan_id and raw_name != latest:
+            _add_identity(index, fan_id, str(raw_name), seen)
+
+
+def _load_identity_base() -> dict[str, Any]:
+    shared = identity_index.redblue_index()
+    if shared["by_id"] or shared["by_name"]:
+        return shared
+
+    # Legacy deployments only have the fallback files.  Their signature is
+    # intentionally separate so frequent fallback rewrites cannot invalidate
+    # the primary index cache.
+    signature = _fallback_identity_signature()
+    with _IDENTITY_LOCK:
+        if _IDENTITY_CACHE.get("signature") == signature and isinstance(_IDENTITY_CACHE.get("index"), dict):
+            return _IDENTITY_CACHE["index"]
+        index = _empty_identity()
+        sender_map = _load_json(Path((cfg.REDBLUE_IDENTITY_FALLBACK_PATHS or {}).get("sender_identity_map", "")))
+        if isinstance(sender_map, dict):
+            _merge_sender_identity(index, sender_map)
+        profiles = _load_json(Path((cfg.REDBLUE_IDENTITY_FALLBACK_PATHS or {}).get("sender_profiles", "")))
+        if isinstance(profiles, dict):
+            _merge_profiles(index, profiles)
+        name_map = _load_json(Path((cfg.REDBLUE_IDENTITY_FALLBACK_PATHS or {}).get("fan_name_map", "")))
+        if isinstance(name_map, dict):
+            _merge_name_map(index, name_map)
+        _IDENTITY_CACHE["signature"] = signature
+        _IDENTITY_CACHE["index"] = index
+        return index
+
+
+def _alias_maps(aliases: Iterable[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    by_name: dict[str, dict[str, Any]] = {}
+    by_id: dict[str, dict[str, Any]] = {}
+    for alias in aliases:
+        if not isinstance(alias, dict):
+            continue
+        name = _clean(alias.get("raw_name"), 120)
+        fan_id = _clean(alias.get("fan_id"), 32)
+        fan_name = _clean(alias.get("fan_name"), 120)
+        if not fan_id:
+            continue
+        record = {"fan_id": fan_id, "fan_name": fan_name}
+        if name:
+            by_name[name] = record
+        by_id[fan_id] = record
+    return by_name, by_id
+
+
+def _resolve_identity(
+    raw_name: str,
+    raw_id: str,
+    aliases: Iterable[dict[str, Any]] = (),
+) -> dict[str, Any]:
+    raw_name = _clean(raw_name, 120)
+    raw_id = _clean(raw_id, 32)
+    alias_by_name, alias_by_id = _alias_maps(aliases)
+    if raw_id:
+        account = _load_identity_base()["by_id"].get(raw_id)
+        if account:
+            return {
+                "fan_id": raw_id,
+                "fan_name": account.get("latest_name") or raw_name,
+                "warning": False,
+                "reason": "",
+            }
+        alias = alias_by_id.get(raw_id)
+        if alias:
+            return {"fan_id": raw_id, "fan_name": alias.get("fan_name") or raw_name, "warning": False, "reason": ""}
+        return {"fan_id": "", "fan_name": raw_name, "warning": True, "reason": "口袋48 ID 未找到"}
+    if raw_name:
+        if raw_name.isdigit():
+            account = _load_identity_base()["by_id"].get(raw_name)
+            if account:
+                return {
+                    "fan_id": raw_name,
+                    "fan_name": account.get("latest_name") or raw_name,
+                    "warning": False,
+                    "reason": "",
+                }
+        nick = _load_identity_base()["by_name"].get(raw_name)
+        if nick:
+            ids = sorted(str(item) for item in (nick.get("ids") or []))
+            if len(ids) == 1:
+                account = _load_identity_base()["by_id"].get(ids[0], {})
+                return {
+                    "fan_id": ids[0],
+                    "fan_name": account.get("latest_name") or raw_name,
+                    "warning": False,
+                    "reason": "",
+                }
+            if len(ids) > 1:
+                alias = alias_by_name.get(raw_name)
+                if alias:
+                    return {
+                        "fan_id": alias["fan_id"],
+                        "fan_name": alias.get("fan_name") or raw_name,
+                        "warning": False,
+                        "reason": "",
+                    }
+                return {
+                    "fan_id": "",
+                    "fan_name": raw_name,
+                    "warning": True,
+                    "reason": f"昵称对应多个口袋48账号：{', '.join(ids[:5])}",
+                }
+        alias = alias_by_name.get(raw_name)
+        if alias:
+            return {
+                "fan_id": alias["fan_id"],
+                "fan_name": alias.get("fan_name") or raw_name,
+                "warning": False,
+                "reason": "",
+            }
+        return {"fan_id": "", "fan_name": raw_name, "warning": True, "reason": "未找到该口袋48昵称"}
+    return {"fan_id": "", "fan_name": "", "warning": True, "reason": "缺少口袋48昵称或 ID"}
+
+
+# ── 条目工具 ────────────────────────────────────────────────────────────
+
+
+def _entry_time(item: dict[str, Any]) -> str:
+    return _clean(item.get("source_time") or item.get("created_at"), 32)
+
+
+def _entry_key(item: dict[str, Any]) -> str:
+    fan_id = _clean(item.get("fan_id"), 32)
+    if fan_id:
+        return f"id:{fan_id}"
+    return f"name:{_clean(item.get('fan_name') or item.get('raw_name'), 120)}"
+
+
+def _add_alias(doc: dict[str, Any], raw_name: str, fan_id: str, fan_name: str, source: str) -> None:
+    raw_name = _clean(raw_name, 120)
+    fan_id = _clean(fan_id, 32)
+    if not raw_name or not fan_id:
+        return
+    aliases = doc.setdefault("aliases", [])
+    for alias in aliases:
+        if not isinstance(alias, dict):
+            continue
+        if _clean(alias.get("raw_name"), 120) == raw_name and _clean(alias.get("fan_id"), 32) == fan_id:
+            alias["fan_name"] = fan_name
+            alias["source"] = source
+            alias["updated_at"] = _now()
+            return
+    aliases.append(
+        {
+            "raw_name": raw_name,
+            "fan_id": fan_id,
+            "fan_name": fan_name,
+            "source": source,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+    )
+
+
+def _apply_identity(
+    doc: dict[str, Any],
+    entry: dict[str, Any],
+    raw_name: str,
+    raw_id: str,
+    *,
+    source: str,
+    write_alias: bool = True,
+) -> None:
+    resolved = _resolve_identity(raw_name, raw_id, doc.get("aliases") or [])
+    entry["raw_name"] = raw_name
+    entry["raw_id"] = raw_id
+    entry["fan_id"] = resolved["fan_id"]
+    entry["fan_name"] = resolved["fan_name"] or raw_name
+    entry["warning"] = bool(resolved["warning"])
+    entry["warning_reason"] = resolved["reason"]
+    if write_alias and not resolved["warning"] and resolved["fan_id"]:
+        _add_alias(doc, raw_name or resolved["fan_name"], resolved["fan_id"], resolved["fan_name"], source)
+
+
+def _name_set(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {item.strip() for item in value.split(",") if item.strip()}
+    if isinstance(value, (list, tuple, set)):
+        return {str(item).strip() for item in value if str(item).strip()}
+    return set()
+
+
+_GIFT_PRICE_LOCK = threading.Lock()
+_GIFT_PRICE_CACHE: dict[str, Any] = {}
+
+
+def _gift_price_index() -> tuple[dict[str, float], dict[str, float]]:
+    path = Path(getattr(cfg, "REDBLUE_GIFT_AUTHORITY_PATH", "") or "")
+    try:
+        stat = path.stat()
+    except OSError:
+        return {}, {}
+    signature = (str(path), stat.st_mtime_ns, stat.st_size)
+    with _GIFT_PRICE_LOCK:
+        if _GIFT_PRICE_CACHE.get("signature") == signature:
+            return _GIFT_PRICE_CACHE["by_id"], _GIFT_PRICE_CACHE["by_name"]
+        data = _load_json(path)
+        by_id: dict[str, float] = {}
+        by_name: dict[str, float] = {}
+        gifts = data.get("gifts") if isinstance(data, dict) else None
+        for gift in gifts or []:
+            if not isinstance(gift, dict):
+                continue
+            price = max(_to_float(gift.get("melee"), 0.0), _to_float(gift.get("money"), 0.0))
+            if price <= 0:
+                continue
+            gift_id = _clean(gift.get("gift_id"), 40)
+            gift_name = _clean(gift.get("gift_name"), 160)
+            if gift_id:
+                by_id[gift_id] = price
+            if gift_name:
+                by_name[gift_name] = price
+        _GIFT_PRICE_CACHE["signature"] = signature
+        _GIFT_PRICE_CACHE["by_id"] = by_id
+        _GIFT_PRICE_CACHE["by_name"] = by_name
+        return by_id, by_name
+
+
+def _gift_price(gift_name: str, gift_id: str) -> float:
+    by_id, by_name = _gift_price_index()
+    if gift_id and gift_id in by_id:
+        return by_id[gift_id]
+    return by_name.get(_clean(gift_name, 160), 0.0)
+
+
+def _is_chicken_gift(gift_name: str, gift_id: str = "") -> bool:
+    gift_id = _clean(gift_id, 40)
+    if gift_id and gift_id in _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_IDS", "")):
+        return True
+    name = _clean(gift_name, 160)
+    if not name or name == "弦月回响":
+        return False
+    if name in _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_NAMES", "")):
+        return True
+    keywords = _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_KEYWORDS", "鸡腿"))
+    if any(keyword in name for keyword in keywords):
+        return True
+    return _gift_price(name, gift_id) > 0
+
+
+def _gift_scoring_method(gift_name: str, source: str, gift_id: str = "") -> str:
+    if _is_chicken_gift(gift_name, gift_id):
+        return "鸡腿"
+    return DEFAULT_SCORING_METHODS.get(_clean(source, 20), "计分卡")
+
+
+def _entry_scoring_method(entry: dict[str, Any]) -> str:
+    method = _clean(entry.get("scoring_method"), 10)
+    if method in SCORING_METHODS:
+        return method
+    return DEFAULT_SCORING_METHODS.get(_clean(entry.get("source"), 20), "计分卡")
+
+
+def _new_entry(
+    doc: dict[str, Any],
+    *,
+    source: str,
+    source_id: str,
+    source_time: str,
+    raw_name: str,
+    raw_id: str,
+    score: float,
+    settled: bool,
+    note: str = "",
+    weidian: dict[str, Any] | None = None,
+    scoring_method: str = "",
+) -> dict[str, Any]:
+    entry_id = f"rb-{uuid.uuid4().hex}"
+    method = _clean(scoring_method, 10)
+    if method not in SCORING_METHODS:
+        method = DEFAULT_SCORING_METHODS.get(_clean(source, 20), "计分卡")
+    entry = {
+        "id": entry_id,
+        "fan_id": "",
+        "fan_name": _clean(raw_name, 120),
+        "raw_name": _clean(raw_name, 120),
+        "raw_id": _clean(raw_id, 32),
+        "score": round(max(0.0, float(score)), 4),
+        "source": source,
+        "scoring_method": method,
+        "source_id": _clean(source_id, 120),
+        "source_time": _clean(source_time, 32) or _now(),
+        "created_at": _now(),
+        "updated_at": _now(),
+        "settled": bool(settled),
+        "warning": False,
+        "warning_reason": "",
+        "duplicate": False,
+        "duplicate_note": "",
+        "business_done": False,
+        "business_done_at": "",
+        "note": _clean(note),
+        "identity_locked": False,
+        "ai_suggestion": {},
+        "ai_applied_at": "",
+        "shipping_error": "",
+        "weidian": weidian or {},
+    }
+    _apply_identity(doc, entry, entry["raw_name"], entry["raw_id"], source=source)
+    return entry
+
+
+def _find_entry(doc: dict[str, Any], source: str, source_id: str) -> dict[str, Any] | None:
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("source") == source and _clean(entry.get("source_id"), 120) == _clean(source_id, 120):
+            return entry
+    return None
+
+
+def _upsert_entry(doc: dict[str, Any], candidate: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    existing = _find_entry(doc, candidate["source"], candidate["source_id"])
+    if existing is None:
+        doc.setdefault("entries", []).append(candidate)
+        return candidate, True
+    for key in (
+        "score",
+        "scoring_method",
+        "source_time",
+        "settled",
+        "weidian",
+        "shipping_error",
+    ):
+        if key in candidate:
+            existing[key] = candidate[key]
+    existing["updated_at"] = _now()
+    if not existing.get("identity_locked"):
+        _apply_identity(
+            doc,
+            existing,
+            candidate.get("raw_name") or existing.get("raw_name"),
+            candidate.get("raw_id") or existing.get("raw_id"),
+            source=existing.get("source") or candidate.get("source"),
+        )
+    if not existing.get("note") and candidate.get("note"):
+        existing["note"] = candidate["note"]
+    return existing, False
+
+
+def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = ()) -> dict[str, Any]:
+    source = _clean(entry.get("source"), 20)
+    scoring_method = _entry_scoring_method(entry)
+    raw_name = _clean(entry.get("raw_name"), 120)
+    raw_id = _clean(entry.get("raw_id"), 32)
+    fan_id = _clean(entry.get("fan_id"), 32)
+    fan_name = _clean(entry.get("fan_name") or raw_name, 120)
+    warning = bool(entry.get("warning"))
+    warning_reason = _clean(entry.get("warning_reason"))
+    if not entry.get("identity_locked"):
+        resolved = _resolve_identity(raw_name, fan_id or raw_id, ())
+        if resolved["warning"] and aliases:
+            resolved = _resolve_identity(raw_name, fan_id or raw_id, aliases)
+        if not resolved["warning"]:
+            fan_id = resolved["fan_id"] or fan_id
+            fan_name = resolved["fan_name"] or fan_name
+            warning = False
+            warning_reason = ""
+    return {
+        "id": _clean(entry.get("id"), 80),
+        "fan_id": fan_id,
+        "fan_name": fan_name,
+        "raw_name": raw_name,
+        "raw_id": raw_id,
+        "score": round(_to_float(entry.get("score"), 0.0), 4),
+        "source": source,
+        "source_label": SOURCE_LABELS.get(source, source),
+        "scoring_method": scoring_method,
+        "source_scoring_label": (
+            f"{SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source))}·{scoring_method}"
+            if scoring_method
+            else SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source))
+        ),
+        "source_id": _clean(entry.get("source_id"), 120),
+        "source_time": _clean(entry.get("source_time"), 32),
+        "created_at": _clean(entry.get("created_at"), 32),
+        "updated_at": _clean(entry.get("updated_at"), 32),
+        "settled": bool(entry.get("settled")),
+        "warning": warning,
+        "warning_reason": warning_reason,
+        "duplicate": bool(entry.get("duplicate")),
+        "duplicate_note": _clean(entry.get("duplicate_note")),
+        "business_done": bool(entry.get("business_done")),
+        "business_done_at": _clean(entry.get("business_done_at"), 32),
+        "note": _clean(entry.get("note")),
+        "identity_locked": bool(entry.get("identity_locked")),
+        "ai_suggestion": entry.get("ai_suggestion") if isinstance(entry.get("ai_suggestion"), dict) else {},
+        "ai_applied_at": _clean(entry.get("ai_applied_at"), 32),
+        "shipping_error": _clean(entry.get("shipping_error")),
+        "weidian": entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {},
+    }
+
+
+# ── 筛选与汇总 ──────────────────────────────────────────────────────────
+
+
+def _filter_entries(
+    entries: Iterable[dict[str, Any]],
+    *,
+    source: str = "all",
+    status_filter: str = "all",
+    keyword: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    include_duplicate: bool = True,
+    aliases: Iterable[dict[str, Any]] = (),
+) -> list[dict[str, Any]]:
+    source = _clean(source, 20).lower() or "all"
+    status_filter = _clean(status_filter, 20).lower() or "all"
+    keyword = _clean(keyword, 120).casefold()
+    result: list[dict[str, Any]] = []
+    for raw in entries:
+        if not isinstance(raw, dict):
+            continue
+        item = _normalise_entry(raw, aliases)
+        if source != "all" and item["source"] != source:
+            continue
+        if not include_duplicate and item["duplicate"]:
+            continue
+        if status_filter == "settled" and not item["settled"]:
+            continue
+        if status_filter == "pending" and item["settled"]:
+            continue
+        if status_filter == "warning" and not item["warning"]:
+            continue
+        if status_filter == "duplicate" and not item["duplicate"]:
+            continue
+        if status_filter == "normal" and (item["warning"] or item["duplicate"]):
+            continue
+        day = (item["source_time"] or item["created_at"])[:10]
+        if date_from and day < date_from:
+            continue
+        if date_to and day > date_to:
+            continue
+        if keyword:
+            haystack = " ".join(
+                [
+                    item["fan_name"],
+                    item["fan_id"],
+                    item["raw_name"],
+                    item["raw_id"],
+                    item["note"],
+                    item["source_id"],
+                    item["weidian"].get("buyer_name", ""),
+                    item["weidian"].get("buyer_note", ""),
+                ]
+            ).casefold()
+            if keyword not in haystack:
+                continue
+        result.append(item)
+    return result
+
+
+def _summary(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    items = [item for item in entries if isinstance(item, dict) and not item.get("duplicate")]
+    settled = [item for item in items if item.get("settled")]
+    pending = [item for item in items if not item.get("settled")]
+    people = {_entry_key(item) for item in items}
+    return {
+        "entry_count": len(items),
+        "people_count": len(people),
+        "total_score": round(sum(_to_float(item.get("score"), 0.0) for item in items), 4),
+        "settled_score": round(sum(_to_float(item.get("score"), 0.0) for item in settled), 4),
+        "pending_score": round(sum(_to_float(item.get("score"), 0.0) for item in pending), 4),
+        "warning_count": sum(1 for item in items if item.get("warning")),
+        "pending_count": len(pending),
+        "duplicate_count": sum(1 for item in entries if isinstance(item, dict) and item.get("duplicate")),
+    }
+
+
+def _fan_summary(entries: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for item in entries:
+        if not isinstance(item, dict) or item.get("duplicate"):
+            continue
+        key = _entry_key(item)
+        group = groups.setdefault(
+            key,
+            {
+                "key": key,
+                "fan_id": item.get("fan_id") or "",
+                "fan_name": item.get("fan_name") or item.get("raw_name") or "未登记",
+                "total_score": 0.0,
+                "settled_score": 0.0,
+                "pending_score": 0.0,
+                "entry_count": 0,
+                "warning": False,
+                "sources": {},
+                "scoring": {},
+                "score_names": [],
+                "score_name": "",
+                "reached_at": "",
+                "_score_time": "",
+            },
+        )
+        score = _to_float(item.get("score"), 0.0)
+        group["total_score"] = round(group["total_score"] + score, 4)
+        if item.get("settled"):
+            group["settled_score"] = round(group["settled_score"] + score, 4)
+        else:
+            group["pending_score"] = round(group["pending_score"] + score, 4)
+        group["entry_count"] += 1
+        group["warning"] = group["warning"] or bool(item.get("warning"))
+        source = item.get("source") or ""
+        group["sources"][source] = round(group["sources"].get(source, 0.0) + score, 4)
+        method = _entry_scoring_method(item)
+        group["scoring"][method] = round(group["scoring"].get(method, 0.0) + score, 4)
+        raw_name = _clean(item.get("raw_name") or item.get("fan_name"), 120)
+        if raw_name and raw_name not in group["score_names"]:
+            group["score_names"].append(raw_name)
+        item_time = _entry_time(item)
+        if item_time >= str(group["reached_at"]):
+            group["reached_at"] = item_time
+        if raw_name and item_time >= str(group["_score_time"]):
+            group["_score_time"] = item_time
+            group["score_name"] = raw_name
+        if not group["fan_id"] and item.get("fan_id"):
+            group["fan_id"] = item["fan_id"]
+    for group in groups.values():
+        group.pop("_score_time", None)
+    return sorted(
+        groups.values(),
+        key=lambda row: (
+            -_to_float(row.get("total_score"), 0.0),
+            str(row.get("reached_at") or "9999-12-31 23:59:59"),
+            str(row.get("fan_name")),
+        ),
+    )
+
+
+def _sort_entries(entries: list[dict[str, Any]], sort: str) -> list[dict[str, Any]]:
+    reverse = _clean(sort, 20).lower() == "time_desc"
+    return sorted(
+        entries,
+        key=lambda item: (_entry_time(item), item.get("id") or ""),
+        reverse=reverse,
+    )
+
+
+def _load_filtered(
+    *,
+    source: str,
+    status_filter: str,
+    keyword: str,
+    date_from: str,
+    date_to: str,
+    sort: str,
+    include_duplicate: bool,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    try:
+        doc = load_document(RESOURCE)
+    except SharedStateError as exc:
+        raise HTTPException(status_code=503, detail=f"红蓝台账读取失败：{exc}") from exc
+    filtered = _filter_entries(
+        doc.get("entries") or [],
+        source=source,
+        status_filter=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        include_duplicate=include_duplicate,
+        aliases=doc.get("aliases") or [],
+    )
+    return doc, _sort_entries(filtered, sort)
+
+
+# ── Mutators ────────────────────────────────────────────────────────────
+
+
+def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
+    raw_name = _clean(payload.get("raw_name"), 120)
+    raw_id = _clean(payload.get("raw_id"), 32)
+    score = _to_float(payload.get("score"), 0.0)
+    if score <= 0:
+        raise ValueError("分数必须大于 0")
+    if not raw_name and not raw_id:
+        raise ValueError("请填写口袋48昵称或 ID")
+    entry = _new_entry(
+        doc,
+        source="manual",
+        source_id=f"manual-{uuid.uuid4().hex}",
+        source_time=_now(),
+        raw_name=raw_name,
+        raw_id=raw_id,
+        score=score,
+        settled=_to_bool(payload.get("settled"), True),
+        note=_clean(payload.get("note")),
+    )
+    doc.setdefault("entries", []).append(entry)
+    return doc, _normalise_entry(entry, doc.get("aliases") or [])
+
+
+def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
+    entry_id = _clean(payload.get("id"), 80)
+    entry = next((item for item in doc.get("entries") or [] if isinstance(item, dict) and item.get("id") == entry_id), None)
+    if entry is None:
+        raise ValueError("条目不存在")
+    raw_name = _clean(payload.get("raw_name", entry.get("raw_name")), 120)
+    raw_id = _clean(payload.get("raw_id", entry.get("raw_id")), 32)
+    old_identity = (_clean(entry.get("raw_name"), 120), _clean(entry.get("raw_id"), 32))
+    if (raw_name, raw_id) != old_identity:
+        entry["identity_locked"] = True
+    _apply_identity(doc, entry, raw_name, raw_id, source=entry.get("source") or "manual")
+    if payload.get("score") is not None:
+        score = _to_float(payload.get("score"), 0.0)
+        if score <= 0:
+            raise ValueError("分数必须大于 0")
+        entry["score"] = round(score, 4)
+    if payload.get("note") is not None:
+        entry["note"] = _clean(payload.get("note"))
+    if payload.get("settled") is not None:
+        entry["settled"] = _to_bool(payload.get("settled"), bool(entry.get("settled")))
+    if payload.get("duplicate") is not None:
+        entry["duplicate"] = _to_bool(payload.get("duplicate"), bool(entry.get("duplicate")))
+    if payload.get("duplicate_note") is not None:
+        entry["duplicate_note"] = _clean(payload.get("duplicate_note"))
+    if payload.get("business_done") is not None:
+        entry["business_done"] = _to_bool(payload.get("business_done"), bool(entry.get("business_done")))
+        entry["business_done_at"] = _now() if entry["business_done"] else ""
+    entry["updated_at"] = _now()
+    return doc, _normalise_entry(entry, doc.get("aliases") or [])
+
+
+def _mutator_delete(doc: dict[str, Any], payload: dict[str, Any]):
+    entry_id = _clean(payload.get("id"), 80)
+    before = len(doc.get("entries") or [])
+    doc["entries"] = [item for item in doc.get("entries") or [] if not (isinstance(item, dict) and item.get("id") == entry_id)]
+    return doc, {"deleted": before - len(doc["entries"])}
+
+
+def _mutator_duplicate(doc: dict[str, Any], payload: dict[str, Any]):
+    entry_id = _clean(payload.get("id"), 80)
+    entry = next((item for item in doc.get("entries") or [] if isinstance(item, dict) and item.get("id") == entry_id), None)
+    if entry is None:
+        raise ValueError("条目不存在")
+    entry["duplicate"] = _to_bool(payload.get("duplicate"), not bool(entry.get("duplicate")))
+    if payload.get("duplicate_note") is not None:
+        entry["duplicate_note"] = _clean(payload.get("duplicate_note"))
+    if payload.get("business_done") is not None:
+        entry["business_done"] = _to_bool(payload.get("business_done"), bool(entry.get("business_done")))
+        entry["business_done_at"] = _now() if entry["business_done"] else ""
+    entry["updated_at"] = _now()
+    return doc, _normalise_entry(entry, doc.get("aliases") or [])
+
+
+def _mutator_apply_ai(doc: dict[str, Any], payload: dict[str, Any]):
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    entries = {str(item.get("id")): item for item in doc.get("entries") or [] if isinstance(item, dict)}
+    applied = 0
+    skipped = 0
+    for suggestion in items:
+        if not isinstance(suggestion, dict):
+            continue
+        entry = entries.get(_clean(suggestion.get("entry_id"), 80))
+        if entry is None:
+            skipped += 1
+            continue
+        fan_id = _clean(suggestion.get("fan_id"), 32)
+        fan_name = _clean(suggestion.get("fan_name"), 120)
+        resolved = _resolve_identity(fan_name, fan_id, doc.get("aliases") or [])
+        if resolved["warning"]:
+            skipped += 1
+            continue
+        entry["fan_id"] = resolved["fan_id"]
+        entry["fan_name"] = resolved["fan_name"] or fan_name
+        entry["warning"] = False
+        entry["warning_reason"] = ""
+        entry["identity_locked"] = True
+        entry["ai_suggestion"] = {
+            "fan_id": resolved["fan_id"],
+            "fan_name": resolved["fan_name"] or fan_name,
+            "confidence": _to_float(suggestion.get("confidence"), 0.0),
+            "reason": _clean(suggestion.get("reason")),
+            "evidence": _clean(suggestion.get("evidence")),
+            "backend": _clean(suggestion.get("backend"), 20),
+        }
+        entry["ai_applied_at"] = _now()
+        entry["updated_at"] = _now()
+        _add_alias(doc, entry.get("raw_name") or entry.get("fan_name"), resolved["fan_id"], resolved["fan_name"], entry.get("source") or "manual")
+        applied += 1
+    return doc, {"applied": applied, "skipped": skipped}
+
+
+def _mutator_upsert_room_live(doc: dict[str, Any], payload: dict[str, Any]):
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    created = 0
+    updated = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        source = _clean(item.get("source"), 20)
+        if source not in {"room", "live"}:
+            continue
+        source_id = _clean(item.get("source_id"), 120)
+        if not source_id:
+            continue
+        scoring_method = _clean(item.get("scoring_method"), 10)
+        if scoring_method not in SCORING_METHODS:
+            scoring_method = _gift_scoring_method(
+                _clean(item.get("gift_name"), 160),
+                source,
+                _clean(item.get("gift_id"), 40),
+            )
+        candidate = _new_entry(
+            doc,
+            source=source,
+            source_id=source_id,
+            source_time=_clean(item.get("source_time"), 32),
+            raw_name=_clean(item.get("raw_name"), 120),
+            raw_id=_clean(item.get("raw_id"), 32),
+            score=_to_float(item.get("score"), 0.0),
+            settled=True,
+            note=_clean(item.get("note")),
+            scoring_method=scoring_method,
+        )
+        _, is_new = _upsert_entry(doc, candidate)
+        created += int(is_new)
+        updated += int(not is_new)
+    return doc, {"created": created, "updated": updated}
+
+
+def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
+    orders = payload.get("orders") if isinstance(payload.get("orders"), list) else []
+    created = 0
+    updated = 0
+    for order in orders:
+        if not isinstance(order, dict):
+            continue
+        order_id = _clean(order.get("order_id"), 120)
+        if not order_id:
+            continue
+        buyer_name = _clean(order.get("buyer_name"), 120)
+        buyer_note = _clean(order.get("buyer_note"))
+        seller_note = _clean(order.get("seller_note"))
+        note = buyer_note or seller_note
+        raw_id = ""
+        match = POCKET_ID_RE.search(note) or POCKET_ID_RE.search(buyer_name)
+        if match:
+            raw_id = match.group(1)
+        raw_name = buyer_name
+        if not raw_id and note:
+            raw_name = re.sub(r"\s+", " ", note).strip() or buyer_name
+        status_desc = _clean(order.get("status"), 40)
+        shipped_at = _clean(order.get("shipped_at"), 32)
+        settled = bool(order.get("shipped")) or any(
+            keyword in status_desc for keyword in ("已发货", "交易成功", "完成")
+        )
+        weidian = {
+            "order_id": order_id,
+            "item_id": _clean(order.get("item_id"), 40),
+            "item_name": _clean(order.get("item_name"), 160),
+            "status": status_desc,
+            "buyer_name": buyer_name,
+            "buyer_note": buyer_note,
+            "seller_note": seller_note,
+            "quantity": _to_float(order.get("quantity"), 0.0),
+            "score": _weidian_order_score(order),
+            "amount": _to_float(order.get("amount"), 0.0),
+            "shipped": bool(order.get("shipped")),
+            "shipped_at": shipped_at,
+        }
+        candidate = _new_entry(
+            doc,
+            source="weidian",
+            source_id=order_id,
+            source_time=_clean(order.get("add_time"), 32),
+            raw_name=raw_name,
+            raw_id=raw_id,
+            score=_weidian_order_score(order),
+            settled=settled,
+            note=note,
+            weidian=weidian,
+        )
+        existing = _find_entry(doc, "weidian", order_id)
+        if existing is not None and existing.get("identity_locked"):
+            candidate["identity_locked"] = True
+            candidate["fan_id"] = existing.get("fan_id") or candidate.get("fan_id")
+            candidate["fan_name"] = existing.get("fan_name") or candidate.get("fan_name")
+            candidate["warning"] = bool(existing.get("warning"))
+            candidate["warning_reason"] = existing.get("warning_reason") or ""
+        _, is_new = _upsert_entry(doc, candidate)
+        created += int(is_new)
+        updated += int(not is_new)
+    return doc, {"created": created, "updated": updated}
+
+
+def _mutator_mark_shipped(doc: dict[str, Any], payload: dict[str, Any]):
+    order_ids = {_clean(value, 120) for value in (payload.get("order_ids") or []) if _clean(value, 120)}
+    shipped_at = _clean(payload.get("shipped_at"), 32) or _now()
+    updated = 0
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict) or entry.get("source") != "weidian":
+            continue
+        if _clean(entry.get("source_id"), 120) not in order_ids:
+            continue
+        entry["settled"] = True
+        entry["shipping_error"] = ""
+        entry["updated_at"] = _now()
+        weidian = entry.setdefault("weidian", {})
+        if isinstance(weidian, dict):
+            weidian["shipped"] = True
+            weidian["shipped_at"] = shipped_at
+        updated += 1
+    return doc, {"updated": updated}
+
+
+register_mutator(RESOURCE, "add", _mutator_add)
+register_mutator(RESOURCE, "update", _mutator_update)
+register_mutator(RESOURCE, "delete", _mutator_delete)
+register_mutator(RESOURCE, "duplicate", _mutator_duplicate)
+register_mutator(RESOURCE, "apply_ai", _mutator_apply_ai)
+register_mutator(RESOURCE, "upsert_room_live", _mutator_upsert_room_live)
+register_mutator(RESOURCE, "upsert_weidian", _mutator_upsert_weidian)
+register_mutator(RESOURCE, "mark_shipped", _mutator_mark_shipped)
+
+
+def _build_room_live_items() -> list[dict[str, Any]]:
+    path = Path(cfg.REDBLUE_SCORE_DATA_PATH)
+    if not path.exists():
+        return []
+    data = _load_json(path)
+    raw_items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(raw_items, list):
+        return []
+    items = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        source = _clean(item.get("source"), 20)
+        if source not in {"room", "live"}:
+            continue
+        source_id = _clean(item.get("id"), 120)
+        if not source_id:
+            continue
+        score = _to_float(item.get("total_score"), 0.0)
+        if score <= 0:
+            continue
+        note = _clean(item.get("gift_name"), 160)
+        if item.get("gift_count"):
+            note = f"{note} × {int(_to_float(item.get('gift_count'), 1))}"
+        gift_name = _clean(item.get("gift_name"), 160)
+        gift_id = _clean(item.get("gift_id"), 40)
+        items.append(
+            {
+                "source": source,
+                "source_id": source_id,
+                "source_time": _clean(item.get("event_time"), 32),
+                "raw_name": _clean(item.get("sender_name"), 120),
+                "raw_id": _clean(item.get("sender_id"), 32),
+                "score": score,
+                "note": note,
+                "gift_name": gift_name,
+                "gift_id": gift_id,
+                "scoring_method": _gift_scoring_method(gift_name, source, gift_id),
+            }
+        )
+    return items
+
+
+def _room_live_changed(doc: dict[str, Any], items: list[dict[str, Any]]) -> bool:
+    existing = {
+        (_clean(entry.get("source"), 20), _clean(entry.get("source_id"), 120)): entry
+        for entry in doc.get("entries") or []
+        if isinstance(entry, dict)
+    }
+    for item in items:
+        entry = existing.get((item["source"], item["source_id"]))
+        if entry is None:
+            return True
+        if abs(_to_float(entry.get("score"), 0.0) - item["score"]) > 1e-9:
+            return True
+        if _entry_scoring_method(entry) != item.get("scoring_method"):
+            return True
+        if _clean(entry.get("source_time"), 32) != item["source_time"]:
+            return True
+        if _clean(entry.get("raw_name"), 120) != item["raw_name"]:
+            return True
+        if _clean(entry.get("raw_id"), 32) != item["raw_id"]:
+            return True
+    return False
+
+
+def _sync_room_live_now(request: Request | None = None) -> dict[str, Any]:
+    with _ROOM_LIVE_SYNC_LOCK:
+        items = _build_room_live_items()
+        try:
+            doc = load_document(RESOURCE)
+        except SharedStateError:
+            doc = {}
+        if not _room_live_changed(doc, items):
+            return {"created": 0, "updated": 0, "skipped": True}
+        if request is not None:
+            return _mutate("upsert_room_live", {"items": items}, request).get("result") or {}
+        result = execute_mutation(
+            RESOURCE,
+            "upsert_room_live",
+            {"items": items},
+            operation_id=uuid.uuid4().hex,
+        )
+        return result.get("result") or {}
+
+
+def _weidian_changed(doc: dict[str, Any], orders: list[dict[str, Any]]) -> bool:
+    existing = {
+        _clean(entry.get("source_id"), 120): entry
+        for entry in doc.get("entries") or []
+        if isinstance(entry, dict) and entry.get("source") == "weidian"
+    }
+    for order in orders:
+        if not isinstance(order, dict):
+            continue
+        order_id = _clean(order.get("order_id"), 120)
+        if not order_id:
+            continue
+        entry = existing.get(order_id)
+        if entry is None:
+            return True
+        if abs(_to_float(entry.get("score"), 0.0) - _weidian_order_score(order)) > 1e-9:
+            return True
+        weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
+        if _clean(weidian.get("status"), 40) != _clean(order.get("status"), 40):
+            return True
+        expected_settled = bool(order.get("shipped")) or any(
+            keyword in _clean(order.get("status"), 40) for keyword in ("已发货", "交易成功", "完成")
+        )
+        if bool(entry.get("settled")) != expected_settled:
+            return True
+        if _clean(weidian.get("item_name"), 160) != _clean(order.get("item_name"), 160):
+            return True
+        if _clean(weidian.get("buyer_name"), 120) != _clean(order.get("buyer_name"), 120):
+            return True
+        if _clean(weidian.get("buyer_note"), 500) != _clean(order.get("buyer_note"), 500):
+            return True
+        if _clean(weidian.get("seller_note"), 500) != _clean(order.get("seller_note"), 500):
+            return True
+    return False
+
+
+# ── 数据接口 ────────────────────────────────────────────────────────────
+
+
+@router.get("/data")
+def get_redblue_data(
+    response: Response,
+    source: str = Query("all"),
+    status_filter: str = Query("all", alias="status"),
+    keyword: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    sort: str = Query("time_asc"),
+    include_duplicate: bool = Query(True),
+    _=Depends(verify_redblue_password),
+):
+    response.headers["Cache-Control"] = "no-store"
+    date_from = _norm_date(date_from)
+    date_to = _norm_date(date_to)
+    doc, entries = _load_filtered(
+        source=source,
+        status_filter=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        include_duplicate=include_duplicate,
+    )
+    all_entries = [_normalise_entry(item, doc.get("aliases") or []) for item in doc.get("entries") or [] if isinstance(item, dict)]
+    return {
+        "generated_at": _clean(doc.get("updated_at"), 32),
+        "summary": _summary(entries),
+        "overall": _summary(all_entries),
+        "fan_summary": _fan_summary(entries),
+        "entries": entries,
+        "total": len(entries),
+        "filters": {
+            "source": _clean(source, 20),
+            "status": _clean(status_filter, 20),
+            "keyword": _clean(keyword, 120),
+            "date_from": date_from,
+            "date_to": date_to,
+            "sort": _clean(sort, 20),
+            "include_duplicate": include_duplicate,
+        },
+    }
+
+
+def _export_context(
+    *,
+    source: str,
+    status_filter: str,
+    keyword: str,
+    date_from: str,
+    date_to: str,
+    sort: str,
+    include_duplicate: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str]:
+    date_from = _norm_date(date_from)
+    date_to = _norm_date(date_to)
+    _, entries = _load_filtered(
+        source=source,
+        status_filter=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        include_duplicate=include_duplicate,
+    )
+    if not entries:
+        raise HTTPException(status_code=404, detail="当前筛选条件下没有条目")
+    if len(entries) > cfg.REDBLUE_IMAGE_EXPORT_MAX_ROWS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"筛选结果 {len(entries)} 条，单张图最多 {cfg.REDBLUE_IMAGE_EXPORT_MAX_ROWS} 条，请缩小范围",
+        )
+    period = (
+        f"{date_from} 至 {date_to}"
+        if date_from and date_to
+        else (f"{date_from} 起" if date_from else (f"截至 {date_to}" if date_to else "全部时间"))
+    )
+    filters = []
+    if source != "all":
+        filters.append("来源：" + SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source)))
+    if status_filter != "all":
+        filters.append("状态：" + status_filter)
+    if keyword:
+        filters.append("关键词：" + keyword)
+    if not include_duplicate:
+        filters.append("不含重复")
+    updated = max((item.get("source_time") or item.get("created_at") or "" for item in entries), default="")[:16]
+    return entries, _summary(entries), period, " · ".join(filters), updated
+
+
+def _export_response(png: bytes, filename: str) -> Response:
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/export/summary.png")
+def export_redblue_summary(
+    source: str = Query("all"),
+    status_filter: str = Query("all", alias="status"),
+    keyword: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    sort: str = Query("time_asc"),
+    include_duplicate: bool = Query(True),
+    _=Depends(verify_redblue_password),
+):
+    entries, summary, period, filter_text, updated = _export_context(
+        source=source,
+        status_filter=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        include_duplicate=include_duplicate,
+    )
+    from website.redblue_export import render_summary_png
+
+    png = render_summary_png(
+        entries,
+        summary=summary,
+        fan_summary=_fan_summary(entries),
+        period=period,
+        filter_text=filter_text,
+        updated=updated,
+    )
+    stamp = datetime.now(BJ_TZ).strftime("%Y%m%d_%H%M")
+    return _export_response(png, f"redblue_summary_{stamp}.png")
+
+
+@router.get("/export/entries.png")
+def export_redblue_entries(
+    source: str = Query("all"),
+    status_filter: str = Query("all", alias="status"),
+    keyword: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    sort: str = Query("time_asc"),
+    include_duplicate: bool = Query(True),
+    _=Depends(verify_redblue_password),
+):
+    entries, summary, period, filter_text, updated = _export_context(
+        source=source,
+        status_filter=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        include_duplicate=include_duplicate,
+    )
+    from website.redblue_export import render_entries_png
+
+    png = render_entries_png(
+        entries,
+        summary=summary,
+        period=period,
+        filter_text=filter_text,
+        updated=updated,
+    )
+    stamp = datetime.now(BJ_TZ).strftime("%Y%m%d_%H%M")
+    return _export_response(png, f"redblue_entries_{stamp}.png")
+
+
+# ── 写操作 ──────────────────────────────────────────────────────────────
+
+
+def _mutate(operation: str, payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    operation_id = _clean(request.headers.get(MUTATION_HEADER), 80) or uuid.uuid4().hex
+    try:
+        result = execute_mutation(RESOURCE, operation, payload, operation_id=operation_id)
+    except (SharedStateError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"result": result.get("result"), "replicated": result.get("replicated", True)}
+
+
+@router.post("/entries")
+def add_entry(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    return _mutate("add", payload, request)
+
+
+@router.patch("/entries/{entry_id}")
+def update_entry(entry_id: str, request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    payload = dict(payload)
+    payload["id"] = entry_id
+    return _mutate("update", payload, request)
+
+
+@router.delete("/entries/{entry_id}")
+def delete_entry(entry_id: str, request: Request, _=Depends(verify_redblue_password)):
+    return _mutate("delete", {"id": entry_id}, request)
+
+
+@router.post("/entries/{entry_id}/duplicate")
+def mark_duplicate(entry_id: str, request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    data = dict(payload or {})
+    data["id"] = entry_id
+    return _mutate("duplicate", data, request)
+
+
+@router.post("/sync/room-live")
+def sync_room_live(request: Request, _=Depends(verify_redblue_password)):
+    try:
+        return {"result": _sync_room_live_now(request), "replicated": True}
+    except (SharedStateError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── 队列 ────────────────────────────────────────────────────────────────
+
+
+def _queue_root(kind: str) -> Path:
+    base = cfg.REDBLUE_AI_QUEUE_DIR if kind == "ai" else cfg.REDBLUE_WEIDIAN_QUEUE_DIR
+    return Path(base)
+
+
+def _queue_dirs(kind: str) -> tuple[Path, Path, Path, Path]:
+    root = _queue_root(kind)
+    pending = root / "pending"
+    results = root / "results"
+    done = root / "done"
+    for path in (pending, results, done):
+        path.mkdir(parents=True, exist_ok=True)
+    return root, pending, results, done
+
+
+def _write_job(kind: str, payload: dict[str, Any]) -> str:
+    _, pending, _, _ = _queue_dirs(kind)
+    job_id = uuid.uuid4().hex
+    payload = dict(payload)
+    payload["job_id"] = job_id
+    payload["created_at"] = _now()
+    payload["origin_node"] = cfg.SHARED_STATE_NODE_ID
+    path = pending / f"{job_id}.json"
+    tmp = pending / f".{job_id}.tmp"
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return job_id
+
+
+def _read_job_result(kind: str, job_id: str) -> dict[str, Any]:
+    _, pending, results, _ = _queue_dirs(kind)
+    result_path = results / f"{job_id}.json"
+    if result_path.exists():
+        data = _load_json(result_path)
+        if isinstance(data, dict):
+            return data
+        return {"status": "error", "error": "结果文件格式无效"}
+    if (pending / f"{job_id}.json").exists():
+        return {"status": "pending"}
+    return {"status": "missing"}
+
+
+def _worker_health(kind: str) -> dict[str, Any]:
+    root = _queue_root(kind)
+    status_path = root / "worker_status.json"
+    data = _load_json(status_path)
+    return {
+        "queue_dir": str(root),
+        "worker_status": data if isinstance(data, dict) else {},
+        "available": bool(isinstance(data, dict) and data.get("updated_at")),
+    }
+
+
+# ── AI 昵称分析 ─────────────────────────────────────────────────────────
+
+
+@router.post("/ai/jobs")
+def create_ai_job(payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    entry_ids = {_clean(value, 80) for value in (payload.get("entry_ids") or []) if _clean(value, 80)}
+    doc = load_document(RESOURCE)
+    selected = []
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry_ids and entry.get("id") not in entry_ids:
+            continue
+        if not entry_ids and not entry.get("warning"):
+            continue
+        if not entry.get("warning") and not payload.get("force"):
+            continue
+        selected.append(_normalise_entry(entry, doc.get("aliases") or []))
+    if not selected:
+        raise HTTPException(status_code=422, detail="没有需要分析的未登记条目")
+    selected = selected[: max(1, int(cfg.REDBLUE_AI_MAX_ENTRIES))]
+    job_id = _write_job(
+        "ai",
+        {
+            "type": "identity_resolve",
+            "identity_index_path": str(cfg.REDBLUE_IDENTITY_INDEX_PATH),
+            "identity_fallback_paths": dict(cfg.REDBLUE_IDENTITY_FALLBACK_PATHS or {}),
+            "entries": [
+                {
+                    "entry_id": item["id"],
+                    "raw_name": item["raw_name"] or item["fan_name"],
+                    "raw_id": item["raw_id"],
+                    "note": item["note"],
+                    "source": item["source"],
+                    "source_time": item["source_time"],
+                    "weidian": item.get("weidian") or {},
+                }
+                for item in selected
+            ],
+        },
+    )
+    return {"job_id": job_id, "count": len(selected)}
+
+
+@router.get("/ai/jobs/{job_id}")
+def get_ai_job(job_id: str, _=Depends(verify_redblue_password)):
+    job_id = _valid_job_id(job_id)
+    return _read_job_result("ai", job_id)
+
+
+@router.post("/ai/jobs/{job_id}/apply")
+def apply_ai_job(job_id: str, request: Request, _=Depends(verify_redblue_password)):
+    job_id = _valid_job_id(job_id)
+    result = _read_job_result("ai", job_id)
+    if result.get("status") != "done":
+        raise HTTPException(status_code=409, detail="AI 任务尚未完成")
+    suggestions = result.get("suggestions") if isinstance(result.get("suggestions"), list) else []
+    items = []
+    for suggestion in suggestions:
+        if not isinstance(suggestion, dict):
+            continue
+        items.append(
+            {
+                "entry_id": _clean(suggestion.get("entry_id"), 80),
+                "fan_id": _clean(suggestion.get("fan_id"), 32),
+                "fan_name": _clean(suggestion.get("fan_name"), 120),
+                "confidence": _to_float(suggestion.get("confidence"), 0.0),
+                "reason": _clean(suggestion.get("reason")),
+                "evidence": _clean(suggestion.get("evidence")),
+                "backend": _clean(result.get("backend"), 20),
+            }
+        )
+    if not items:
+        raise HTTPException(status_code=422, detail="没有可应用的 AI 建议")
+    return _mutate("apply_ai", {"items": items}, request)
+
+
+@router.post("/ai/apply")
+def apply_ai_suggestions(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    entry_ids = {_clean(value, 80) for value in (payload.get("entry_ids") or []) if _clean(value, 80)}
+    job_id = _clean(payload.get("job_id"), 64)
+    suggestions: list[dict[str, Any]] = []
+    backend = ""
+    if job_id:
+        job_id = _valid_job_id(job_id)
+        result = _read_job_result("ai", job_id)
+        if result.get("status") != "done":
+            raise HTTPException(status_code=409, detail="AI 任务尚未完成")
+        backend = _clean(result.get("backend"), 20)
+        for suggestion in result.get("suggestions") or []:
+            if not isinstance(suggestion, dict):
+                continue
+            entry_id = _clean(suggestion.get("entry_id"), 80)
+            if entry_ids and entry_id not in entry_ids:
+                continue
+            suggestions.append(
+                {
+                    "entry_id": entry_id,
+                    "fan_id": _clean(suggestion.get("fan_id"), 32),
+                    "fan_name": _clean(suggestion.get("fan_name"), 120),
+                    "confidence": _to_float(suggestion.get("confidence"), 0.0),
+                    "reason": _clean(suggestion.get("reason")),
+                    "evidence": _clean(suggestion.get("evidence")),
+                    "backend": backend,
+                }
+            )
+    else:
+        raw_items = payload.get("items") if isinstance(payload.get("items"), list) else []
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            entry_id = _clean(item.get("entry_id"), 80)
+            if entry_ids and entry_id not in entry_ids:
+                continue
+            suggestions.append(
+                {
+                    "entry_id": entry_id,
+                    "fan_id": _clean(item.get("fan_id"), 32),
+                    "fan_name": _clean(item.get("fan_name"), 120),
+                    "confidence": _to_float(item.get("confidence"), 0.0),
+                    "reason": _clean(item.get("reason")),
+                    "evidence": _clean(item.get("evidence")),
+                    "backend": _clean(item.get("backend"), 20) or backend,
+                }
+            )
+    if not suggestions:
+        raise HTTPException(status_code=422, detail="没有可应用的 AI 建议")
+    return _mutate("apply_ai", {"items": suggestions}, request)
+
+
+@router.get("/ai/prompt")
+def ai_prompt(_=Depends(verify_redblue_password)):
+    path = Path(cfg.REDBLUE_AI_PROMPT_PATH)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"AI Prompt 文档读取失败：{exc}") from exc
+    return {"path": str(path), "text": text}
+
+
+@router.get("/ai/health")
+def ai_health(_=Depends(verify_redblue_password)):
+    return _worker_health("ai")
+
+
+# ── 微店同步与发货 ──────────────────────────────────────────────────────
+
+
+@router.post("/weidian/sync")
+def create_weidian_sync_job(_=Depends(verify_redblue_password)):
+    job_id = _write_job(
+        "weidian",
+        {
+            "type": "sync",
+            "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
+            "item_ids": cfg.REDBLUE_WEIDIAN_ITEM_IDS,
+            "output_path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
+        },
+    )
+    return {"job_id": job_id}
+
+
+@router.get("/weidian/jobs/{job_id}")
+def get_weidian_job(job_id: str, _=Depends(verify_redblue_password)):
+    job_id = _valid_job_id(job_id)
+    return _read_job_result("weidian", job_id)
+
+
+@router.post("/weidian/sync/apply")
+def apply_weidian_sync(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    job_id = _valid_job_id(_clean(payload.get("job_id"), 64))
+    result = _read_job_result("weidian", job_id)
+    if result.get("status") != "done":
+        raise HTTPException(status_code=409, detail="微店同步任务尚未完成")
+    path = Path(cfg.REDBLUE_WEIDIAN_ORDERS_PATH)
+    if not path.exists():
+        raise HTTPException(status_code=503, detail="微店订单文件未生成")
+    data = _load_json(path)
+    orders = data.get("orders") if isinstance(data, dict) else None
+    if not isinstance(orders, list):
+        raise HTTPException(status_code=503, detail="微店订单文件格式无效")
+    try:
+        doc = load_document(RESOURCE)
+    except SharedStateError:
+        doc = {}
+    if not _weidian_changed(doc, orders):
+        return {"result": {"created": 0, "updated": 0, "skipped": True}, "replicated": True}
+    return _mutate("upsert_weidian", {"orders": orders}, request)
+
+
+@router.post("/weidian/ship")
+def create_weidian_ship_job(payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    entry_ids = {_clean(value, 80) for value in (payload.get("entry_ids") or []) if _clean(value, 80)}
+    if not entry_ids:
+        raise HTTPException(status_code=422, detail="请选择要发货的微店条目")
+    doc = load_document(RESOURCE)
+    orders = []
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict) or entry.get("id") not in entry_ids:
+            continue
+        if entry.get("source") != "weidian":
+            continue
+        if entry.get("settled"):
+            continue
+        weidian = entry.get("weidian") or {}
+        order_id = _clean(weidian.get("order_id") or entry.get("source_id"), 120)
+        item_id = _clean(weidian.get("item_id"), 40) or cfg.REDBLUE_WEIDIAN_ITEM_ID
+        if order_id:
+            orders.append({"order_id": order_id, "item_id": item_id})
+    orders = sorted({(item["order_id"], item["item_id"]) for item in orders})[:200]
+    if not orders:
+        raise HTTPException(status_code=422, detail="所选条目没有待发货的微店订单")
+    job_id = _write_job(
+        "weidian",
+        {
+            "type": "ship",
+            "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
+            "orders": [{"order_id": order_id, "item_id": item_id} for order_id, item_id in orders],
+        },
+    )
+    return {"job_id": job_id, "count": len(orders)}
+
+
+@router.post("/weidian/ship/apply")
+def apply_weidian_ship(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    job_id = _valid_job_id(_clean(payload.get("job_id"), 64))
+    result = _read_job_result("weidian", job_id)
+    if result.get("status") != "done":
+        raise HTTPException(status_code=409, detail="微店发货任务尚未完成")
+    shipped = result.get("shipped") if isinstance(result.get("shipped"), list) else []
+    order_ids = sorted({_clean(item.get("order_id"), 120) for item in shipped if isinstance(item, dict) and item.get("order_id")})
+    if not order_ids:
+        return {"updated": 0, "errors": result.get("errors") or []}
+    mutation = _mutate("mark_shipped", {"order_ids": order_ids, "shipped_at": _now()}, request)
+    return {"updated": mutation.get("result", {}).get("updated", 0), "errors": result.get("errors") or []}
+
+
+@router.get("/weidian/health")
+def weidian_health(_=Depends(verify_redblue_password)):
+    return _worker_health("weidian")

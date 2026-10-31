@@ -55,7 +55,7 @@ def _cookie_token(password: str) -> str:
 
 - 用 `hmac.compare_digest` 比较密码和 Cookie token。
 - 不要把密码、token 或 `_COOKIE_SECRET` 写进日志、异常详情、分析事件或响应体。
-- 当前仓库的单进程实现使用 `os.urandom(32)`，服务重启后旧 Cookie 失效，页面会回到登录页，这是可接受的。
+- 单进程实现可以直接使用 `os.urandom(32)`，服务重启后旧 Cookie 失效、页面回到登录页；但频繁重启或导出/部署较多时体验很差。2026-10-27 起红蓝台账已改为 600 权限的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`），重启后登录态保留；密钥文件不得进 Git、不得打印。
 - 如果未来改成多 worker，必须把 `_COOKIE_SECRET` 改为所有 worker 共享的持久密钥（环境变量或 600 权限密钥文件），否则不同 worker 签发的 Cookie 会互相失效。
 
 ### 3.2 鉴权依赖

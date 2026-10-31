@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site_title }} · 红蓝计分台账 2026</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0c1016; --panel: #151b24; --panel-2: #1b2430; --line: #2c394b;
+      --text: #e8eef6; --muted: #95a4b6; --faint: #657386; --ink: #091017;
+      --teal: #41b9aa; --gold: #f0b84b; --blue: #67a8ff; --pink: #e87da7;
+      --green: #4dc27c; --red: #e36f6f;
+    }
+    body { min-height: 100vh; background: linear-gradient(180deg, rgba(65,185,170,.08), transparent 240px), var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif; line-height: 1.45; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .hidden { display: none !important; }
+    #loginOverlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: var(--bg); padding: 24px; }
+    .login-box { width: min(380px,100%); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 28px; box-shadow: 0 18px 50px rgba(0,0,0,.3); }
+    .login-box h1 { font-size: 20px; margin-bottom: 8px; }
+    .login-box p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+    .login-box input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); color: var(--text); padding: 0 12px; outline: none; }
+    .login-box input:focus { border-color: var(--teal); }
+    .login-btn { width: 100%; min-height: 44px; margin-top: 12px; border: 0; border-radius: 8px; background: var(--teal); color: var(--ink); font-weight: 760; }
+    .login-btn:disabled { opacity: .7; cursor: wait; }
+    .login-error { display: none; margin-top: 10px; color: var(--red); font-size: 13px; }
+    .login-error.show { display: block; }
+    .page { display: none; min-height: 100vh; }
+    .page.ready { display: block; }
+    .topbar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+    .topbar-inner { width: min(1500px,100%); margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .title h1 { font-size: 21px; }
+    .title p { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .btn { min-height: 34px; padding: 0 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 13px; white-space: nowrap; }
+    .btn:hover { border-color: var(--teal); color: var(--teal); }
+    .btn.primary { background: var(--teal); border-color: var(--teal); color: var(--ink); font-weight: 760; }
+    .btn.gold { border-color: rgba(240,184,75,.6); color: var(--gold); }
+    .btn.pink { border-color: rgba(232,125,167,.6); color: var(--pink); }
+    .btn.danger { border-color: rgba(227,111,111,.6); color: var(--red); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .wrap { width: min(1500px,100%); margin: 0 auto; padding: 20px 24px 48px; }
+    .kpis { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px; }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 25px; font-weight: 780; margin-top: 3px; }
+    .kpi .value.teal { color: var(--teal); } .kpi .value.gold { color: var(--gold); } .kpi .value.pink { color: var(--pink); } .kpi .value.red { color: var(--red); } .kpi .value.blue { color: var(--blue); }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .toolbar .spacer { flex: 1; }
+    .filters { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)) auto; gap: 8px; align-items: end; margin-top: 12px; }
+    .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .field label { color: var(--faint); font-size: 12px; }
+    .field input, .field select, .field textarea { width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); color: var(--text); padding: 0 9px; outline: none; }
+    .field textarea { min-height: 72px; padding: 8px 9px; resize: vertical; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--teal); }
+    .check { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; min-height: 34px; }
+    .check input { width: 15px; height: 15px; accent-color: var(--teal); }
+    .analytics-grid { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.35fr); gap: 12px; margin-bottom: 14px; align-items: start; }
+    .analytics-grid .panel { margin-bottom: 0; padding: 0; overflow: hidden; }
+    .panel-head { min-height: 48px; padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .panel-head h2 { font-size: 15px; font-weight: 740; }
+    .panel-head .panel-count { color: var(--muted); font-size: 12px; }
+    .panel-actions { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+    .bar-list { display: flex; flex-direction: column; gap: 10px; padding: 13px 14px 15px; }
+    .bar-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(88px,auto); gap: 10px; align-items: center; min-height: 36px; }
+    .bar-label { min-width: 0; display: flex; align-items: center; gap: 9px; }
+    .bar-name { min-width: 0; color: var(--text); font-size: 13px; font-weight: 680; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-meta { color: var(--faint); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { height: 7px; margin-top: 7px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.06); }
+    .bar-fill { width: var(--bar-width,0%); height: 100%; border-radius: inherit; background: var(--teal); }
+    .bar-row.card .bar-fill { background: var(--blue); }
+    .bar-row.leg .bar-fill { background: var(--pink); }
+    .bar-row.warn .bar-name { color: var(--red); }
+    .bar-value { color: var(--text); font-size: 13px; font-weight: 740; text-align: right; white-space: nowrap; }
+    .split-score { color: var(--faint); font-size: 12px; margin-top: 2px; }
+    .distribution-more { display: none; width: calc(100% - 28px); min-height: 42px; margin: -3px 14px 14px; border: 1px solid rgba(65,185,170,.34); border-radius: 8px; background: linear-gradient(90deg, rgba(65,185,170,.12), rgba(240,184,75,.08)); color: var(--text); padding: 0 12px; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; text-align: left; }
+    .distribution-more.show { display: flex; }
+    .distribution-more::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--teal), var(--gold), var(--pink)); opacity: .9; }
+    .distribution-more:hover, .distribution-more:focus-visible { border-color: var(--gold); outline: none; }
+    .distribution-more-text { font-size: 13px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .distribution-more-action { color: var(--gold); font-size: 12px; font-weight: 760; white-space: nowrap; }
+    .table-wrap { overflow-x: auto; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 1120px; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+    th { color: var(--faint); font-weight: 600; font-size: 12px; white-space: nowrap; }
+    tr.row:hover { background: rgba(65,185,170,.04); }
+    tr.warn td { background: rgba(227,111,111,.06); }
+    .pill { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+    .pill.manual { color: var(--gold); border-color: rgba(240,184,75,.4); }
+    .pill.weidian { color: var(--pink); border-color: rgba(232,125,167,.4); }
+    .pill.room { color: var(--blue); border-color: rgba(103,168,255,.4); }
+    .pill.live { color: var(--teal); border-color: rgba(65,185,170,.4); }
+    .pill.card { color: var(--blue); border-color: rgba(103,168,255,.4); background: rgba(103,168,255,.08); }
+    .pill.leg { color: var(--pink); border-color: rgba(232,125,167,.4); background: rgba(232,125,167,.08); }
+    .pill.ok { color: var(--green); border-color: rgba(77,194,124,.4); }
+    .pill.wait { color: var(--gold); border-color: rgba(240,184,75,.4); }
+    .pill.bad { color: var(--red); border-color: rgba(227,111,111,.4); }
+    .pill.dup { color: var(--faint); }
+    .warn-icon { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; vertical-align: 1px; }
+    .actions { display: flex; gap: 5px; flex-wrap: wrap; }
+    .mini { min-height: 28px; padding: 0 8px; font-size: 12px; border-radius: 6px; }
+    .business-btn { border-color: rgba(232,125,167,.45); color: var(--pink); }
+    .business-btn.done { border-color: rgba(77,194,124,.55); color: var(--green); }
+    .empty { color: var(--faint); text-align: center; padding: 30px 10px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 360px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: none; }
+    .toast.show { display: block; }
+    .toast.error { border-left-color: var(--red); }
+    .modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 18px; }
+    .modal.hidden { display: none; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.62); }
+    .modal-card { position: relative; width: min(620px,100%); max-height: 90vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+    .modal-card.wide { width: min(980px,100%); }
+    .modal-card h2 { font-size: 19px; margin-bottom: 4px; }
+    .modal-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .suggest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .suggest { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .suggest .raw { color: var(--muted); font-size: 12px; }
+    .suggest .match { font-weight: 700; }
+    .suggest .reason { color: var(--faint); font-size: 12px; margin-top: 2px; }
+    .ai-panel { margin-top: 12px; }
+    .notice { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3,minmax(0,1fr)); } .filters { grid-template-columns: repeat(2,minmax(0,1fr)); } .analytics-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) { .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } .filters { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div id="loginOverlay">
+  <div class="login-box">
+    <h1>红蓝计分台账 2026</h1>
+    <p>请输入管理密码</p>
+    <input id="passwordInput" type="password" autocomplete="new-password" placeholder="密码">
+    <button class="login-btn" id="loginBtn">进入</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="page" id="page">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="title">
+        <h1>红蓝计分台账 2026</h1>
+        <p id="metaLine">自动同步：房间/直播 60s · 微店 5min · 按时间正序</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" id="refreshBtn">刷新</button>
+        <button class="btn" id="exportEntriesBtn">导出按条目</button>
+        <button class="btn" id="logoutBtn">退出</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="kpis" id="kpis"></section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <button class="btn primary" id="addManualBtn">＋ 新增暗票</button>
+        <button class="btn" id="syncRoomLiveBtn">立即同步房间/直播</button>
+        <button class="btn pink" id="syncWeidianBtn">立即同步微店</button>
+        <button class="btn gold" id="aiResolveBtn">AI 识别未登记</button>
+        <button class="btn" id="applySelectedAiBtn">应用选中 AI 建议</button>
+        <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
+        <button class="btn" id="duplicateSelectedBtn">标记重复</button>
+        <div class="spacer"></div>
+        <span class="notice" id="actionStatus"></span>
+      </div>
+      <div class="filters">
+        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店</option><option value="room">房间</option><option value="live">直播</option></select></div>
+        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
+        <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
+        <div class="field"><label>开始日期</label><input id="dateFrom" type="date"></div>
+        <div class="field"><label>结束日期</label><input id="dateTo" type="date"></div>
+        <div class="field"><label>排序</label><select id="sortFilter"><option value="time_asc">时间正序</option><option value="time_desc">时间倒序</option></select></div>
+        <div class="field"><label>&nbsp;</label><label class="check"><input id="includeDuplicate" type="checkbox" checked> 显示重复</label></div>
+      </div>
+    </section>
+
+    <section class="analytics-grid" aria-label="计分汇总">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>计分来源汇总</h2>
+          <span class="panel-count" id="scoringSummaryCount">6 类</span>
+        </div>
+        <div class="bar-list" id="scoringSummary"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>按昵称汇总</h2>
+          <div class="panel-actions">
+            <span class="panel-count" id="fanSummaryCount">0 人</span>
+            <button class="btn mini" id="exportSummaryBtn" type="button">导出按昵称汇总</button>
+            <button class="btn mini" id="openFanModalBtn" type="button" style="display:none;">全部</button>
+          </div>
+        </div>
+        <div class="bar-list" id="fanSummary"></div>
+        <button class="distribution-more" id="fanMoreBar" type="button" aria-haspopup="dialog" aria-controls="fanModal" aria-hidden="true">
+          <span class="distribution-more-text" id="fanMoreText"></span>
+          <span class="distribution-more-action">查看全部</span>
+        </button>
+      </section>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><div class="spacer"></div><label class="check"><input type="checkbox" id="selectAll"> 全选当前列表</label></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:34px;"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务</th><th>备注</th><th>操作</th></tr></thead>
+          <tbody id="entryBody"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="emptyState">当前筛选条件下没有条目</div>
+    </section>
+
+    <section class="panel hidden" id="aiPanel">
+      <div class="toolbar"><strong style="font-size:15px;">AI 建议</strong><span class="notice" id="aiHint"></span><div class="spacer"></div><button class="btn" id="viewPromptBtn">查看 AI Prompt</button><button class="btn" id="closeAiPanelBtn">收起</button></div>
+      <div class="suggest-list" id="aiSuggestList"></div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal hidden" id="entryModal">
+  <div class="modal-backdrop" data-close="entryModal"></div>
+  <div class="modal-card">
+    <h2 id="entryModalTitle">新增暗票</h2>
+    <div class="sub" id="entryModalSub">暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。</div>
+    <div class="form-grid">
+      <div class="field"><label>口袋48昵称</label><input id="entryName" placeholder="粉丝昵称"></div>
+      <div class="field"><label>口袋48 ID</label><input id="entryId" placeholder="可选；填了会优先校验"></div>
+      <div class="field"><label>分数</label><input id="entryScore" type="number" min="0.01" step="0.01" placeholder="1"></div>
+      <div class="field"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
+      <div class="field full"><label>备注</label><textarea id="entryNote" placeholder="可选"></textarea></div>
+      <div class="field full"><label class="check"><input id="entryBusinessDone" type="checkbox"> 业务已完成</label></div>
+      <div class="field full"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close="entryModal">取消</button>
+      <button class="btn primary" id="saveEntryBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="fanModal">
+  <div class="modal-backdrop" data-close="fanModal"></div>
+  <div class="modal-card wide">
+    <h2>按昵称汇总 · 全部</h2>
+    <div class="sub" id="fanModalSub"></div>
+    <div class="bar-list" id="fanModalBars"></div>
+    <div class="modal-actions"><button class="btn" data-close="fanModal">关闭</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="promptModal">
+  <div class="modal-backdrop" data-close="promptModal"></div>
+  <div class="modal-card wide">
+    <h2>AI Prompt</h2>
+    <div class="sub" id="promptPath"></div>
+    <pre id="promptText" style="white-space:pre-wrap;background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;line-height:1.6;max-height:65vh;overflow:auto;"></pre>
+    <div class="modal-actions"><button class="btn" data-close="promptModal">关闭</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="confirmModal">
+  <div class="modal-backdrop" data-close="confirmModal"></div>
+  <div class="modal-card">
+    <h2 id="confirmTitle">确认</h2>
+    <div class="sub" id="confirmText"></div>
+    <div class="modal-actions">
+      <button class="btn" data-close="confirmModal">取消</button>
+      <button class="btn danger" id="confirmOkBtn">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var LEGACY_PASSWORD_KEY = "redblue_ledger_password_2026";
+  var data = null;
+  var selected = new Set();
+  var editingId = "";
+  var aiJobId = "";
+  var aiSuggestions = {};
+  var fanSummaryItems = [];
+  var pollTimer = null;
+  var confirmAction = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var loginOverlay = $("loginOverlay"), page = $("page"), loginError = $("loginError");
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function score(value) {
+    var n = Number(value || 0);
+    return Math.abs(n - Math.round(n)) < 0.0001 ? String(Math.round(n)) : n.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
+  }
+  function showToast(message, isError) {
+    var el = $("toast");
+    el.textContent = message || "";
+    el.classList.toggle("error", Boolean(isError));
+    el.classList.add("show");
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(function () { el.classList.remove("show"); }, 4200);
+  }
+  function setStatus(message) { $("actionStatus").textContent = message || ""; }
+
+  function showLogin(message) {
+    page.classList.remove("ready");
+    loginOverlay.classList.remove("hidden");
+    $("passwordInput").value = "";
+    if (message) {
+      loginError.textContent = message;
+      loginError.classList.add("show");
+    }
+    $("passwordInput").focus();
+  }
+
+  function showApp() {
+    loginOverlay.classList.add("hidden");
+    page.classList.add("ready");
+  }
+
+  async function api(path, options) {
+    options = options || {};
+    options.credentials = "same-origin";
+    options.cache = "no-store";
+    var response = await fetch(path, options);
+    if (response.status === 401 || response.status === 403) {
+      showLogin("登录已失效，请重新输入密码");
+      throw new Error("登录已失效，请重新输入密码");
+    }
+    if (!response.ok) {
+      var body = await response.json().catch(function () { return {}; });
+      throw new Error(body.detail || ("HTTP " + response.status));
+    }
+    return response.json();
+  }
+
+  function filterQuery() {
+    var params = new URLSearchParams();
+    params.set("source", $("sourceFilter").value);
+    params.set("status", $("statusFilter").value);
+    params.set("keyword", $("keywordInput").value.trim());
+    params.set("date_from", $("dateFrom").value);
+    params.set("date_to", $("dateTo").value);
+    params.set("sort", $("sortFilter").value);
+    params.set("include_duplicate", $("includeDuplicate").checked ? "true" : "false");
+    return params.toString();
+  }
+
+  async function loadData(silent) {
+    if (!silent) setStatus("加载中…");
+    try {
+      data = await api("/api/redblue/data?" + filterQuery());
+      selected.clear();
+      renderAll();
+      setStatus("");
+    } catch (error) {
+      if (!silent) showToast(error.message || "加载失败", true);
+      throw error;
+    }
+  }
+
+  function renderAll() {
+    if (!data) return;
+    renderKpis();
+    renderScoringSummary();
+    renderFanSummary();
+    renderEntries();
+    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 6 类计分来源（房间/直播 × 计分卡/鸡腿、应援会/暗票） · 按时间正序";
+  }
+
+  function renderKpis() {
+    var s = data.summary || {};
+    var cards = [
+      ["总计分", score(s.total_score), "teal"],
+      ["人数", s.people_count || 0, "blue"],
+      ["条目", s.entry_count || 0, ""],
+      ["已投", score(s.settled_score), "teal"],
+      ["待投", score(s.pending_score), "pink"],
+      ["未登记", s.warning_count || 0, "red"]
+    ];
+    $("kpis").innerHTML = cards.map(function (item) {
+      return '<div class="kpi"><div class="label">' + esc(item[0]) + '</div><div class="value ' + item[2] + '">' + esc(item[1]) + '</div></div>';
+    }).join("");
+  }
+
+  function sourceScoringLabel(key) {
+    var base = {manual:"暗票",weidian:"应援会",room:"房间",live:"直播"}[key] || key;
+    var method = {manual:"计分卡",weidian:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
+    return method ? base + "·" + method : base;
+  }
+
+  var SCORING_CATEGORIES = [
+    {source:"room", method:"计分卡", label:"房间·计分卡", cls:"card"},
+    {source:"room", method:"鸡腿", label:"房间·鸡腿", cls:"leg"},
+    {source:"live", method:"计分卡", label:"直播·计分卡", cls:"card"},
+    {source:"live", method:"鸡腿", label:"直播·鸡腿", cls:"leg"},
+    {source:"weidian", method:"鸡腿", label:"应援会·鸡腿", cls:"leg"},
+    {source:"manual", method:"计分卡", label:"暗票·计分卡", cls:"card"}
+  ];
+
+  function renderScoringSummary() {
+    var buckets = {};
+    SCORING_CATEGORIES.forEach(function (item) {
+      buckets[item.source + "|" + item.method] = {count:0, score:0, settled:0, pending:0};
+    });
+    (data.entries || []).forEach(function (entry) {
+      if (entry.duplicate) return;
+      var bucket = buckets[entry.source + "|" + entry.scoring_method];
+      if (!bucket) return;
+      var value = Number(entry.score || 0);
+      bucket.count += 1;
+      bucket.score += value;
+      if (entry.settled) bucket.settled += value;
+      else bucket.pending += value;
+    });
+    var items = SCORING_CATEGORIES.map(function (item) {
+      var bucket = buckets[item.source + "|" + item.method];
+      return {label:item.label, cls:item.cls, count:bucket.count, total_score:bucket.score, settled:bucket.settled, pending:bucket.pending};
+    });
+    $("scoringSummaryCount").textContent = items.length + " 类";
+    renderBarList($("scoringSummary"), items, {
+      maxValue: maxValueOf(items, function (item) { return item.total_score; }),
+      rowClass: function (item) { return item.cls; },
+      label: function (item) { return item.label; },
+      meta: function (item) { return item.count + " 条"; },
+      value: function (item) { return item.total_score; },
+      split: function (item) { return "已投 " + score(item.settled) + " · 待投 " + score(item.pending); }
+    });
+  }
+
+  function fanScoreParts(fan) {
+    var scoring = fan.scoring || {};
+    var parts = [];
+    ["计分卡", "鸡腿"].forEach(function (method) {
+      if (scoring[method] !== undefined) parts.push(method + " " + score(scoring[method]));
+    });
+    if (!parts.length) {
+      var sources = fan.sources || {};
+      Object.keys(sources).forEach(function (key) {
+        parts.push(sourceScoringLabel(key) + " " + score(sources[key]));
+      });
+    }
+    return parts;
+  }
+
+  function fanBarOptions(items) {
+    return {
+      maxValue: maxValueOf(items, function (item) { return item.total_score; }),
+      rowClass: function (item) { return item.warning ? "warn" : ""; },
+      warning: function (item) { return item.warning; },
+      warningTitle: function () { return "暂未找到对应的口袋48账号昵称"; },
+      label: function (item) { return item.fan_name || "未登记"; },
+      meta: function (item) {
+        var parts = [item.fan_id ? "ID " + item.fan_id : "按昵称兜底"];
+        var scoreNames = (item.score_names || []).filter(function (value) {
+          return value && value !== item.fan_name;
+        });
+        if (scoreNames.length) parts.push("计分昵称 " + scoreNames.slice(0, 2).join(" / "));
+        parts.push("记录 " + (item.entry_count || 0));
+        parts.push("已投 " + score(item.settled_score) + " · 待投 " + score(item.pending_score));
+        return parts.join(" · ");
+      },
+      value: function (item) { return item.total_score; },
+      split: function (item) { return fanScoreParts(item).join(" · "); }
+    };
+  }
+
+  function renderFanSummary() {
+    var fans = data.fan_summary || [];
+    fanSummaryItems = fans;
+    $("fanSummaryCount").textContent = fans.length + " 人";
+    var hiddenCount = Math.max(0, fans.length - 10);
+    $("openFanModalBtn").style.display = hiddenCount > 0 ? "inline-flex" : "none";
+    $("fanMoreBar").classList.toggle("show", hiddenCount > 0);
+    $("fanMoreBar").disabled = hiddenCount <= 0;
+    $("fanMoreBar").setAttribute("aria-hidden", hiddenCount > 0 ? "false" : "true");
+    $("fanMoreText").textContent = hiddenCount > 0 ? "还有 " + hiddenCount + " 人未显示，点击查看完整分布" : "";
+    renderBarList($("fanSummary"), fans.slice(0, 10), fanBarOptions(fans));
+    if (!$("fanModal").classList.contains("hidden")) renderFanModal();
+  }
+
+  function renderFanModal() {
+    $("fanModalSub").textContent = "共 " + fanSummaryItems.length + " 人 · 按总分降序，同分按达成时间升序";
+    renderBarList($("fanModalBars"), fanSummaryItems, fanBarOptions(fanSummaryItems));
+  }
+
+  function openFanModal() {
+    renderFanModal();
+    $("fanModal").classList.remove("hidden");
+  }
+
+  function maxValueOf(items, getter) {
+    return items.reduce(function (max, item) {
+      return Math.max(max, Number(getter(item) || 0));
+    }, 0);
+  }
+
+  function percent(value, maxValue) {
+    var max = Number(maxValue || 0);
+    if (max <= 0) return 0;
+    return Math.max(0, Math.min(100, Number(value || 0) / max * 100));
+  }
+
+  function renderBarList(parent, items, options) {
+    parent.textContent = "";
+    if (!items.length) {
+      parent.innerHTML = '<div class="empty">暂无数据</div>';
+      return;
+    }
+    items.forEach(function (item) {
+      var row = document.createElement("div");
+      row.className = "bar-row" + (options.rowClass ? " " + options.rowClass(item) : "");
+      var label = document.createElement("div");
+      label.className = "bar-label";
+      var text = document.createElement("div");
+      text.style.minWidth = "0";
+      var name = document.createElement("div");
+      name.className = "bar-name";
+      name.textContent = options.label(item);
+      if (options.warning && options.warning(item)) {
+        var warn = document.createElement("span");
+        warn.className = "warn-icon";
+        warn.textContent = "!";
+        warn.title = options.warningTitle ? options.warningTitle(item) : "";
+        name.appendChild(warn);
+      }
+      var meta = document.createElement("div");
+      meta.className = "bar-meta";
+      meta.textContent = options.meta(item);
+      var track = document.createElement("div");
+      track.className = "bar-track";
+      var fill = document.createElement("div");
+      fill.className = "bar-fill";
+      fill.style.setProperty("--bar-width", percent(options.value(item), options.maxValue) + "%");
+      track.appendChild(fill);
+      text.appendChild(name);
+      text.appendChild(meta);
+      text.appendChild(track);
+      label.appendChild(text);
+      row.appendChild(label);
+      var value = document.createElement("div");
+      value.className = "bar-value";
+      value.textContent = score(options.value(item));
+      var split = document.createElement("div");
+      split.className = "split-score";
+      split.textContent = options.split(item);
+      value.appendChild(split);
+      row.appendChild(value);
+      parent.appendChild(row);
+    });
+  }
+
+  function statusPills(entry) {
+    var out = [];
+    if (entry.duplicate) out.push('<span class="pill dup">重复</span>');
+    else if (entry.settled) out.push('<span class="pill ok">已投</span>');
+    else out.push('<span class="pill wait">待投</span>');
+    return out.join(" ");
+  }
+
+  function renderEntries() {
+    var entries = data.entries || [];
+    $("entryHint").textContent = "共 " + entries.length + " 条";
+    $("emptyState").classList.toggle("hidden", entries.length > 0);
+    if (!entries.length) { $("entryBody").innerHTML = ""; return; }
+    $("entryBody").innerHTML = entries.map(function (entry) {
+      var name = entry.fan_name || entry.raw_name || "未登记";
+      var rawId = entry.fan_id ? "ID " + entry.fan_id : (entry.raw_id ? "ID " + entry.raw_id : "");
+      var scoringName = entry.raw_name || "";
+      var scoreNote = scoringName && scoringName !== name ? "计分昵称：" + scoringName : "";
+      var identityNote = [rawId || "未登记 ID", scoreNote].filter(Boolean).join(" · ");
+      var warning = entry.warning ? '<span class="warn-icon" title="' + esc(entry.warning_reason || "待修正") + '">!</span>' : "";
+      var note = entry.note || "";
+      var weidian = entry.weidian || {};
+      if (entry.source === "weidian" && weidian.order_id) {
+        note = (note ? note + " · " : "") + "订单 " + weidian.order_id + (weidian.status ? " · " + weidian.status : "");
+      }
+      var ai = aiSuggestions[entry.id];
+      var aiBtn = ai ? '<button class="btn mini gold" data-ai-apply="' + esc(entry.id) + '">应用AI</button>' : "";
+      var shipBtn = (entry.source === "weidian" && !entry.settled && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
+      var scoring = entry.scoring_method || "";
+      var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
+      return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
+        '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
+        '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
+        '<td><strong>' + esc(name) + '</strong>' + warning + '<div class="notice">' + esc(identityNote) + '</div></td>' +
+        '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || entry.source) + '</span></td>' +
+        '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span></td>' +
+        '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
+        '<td>' + statusPills(entry) + '</td>' +
+        '<td><button class="btn mini business-btn ' + (entry.business_done ? "done" : "") + '" data-business="' + esc(entry.id) + '" data-done="' + (entry.business_done ? "0" : "1") + '">' + (entry.business_done ? "已完成业务" : "未完成业务") + '</button></td>' +
+        '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
+        '<td><div class="actions">' +
+          '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + aiBtn + shipBtn +
+          '<button class="btn mini" data-dup="' + esc(entry.id) + '">' + (entry.duplicate ? "取消重复" : "重复") + '</button>' +
+          '<button class="btn mini danger" data-delete="' + esc(entry.id) + '">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  function openEntryModal(entry) {
+    editingId = entry ? entry.id : "";
+    $("entryModalTitle").textContent = entry ? "编辑条目" : "新增暗票";
+    $("entryModalSub").textContent = entry
+      ? "来源：" + (entry.source_label || entry.source) + " · 原始时间：" + (entry.source_time || entry.created_at || "-")
+      : "暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。";
+    $("entryName").value = entry ? (entry.raw_name || entry.fan_name || "") : "";
+    $("entryId").value = entry ? (entry.fan_id || entry.raw_id || "") : "";
+    $("entryScore").value = entry ? entry.score : "1";
+    $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
+    $("entryNote").value = entry ? (entry.note || "") : "";
+    $("entryBusinessDone").checked = entry ? Boolean(entry.business_done) : false;
+    $("entryDuplicate").checked = entry ? Boolean(entry.duplicate) : false;
+    $("entryModal").classList.remove("hidden");
+    setTimeout(function () { $("entryName").focus(); }, 30);
+  }
+
+  async function saveEntry() {
+    var payload = {
+      raw_name: $("entryName").value.trim(),
+      raw_id: $("entryId").value.trim(),
+      score: Number($("entryScore").value || 0),
+      note: $("entryNote").value.trim(),
+      settled: $("entrySettled").checked,
+      business_done: $("entryBusinessDone").checked,
+      duplicate: $("entryDuplicate").checked
+    };
+    if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
+    if (!(payload.score > 0)) { showToast("分数必须大于 0", true); return; }
+    $("saveEntryBtn").disabled = true;
+    try {
+      if (editingId) {
+        await api("/api/redblue/entries/" + encodeURIComponent(editingId), {method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+      } else {
+        await api("/api/redblue/entries", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+      }
+      $("entryModal").classList.add("hidden");
+      showToast(editingId ? "已保存" : "已新增");
+      await loadData(true);
+    } catch (error) {
+      showToast(error.message || "保存失败", true);
+    } finally {
+      $("saveEntryBtn").disabled = false;
+    }
+  }
+
+  async function duplicateEntry(id, duplicate) {
+    try {
+      await api("/api/redblue/entries/" + encodeURIComponent(id) + "/duplicate", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({duplicate: duplicate})});
+      await loadData(true);
+    } catch (error) { showToast(error.message || "操作失败", true); }
+  }
+
+  async function toggleBusiness(id, done) {
+    try {
+      await api("/api/redblue/entries/" + encodeURIComponent(id), {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({business_done: done})
+      });
+      await loadData(true);
+    } catch (error) { showToast(error.message || "业务状态更新失败", true); }
+  }
+
+  async function deleteEntry(id) {
+    openConfirm("删除条目", "删除后不可恢复，确定删除？", async function () {
+      try {
+        await api("/api/redblue/entries/" + encodeURIComponent(id), {method: "DELETE"});
+        await loadData(true);
+        showToast("已删除");
+      } catch (error) { showToast(error.message || "删除失败", true); }
+    });
+  }
+
+  function openConfirm(title, text, action) {
+    $("confirmTitle").textContent = title;
+    $("confirmText").textContent = text;
+    confirmAction = action;
+    $("confirmModal").classList.remove("hidden");
+  }
+
+  var roomLiveBusy = false;
+  var weidianBusy = false;
+  var autoSyncStarted = false;
+
+  async function syncRoomLive(silent) {
+    if (roomLiveBusy) return;
+    roomLiveBusy = true;
+    if (!silent) setStatus("同步房间/直播…");
+    try {
+      var result = await api("/api/redblue/sync/room-live", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+      var r = result.result || {};
+      var changed = !r.skipped && ((r.created || 0) + (r.updated || 0) > 0);
+      if (!silent) showToast("房间/直播：新增 " + (r.created || 0) + "，更新 " + (r.updated || 0));
+      if (changed) await loadData(true);
+    } catch (error) {
+      if (!silent) showToast(error.message || "同步失败", true);
+    } finally {
+      roomLiveBusy = false;
+      if (!silent) setStatus("");
+    }
+  }
+
+  async function createJob(path, body) {
+    return api(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  }
+
+  function waitJob(kind, jobId, silent) {
+    return new Promise(function (resolve, reject) {
+      var started = Date.now();
+      var timer = setInterval(async function () {
+        if (Date.now() - started > 15 * 60 * 1000) {
+          clearInterval(timer);
+          if (!silent) { setStatus(""); showToast("任务超时，请查看 worker 状态", true); }
+          reject(new Error("任务超时"));
+          return;
+        }
+        try {
+          var result = await api("/api/redblue/" + kind + "/jobs/" + encodeURIComponent(jobId));
+          if (result.status === "done") {
+            clearInterval(timer);
+            if (!silent) setStatus("");
+            resolve(result);
+          } else if (result.status === "error") {
+            clearInterval(timer);
+            if (!silent) { setStatus(""); showToast(result.error || "任务失败", true); }
+            reject(new Error(result.error || "任务失败"));
+          } else if (!silent) {
+            setStatus("任务处理中…");
+          }
+        } catch (error) {
+          clearInterval(timer);
+          if (!silent) { setStatus(""); showToast(error.message || "任务查询失败", true); }
+          reject(error);
+        }
+      }, 2500);
+    });
+  }
+
+  async function syncWeidian(silent) {
+    if (weidianBusy) return;
+    weidianBusy = true;
+    if (!silent) setStatus("提交微店同步…");
+    try {
+      var job = await createJob("/api/redblue/weidian/sync");
+      await waitJob("weidian", job.job_id, silent);
+      var applied = await createJob("/api/redblue/weidian/sync/apply", {job_id: job.job_id});
+      var r = applied.result || {};
+      var changed = !r.skipped && ((r.created || 0) + (r.updated || 0) > 0);
+      if (!silent) showToast("微店：新增 " + (r.created || 0) + "，更新 " + (r.updated || 0));
+      if (changed) await loadData(true);
+    } catch (error) {
+      if (!silent) showToast(error.message || "同步失败", true);
+    } finally {
+      weidianBusy = false;
+      if (!silent) setStatus("");
+    }
+  }
+
+  async function aiResolve() {
+    var ids = Array.from(selected);
+    setStatus("提交 AI 识别…");
+    try {
+      var job = await createJob("/api/redblue/ai/jobs", {entry_ids: ids});
+      aiJobId = job.job_id;
+      var result = await waitJob("ai", job.job_id, false);
+      aiSuggestions = {};
+      (result.suggestions || []).forEach(function (item) { if (item.entry_id) aiSuggestions[item.entry_id] = item; });
+      renderAiPanel(result);
+      renderEntries();
+      showToast("AI 分析完成：" + (result.suggestions || []).length + " 条建议");
+    } catch (error) {
+      setStatus("");
+      showToast(error.message || "AI 任务失败", true);
+    }
+  }
+
+  function renderAiPanel(result) {
+    var suggestions = (result && result.suggestions) || [];
+    $("aiPanel").classList.remove("hidden");
+    $("aiHint").textContent = "后台：" + (result.backend || "-") + " · 仅作建议，应用后才写入";
+    if (!suggestions.length) {
+      $("aiSuggestList").innerHTML = '<div class="empty">没有找到候选</div>';
+      return;
+    }
+    $("aiSuggestList").innerHTML = suggestions.map(function (item) {
+      var entry = (data.entries || []).find(function (row) { return row.id === item.entry_id; }) || {};
+      var raw = entry.raw_name || entry.fan_name || item.entry_id;
+      var conf = Math.round(Number(item.confidence || 0) * 100);
+      return '<div class="suggest">' +
+        '<div><div class="raw">' + esc(raw) + '</div><div class="match">' + esc(item.fan_name || "未匹配") + (item.fan_id ? ' <span class="notice">ID ' + esc(item.fan_id) + '</span>' : '') + '</div><div class="reason">' + esc(item.reason || "") + (item.evidence ? ' · ' + esc(item.evidence) : '') + ' · 置信度 ' + conf + '%</div></div>' +
+        '<button class="btn mini gold" data-ai-apply="' + esc(item.entry_id) + '">应用</button>' +
+      '</div>';
+    }).join("");
+  }
+
+  async function applyAi(entryId) {
+    try {
+      var items = [];
+      if (entryId) {
+        var suggestion = aiSuggestions[entryId];
+        if (!suggestion) { showToast("该条目没有 AI 建议", true); return; }
+        items.push(suggestion);
+      } else {
+        Array.from(selected).forEach(function (id) { if (aiSuggestions[id]) items.push(aiSuggestions[id]); });
+      }
+      if (!items.length) { showToast("没有可应用的 AI 建议", true); return; }
+      var result = await api("/api/redblue/ai/apply", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({items: items})});
+      showToast("已应用 " + (result.result.applied || 0) + " 条，跳过 " + (result.result.skipped || 0) + " 条");
+      await loadData(true);
+    } catch (error) { showToast(error.message || "应用失败", true); }
+  }
+
+  async function shipSelected() {
+    var ids = Array.from(selected);
+    if (!ids.length) { showToast("请先选择微店条目", true); return; }
+    setStatus("提交发货…");
+    try {
+      var job = await createJob("/api/redblue/weidian/ship", {entry_ids: ids});
+      var result = await waitJob("weidian", job.job_id, false);
+      var applied = await createJob("/api/redblue/weidian/ship/apply", {job_id: job.job_id});
+      showToast("发货完成：" + (applied.updated || 0) + " 条" + ((applied.errors || []).length ? "，失败 " + applied.errors.length : ""));
+      await loadData(true);
+    } catch (error) {
+      setStatus("");
+      showToast(error.message || "发货失败", true);
+    }
+  }
+
+  function startAutoSync() {
+    if (autoSyncStarted) return;
+    autoSyncStarted = true;
+    setTimeout(function () { syncRoomLive(true).catch(function () {}); }, 1500);
+    setTimeout(function () { syncWeidian(true).catch(function () {}); }, 5000);
+    setInterval(function () { syncRoomLive(true).catch(function () {}); }, 60000);
+    setInterval(function () { syncWeidian(true).catch(function () {}); }, 300000);
+  }
+
+  async function shipOne(entryId) {
+    selected = new Set([entryId]);
+    renderEntries();
+    await shipSelected();
+  }
+
+  async function exportImage(kind) {
+    var button = kind === "summary" ? $("exportSummaryBtn") : $("exportEntriesBtn");
+    var originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "生成中…";
+    setStatus("正在生成" + (kind === "summary" ? "按昵称汇总" : "按条目") + "图片…");
+    try {
+      var response = await fetch("/api/redblue/export/" + kind + ".png?" + filterQuery(), {credentials: "same-origin", cache: "no-store"});
+      if (response.status === 401 || response.status === 403) { showLogin("登录已失效，请重新输入密码"); return; }
+      if (!response.ok) {
+        var body = await response.json().catch(function () { return {}; });
+        throw new Error(body.detail || ("HTTP " + response.status));
+      }
+      var blob = await response.blob();
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = "红蓝计分汇总_" + (kind === "summary" ? "按昵称汇总" : "按条目") + "_" + new Date().toISOString().slice(0,10) + ".png";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    } catch (error) { showToast(error.message || "导出失败", true); }
+    finally { button.disabled = false; button.textContent = originalText; setStatus(""); }
+  }
+
+  function updateSelectAll() {
+    var boxes = document.querySelectorAll("[data-select]");
+    var all = boxes.length > 0 && Array.from(boxes).every(function (box) { return box.checked; });
+    $("selectAll").checked = all;
+  }
+
+  async function showAiPrompt() {
+    try {
+      var result = await api("/api/redblue/ai/prompt");
+      $("promptPath").textContent = result.path || "";
+      $("promptText").textContent = result.text || "";
+      $("promptModal").classList.remove("hidden");
+    } catch (error) { showToast(error.message || "读取 Prompt 失败", true); }
+  }
+
+  function bindEvents() {
+    $("loginBtn").addEventListener("click", doLogin);
+    $("passwordInput").addEventListener("keydown", function (event) { if (event.key === "Enter") doLogin(); });
+    $("logoutBtn").addEventListener("click", async function () {
+      try {
+        await fetch("/api/redblue/logout", {method: "POST", credentials: "same-origin", cache: "no-store"});
+      } catch (error) {}
+      location.reload();
+    });
+    $("refreshBtn").addEventListener("click", function () { loadData().catch(function () {}); });
+    $("exportSummaryBtn").addEventListener("click", function () { exportImage("summary"); });
+    $("openFanModalBtn").addEventListener("click", openFanModal);
+    $("fanMoreBar").addEventListener("click", openFanModal);
+    $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
+    $("addManualBtn").addEventListener("click", function () { openEntryModal(null); });
+    $("syncRoomLiveBtn").addEventListener("click", function () { syncRoomLive(false); });
+    $("syncWeidianBtn").addEventListener("click", function () { syncWeidian(false); });
+    $("aiResolveBtn").addEventListener("click", aiResolve);
+    $("applySelectedAiBtn").addEventListener("click", function () { applyAi(""); });
+    $("shipSelectedBtn").addEventListener("click", shipSelected);
+    $("duplicateSelectedBtn").addEventListener("click", async function () {
+      var ids = Array.from(selected);
+      if (!ids.length) { showToast("请先选择条目", true); return; }
+      for (var i = 0; i < ids.length; i++) { await duplicateEntry(ids[i], true); }
+      showToast("已标记 " + ids.length + " 条重复");
+    });
+    ["sourceFilter","statusFilter","sortFilter","includeDuplicate","dateFrom","dateTo"].forEach(function (id) {
+      $(id).addEventListener("change", function () { loadData().catch(function () {}); });
+    });
+    $("keywordInput").addEventListener("keydown", function (event) { if (event.key === "Enter") loadData().catch(function () {}); });
+    $("saveEntryBtn").addEventListener("click", saveEntry);
+    $("closeAiPanelBtn").addEventListener("click", function () { $("aiPanel").classList.add("hidden"); });
+    $("viewPromptBtn").addEventListener("click", showAiPrompt);
+    $("selectAll").addEventListener("change", function (event) {
+      var checked = event.target.checked;
+      document.querySelectorAll("[data-select]").forEach(function (box) {
+        box.checked = checked;
+        if (checked) selected.add(box.getAttribute("data-select")); else selected.delete(box.getAttribute("data-select"));
+      });
+    });
+    $("confirmOkBtn").addEventListener("click", function () {
+      var action = confirmAction; confirmAction = null;
+      $("confirmModal").classList.add("hidden");
+      if (action) action();
+    });
+    document.addEventListener("click", function (event) {
+      var close = event.target.closest("[data-close]");
+      if (close) { $(close.getAttribute("data-close")).classList.add("hidden"); return; }
+      var select = event.target.closest("[data-select]");
+      if (select) {
+        var id = select.getAttribute("data-select");
+        if (select.checked) selected.add(id); else selected.delete(id);
+        updateSelectAll();
+        return;
+      }
+      var edit = event.target.closest("[data-edit]");
+      if (edit) {
+        var entry = (data.entries || []).find(function (row) { return row.id === edit.getAttribute("data-edit"); });
+        if (entry) openEntryModal(entry);
+        return;
+      }
+      var dup = event.target.closest("[data-dup]");
+      if (dup) {
+        var row = (data.entries || []).find(function (item) { return item.id === dup.getAttribute("data-dup"); });
+        if (row) duplicateEntry(row.id, !row.duplicate);
+        return;
+      }
+      var del = event.target.closest("[data-delete]");
+      if (del) { deleteEntry(del.getAttribute("data-delete")); return; }
+      var biz = event.target.closest("[data-business]");
+      if (biz) { toggleBusiness(biz.getAttribute("data-business"), biz.getAttribute("data-done") === "1"); return; }
+      var aiApply = event.target.closest("[data-ai-apply]");
+      if (aiApply) { applyAi(aiApply.getAttribute("data-ai-apply")); return; }
+      var ship = event.target.closest("[data-ship]");
+      if (ship) { shipOne(ship.getAttribute("data-ship")); return; }
+    });
+  }
+
+  async function doLogin() {
+    var value = $("passwordInput").value.trim();
+    if (!value) { loginError.textContent = "请输入密码"; loginError.classList.add("show"); return; }
+    $("loginBtn").disabled = true;
+    loginError.classList.remove("show");
+    try {
+      var response = await fetch("/api/redblue/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({password: value}),
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        var body = await response.json().catch(function () { return {}; });
+        throw new Error(body.detail || "密码错误");
+      }
+      $("passwordInput").value = "";
+      loginError.classList.remove("show");
+      showApp();
+      await loadData();
+      startAutoSync();
+    } catch (error) {
+      if (page.classList.contains("ready")) {
+        showToast(error.message || "加载失败", true);
+      } else {
+        loginError.textContent = error.message || "密码错误";
+        loginError.classList.add("show");
+      }
+    } finally { $("loginBtn").disabled = false; }
+  }
+
+  async function boot() {
+    sessionStorage.removeItem(LEGACY_PASSWORD_KEY);
+    localStorage.removeItem(LEGACY_PASSWORD_KEY);
+    var verified = false;
+    try {
+      var response = await fetch("/api/redblue/verify", {credentials: "same-origin", cache: "no-store"});
+      verified = response.ok;
+    } catch (error) {}
+    if (!verified) { showLogin(""); return; }
+    showApp();
+    try {
+      await loadData();
+      startAutoSync();
+    } catch (error) {
+      showToast(error.message || "加载失败", true);
+    }
+  }
+
+  bindEvents();
+  boot();
+})();
+</script>
+</body>
+</html>

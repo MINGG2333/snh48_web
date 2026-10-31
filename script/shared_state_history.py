@@ -19,20 +19,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     list_parser = sub.add_parser("list")
-    list_parser.add_argument("resource", choices=("scroller", "room_ignore", "score_business", "memories"))
+    list_parser.add_argument("resource", choices=("scroller", "room_ignore", "score_business", "memories", "redblue_ledger"))
     list_parser.add_argument("--limit", type=int, default=20)
     restore_parser = sub.add_parser("restore")
-    restore_parser.add_argument("resource", choices=("scroller", "room_ignore", "score_business", "memories"))
+    restore_parser.add_argument("resource", choices=("scroller", "room_ignore", "score_business", "memories", "redblue_ledger"))
     restore_parser.add_argument("revision")
     baseline_parser = sub.add_parser("baseline")
     baseline_parser.add_argument(
         "resource",
-        choices=("all", "scroller", "room_ignore", "score_business", "memories"),
+        choices=("all", "scroller", "room_ignore", "score_business", "memories", "redblue_ledger"),
     )
     replicate_parser = sub.add_parser("replicate")
     replicate_parser.add_argument(
         "resource",
-        choices=("scroller", "room_ignore", "score_business", "memories"),
+        choices=("scroller", "room_ignore", "score_business", "memories", "redblue_ledger"),
     )
     args = parser.parse_args()
 
@@ -42,7 +42,7 @@ def main() -> int:
         print(json.dumps(restore_revision(args.resource, args.revision), ensure_ascii=False, indent=2))
     elif args.command == "baseline":
         resources = (
-            ("scroller", "room_ignore", "score_business", "memories")
+            ("scroller", "room_ignore", "score_business", "memories", "redblue_ledger")
             if args.resource == "all"
             else (args.resource,)
         )

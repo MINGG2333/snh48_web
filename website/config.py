@@ -388,6 +388,126 @@ BUSINESS_DATA_PATH = os.getenv(
     ),
 )
 
+# ── Red-Blue Ledger 2026 (红蓝计分台账) ──────────────────────────────
+# 页面含暗票昵称/微店买家昵称，必须密码保护；默认复用业务管理密码。
+REDBLUE_LEDGER_PASSWORD = os.getenv("REDBLUE_LEDGER_PASSWORD", BUSINESS_ADMIN_PASSWORD)
+REDBLUE_LEDGER_DATA_PATH = os.getenv(
+    "REDBLUE_LEDGER_DATA_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_ledger_2026.json"
+    ),
+)
+REDBLUE_SCORE_DATA_PATH = os.getenv(
+    "REDBLUE_SCORE_DATA_PATH",
+    SCORE_GIFTS_WINTER_DATA_PATH,
+)
+# 红蓝歌会鸡腿计分礼物：11/11–11/15 上线的特定鸡腿礼物仍带计分属性。
+# 精确礼物名用逗号分隔放在 REDBLUE_CHICKEN_GIFT_NAMES；
+# 默认同时把名称含“鸡腿”的计分礼物视为鸡腿，弦月回响等计分卡礼物保持计分卡。
+REDBLUE_CHICKEN_GIFT_NAMES = os.getenv("REDBLUE_CHICKEN_GIFT_NAMES", "")
+REDBLUE_CHICKEN_GIFT_IDS = os.getenv("REDBLUE_CHICKEN_GIFT_IDS", "")
+REDBLUE_CHICKEN_GIFT_KEYWORDS = os.getenv("REDBLUE_CHICKEN_GIFT_KEYWORDS", "鸡腿")
+# 红蓝鸡腿计分礼物：官方礼物名可能不含“鸡腿”，按“口袋48鸡腿价格 > 0 且有计分属性”兜底识别。
+REDBLUE_GIFT_AUTHORITY_PATH = os.getenv(
+    "REDBLUE_GIFT_AUTHORITY_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "room_record" / "all_members" / "score_gift_authority.json"),
+)
+REDBLUE_WEIDIAN_ITEM_ID = os.getenv("REDBLUE_WEIDIAN_ITEM_ID", "7879362063")
+REDBLUE_WEIDIAN_ITEM_IDS = [
+    value.strip()
+    for value in os.getenv(
+        "REDBLUE_WEIDIAN_ITEM_IDS",
+        f"{REDBLUE_WEIDIAN_ITEM_ID},7889970560",
+    ).split(",")
+    if value.strip()
+]
+REDBLUE_WEIDIAN_UNIT_PRICE = float(os.getenv("REDBLUE_WEIDIAN_UNIT_PRICE", "26.25"))
+REDBLUE_COOKIE_SECRET_PATH = os.getenv(
+    "REDBLUE_COOKIE_SECRET_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_ledger_cookie_secret"
+    ),
+)
+REDBLUE_WEIDIAN_ORDERS_PATH = os.getenv(
+    "REDBLUE_WEIDIAN_ORDERS_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_weidian_orders_2026.json"
+    ),
+)
+REDBLUE_IDENTITY_INDEX_PATH = os.getenv(
+    "REDBLUE_IDENTITY_INDEX_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "all_members"
+        / "fan_identity_index.json"
+    ),
+)
+REDBLUE_IDENTITY_FALLBACK_PATHS = {
+    "sender_identity_map": str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "score_gifts"
+        / "sender_identity_map.json"
+    ),
+    "sender_profiles": str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "metadata"
+        / "sender_profiles_state.json"
+    ),
+    "fan_name_map": str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "fan_name_map.json"
+    ),
+}
+REDBLUE_AI_QUEUE_DIR = os.getenv(
+    "REDBLUE_AI_QUEUE_DIR",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_ai_jobs"
+    ),
+)
+REDBLUE_WEIDIAN_QUEUE_DIR = os.getenv(
+    "REDBLUE_WEIDIAN_QUEUE_DIR",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_weidian_jobs"
+    ),
+)
+REDBLUE_AI_PROMPT_PATH = os.getenv(
+    "REDBLUE_AI_PROMPT_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "doc" / "redblue_ai_prompt.md"),
+)
+REDBLUE_AI_MAX_ENTRIES = int(os.getenv("REDBLUE_AI_MAX_ENTRIES", "50"))
+REDBLUE_IMAGE_EXPORT_MAX_ROWS = int(os.getenv("REDBLUE_IMAGE_EXPORT_MAX_ROWS", "500"))
+
 # ── Fan Counts (粉丝数记录页) ────────────────────────────────────────
 # 公开只读数据，由 fan-hub fan_count_collector.py 定时采集，允许同步阿里云。
 FAN_COUNTS_DATA_PATH = os.getenv(

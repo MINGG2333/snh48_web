@@ -19,8 +19,9 @@
 | `room_ignore` | `website/data/room_messages_ignored_batches.json` | 房间消息忽略/撤销 | 无 |
 | `score_business` | fan-hub `score_gifts/live_business_fulfillments.json` | 直播计分礼物人工核实/修正 | 腾讯云 `score_gift_business_analyzer.py` |
 | `memories` | `website/data/memories/memories.json` | 粉丝提交、应援会审核、本人确认 | `script/build_memories_seed.py` |
+| `redblue_ledger` | fan-hub `private_handover/web_state/redblue_ledger_2026.json` | 红蓝计分台账 2026 | 本机 root worker 队列（AI/微店结果由网页应用） |
 
-四个当前状态文件都只走版本化复制通道，不再由普通 `core` / `dynamic` rsync 覆盖。计分礼物目录中的 `score_gifts.json` 等只读派生文件仍按 `dynamic` 拉取，但明确排除 `live_business_fulfillments.json` 和 `.*.lock`；手动 `deploy.py sync-data` 也使用相同排除规则。这样旧文件不会在新 revision 到达后把副本回滚。
+五个当前状态文件都只走版本化复制通道，不再由普通 `core` / `dynamic` rsync 覆盖。计分礼物目录中的 `score_gifts.json` 等只读派生文件仍按 `dynamic` 拉取，但明确排除 `live_business_fulfillments.json` 和 `.*.lock`；手动 `deploy.py sync-data` 也使用相同排除规则。这样旧文件不会在新 revision 到达后把副本回滚。
 
 当前状态文件的落盘权限按资源区分（`shared_runtime_state.RESOURCE_FILE_MODES`）：`score_business` 位于 fan-hub 数据目录，写入方是 root 身份的 peer 或分析器，而网站进程以 `snh48-web` 用户读取，固定 `0644`；其余资源留在 `website/data/` 内、由网站进程自身读写，保持 `0600`。root 身份的 peer 通过 `inbox-put` 落盘 action inbox 事件后，会自动 chown 为事件目录属主，保证网站进程可读。
 
@@ -45,6 +46,7 @@ cd /home/snh48_web
 /home/snh48_web/venv/bin/python script/shared_state_history.py list room_ignore --limit 20
 /home/snh48_web/venv/bin/python script/shared_state_history.py list score_business --limit 20
 /home/snh48_web/venv/bin/python script/shared_state_history.py list memories --limit 20
+/home/snh48_web/venv/bin/python script/shared_state_history.py list redblue_ledger --limit 20
 ```
 
 恢复必须在腾讯云权威节点执行。恢复本身会生成一个新的 revision，因此恢复前后的历史都保留：
@@ -123,7 +125,7 @@ SHARED_STATE_NODE_LABELS_JSON={"aliyun-new":"新公开站"}
 
 ## 首次迁移与巡检
 
-首次只在腾讯云创建四个基线 revision：
+首次只在腾讯云创建五个基线 revision：
 
 ```bash
 /home/snh48_web/venv/bin/python script/shared_state_history.py baseline all
@@ -135,6 +137,7 @@ SHARED_STATE_NODE_LABELS_JSON={"aliyun-new":"新公开站"}
 find website/data/shared_state_outbox -type f -name '*.json' -printf '%p\n' 2>/dev/null
 /home/snh48_web/venv/bin/python script/shared_state_history.py list memories --limit 1
 /home/snh48_web/venv/bin/python script/shared_state_history.py list score_business --limit 1
+/home/snh48_web/venv/bin/python script/shared_state_history.py list redblue_ledger --limit 1
 ```
 
 正常情况下 outbox 很快清空。对端故障时保留积压文件，修复 SSH 或对端服务代码后等待后台线程重试；不要删除 outbox，也不要用旧副本覆盖腾讯云当前文件。

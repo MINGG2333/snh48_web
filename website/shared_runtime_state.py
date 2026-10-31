@@ -12,6 +12,7 @@ import gzip
 import hashlib
 import json
 import os
+import pwd
 import re
 import shlex
 import subprocess
@@ -48,7 +49,8 @@ LOCAL_ONLY_RESOURCES = {"business_tasks"}
 
 # 当前状态文件的写入权限。score_business 位于 fan-hub 数据目录，由 root 身份的
 # peer/分析器写入，而网站进程以 snh48-web 用户读取，必须保持组外可读。
-RESOURCE_FILE_MODES = {"score_business": 0o644}
+RESOURCE_FILE_MODES = {"score_business": 0o644, "redblue_ledger": 0o664}
+RESOURCE_OWNER_USERS = {"redblue_ledger": "snh48-web"}
 
 _registry: dict[tuple[str, str], Mutator] = {}
 _worker_started = False
@@ -79,6 +81,7 @@ def resource_path(resource: str) -> Path:
         "score_business": Path(cfg.SCORE_GIFTS_DATA_PATH).parent / "live_business_fulfillments.json",
         "memories": Path(cfg.MEMORIES_DATA_PATH),
         "business_tasks": Path(cfg.BUSINESS_DATA_PATH),
+        "redblue_ledger": Path(cfg.REDBLUE_LEDGER_DATA_PATH),
     }
     try:
         return paths[resource]
@@ -93,6 +96,7 @@ def default_document(resource: str) -> dict[str, Any]:
         "score_business": {"version": 1, "records": {}},
         "memories": {"version": 1, "items": []},
         "business_tasks": {"version": 1, "tasks": []},
+        "redblue_ledger": {"version": 1, "entries": [], "aliases": []},
     }
     return deepcopy(defaults[resource])
 
@@ -113,6 +117,11 @@ def normalise_document(resource: str, value: Any) -> dict[str, Any]:
         doc["items"] = []
     elif resource == "business_tasks" and not isinstance(doc.get("tasks"), list):
         doc["tasks"] = []
+    elif resource == "redblue_ledger":
+        if not isinstance(doc.get("entries"), list):
+            doc["entries"] = []
+        if not isinstance(doc.get("aliases"), list):
+            doc["aliases"] = []
     return doc
 
 
@@ -134,12 +143,29 @@ def load_document(resource: str) -> dict[str, Any]:
         raise SharedStateError(f"failed to read {resource} state") from exc
 
 
+def _ensure_resource_owner(resource: str, path: Path) -> None:
+    """Let the website user write resources whose lock/file are created by root."""
+    user = RESOURCE_OWNER_USERS.get(resource)
+    if not user or os.geteuid() != 0:
+        return
+    try:
+        account = pwd.getpwnam(user)
+    except KeyError:
+        return
+    try:
+        os.chown(path, account.pw_uid, account.pw_gid)
+        os.chmod(path, 0o775 if path.is_dir() else 0o664)
+    except OSError:
+        return
+
+
 @contextmanager
 def resource_lock(resource: str) -> Iterator[None]:
     path = resource_path(resource)
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_name(f".{path.name}.lock")
     with lock_path.open("a+", encoding="utf-8") as handle:
+        _ensure_resource_owner(resource, lock_path)
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
             yield
@@ -217,12 +243,15 @@ def _write_snapshot(resource: str, doc: dict[str, Any], operation: str) -> None:
         json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8") + b"\n",
         compresslevel=6,
     )
+    _ensure_resource_owner(resource, target.parent)
     _atomic_write(target, compressed)
 
 
 def _write_current(resource: str, doc: dict[str, Any]) -> None:
     content = json.dumps(doc, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
-    _atomic_write(resource_path(resource), content, mode=RESOURCE_FILE_MODES.get(resource, 0o600))
+    path = resource_path(resource)
+    _atomic_write(path, content, mode=RESOURCE_FILE_MODES.get(resource, 0o600))
+    _ensure_resource_owner(resource, path)
 
 
 def _commit_locked(
@@ -262,8 +291,10 @@ def _commit_locked(
         "origin_label": node_label(origin),
         "result": result,
     }
+    receipt_path = _operation_receipt_path(resource, operation_id)
+    _ensure_resource_owner(resource, receipt_path.parent)
     _atomic_write(
-        _operation_receipt_path(resource, operation_id),
+        receipt_path,
         json.dumps(receipt, ensure_ascii=False, indent=2).encode("utf-8") + b"\n",
     )
     return committed
