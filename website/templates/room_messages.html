@@ -452,6 +452,55 @@
       top: 0;
     }
 
+    .context-gap {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 2px 0 10px;
+      padding: 7px 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.14);
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .context-gap-label {
+      min-width: 0;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .context-gap .link-btn {
+      min-height: 30px;
+    }
+
+    .context-gap .link-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .message.context-message .card {
+      border-style: dashed;
+      opacity: 0.9;
+    }
+
+    .context-badge {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 0 8px;
+      border: 1px solid rgba(98, 168, 255, 0.45);
+      color: #a9ccff;
+      background: rgba(98, 168, 255, 0.12);
+      font-size: 12px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
     .card {
       border: 1px solid var(--line);
       border-left-width: 4px;
@@ -1536,6 +1585,7 @@
     var hasMoreOlder = false;
     var hasMoreNewer = false;
     var loading = false;
+    var contextLoading = false;
     var loginBusy = false;
     var loginVerified = false;
     var loadedCount = 0;
@@ -2101,10 +2151,14 @@
     }
 
     function appendMessages(items) {
+      var added = 0;
       items.forEach(function(item) {
+        if (findMessageNode(item.id)) return;
         messageList.appendChild(createMessageNode(item));
+        added += 1;
       });
-      loadedCount += items.length;
+      loadedCount += added;
+      refreshContextGaps();
     }
 
     function prependMessages(items) {
@@ -2112,14 +2166,159 @@
       var oldHeight = currentScrollHeight();
       var oldTop = currentScrollTop();
       var frag = document.createDocumentFragment();
+      var added = 0;
       items.forEach(function(item) {
+        if (findMessageNode(item.id)) return;
         frag.appendChild(createMessageNode(item));
+        added += 1;
       });
+      if (added === 0) return;
       messageList.insertBefore(frag, messageList.firstChild);
-      loadedCount += items.length;
+      loadedCount += added;
+      refreshContextGaps();
       window.requestAnimationFrame(function() {
         setCurrentScrollTop(currentScrollHeight() - oldHeight + oldTop);
       });
+    }
+
+    function messageRowIndex(node) {
+      var raw = node ? node.dataset.rowIndex : "";
+      if (raw === undefined || raw === "") return null;
+      var index = Number(raw);
+      return isFinite(index) && index >= 0 ? index : null;
+    }
+
+    function refreshContextGaps() {
+      Array.prototype.forEach.call(messageList.querySelectorAll(".context-gap"), function(node) {
+        node.remove();
+      });
+      var nodes = Array.prototype.slice.call(messageList.querySelectorAll("article.message"));
+      for (var i = 1; i < nodes.length; i += 1) {
+        var prevIndex = messageRowIndex(nodes[i - 1]);
+        var currentIndex = messageRowIndex(nodes[i]);
+        if (prevIndex === null || currentIndex === null) continue;
+        var hidden = currentIndex - prevIndex - 1;
+        if (hidden <= 0) continue;
+        messageList.insertBefore(createContextGapNode(nodes[i - 1], nodes[i], hidden), nodes[i]);
+      }
+    }
+
+    function createContextGapNode(upperNode, lowerNode, hiddenCount) {
+      var gap = document.createElement("div");
+      gap.className = "context-gap";
+
+      var label = document.createElement("span");
+      label.className = "context-gap-label";
+      label.textContent = "中间还有 " + formatNumber(hiddenCount) + " 条其他消息";
+      gap.appendChild(label);
+
+      var beforeButton = document.createElement("button");
+      beforeButton.type = "button";
+      beforeButton.className = "link-btn";
+      beforeButton.textContent = "拓展上文";
+      beforeButton.title = "展开下方这条消息之前的上下文";
+      beforeButton.dataset.contextDirection = "before";
+      beforeButton.dataset.contextAnchor = lowerNode.dataset.messageId || "";
+      gap.appendChild(beforeButton);
+
+      var afterButton = document.createElement("button");
+      afterButton.type = "button";
+      afterButton.className = "link-btn";
+      afterButton.textContent = "拓展下文";
+      afterButton.title = "展开上方这条消息之后的上下文";
+      afterButton.dataset.contextDirection = "after";
+      afterButton.dataset.contextAnchor = upperNode.dataset.messageId || "";
+      gap.appendChild(afterButton);
+
+      return gap;
+    }
+
+    function insertContextItems(items, anchorId) {
+      var anchorNode = findMessageNode(anchorId);
+      var beforeTop = anchorNode ? anchorNode.getBoundingClientRect().top : 0;
+      var added = 0;
+      (items || []).forEach(function(item) {
+        if (!item || !item.id || findMessageNode(item.id)) return;
+        item.__contextExpanded = true;
+        var node = createMessageNode(item);
+        var reference = null;
+        var nodes = messageList.querySelectorAll("article.message");
+        for (var i = 0; i < nodes.length; i += 1) {
+          var index = messageRowIndex(nodes[i]);
+          if (index !== null && typeof item.row_index === "number" && index > item.row_index) {
+            reference = nodes[i];
+            break;
+          }
+        }
+        messageList.insertBefore(node, reference);
+        added += 1;
+      });
+      if (added > 0) {
+        loadedCount += added;
+        refreshContextGaps();
+        if (anchorNode && anchorNode.isConnected) {
+          var afterTop = anchorNode.getBoundingClientRect().top;
+          if (afterTop !== beforeTop) {
+            setCurrentScrollTop(currentScrollTop() + (afterTop - beforeTop));
+          }
+        }
+      }
+      return added;
+    }
+
+    async function expandContext(direction, anchorId, button) {
+      if (!anchorId || contextLoading || loading) return;
+      contextLoading = true;
+      var originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "正在拓展…";
+      try {
+        var params = new URLSearchParams();
+        params.set("message_id", anchorId);
+        params.set("direction", direction);
+        params.set("limit", "20");
+        var resp = await fetch("/api/room-messages/context?" + params.toString(), {
+          headers: { "X-Room-Messages-Password": password },
+          cache: "no-store"
+        });
+        if (resp.status === 401 || resp.status === 403) {
+          var detail = await readError(resp);
+          resetLoginForPassword(detail || "密码错误");
+          loginOverlay.classList.remove("hidden");
+          pageEl.classList.remove("ready");
+          stopRefresh();
+          return;
+        }
+        if (!resp.ok) {
+          throw new Error(await readError(resp) || ("HTTP " + resp.status));
+        }
+        var data = await resp.json();
+        var added = insertContextItems(data.items || [], anchorId);
+        trackAdminEvent("admin_filter", {
+          action: "expand_context",
+          direction: direction,
+          message_id: anchorId,
+          result: added > 0 ? "success" : "empty",
+          item_count: added
+        });
+        if (added === 0) {
+          showJumpStatus("这个方向没有更多可展开的消息");
+        }
+      } catch (err) {
+        trackAdminEvent("admin_filter", {
+          action: "expand_context",
+          direction: direction,
+          message_id: anchorId,
+          result: "failure"
+        });
+        showJumpStatus("拓展上下文失败：" + (err && err.message ? err.message : err));
+      } finally {
+        contextLoading = false;
+        if (button && button.isConnected) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      }
     }
 
     function createMessageNode(item) {
@@ -2129,6 +2328,12 @@
       wrap.dataset.date = item.date || String(item.bj_time || "").slice(0, 10);
       wrap.dataset.ignored = item.ignored ? "true" : "false";
       wrap.dataset.roomType = item.room_type || "main";
+      if (typeof item.row_index === "number" && item.row_index >= 0) {
+        wrap.dataset.rowIndex = String(item.row_index);
+      }
+      if (item.__contextExpanded) {
+        wrap.classList.add("context-message");
+      }
 
       var time = document.createElement("div");
       time.className = "time-col";
@@ -2157,6 +2362,12 @@
       roomTag.className = "room-tag";
       roomTag.textContent = item.room_label || (item.room_type === "small" ? "小房间" : "公开房间");
       head.appendChild(roomTag);
+      if (item.__contextExpanded) {
+        var contextBadge = document.createElement("span");
+        contextBadge.className = "context-badge";
+        contextBadge.textContent = "上下文";
+        head.appendChild(contextBadge);
+      }
       var tag = document.createElement("span");
       tag.className = "type-tag";
       tag.textContent = item.type_label || item.msg_type || "未知";
@@ -3365,6 +3576,15 @@
       }
     });
     messageList.addEventListener("click", function(event) {
+      var contextButton = event.target.closest("button[data-context-direction]");
+      if (contextButton) {
+        expandContext(
+          contextButton.dataset.contextDirection,
+          contextButton.dataset.contextAnchor,
+          contextButton
+        );
+        return;
+      }
       var button = event.target.closest("button[data-target-id]");
       if (!button) return;
       jumpToMessage(button.dataset.targetId, button.dataset.targetFamily);

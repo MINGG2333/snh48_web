@@ -34,7 +34,7 @@ class SharedStateMutatorTests(unittest.TestCase):
             "version": 2,
             "ignored_batches": [{"batch_id": "older", "gift_message_ids": ["gift-1"]}],
         }
-        with mock.patch("website.room_messages_api._load_dataset", return_value=([], summary)):
+        with mock.patch("website.room_messages_api._load_dataset", return_value=([], summary, {})):
             state, result = _ignore_latest_mutator(initial, {})
         self.assertEqual(len(state["ignored_batches"]), 2)
         self.assertEqual(result["ignored_batch"]["gift_message_ids"], ["gift-2"])

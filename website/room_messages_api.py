@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import hmac
 import json
+import logging
 import re
 import threading
 import time
@@ -82,13 +83,19 @@ TYPE_FAMILIES = {
     "QCHAT_SERVER_NOTICE": "event",
 }
 
+logger = logging.getLogger(__name__)
+
 _cache_lock = threading.Lock()
-_cache_mtime_ns = -1
-_cache_ignore_mtime_ns = -2
-_cache_transcripts_mtime_ns = -2
-_cache_rows: list[dict[str, Any]] = []
-_cache_summary: dict[str, Any] = {}
+_refresh_lock = threading.Lock()
+_cache_state: tuple[list[dict[str, Any]], dict[str, Any], dict[str, list[int]]] | None = None
+_cache_signature: tuple[Any, ...] | None = None
+_cache_refreshing = False
 _cache_loaded_at = 0.0
+_cache_month_signature: tuple[Any, ...] | None = None
+_cache_month_rows: list[dict[str, Any]] = []
+_cache_month_annotations: dict[str, Any] = {"essence_ids": {}, "gift_effects": [], "deleted_ids": {}}
+_cache_month_notice_state: dict[str, dict[str, str]] = {}
+_cache_gift_map_signature: tuple[int, int] | None = None
 _ignore_lock = threading.Lock()
 
 
@@ -174,7 +181,7 @@ def get_room_messages_data(
     if target_id and target_date:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="目标条件无效")
 
-    rows, summary = _load_dataset()
+    rows, summary, sender_index = _load_dataset()
     sender = sender.strip()
     keyword = keyword.strip()
     date_from = date_from.strip()
@@ -213,6 +220,7 @@ def get_room_messages_data(
             room_type=room_type,
             date_from=date_from,
             date_to=date_to,
+            sender_index=sender_index,
         )
 
         total = len(filtered)
@@ -249,6 +257,48 @@ def get_room_messages_data(
     }
 
 
+@router.get("/context")
+def get_room_messages_context(
+    response: Response,
+    message_id: str = Query(""),
+    direction: str = Query("before"),
+    limit: int = Query(20, ge=1, le=100),
+    _=Depends(verify_room_messages_password),
+):
+    """Return unfiltered neighbours around a message for the context expander."""
+    response.headers["Cache-Control"] = "no-store"
+    message_id = message_id.strip()
+    direction = direction.strip().lower()
+    if not message_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="目标消息不能为空")
+    if direction not in {"before", "after"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的上下文方向")
+
+    rows, _, _ = _load_dataset()
+    target_index = _find_row_index(rows, message_id)
+    if target_index is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标消息不存在")
+
+    total = len(rows)
+    if direction == "before":
+        start = max(0, target_index - limit)
+        end = target_index
+    else:
+        start = min(total, target_index + 1)
+        end = min(total, start + limit)
+
+    return {
+        "items": [_public_row(row) for row in rows[start:end]],
+        "message_id": message_id,
+        "direction": direction,
+        "start_index": start,
+        "end_index": end,
+        "has_more_before": start > 0,
+        "has_more_after": end < total,
+    }
+
+
+
 @router.get("/summary")
 def get_room_messages_summary(
     response: Response,
@@ -256,7 +306,7 @@ def get_room_messages_summary(
 ):
     """Return room message summary and type counts."""
     response.headers["Cache-Control"] = "no-store"
-    _, summary = _load_dataset()
+    _, summary, _ = _load_dataset()
     return {
         "summary": summary,
         "type_counts": summary.get("type_counts", []),
@@ -285,7 +335,7 @@ def ignore_latest_unreplied_gift_batch(
                 detail=f"忽略状态跨服务器保存失败：{exc}",
             ) from exc
         _invalidate_cache()
-        _, new_summary = _load_dataset()
+        _, new_summary, _ = _load_dataset(force=True)
         result = mutation.get("result") if isinstance(mutation.get("result"), dict) else {}
         return _summary_payload(new_summary) | {"ignored_batch": result.get("ignored_batch") or {}}
 
@@ -309,7 +359,7 @@ def undo_latest_ignored_gift_batch(
                 detail=f"忽略状态跨服务器保存失败：{exc}",
             ) from exc
         _invalidate_cache()
-        _, new_summary = _load_dataset()
+        _, new_summary, _ = _load_dataset(force=True)
         result = mutation.get("result") if isinstance(mutation.get("result"), dict) else {}
         return _summary_payload(new_summary) | {"undone_batch": result.get("undone_batch") or {}}
 
@@ -317,7 +367,7 @@ def undo_latest_ignored_gift_batch(
 def _ignore_latest_mutator(
     state: dict[str, Any], _payload: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    _, summary = _load_dataset()
+    _, summary, _ = _load_dataset()
     batch = summary.get("latest_unreplied_gift_batch") or {}
     gift_message_ids = [str(item) for item in batch.get("gift_message_ids") or [] if item]
     if not gift_message_ids:
@@ -390,63 +440,157 @@ def _audio_transcripts_path() -> Path:
     return Path(cfg.ROOM_AUDIO_TRANSCRIPTS_PATH)
 
 
-def _load_dataset() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_rows, _cache_summary, _cache_loaded_at
+def _load_dataset(force: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, list[int]]]:
+    """Return the cached room dataset, refreshing in the background when stale.
 
+    The room fact table changes continuously. Rebuilding every request made the
+    page block for tens of seconds under memory pressure, so requests keep
+    serving the last good cache while a single background thread rebuilds it.
+    """
+    signature = _dataset_signature()
+    with _cache_lock:
+        cached = _cache_state
+        cached_signature = _cache_signature
+        loaded_at = _cache_loaded_at
+    if not force and cached is not None:
+        if cached_signature == signature:
+            return cached
+        min_interval = cfg.ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS
+        if time.monotonic() - loaded_at < min_interval:
+            return cached
+        _schedule_background_refresh()
+        return cached
+    return _rebuild_dataset(force=force)
+
+
+def _schedule_background_refresh() -> None:
+    global _cache_refreshing
+    with _cache_lock:
+        if _cache_refreshing:
+            return
+        _cache_refreshing = True
+    thread = threading.Thread(
+        target=_background_refresh,
+        name="room-messages-cache-refresh",
+        daemon=True,
+    )
+    thread.start()
+
+
+def _background_refresh() -> None:
+    global _cache_refreshing
+    try:
+        _rebuild_dataset()
+    except Exception:
+        logger.exception("房间消息缓存后台重建失败，继续使用旧缓存")
+    finally:
+        with _cache_lock:
+            _cache_refreshing = False
+
+
+def _rebuild_dataset(force: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, list[int]]]:
+    global _cache_state, _cache_signature, _cache_loaded_at
+
+    with _refresh_lock:
+        signature = _dataset_signature()
+        with _cache_lock:
+            cached = _cache_state
+            cached_signature = _cache_signature
+        if not force and cached is not None and cached_signature == signature:
+            return cached
+
+        source_kind, path = _dataset_source()
+        if not path.exists():
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据未生成")
+        rows, source_path, source_mtime, ignored_state, sender_index = _build_dataset(source_kind, path)
+        summary = _build_summary(rows, source_mtime, ignored_state, source_path)
+        state = (rows, summary, sender_index)
+        with _cache_lock:
+            _cache_state = state
+            _cache_signature = signature
+            _cache_loaded_at = time.monotonic()
+        return state
+
+
+def _build_dataset(
+    source_kind: str,
+    path: Path,
+) -> tuple[list[dict[str, Any]], str, float, dict[str, Any], dict[str, list[int]]]:
+    transcripts = _load_audio_transcripts()
+    if source_kind == "jsonl":
+        rows, source_path, source_mtime = _load_jsonl_rows(path, transcripts)
+    elif source_kind == "shards":
+        rows, source_path, source_mtime = _load_sharded_rows(path, transcripts)
+    else:
+        rows, source_path, source_mtime = _load_csv_rows(path, transcripts), str(path), path.stat().st_mtime
+
+    _attach_message_links(rows)
+    ignored_state = _load_ignored_state()
+    ignored_ids = _ignored_gift_ids(ignored_state)
+    _attach_ignored_gifts(rows, ignored_ids)
+    _finalize_rows(rows)
+    return rows, source_path, source_mtime, ignored_state, _build_sender_index(rows)
+
+
+def _finalize_rows(rows: list[dict[str, Any]]) -> None:
+    """Drop fields that are only needed while constructing the cache."""
+    for row in rows:
+        row.pop("_search_text", None)
+        row.pop("raw_extInfo", None)
+
+
+def _build_sender_index(rows: list[dict[str, Any]]) -> dict[str, list[int]]:
+    index: dict[str, list[int]] = {}
+    for row_index, row in enumerate(rows):
+        name = str(row.get("sender_name") or "").lower()
+        index.setdefault(name, []).append(row_index)
+    return index
+
+
+def _dataset_signature() -> tuple[Any, ...]:
     source_kind, path = _dataset_source()
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据未生成")
-
-    source_mtime_ns = _source_mtime_ns(source_kind, path)
-    ignore_mtime_ns = _ignore_mtime_ns()
-    transcripts_mtime_ns = _audio_transcripts_mtime_ns()
-    cache_fresh = (
-        _cache_mtime_ns == source_mtime_ns
-        and _cache_ignore_mtime_ns == ignore_mtime_ns
-        and _cache_transcripts_mtime_ns == transcripts_mtime_ns
+    if source_kind == "jsonl":
+        metadata_dir = path.parent
+        return (
+            "jsonl",
+            str(path),
+            _file_signature(path),
+            _jsonl_month_signature(metadata_dir),
+            _file_signature(metadata_dir / "room_voice_events.jsonl"),
+            _file_signature(metadata_dir / "gift_effect_map.json"),
+            _ignore_mtime_ns(),
+            _audio_transcripts_mtime_ns(),
+        )
+    return (
+        source_kind,
+        str(path),
+        _file_signature(path),
+        _ignore_mtime_ns(),
+        _audio_transcripts_mtime_ns(),
     )
-    if cache_fresh:
-        return _cache_rows, _cache_summary
 
-    # jsonl 事实表随实时推送逐条变化；全量重建约 7 秒，不能每个请求都重建。
-    # 距上次重建不足最小间隔时沿用旧缓存（数据滞后最多该间隔）。
-    min_interval = cfg.ROOM_MESSAGES_REBUILD_MIN_INTERVAL_SECONDS
-    if _cache_rows and (time.monotonic() - _cache_loaded_at) < min_interval:
-        return _cache_rows, _cache_summary
 
-    with _cache_lock:
-        if _cache_rows and (time.monotonic() - _cache_loaded_at) < min_interval:
-            return _cache_rows, _cache_summary
-        source_mtime_ns = _source_mtime_ns(source_kind, path)
-        ignore_mtime_ns = _ignore_mtime_ns()
-        transcripts_mtime_ns = _audio_transcripts_mtime_ns()
-        if (
-            _cache_mtime_ns == source_mtime_ns
-            and _cache_ignore_mtime_ns == ignore_mtime_ns
-            and _cache_transcripts_mtime_ns == transcripts_mtime_ns
-        ):
-            return _cache_rows, _cache_summary
+def _file_signature(path: Path) -> tuple[int, int]:
+    try:
+        stat = path.stat()
+        return stat.st_mtime_ns, stat.st_size
+    except OSError:
+        return 0, 0
 
-        transcripts = _load_audio_transcripts()
-        if source_kind == "jsonl":
-            rows, source_path, source_mtime = _load_jsonl_rows(path, transcripts)
-        elif source_kind == "shards":
-            rows, source_path, source_mtime = _load_sharded_rows(path, transcripts)
-        else:
-            rows, source_path, source_mtime = _load_csv_rows(path, transcripts), str(path), path.stat().st_mtime
 
-        _attach_message_links(rows)
-        ignored_state = _load_ignored_state()
-        ignored_ids = _ignored_gift_ids(ignored_state)
-        _attach_ignored_gifts(rows, ignored_ids)
-        summary = _build_summary(rows, source_mtime, ignored_state, source_path)
-        _cache_mtime_ns = source_mtime_ns
-        _cache_ignore_mtime_ns = ignore_mtime_ns
-        _cache_transcripts_mtime_ns = transcripts_mtime_ns
-        _cache_rows = rows
-        _cache_summary = summary
-        _cache_loaded_at = time.monotonic()
-        return _cache_rows, _cache_summary
+def _jsonl_month_paths(metadata_dir: Path) -> list[Path]:
+    return sorted(metadata_dir.glob("messages_2*.jsonl"))
+
+
+def _jsonl_month_signature(metadata_dir: Path) -> tuple[Any, ...]:
+    parts: list[Any] = []
+    for month_path in _jsonl_month_paths(metadata_dir):
+        parts.append((month_path.name, _file_signature(month_path)))
+    parts.append(("__archive_manifest__", _file_signature(metadata_dir / "messages_archive_manifest.json")))
+    return tuple(parts)
+
 
 
 def _dataset_source() -> tuple[str, Path]:
@@ -613,9 +757,17 @@ def _notice_snapshot(payload_ext: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _annotate_notice_changes(rows: list[dict[str, Any]]) -> None:
-    """对房间动态做前后 diff：只把变化的字段写进 detail，让通知可读。"""
-    last_by_channel: dict[str, dict[str, str]] = {}
+def _annotate_notice_changes(
+    rows: list[dict[str, Any]],
+    last_by_channel: dict[str, dict[str, str]] | None = None,
+) -> dict[str, dict[str, str]]:
+    """对房间动态做前后 diff：只把变化的字段写进 detail，让通知可读。
+
+    last_by_channel 可传入上一批消息结束时的快照，用于月封存 + 主文件分段
+    增量重建时保持跨文件的前后文。
+    """
+    if last_by_channel is None:
+        last_by_channel = {}
     for row in rows:
         if row.get("msg_type") != "QCHAT_SERVER_NOTICE":
             continue
@@ -632,6 +784,7 @@ def _annotate_notice_changes(rows: list[dict[str, Any]]) -> None:
             else:
                 row["detail"] = "房间状态心跳（无资料变化）"
         last_by_channel[channel] = snapshot
+    return last_by_channel
 
 
 
@@ -697,65 +850,146 @@ def _load_voice_event_rows(metadata_dir: Path) -> list[dict[str, Any]]:
         rows.append(row)
     return rows
 
+def _empty_annotations() -> dict[str, Any]:
+    return {"essence_ids": {}, "gift_effects": [], "deleted_ids": {}}
+
+
+def _merge_annotations(base: dict[str, Any], extra: dict[str, Any]) -> None:
+    base["essence_ids"].update(extra.get("essence_ids") or {})
+    base["deleted_ids"].update(extra.get("deleted_ids") or {})
+    base["gift_effects"].extend(extra.get("gift_effects") or [])
+
+
+def _read_jsonl_file(
+    path: Path,
+    notice_state: dict[str, dict[str, str]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    annotations = _empty_annotations()
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                msg_type = str(payload.get("msg_type", "") or "")
+                if msg_type in JSONL_ONLY_MSG_TYPES:
+                    _collect_jsonl_annotations(payload, annotations)
+                    continue
+                rows.append(_normalise_row(_jsonl_row_to_csv_view(payload)))
+    except OSError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
+
+    _annotate_notice_changes(rows, notice_state)
+    # raw_extInfo 只服务于 QCHAT_SERVER_NOTICE 的前后 diff，展示和搜索都不需要。
+    for row in rows:
+        row.pop("raw_extInfo", None)
+    return rows, annotations
+
+
+def _apply_annotations(rows: list[dict[str, Any]], annotations: dict[str, Any]) -> None:
+    essence_ids = annotations.get("essence_ids") or {}
+    gift_effects = annotations.get("gift_effects") or []
+    deleted_ids = annotations.get("deleted_ids") or {}
+    if not essence_ids and not gift_effects and not deleted_ids:
+        return
+    for row in rows:
+        deleted_at = deleted_ids.get(str(row.get("id", "") or ""))
+        if deleted_at and not row.get("deleted"):
+            row["deleted"] = True
+            row["deleted_detected_at"] = row.get("deleted_detected_at") or deleted_at
+        essence_at = essence_ids.get(str(row.get("id", "") or ""))
+        if essence_at:
+            row["essence"] = True
+            row["essence_at"] = essence_at
+        effect = _match_gift_effect(row, gift_effects)
+        if effect:
+            row["gift_effect_url"] = effect["effect_url"]
+            row["gift_effect_play_time"] = effect["play_time"]
+
+
+def _apply_gift_effect_map(rows: list[dict[str, Any]], metadata_dir: Path) -> None:
+    effect_map = _load_gift_effect_map(metadata_dir)
+    if not effect_map:
+        return
+    for row in rows:
+        if row.get("gift_effect_url") or row.get("msg_type") != "GIFT_TEXT":
+            continue
+        entry = effect_map.get(str(row.get("gift_name", "") or ""))
+        if entry and entry.get("zip_path"):
+            row["gift_effect_url"] = _effect_url_from_zip_path(str(entry["zip_path"]))
+            row["gift_effect_play_time"] = _to_int(entry.get("play_time"), 0)
+
+
+def _apply_audio_transcripts(
+    rows: list[dict[str, Any]],
+    transcripts: dict[str, dict[str, Any]],
+) -> None:
+    for row in rows:
+        if row.get("media_kind") != "audio":
+            continue
+        transcript = transcripts.get(str(row.get("id", "") or ""))
+        if transcript:
+            row["audio_transcript"] = transcript
+        else:
+            row.pop("audio_transcript", None)
+
+
+def _ensure_row_indices(rows: list[dict[str, Any]]) -> None:
+    for index, row in enumerate(rows):
+        row["_row_index"] = index
+
+
 def _load_jsonl_rows(
     main_path: Path,
     transcripts: dict[str, dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], str, float]:
+    global _cache_month_signature, _cache_month_rows, _cache_month_annotations
+    global _cache_month_notice_state, _cache_gift_map_signature
+
     metadata_dir = main_path.parent
-    # 月封存文件按文件名时间序，主文件（近期数据）在最后。
-    month_files = sorted(metadata_dir.glob("messages_2*.jsonl"))
-    rows: list[dict[str, Any]] = []
-    annotations: dict[str, Any] = {"essence_ids": {}, "gift_effects": [], "deleted_ids": {}}
-    for file_path in [*month_files, main_path]:
-        try:
-            with file_path.open("r", encoding="utf-8") as handle:
-                for line in handle:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        payload = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if not isinstance(payload, dict):
-                        continue
-                    msg_type = str(payload.get("msg_type", "") or "")
-                    if msg_type in JSONL_ONLY_MSG_TYPES:
-                        _collect_jsonl_annotations(payload, annotations)
-                        continue
-                    normalised = _normalise_row(_jsonl_row_to_csv_view(payload))
-                    _attach_audio_transcript(normalised, transcripts)
-                    normalised["_row_index"] = len(rows)
-                    rows.append(normalised)
-        except OSError as exc:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="房间消息数据读取失败") from exc
-    essence_ids = annotations["essence_ids"]
-    gift_effects = annotations["gift_effects"]
-    deleted_ids = annotations["deleted_ids"]
-    if essence_ids or gift_effects or deleted_ids:
+    month_paths = _jsonl_month_paths(metadata_dir)
+    month_signature = _jsonl_month_signature(metadata_dir)
+    if _cache_month_signature != month_signature:
+        month_rows: list[dict[str, Any]] = []
+        month_annotations = _empty_annotations()
+        month_notice_state: dict[str, dict[str, str]] = {}
+        for month_path in month_paths:
+            file_rows, file_annotations = _read_jsonl_file(month_path, month_notice_state)
+            month_rows.extend(file_rows)
+            _merge_annotations(month_annotations, file_annotations)
+        _cache_month_rows = month_rows
+        _cache_month_annotations = month_annotations
+        _cache_month_notice_state = month_notice_state
+        _cache_month_signature = month_signature
+
+    main_rows, main_annotations = _read_jsonl_file(main_path, dict(_cache_month_notice_state))
+    annotations = {
+        "essence_ids": dict(_cache_month_annotations.get("essence_ids") or {}),
+        "deleted_ids": dict(_cache_month_annotations.get("deleted_ids") or {}),
+        "gift_effects": list(_cache_month_annotations.get("gift_effects") or []),
+    }
+    _merge_annotations(annotations, main_annotations)
+
+    rows = [*_cache_month_rows, *main_rows]
+    _ensure_row_indices(rows)
+
+    gift_map_signature = _file_signature(metadata_dir / "gift_effect_map.json")
+    if _cache_gift_map_signature != gift_map_signature:
         for row in rows:
-            deleted_at = deleted_ids.get(str(row.get("id", "") or ""))
-            if deleted_at and not row.get("deleted"):
-                row["deleted"] = True
-                row["deleted_detected_at"] = row.get("deleted_detected_at") or deleted_at
-            essence_at = essence_ids.get(str(row.get("id", "") or ""))
-            if essence_at:
-                row["essence"] = True
-                row["essence_at"] = essence_at
-            effect = _match_gift_effect(row, gift_effects)
-            if effect:
-                row["gift_effect_url"] = effect["effect_url"]
-                row["gift_effect_play_time"] = effect["play_time"]
-    # 历史礼物消息（无动效帧）按礼物名从映射表补挂动效
-    effect_map = _load_gift_effect_map(metadata_dir)
-    if effect_map:
-        for row in rows:
-            if row.get("gift_effect_url") or row.get("msg_type") != "GIFT_TEXT":
-                continue
-            entry = effect_map.get(str(row.get("gift_name", "") or ""))
-            if entry and entry.get("zip_path"):
-                row["gift_effect_url"] = _effect_url_from_zip_path(str(entry["zip_path"]))
-                row["gift_effect_play_time"] = _to_int(entry.get("play_time"), 0)
+            row["gift_effect_url"] = ""
+            row["gift_effect_play_time"] = 0
+        _cache_gift_map_signature = gift_map_signature
+
+    _apply_annotations(rows, annotations)
+    _apply_gift_effect_map(rows, metadata_dir)
+
     voice_rows = _load_voice_event_rows(metadata_dir)
     if voice_rows:
         rows.extend(voice_rows)
@@ -766,9 +1000,9 @@ def _load_jsonl_rows(
                 str(row.get("id") or ""),
             )
         )
-        for index, row in enumerate(rows):
-            row["_row_index"] = index
-    _annotate_notice_changes(rows)
+        _ensure_row_indices(rows)
+
+    _apply_audio_transcripts(rows, transcripts)
     return rows, str(metadata_dir), main_path.stat().st_mtime
 
 
@@ -865,25 +1099,6 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
     media_kind = parsed.get("media_kind") or _media_kind_for_type(msg_type)
     media_url = _resolve_media_url(str(media_url), media_kind)
 
-    search_text = " ".join(
-        str(value)
-        for value in (
-            row.get("bj_time", ""),
-            row.get("msg_type", ""),
-            row.get("sender_name", ""),
-            row.get("sender_id", ""),
-            row.get("text_content", ""),
-            row.get("reply_text", ""),
-            row.get("gift_name", ""),
-            parsed.get("title", ""),
-            parsed.get("body", ""),
-            parsed.get("quote", ""),
-            parsed.get("detail", ""),
-            room_label,
-        )
-        if value
-    ).lower()
-
     return {
         "id": row.get("id", ""),
         "server_id": row.get("server_id", ""),
@@ -930,7 +1145,6 @@ def _normalise_row(row: dict[str, str]) -> dict[str, Any]:
         "gift_effect_play_time": 0,
         "msg_time": _to_int(row.get("msg_time"), 0),
         "raw_extInfo": row.get("raw_extInfo", ""),
-        "_search_text": search_text,
     }
 
 
@@ -990,7 +1204,6 @@ def _attach_audio_transcript(row: dict[str, Any], transcripts: dict[str, dict[st
     transcript = transcripts.get(str(row.get("id", "")))
     if transcript:
         row["audio_transcript"] = transcript
-        row["_search_text"] = f"{row.get('_search_text', '')} {transcript.get('text', '')}".lower()
 
 
 def _parse_content(row: dict[str, str]) -> dict[str, str]:
@@ -1161,6 +1374,35 @@ def _parse_content(row: dict[str, str]) -> dict[str, str]:
     return {"title": TYPE_LABELS.get(msg_type, msg_type), "body": raw}
 
 
+KEYWORD_FIELDS = (
+    "bj_time",
+    "msg_type",
+    "sender_name",
+    "sender_id",
+    "raw_content",
+    "reply_text",
+    "gift_name",
+    "title",
+    "body",
+    "quote",
+    "detail",
+    "room_label",
+)
+
+
+def _row_matches_keyword(row: dict[str, Any], keyword_lower: str) -> bool:
+    for field in KEYWORD_FIELDS:
+        value = row.get(field)
+        if value and keyword_lower in str(value).lower():
+            return True
+    transcript = row.get("audio_transcript")
+    if isinstance(transcript, dict):
+        text = transcript.get("text")
+        if text and keyword_lower in str(text).lower():
+            return True
+    return False
+
+
 def _filter_rows(
     rows: list[dict[str, Any]],
     *,
@@ -1172,19 +1414,29 @@ def _filter_rows(
     room_type: str,
     date_from: str,
     date_to: str,
+    sender_index: dict[str, list[int]] | None = None,
 ) -> list[dict[str, Any]]:
     sender_lower = sender.lower()
     keyword_lower = keyword.lower()
     filtered: list[dict[str, Any]] = []
 
-    for row in rows:
+    if sender_lower and sender_index is not None:
+        candidate_indices: set[int] = set()
+        for name, indices in sender_index.items():
+            if sender_lower in name:
+                candidate_indices.update(indices)
+        candidates: Any = (rows[index] for index in sorted(candidate_indices) if 0 <= index < len(rows))
+    else:
+        candidates = rows
+
+    for row in candidates:
         if msg_type != "ALL" and row["msg_type"] != msg_type:
             continue
         if families is not None and row["family"] not in families:
             continue
         if sender_lower and sender_lower not in row["sender_name"].lower():
             continue
-        if keyword_lower and keyword_lower not in row["_search_text"]:
+        if keyword_lower and not _row_matches_keyword(row, keyword_lower):
             continue
         if has_media == "with" and not row["media_url"] and not row["media_path"]:
             continue
@@ -1379,11 +1631,10 @@ def _batch_id(batch: dict[str, Any]) -> str:
 
 
 def _invalidate_cache() -> None:
-    global _cache_mtime_ns, _cache_ignore_mtime_ns, _cache_transcripts_mtime_ns, _cache_loaded_at
-    _cache_mtime_ns = -1
-    _cache_ignore_mtime_ns = -2
-    _cache_transcripts_mtime_ns = -2
-    _cache_loaded_at = 0.0
+    global _cache_signature, _cache_loaded_at
+    with _cache_lock:
+        _cache_signature = None
+        _cache_loaded_at = 0.0
 
 
 def _summary_payload(summary: dict[str, Any]) -> dict[str, Any]:
@@ -1423,7 +1674,9 @@ def _reply_target(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in row.items() if not key.startswith("_")}
+    item = {key: value for key, value in row.items() if not key.startswith("_")}
+    item["row_index"] = int(row.get("_row_index", -1))
+    return item
 
 
 def _build_summary(rows: list[dict[str, Any]], mtime: float, ignored_state: dict[str, Any], source_path: str) -> dict[str, Any]:

@@ -65,6 +65,13 @@ class RoomMessagesTemplateTests(unittest.TestCase):
         self.assertNotIn('.filter-modal-scroll .field input[type="date"] {\n        display: block;', template)
         self.assertIn('unrepliedPanel.classList.toggle("visible", shouldShow)', template)
         self.assertIn('function isGiftReplyFamilyView()', template)
+        self.assertIn("function refreshContextGaps()", template)
+        self.assertIn("function expandContext(", template)
+        self.assertIn('gap.className = "context-gap"', template)
+        self.assertIn("拓展上文", template)
+        self.assertIn("拓展下文", template)
+        self.assertIn("/api/room-messages/context", template)
+        self.assertIn("rowIndex", template)
         self.assertNotIn('id="feedbackNav"', template)
         self.assertNotIn('id="feedbackForm"', template)
 
