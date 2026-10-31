@@ -453,17 +453,25 @@
     }
 
     .context-gap {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: 132px minmax(0, 1fr);
+      gap: 10px;
       margin: 2px 0 10px;
-      padding: 7px 10px;
-      border-top: 1px dashed rgba(255, 255, 255, 0.14);
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+      align-items: stretch;
       color: var(--muted);
       font-size: 12px;
+    }
+
+    .context-gap-body {
+      grid-column: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px dashed rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
     }
 
     .context-gap-label {
@@ -473,7 +481,15 @@
     }
 
     .context-gap .link-btn {
-      min-height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 36px;
+      border-radius: 999px;
+      font-weight: 720;
+      letter-spacing: 0.02em;
+      background: linear-gradient(180deg, rgba(64, 184, 168, 0.10), rgba(64, 184, 168, 0.04));
     }
 
     .context-gap .link-btn:disabled {
@@ -1411,6 +1427,13 @@
         grid-template-columns: 1fr;
         gap: 5px;
       }
+      .context-gap {
+        grid-template-columns: 1fr;
+        gap: 5px;
+      }
+      .context-gap-body {
+        grid-column: 1;
+      }
       .time-col {
         position: static;
         text-align: left;
@@ -2207,29 +2230,33 @@
       var gap = document.createElement("div");
       gap.className = "context-gap";
 
+      var body = document.createElement("div");
+      body.className = "context-gap-body";
+
       var label = document.createElement("span");
       label.className = "context-gap-label";
       label.textContent = "中间还有 " + formatNumber(hiddenCount) + " 条其他消息";
-      gap.appendChild(label);
-
-      var beforeButton = document.createElement("button");
-      beforeButton.type = "button";
-      beforeButton.className = "link-btn";
-      beforeButton.textContent = "拓展上文";
-      beforeButton.title = "展开下方这条消息之前的上下文";
-      beforeButton.dataset.contextDirection = "before";
-      beforeButton.dataset.contextAnchor = lowerNode.dataset.messageId || "";
-      gap.appendChild(beforeButton);
+      body.appendChild(label);
 
       var afterButton = document.createElement("button");
       afterButton.type = "button";
       afterButton.className = "link-btn";
-      afterButton.textContent = "拓展下文";
+      afterButton.textContent = "↓ 拓展下文";
       afterButton.title = "展开上方这条消息之后的上下文";
       afterButton.dataset.contextDirection = "after";
       afterButton.dataset.contextAnchor = upperNode.dataset.messageId || "";
-      gap.appendChild(afterButton);
+      body.appendChild(afterButton);
 
+      var beforeButton = document.createElement("button");
+      beforeButton.type = "button";
+      beforeButton.className = "link-btn";
+      beforeButton.textContent = "↑ 拓展上文";
+      beforeButton.title = "展开下方这条消息之前的上下文";
+      beforeButton.dataset.contextDirection = "before";
+      beforeButton.dataset.contextAnchor = lowerNode.dataset.messageId || "";
+      body.appendChild(beforeButton);
+
+      gap.appendChild(body);
       return gap;
     }
 
