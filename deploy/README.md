@@ -94,6 +94,8 @@ systemctl enable --now snh48-web.service
 
 微博图片代理由 `/home/snh48-fan-hub/deploy/systemd/snh48-weibo-img-proxy.service` 以同一专用账号运行；8899 只供 Nginx 反代，云安全组不得公网放行。翻牌账号管理和微博/抖音/B站 Cookie 更新分别由 `snh48-privileged-bridge-flip.service`、`snh48-privileged-bridge-social.service` 执行；网站进程只经校验对端 UID 的 Unix Socket 提交固定命令，不持有 sudo 权限、fan-hub 写权限或额外 capability。`deploy/harden_runtime_permissions.sh` 会安装并启动桥服务、切换网站 unit，成功后删除旧 sudoers 和包装器。
 
+桥在每次执行前校验目标脚本为 root 所有且 `other` 不可写；若脚本带 group 写位（维护者 ACL 的 mask 会反映到 `st_mode`），桥读取 POSIX ACL，只允许 root 与受信维护者账号 `codex-feishu`、`cjy-sync` 的具名写权限，拒绝组条目、`other` 或未知 UID 的写入。因此源码维护 ACL 无需为了桥而收回写权限。
+
 ---
 
 ## 🐳 Docker 部署（可选）

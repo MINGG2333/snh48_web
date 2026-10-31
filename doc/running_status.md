@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-01 07:14 CST 修复翻牌账号管理特权桥拒绝维护者 ACL 脚本（腾讯云）
+
+- 现象：`https://cjy.plus/flip` 的账号管理接口返回 503「账号管理服务暂时不可用」，`journalctl` 显示 `snh48-web.service` 对 `account-management/latest-job`、`send-sms` 返回 503，特权桥仅记录 `privileged bridge request failed: service=flip`。
+- 根因：2026-10-31 00:45 维护者 ACL 给 `cjy-sync`、`codex-feishu` 授予源码 `rwx`，ACL mask 令 `scripts/web/flip_account_admin.py` 的 `st_mode` 变为 `674`；特权桥原信任校验一律拒绝 group 写位，导致 root 侧脚本未执行，网页端把空响应转成 503。`social_credentials_admin.py` 同样受影响。
+- 修复：提交 `ddad403` 将桥的信任校验改为「root 所有 + `other` 不可写」，带 group 写位时解析 `system.posix_acl_access`，只允许 root 与受信维护者 `codex-feishu`、`cjy-sync` 的具名写权限，拒绝组条目、`other` 和未知 UID；不再要求回收维护者 ACL 写权限。新增 ACL 解析单测。
+- 部署：腾讯云安装新 `/usr/local/libexec/snh48-privileged-bridge-server`（`root:root 0755`）并重启两个桥，`snh48-privileged-bridge-flip.service` PID `3014152`、`snh48-privileged-bridge-social.service` PID `3014153`（均 07:13:16 起）；`snh48-web.service` PID `2967722` 未重启。阿里云不运行这两个桥，仅同步源码。
+- 验证：两端 `tests/test_privileged_bridge.py` 6 项通过；以 `snh48-web` 经 Unix Socket 调用 `flip latest-job` 和 `social status` 均返回 `ok:true`；腾讯云 `GET /api/flip-cards/account-management/latest-job?account_id=172884074` 由 503 恢复为 200。真实短信未重复触发。
+
 ## 2026-10-31 00:36 CST 红蓝汇总按达成时间排序并改用计分页分布样式（两端）
 
 - 需求：按昵称汇总同分时按“到达该总分的时间”从早到晚排序；网页的计分来源汇总和按昵称汇总仿照计分页礼物分布/送礼用户分布条形样式；不增加 Excel 导出，把“导出按昵称汇总”移到按昵称汇总面板头。
