@@ -715,6 +715,20 @@ async def startup():
     else:
         print("  QA engine startup warmup disabled; it will load lazily when QA is used.")
 
+    try:
+        from website.identity_index import start_warmup as start_identity_index_warmup
+        start_identity_index_warmup()
+        print("✓ Identity index warmup started.")
+    except Exception as e:
+        print(f"! Identity index warmup failed to start: {e}")
+
+    try:
+        from website.ob_api.router import start_cache_warmup
+        start_cache_warmup()
+        print("✓ OB cache warmup started.")
+    except Exception as e:
+        print(f"! OB cache warmup failed to start: {e}")
+
 
 def _backup_log_files(transcript_dir: Path) -> None:
     """Backup existing log files in various locations."""

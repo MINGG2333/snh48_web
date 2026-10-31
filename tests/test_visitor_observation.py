@@ -161,9 +161,11 @@ class VisitorObservationTests(unittest.TestCase):
                 ),
             ):
                 response = Response()
-                payload = ob_api.get_ob_data(response, _=True)
+                ob_api.clear_ob_cache()
+                result = ob_api.get_ob_data(response, fresh=True, _=True)
+                payload = json.loads(result.body)
 
-            self.assertEqual(response.headers["Cache-Control"], "no-store")
+            self.assertEqual(result.headers["Cache-Control"], "no-store")
             self.assertEqual(payload["stats"]["estimated_visitors"], 1)
             self.assertEqual(payload["stats"]["stable_profiles"], 1)
             self.assertEqual(payload["stats"]["legacy_sessions"], 1)

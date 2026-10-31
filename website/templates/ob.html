@@ -1852,7 +1852,8 @@
     const wasLoginVisible = !loginOverlay.classList.contains('hidden');
     const attemptedLogin = wasLoginVisible && Boolean(requestPassword);
     try {
-      const resp = await fetch('/api/ob/data', {
+      const dataUrl = options.manual ? '/api/ob/data?fresh=1' : '/api/ob/data';
+      const resp = await fetch(dataUrl, {
         headers: { 'X-Ob-Password': requestPassword },
         cache: 'no-store'
       });

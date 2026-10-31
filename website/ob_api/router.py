@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import threading
+import time
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
@@ -33,7 +36,22 @@ from website.visitor_observation import (
     load_page_views,
 )
 
+try:
+    import orjson
+except ImportError:  # pragma: no cover - fallback for minimal deployments
+    orjson = None
+
 router = APIRouter(prefix="/api/ob", tags=["管理员观察页"])
+
+logger = logging.getLogger(__name__)
+
+_cache_lock = threading.Lock()
+_build_lock = threading.Lock()
+_cache_revision = ""
+_cache_data: dict[str, Any] | None = None
+_cache_payload: bytes | None = None
+_cache_refreshing = False
+_warmup_started = False
 
 IP_CLIENTS_FILE = Path(__file__).resolve().parent.parent / "data" / "ip_clients.json"
 
@@ -146,10 +164,8 @@ def get_ob_summary(response: Response, _=Depends(verify_ob_password)):
     return {"revision": _ob_data_revision()}
 
 
-@router.get("/data")
-def get_ob_data(response: Response, _=Depends(verify_ob_password)):
-    """Return records plus display-only IP association and graph layers."""
-    response.headers["Cache-Control"] = "no-store"
+def _build_ob_data(revision: str) -> dict[str, Any]:
+    """Build the full observation payload; callers handle caching."""
     inbox = list_requests()
     inbox.extend(list_observability_alerts())
     inbox.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("event_id") or "")), reverse=True)
@@ -245,7 +261,6 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
     )
     association_groups = _build_ip_association_groups(groups)
     ip_network_graph = _build_ip_network_graph(groups)
-    revision = _ob_data_revision()
 
     stable_profiles = sum(1 for group in groups if not group["is_legacy"])
     legacy_sessions = len(groups) - stable_profiles
@@ -267,6 +282,95 @@ def get_ob_data(response: Response, _=Depends(verify_ob_password)):
         },
         "inbox": inbox,
     }
+
+
+def _serialize_ob_payload(data: dict[str, Any]) -> bytes:
+    if orjson is not None:
+        return orjson.dumps(data)
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def clear_ob_cache() -> None:
+    global _cache_revision, _cache_data, _cache_payload, _cache_refreshing
+    with _cache_lock:
+        _cache_revision = ""
+        _cache_data = None
+        _cache_payload = None
+        _cache_refreshing = False
+
+
+def _start_ob_refresh() -> None:
+    global _cache_refreshing
+    with _cache_lock:
+        if _cache_refreshing:
+            return
+        _cache_refreshing = True
+    threading.Thread(
+        target=_refresh_ob_cache,
+        name="ob-cache-refresh",
+        daemon=True,
+    ).start()
+
+
+def _refresh_ob_cache() -> None:
+    global _cache_revision, _cache_data, _cache_payload, _cache_refreshing
+    try:
+        with _build_lock:
+            revision = _ob_data_revision()
+            with _cache_lock:
+                if _cache_data is not None and _cache_revision == revision:
+                    return
+            data = _build_ob_data(revision)
+            payload = _serialize_ob_payload(data)
+            with _cache_lock:
+                _cache_revision = revision
+                _cache_data = data
+                _cache_payload = payload
+    except Exception:
+        logger.exception("观察页缓存后台刷新失败，继续使用旧缓存")
+    finally:
+        with _cache_lock:
+            _cache_refreshing = False
+
+
+def start_cache_warmup() -> None:
+    global _warmup_started
+    with _cache_lock:
+        if _warmup_started:
+            return
+        _warmup_started = True
+    _start_ob_refresh()
+
+
+@router.get("/data")
+def get_ob_data(response: Response, fresh: bool = False, _=Depends(verify_ob_password)):
+    """Return cached records; stale data refreshes in the background."""
+    global _cache_revision, _cache_data, _cache_payload
+    revision = _ob_data_revision()
+    with _cache_lock:
+        cached = _cache_data
+        cached_revision = _cache_revision
+        cached_payload = _cache_payload
+        refreshing = _cache_refreshing
+    if not fresh and cached is not None and cached_payload is not None:
+        if cached_revision != revision and not refreshing:
+            _start_ob_refresh()
+        return Response(content=cached_payload, media_type="application/json", headers={"Cache-Control": "no-store"})
+
+    with _build_lock:
+        with _cache_lock:
+            cached = _cache_data
+            cached_revision = _cache_revision
+            cached_payload = _cache_payload
+        if cached is not None and cached_payload is not None and cached_revision == revision:
+            return Response(content=cached_payload, media_type="application/json", headers={"Cache-Control": "no-store"})
+        data = _build_ob_data(revision)
+        payload = _serialize_ob_payload(data)
+        with _cache_lock:
+            _cache_revision = revision
+            _cache_data = data
+            _cache_payload = payload
+        return Response(content=payload, media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
 def _load_ip_clients() -> dict[str, list[str]]:

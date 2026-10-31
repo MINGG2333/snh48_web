@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import re
 import subprocess
 import threading
@@ -25,6 +26,8 @@ from website.shared_runtime_state import SharedStatePeerError, peer_command
 
 router = APIRouter(prefix="/api/weidian-orders", tags=["微店订单"])
 
+logger = logging.getLogger(__name__)
+
 AUTH_COOKIE = "weidian_orders_auth"
 AUTH_COOKIE_PATH = "/api/weidian-orders"
 
@@ -37,6 +40,8 @@ CACHE_TTL_SECONDS = 8
 _cache_lock = threading.Lock()
 _cache_at = 0.0
 _cache_data: dict[str, Any] | None = None
+_cache_refreshing = False
+_cache_generation = 0
 
 
 def _primary() -> bool:
@@ -101,10 +106,12 @@ def logout(response: Response):
 
 
 def _clear_cache() -> None:
-    global _cache_at, _cache_data
+    global _cache_at, _cache_data, _cache_refreshing, _cache_generation
     with _cache_lock:
         _cache_at = 0.0
         _cache_data = None
+        _cache_refreshing = False
+        _cache_generation += 1
 
 
 def _run_local(action: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -154,17 +161,53 @@ def _call(action: str, payload: dict[str, Any]) -> dict[str, Any]:
     return _peer(action, payload)
 
 
+def _refresh_cache_in_background() -> None:
+    global _cache_at, _cache_data, _cache_refreshing
+    with _cache_lock:
+        generation = _cache_generation
+    try:
+        data = _call("snapshot", {})
+        with _cache_lock:
+            if generation == _cache_generation:
+                _cache_at = time.time()
+                _cache_data = data
+    except Exception:
+        logger.exception("微店订单缓存后台刷新失败，继续使用旧缓存")
+    finally:
+        with _cache_lock:
+            _cache_refreshing = False
+
+
 @router.get("/data")
 def weidian_orders_data(_=Depends(verify_weidian_orders_password)):
-    global _cache_at, _cache_data
+    global _cache_at, _cache_data, _cache_refreshing
     now = time.time()
     with _cache_lock:
-        if _cache_data is not None and now - _cache_at < CACHE_TTL_SECONDS:
-            return _cache_data
+        cached = _cache_data
+        cached_at = _cache_at
+        refreshing = _cache_refreshing
+    if cached is not None:
+        if now - cached_at >= CACHE_TTL_SECONDS and not refreshing:
+            with _cache_lock:
+                if not _cache_refreshing:
+                    _cache_refreshing = True
+                    should_refresh = True
+                else:
+                    should_refresh = False
+            if should_refresh:
+                threading.Thread(
+                    target=_refresh_cache_in_background,
+                    name="weidian-orders-cache-refresh",
+                    daemon=True,
+                ).start()
+        return cached
+    with _cache_lock:
+        generation = _cache_generation
     data = _call("snapshot", {})
     with _cache_lock:
-        _cache_at = time.time()
-        _cache_data = data
+        if generation == _cache_generation:
+            _cache_at = time.time()
+            _cache_data = data
     return data
 
 
