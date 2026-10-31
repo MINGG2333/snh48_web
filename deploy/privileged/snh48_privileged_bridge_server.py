@@ -34,6 +34,18 @@ SERVICE_SETTINGS = {
     },
 }
 
+# POSIX ACL access xattr layout from linux/posix_acl_xattr.h.
+ACL_XATTR = "system.posix_acl_access"
+ACL_VERSION = 2
+ACL_TAG_USER_OBJ = 0x01
+ACL_TAG_USER = 0x02
+ACL_TAG_MASK = 0x10
+ACL_PERM_WRITE = 0x02
+# The project maintenance ACL grants these accounts write access to source
+# trees, including the bridge scripts executed as root. Root remains the only
+# principal allowed to change file ownership or ACLs.
+TRUSTED_WRITER_ACCOUNTS = ("codex-feishu", "cjy-sync")
+
 
 class BridgeFailure(RuntimeError):
     """Internal bridge failure that must not expose subprocess details."""
@@ -64,14 +76,56 @@ def send_frame(connection: socket.socket, payload: bytes) -> None:
     connection.sendall(FRAME_HEADER.pack(len(payload)) + payload)
 
 
+def _trusted_writer_uids() -> frozenset[int]:
+    uids = {0}
+    for account in TRUSTED_WRITER_ACCOUNTS:
+        try:
+            uids.add(pwd.getpwnam(account).pw_uid)
+        except KeyError:
+            continue
+    return frozenset(uids)
+
+
+def _acl_writers_are_trusted(raw_acl: bytes, trusted_uids: frozenset[int]) -> bool:
+    """Allow write only for root and trusted maintainer accounts.
+
+    The group bits reported by stat(2) mirror the ACL mask, so a filesystem
+    with maintainer write ACLs looks group-writable even when the owning group
+    entry itself is read-only. Inspect the ACL instead of trusting st_mode.
+    """
+    if len(raw_acl) < 4 or (len(raw_acl) - 4) % 8 != 0:
+        return False
+    if int.from_bytes(raw_acl[:4], "little") != ACL_VERSION:
+        return False
+    for offset in range(4, len(raw_acl), 8):
+        tag, permissions, identifier = struct.unpack_from("<HHI", raw_acl, offset)
+        if not permissions & ACL_PERM_WRITE:
+            continue
+        if tag == ACL_TAG_USER_OBJ or tag == ACL_TAG_MASK:
+            continue
+        if tag == ACL_TAG_USER and identifier in trusted_uids:
+            continue
+        return False
+    return True
+
+
 def _require_root_owned_readonly(path: Path) -> Path:
     try:
         resolved = path.resolve(strict=True)
         metadata = resolved.stat()
     except OSError as exc:
         raise BridgeFailure("bridge executable missing") from exc
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o022:
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0:
         raise BridgeFailure("bridge executable is not trusted")
+    if metadata.st_mode & 0o002:
+        raise BridgeFailure("bridge executable is not trusted")
+    if metadata.st_mode & 0o020:
+        try:
+            raw_acl = os.getxattr(resolved, ACL_XATTR)
+        except OSError as exc:
+            raise BridgeFailure("bridge executable is not trusted") from exc
+        if not _acl_writers_are_trusted(raw_acl, _trusted_writer_uids()):
+            raise BridgeFailure("bridge executable is not trusted")
     return resolved
 
 

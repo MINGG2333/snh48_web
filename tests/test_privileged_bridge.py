@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -26,6 +27,13 @@ def load_module(name: str, path: Path):
 
 
 bridge_server = load_module("snh48_privileged_bridge_server", SERVER_PATH)
+
+
+def acl_blob(entries: list[tuple[int, int, int]]) -> bytes:
+    return struct.pack("<I", bridge_server.ACL_VERSION) + b"".join(
+        struct.pack("<HHI", tag, permissions, identifier)
+        for tag, permissions, identifier in entries
+    )
 
 
 class FakeProcess:
@@ -82,6 +90,37 @@ class PrivilegedBridgeTests(unittest.TestCase):
         self.assertIn("sensitive-cookie-value", process.stdin_payload)
         self.assertNotIn("sensitive-cookie-value", result)
         self.assertEqual(process.timeout, 170)
+
+    def test_acl_writer_check_allows_trusted_maintainer_write(self) -> None:
+        raw = acl_blob(
+            [
+                (bridge_server.ACL_TAG_USER_OBJ, 6, 0xFFFFFFFF),
+                (bridge_server.ACL_TAG_USER, 7, 1001),
+                (0x04, 4, 0xFFFFFFFF),
+                (bridge_server.ACL_TAG_MASK, 7, 0xFFFFFFFF),
+                (0x20, 4, 0xFFFFFFFF),
+            ]
+        )
+        self.assertTrue(bridge_server._acl_writers_are_trusted(raw, frozenset({0, 1001})))
+
+    def test_acl_writer_check_rejects_untrusted_write(self) -> None:
+        for tag, permissions in (
+            (bridge_server.ACL_TAG_USER, 7),
+            (0x04, 6),
+            (0x20, 6),
+        ):
+            with self.subTest(tag=tag):
+                raw = acl_blob(
+                    [
+                        (bridge_server.ACL_TAG_USER_OBJ, 6, 0xFFFFFFFF),
+                        (tag, permissions, 4242),
+                        (bridge_server.ACL_TAG_MASK, 7, 0xFFFFFFFF),
+                        (0x20, 4, 0xFFFFFFFF),
+                    ]
+                )
+                self.assertFalse(
+                    bridge_server._acl_writers_are_trusted(raw, frozenset({0, 1001}))
+                )
 
     def test_command_allowlist_rejects_arbitrary_execution(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
