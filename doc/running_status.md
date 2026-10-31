@@ -1,5 +1,105 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-10-31 00:36 CST 红蓝汇总按达成时间排序并改用计分页分布样式（两端）
+
+- 需求：按昵称汇总同分时按“到达该总分的时间”从早到晚排序；网页的计分来源汇总和按昵称汇总仿照计分页礼物分布/送礼用户分布条形样式；不增加 Excel 导出，把“导出按昵称汇总”移到按昵称汇总面板头。
+- 排序：`website/redblue_ledger_api.py` 的 `_fan_summary` 新增 `reached_at`（该昵称最后一条计分条目时间），并改为总分降序 → `reached_at` 升序 → 昵称；网页和导出图共用该顺序，不影响条目明细分。
+- 页面：`templates/redblue_ledger_2026.html` 两个汇总区改为 `analytics-grid` + `bar-list/bar-row`；计分来源汇总显示 6 类来源分数条，按昵称汇总显示前 10、带进度条和“全部”弹窗；面板头显示人数、`导出按昵称汇总` 和 `全部`，顶部栏只保留“导出按条目”；页面标题仍为“红蓝计分台账 2026”。
+- 部署：按红蓝台账未跟踪生产文件现有做法两端直接更新 `website/redblue_ledger_api.py`、`templates/redblue_ledger_2026.html`、`tests/test_redblue_ledger_api.py` 和 `doc/website_pages.md`；阿里云 `snh48-aliyun.service` PID `1592327`（00:36:40 起），腾讯云 `snh48-web.service` PID `1527766`（00:36:42 起）。
+- 验证：两端 `tests/test_redblue_ledger_api.py` 20 项 + `tests/test_password_page_security.py` 3 项通过；`/api/redblue/data` 的 36 人 `fan_summary` 同分 `reached_at` 非递减；两端 `/business/redblue2026` 200，包含 `analytics-grid`、`fanModal` 和面板头导出按钮；导出烟测阿里云汇总 699x1802、腾讯云 690x1802，按条目均为 680x2958。
+
+## 2026-10-30 20:02 CST 红蓝台账导出图收窄并改名（两端）
+
+- 需求：按昵称汇总图不再显示已投/待投；卡片保持两列但按最长昵称动态定宽、不截断昵称；按条目图去掉右侧多余空白；导出图标题/页脚/下载名改为“红蓝计分汇总”，按人汇总改称按昵称汇总。
+- 代码：`website/redblue_export.py` 按昵称汇总改为两列动态卡片宽度（当前数据 699px 图宽、卡片约 319px、高 76px），移除已投/待投行，名字不再 `_fit` 截断；按条目宽度 820->680、列位重排；导出标题/页脚改为“红蓝计分汇总”。`templates/redblue_ledger_2026.html` 的按钮、面板和状态文案改为“按昵称汇总”，下载文件名改为 `红蓝计分汇总_*`，页面标题保持“红蓝计分台账 2026”。
+- 部署：按红蓝台账未跟踪生产文件现有做法两端直接更新 `website/redblue_export.py`、`templates/redblue_ledger_2026.html`、`tests/test_redblue_ledger_api.py` 和 `doc/website_pages.md`；阿里云 `snh48-aliyun.service` PID `1264823`（20:02:24 起），腾讯云 `snh48-web.service` PID `1330889`（20:02:25 起）。
+- 验证：两端 `tests/test_redblue_ledger_api.py` 19 项通过；两端 `/business/redblue2026` 200，页面包含“导出按昵称汇总”和新下载名；按昵称汇总导出为动态宽度（阿里云 699x1802、腾讯云 690x1802），按条目均为 680x2958，标题/页脚为“红蓝计分汇总”。
+
+## 2026-10-30 06:38 CST 修正身份索引最新昵称并重建（两端）
+
+- 根因：`scripts/live_monitor/fan_identity_exporter.py` 的 `merge_sender_identity` 把所有历史昵称都按账号级 `latest_seen` 写入，导致同一账号多个昵称并列最新；`latest_name` 又按写入顺序取最后一个，于是 Miyosa 被错标成「无糖芬达yp」。另外台账旧 `aliases` 会覆盖身份索引，进一步放大错误。
+- 修复：身份索引改为按每个昵称自己的 `latest_seen` 计算，并用「时间 + 权威最新优先级 + 出现次数」比较；`redblue_ledger_api._resolve_identity` 改为身份索引优先、alias 只在索引缺失时兜底，避免旧 alias 覆盖新昵称。
+- 重建：腾讯云已重跑身份索引，覆盖到 2026-10-30，accounts `29,039`、nicknames `32,036`；文件经 `dynamic` 组同步到阿里云。Miyosa（ID `166789134`）最新昵称恢复为 `Miyosa`；当前仅剩 `拾蹄悦(悦悦🌲)` → `拾蹄悦(悦悦)` 这一处真实改名。
+- 部署：腾讯云 `snh48-web.service` PID `737080`、阿里云 `snh48-aliyun.service` PID `486540`（均 06:37 起）。
+- 验证：`tests/test_fan_identity_exporter.py` 2 项、网站 `tests/test_redblue_ledger_api.py` 19 项 + `tests/test_score_gifts_sender_export.py` 4 项通过；两端两个页面 200，Miyosa 在 score 页和 redblue 页均显示为 Miyosa。
+
+## 2026-10-30 05:53 CST 计分页与红蓝台账统一使用最新口袋昵称（两端）
+
+- 现象：`/score/2026-winter` 与 `/business/redblue2026` 名单看起来不一致；核对后 31 个口袋ID完全一致，差异是 score 页显示计分时昵称（如「等雨晴_」），红蓝台账显示身份索引里的最新昵称（如「茉莉雨_」），并非名单缺失或错人。
+- 口径：两个页面主名称统一显示最新口袋昵称；计分时昵称不同时，在昵称下方/汇总卡备注「计分昵称」，导出同时保留「当前昵称 / 计分昵称」两列。
+- 代码：`website/score_gifts_api.py` 新增身份索引缓存和 `current_sender_name`，详情、送礼用户分布、`/summary` 和导出均带最新昵称；`sender` 筛选同时匹配最新昵称、计分昵称和口袋ID。`templates/score_gifts.html` 主名称改用 `current_sender_name` 并备注计分昵称。`website/redblue_ledger_api.py` 的按人汇总新增 `score_names` / `score_name`，`templates/redblue_ledger_2026.html` 在 ID 行和汇总卡备注计分昵称。
+- 部署：腾讯云 `snh48-web.service` PID `703592`、阿里云 `snh48-aliyun.service` PID `361693`（均 05:52 起）。
+- 验证：`tests/test_redblue_ledger_api.py` 19 项、`tests/test_score_gifts_sender_export.py` 4 项通过；两端 `/score/2026-winter`、`/business/redblue2026` 200；score 页 41 条，分布中「等雨晴_」显示为「茉莉雨_」并备注计分昵称，红蓝台账同样备注；筛选 `茉莉雨_` 和 `等雨晴_` 都能命中同一人。
+
+## 2026-10-30 05:01 CST 红蓝台账 6 类计分来源汇总与鸡腿礼物识别（两端）
+
+- 需求：房间/直播在 11/11–15（及后续鸡腿窗口）可投带计分属性的红蓝鸡腿礼物；网页显示 6 类“来源×方式”汇总；导出图不再标来源，只按计分卡/鸡腿标记并按人汇总。
+- 口径：房间/直播默认计分卡；官方鸡腿礼物名可能不含“鸡腿”，改为按“口袋48鸡腿价格 > 0 且有计分属性”识别（读 `score_gift_authority.json` 的 `melee`/`money`，不再写死 350），礼物名含“鸡腿”或命中 `REDBLUE_CHICKEN_GIFT_NAMES`/`IDS` 也直接记鸡腿；弦月回响等计分卡礼物保持计分卡；应援会/微店=鸡腿，暗票=计分卡。
+- 代码：`website/config.py` 新增 `REDBLUE_CHICKEN_GIFT_NAMES` / `REDBLUE_CHICKEN_GIFT_KEYWORDS`；`redblue_ledger_api.py` 为条目保存/派生 `scoring_method`，同步时按礼物名判定，`_fan_summary` 新增 `scoring` 汇总；`templates/redblue_ledger_2026.html` 新增 6 类汇总面板；`redblue_export.py` 两类导出图只显示计分方式并按人汇总计分卡/鸡腿；按条目图移除右侧业务状态列，宽度从 1000px 收窄到 820px。
+- 部署：腾讯云 `snh48-web.service` PID `667513`（05:00 起），阿里云 `snh48-aliyun.service` PID `308712`（05:00 起，模型加载后监听 8000）；未跟踪生产文件按现有做法两端直接更新。
+- 验证：两端 `tests/test_redblue_ledger_api.py` 18 项通过；fan-hub `tests/test_all_members_score_exporter.py` 6 项通过；两端 `/business/redblue2026` 200，按条目导出 820px、按人 1000px；现网 44 条仍为房间/直播计分卡、微店鸡腿；腾讯云已重建权威清单并保留 `melee`/`money`，阿里云已重跑 2026-winter score 数据（41 条、弦月回响 73 分），`/score/2026-winter` 200。
+
+## 2026-10-30 04:25 CST 红蓝台账新增计分方式列与导出来源细化（两端）
+
+- 需求：`/business/redblue2026` 需要区分条目是鸡腿还是计分卡计分；导出两类 PNG 的来源标签要细化为「房间·计分卡」「直播·计分卡」「应援会·鸡腿」「暗票·计分卡」。
+- 口径：微店/应援会=鸡腿；房间/直播=计分卡（弦月回响）；暗票按用户确认统一=计分卡。计分方式由 `source` 派生，不新增台账存储字段，历史条目自动生效。
+- 代码：`website/redblue_ledger_api.py` 新增 `SCORING_METHOD_LABELS` / `SCORING_SOURCE_LABELS`，`_normalise_entry` 输出 `scoring_method` 和 `source_scoring_label`，导出筛选文案同步细化；`website/templates/redblue_ledger_2026.html` 表格新增「计分方式」列，按人汇总来源文案同步；`website/redblue_export.py` 两类 PNG 的来源徽章改为细化标签。
+- 部署：按红蓝台账未跟踪生产文件现有做法两端直接更新 API/导出/模板/测试；腾讯云 `snh48-web.service` PID `640597`（04:24:19 起），阿里云 `snh48-aliyun.service` PID `267753`（04:24:19 起，模型加载后 04:24:47 左右监听 8000）。
+- 验证：两端 `tests/test_redblue_ledger_api.py` 14 项通过；两端 `/business/redblue2026` 200；`/api/redblue/data` 44 条，房间 33 / 直播 8 全部 `计分卡`，微店 3 全部 `鸡腿`，标签集合与预期一致；本地渲染两类 PNG 无重叠（1000px 宽）。
+
+## 2026-10-27 01:05 CST 红蓝台账导出重做与页面轻量化（两端）
+
+- 导出字体过大的根因：`website/redblue_export.py` 复用了 `gift_reply_export._font()`，该函数内部固定 `SCALE=2`，但 redblue 画布只有 860px 且未按 2x 缩放，所有字体被放大 2 倍并互相重叠。`gift_reply_export._font()` 增加可选 `scale` 参数（默认仍为 2），redblue 导出显式使用 1x。
+- 重做版式：`redblue_export.py` 改为 1000px 逻辑宽、单栏时间线、标题 50px、正文 20–27px，浅紫底/白卡片/紫色标题，对齐交接包 `礼物回复时间线_近三周_20261021.png` 的观感；按人汇总同步修正字号。导出的“按条目”图从 512KB / 约 6s（cjy.plus）降到 334KB / 约 1.2–1.4s，本地生成约 0.55s。
+- 未登记昵称：不再使用红色昵称；名字统一 `NAME` 色和同字号，只在名字后保留低对比度圆圈 `!`（浅紫圆 + 灰紫叹号）。底部说明同步保留。
+- 页面：移除 `.topbar` 的 `backdrop-filter: blur(12px)`，减少华为 ArkWeb 等浏览器的高开销合成；导出按钮点击后显示“生成中…”并写入状态栏，避免误以为卡死。
+- 登录态：`_COOKIE_SECRET` 从每次启动随机改为 600 权限持久密钥文件 `private_handover/web_state/redblue_ledger_cookie_secret`，网站重启后红蓝台账 Cookie 不再失效；首次登录创建，密钥不进 Git、不打印。`REDBLUE_COOKIE_SECRET_PATH` 可覆盖默认路径。
+- 部署：按红蓝台账/网站未跟踪生产文件做法两端直接更新 `website/redblue_export.py`、`redblue_ledger_api.py`、`config.py`、`gift_reply_export.py`、`templates/redblue_ledger_2026.html` 和测试；腾讯云 `snh48-web.service` PID `1348424`（00:58:36 起），阿里云 `snh48-aliyun.service` PID `38119`（00:59:00 起，01:02:42 完成监听）。两端密钥文件均为 `snh48-web:snh48-web 0600`。
+- 验证：`tests/test_redblue_ledger_api.py` 13 项、`tests/test_gift_reply_export.py` 7 项通过（腾讯云合并跑 20 项通过）；两端 `/business/redblue2026` 200；导出图均为 1000px 宽 PNG（按条目约 334KB、按人汇总约 172KB）。
+- 注意：本次重启前签发的旧红蓝 Cookie 会失效一次；重新登录后，后续重启将保留登录态。
+
+## 2026-10-26 23:56 CST 红蓝台账微店计分按档位×份数修正（两端）
+
+- 问题：`/business/redblue2026` 的微店条目把订单 `quantity` 直接当分数；`99份×1`、总价 `2598.75` 的订单只记 1 分，应为 99 分（或总价 ÷ 26.25）。
+- 修复：`website/redblue_ledger_api.py` 新增 `_weidian_order_score`——优先用 worker 输出的 `score`（SKU 档位数字 × 购买份数），否则订单总价 ÷ `REDBLUE_WEIDIAN_UNIT_PRICE`（默认 26.25），最后回退 `quantity`；`_mutator_upsert_weidian` 写入台账和 `_weidian_changed` 变更检测共用该口径。`website/config.py` 增加 `REDBLUE_WEIDIAN_UNIT_PRICE`；fan-hub `redblue_worker.py` 同步新增 `sku_title` / `score`。
+- 部署：按红蓝台账现有“未跟踪生产文件两端直接更新”做法，直接同步 API/config/测试到腾讯云；重启腾讯云 `snh48-web.service`（PID `1295537`，23:48:04 起）和阿里云 `snh48-aliyun.service`（PID `4153546`，23:47:57 起，模型加载完成后 23:55:18 监听 8000）。
+- 台账修正：腾讯云微店同步 job `5441f61e973d4dc9a3700764ae248cac` apply 返回 `updated=2`、`replicated=true`；两节点台账南方有嘉木 `1.0`、徐某人 `99.0`。`/api/redblue/data`：`entry_count=29`、`total_score=141.0`、`settled_score=42.0`、`pending_score=99.0`。
+- 验证：`tests/test_redblue_ledger_api.py` 12 项、fan-hub `tests/test_redblue_worker.py` 4 项，两端通过；两端 `/business/redblue2026` 200。
+- 源文件状态：`website/redblue_ledger_api.py`、`website/config.py`、测试文件仍按现有红蓝台账做法作为未跟踪生产文件两端直接更新；本运行快照按节点本地维护。
+
+## 2026-10-25 04:57 CST 红蓝台账密码改为 HttpOnly Cookie，移除浏览器密码缓存
+
+- 问题：`/business/redblue2026` 前端把明文管理密码写入 `sessionStorage("redblue_ledger_password_2026")`，刷新自动复用；密码框使用 `autocomplete="current-password"`，且 `REDBLUE_LEDGER_PASSWORD` 默认复用业务管理/礼物回复密码，浏览器存储泄露会连带多个后台页。
+- 修复：后端新增 `POST /api/redblue/login`、`POST /api/redblue/logout`；登录成功签发 `HttpOnly; Secure; SameSite=Strict; Path=/api/redblue` 的 HMAC Cookie（24h），`/verify`、数据、导出、轮询、同步均支持 Cookie；`X-Redblue-Password` 保留旧客户端兼容。前端登录改为提交 JSON 到 `/login`，启动时用 `/verify` 检查 Cookie，401/403 回登录，登出调用服务端接口；删除 sessionStorage 写入并在启动时清理旧 key，密码框改 `autocomplete="new-password"`。
+- 加固：新增 `doc/security/password_page_best_practices.md` 和 `tests/test_password_page_security.py`（禁止 `current-password`、禁止 Web Storage 保存密码、检查 redblue 使用 `/login`）；`AGENTS.md`、`doc/website_pages.md`、`doc/security/security_baseline.md` 已更新。旧 `tests/test_password_login_feedback.py` 中“记忆页应从 localStorage 读取密码”的过期断言已改为只允许 `removeItem` 清理。
+- 验证：临时工作区和两端定向单测通过（redblue 10 项；密码页静态/反馈 7 项）；两端公网烟测：页面 200、源码无 `sessionStorage.setItem`、未登录 `/api/redblue/data` 401、登录 200 且 Set-Cookie 含 HttpOnly/Secure/SameSite=strict/Path=/api/redblue、verify/data/export 200、logout 200、登出后 401；阿里云 04:56:44 自动同步 `/api/redblue/sync/room-live` 仍 200（旧请求头兼容）。
+- 部署：腾讯云 `snh48-web.service` PID `3483721`，04:54:43 启动，NRestarts=0；阿里云 `snh48-aliyun.service` PID `1456413`，04:55:35 启动，NRestarts=3（首次重启因 unit 的 `ReadWritePaths` 指向缺失的 `/home/snh48_web/transcript_analyze/logs_backup` 失败，已按 `deploy/harden_aliyun_runtime_permissions.sh` 规则创建 `snh48-web:snh48-web 0700` 目录后恢复）。两端页面模板改动由 Jinja 自动重载，除服务重启外无需额外构建。
+- 注意：旧版本用户浏览器里可能仍有 `redblue_ledger_password_2026`，新页面首次加载会删除该 key；因 Cookie 为新会话，用户需重新输入一次密码。
+- 源文件状态：`website/redblue_ledger_api.py`、`website/templates/redblue_ledger_2026.html`、`tests/test_redblue_ledger_api.py` 仍是未跟踪生产文件，按现有红蓝台账做法两端直接更新；最佳实践文档、静态护栏、AGENTS 和基线文档已纳入 GitHub；本运行快照按节点本地维护。
+
+## 2026-10-25 03:57 CST 礼物回复导出改为 2x 渲染（长图放大更清晰）
+
+- 背景：上一版已把时间线改回单栏、回复情况保持双栏并对齐本地字号，但导出仍是 1000px 位图；长图在手机相册/聊天里被整体缩小后仍不清楚。
+- 修复：`website/gift_reply_export.py` 改为逻辑 1000px 布局 + 2x 像素密度绘制，输出 2000px 宽；字体、间距、徽标全部按 2x 渲染，版式与本地图保持一致。
+- 稳定性：新增 105MP 安全像素预算（`MAX_EXPORT_PIXELS`），超出时返回 413“导出图过长，请缩小日期范围或增加筛选条件后重试”，避免超长图拖垮腾讯云小内存节点；`gift_replies_api.py` 已把该异常转成 413。
+- 验证：7 项单测两端通过；腾讯云 60 天时间线（461 条）实测 `2000×50808`、6.6MB、14.4 秒、峰值 RSS 475MB，无 swap；阿里云同等数据 17.5 秒通过；90 天范围按预算返回 413。2x 模式下按当前送礼密度约 60 天以内可单张导出。
+- 部署：两端同步 `website/gift_reply_export.py`、`website/gift_replies_api.py`、测试与文档；阿里云重启 `snh48-aliyun.service`（PID `1374884`，03:56:47 启动），腾讯云重启 `snh48-web.service`（PID `3436561`，03:56:48 启动）。
+
+## 2026-10-25 03:35 CST 礼物回复导出改回本地版式（时间线单栏、字号对齐）
+
+- 问题：10/23 上线的导出文件在工作区被改成时间线双栏、正文字号 11–16px；与交接包本地图（时间线单栏、正文 20–24px、标题 50px）相比同宽 1000px 下内容被压缩，看起来明显更小更糊；回复情况虽仍为双栏，但字号也偏小。
+- 修复：`website/gift_reply_export.py` 时间线恢复单栏并按本地 HTML 字号重排（标题 50、日期 27、正文 24、时间/徽标 20）；回复情况保持双栏，把姓名/正文/时间/徽标字号提升到 28/24/20；表头、分区标题、页脚和卡片间距同步对齐本地图。
+- 验证：`tests/test_gift_reply_export.py` 新增单栏与双栏回归用例，6 项在两端通过；两端接口实测 200，时间线 `1000×5478`、回复情况 `1000×4773`（2026-10-18 至 10-25 筛选）。
+- 部署：两端 `website/gift_reply_export.py` 与测试文件为未提交生产改动，直接单文件更新；阿里云重启 `snh48-aliyun.service`（PID `1349301`，03:34:07 启动），腾讯云重启 `snh48-web.service`（PID `3419293`，03:34:08 启动）。
+- 文档：`doc/website_pages.md` 已注明时间线导出单栏、回复情况导出双栏及 1000px/正文 20–24px 版式。
+
+## 2026-10-25 02:12 CST 红蓝台账微店商品名同步（两端）
+
+- 问题：微店订单 `itemName` 是下单快照，商品改名后不会回写；台账同步未比较 `item_name`，旧商品名会长期留在台账 JSON。
+- 修复：`website/redblue_ledger_api.py` 的 `_weidian_changed` 增加 `item_name` 比较；fan-hub `redblue_worker.py` 同步订单时用 `item.getInfo` 当前商品名覆盖快照，获取失败时任务报错、不回退旧名。两处文件当前仍是未跟踪生产文件，按节点直接更新。
+- 部署：腾讯云重启 `snh48-web.service`（PID `3354246`），阿里云重启 `snh48-aliyun.service`（PID `1259393`）；腾讯云触发微店同步 + apply，台账 revision `20261024T180914.805163Z-tencent-effa785b5ca0`，阿里云副本已同步。
+- 验证：`tests/test_redblue_ledger_api.py` 7 项通过；两端 `/business/redblue2026` 返回 200，`/api/redblue/data` 的微店条目商品名为 `【陈嘉仪·红蓝歌会】75折红蓝1分鸡腿礼物`。
+
 ## 2026-10-23 19:35 CST 礼物回复页新增 PNG 导出（两端）
 
 - 功能：`/room/gifts` 新增「导出时间线图」，按当前已应用的筛选（回复状态/礼物/用户/回复类型/日期）导出逐条时间线 PNG；`/room/gift-senders` 新增「导出回复情况图」，按当前筛选导出按送礼人聚合的两列卡片 PNG。两页导出都不受分页影响，按钮显示生成中/失败/已开始下载。

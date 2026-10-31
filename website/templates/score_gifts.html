@@ -1475,8 +1475,12 @@
           var parts = [];
           var id = firstSenderId(item);
           parts.push(id ? "ID " + id : "按昵称兜底");
-          if (Array.isArray(item.sender_names) && item.sender_names.length > 1) {
-            parts.push("昵称 " + item.sender_names.slice(0, 2).join(" / "));
+          var currentName = senderDisplayName(item);
+          var scoringNames = Array.isArray(item.sender_names)
+            ? item.sender_names.filter(function(name) { return name && name !== currentName; })
+            : [];
+          if (scoringNames.length) {
+            parts.push("计分昵称 " + scoringNames.slice(0, 2).join(" / "));
           }
           parts.push("记录 " + formatNumber(item.records || 0));
           parts.push("礼物 " + formatNumber(item.total_count || 0));
@@ -1512,7 +1516,7 @@
       businessError.textContent = "";
       businessMeta.textContent = [
         item.event_time || "-",
-        item.sender_name || "未知用户",
+        item.current_sender_name || item.sender_name || "未知用户",
         item.gift_name || "-",
         formatScore(item.total_score || 0) + " 分",
         item.live_title || item.live_id || ""
@@ -1759,7 +1763,7 @@
       row.appendChild(time);
 
       var sender = document.createElement("div");
-      sender.appendChild(textBlock(item.sender_name || "未知用户", senderMeta(item)));
+      sender.appendChild(textBlock(item.current_sender_name || item.sender_name || "未知用户", senderMeta(item)));
       row.appendChild(sender);
 
       var gift = document.createElement("div");
@@ -2273,12 +2277,17 @@
     }
 
     function senderDisplayName(item) {
-      return item.sender_name || item.sender_identifier || firstSenderId(item) || "未知用户";
+      return item.current_sender_name || item.sender_name || item.sender_identifier || firstSenderId(item) || "未知用户";
     }
 
     function senderMeta(item) {
-      if (!item.sender_id) return "";
-      var parts = ["ID " + item.sender_id];
+      var parts = [];
+      if (item.sender_id) parts.push("ID " + item.sender_id);
+      var currentName = item.current_sender_name || "";
+      var scoringName = item.sender_name || "";
+      if (scoringName && currentName && scoringName !== currentName) {
+        parts.push("计分昵称 " + scoringName);
+      }
       if (item.source === "live" && item.sender_id_source === "room_sender_identity_map") {
         parts.push("昵称映射");
       }

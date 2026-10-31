@@ -22,6 +22,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from website import config as cfg
+from website import identity_index
 from website.maintenance import ensure_writable
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, register_mutator
@@ -58,7 +59,6 @@ _cache_lock = threading.Lock()
 _cache_path = ""
 _cache_mtime_ns = -1
 _cache_doc: dict[str, Any] = {}
-
 
 async def verify_score_gifts_password(
     request: Request,
@@ -236,7 +236,7 @@ def get_score_gifts_summary(
         "default_page_size": _to_int(doc.get("default_page_size"), 100),
         "summary": doc.get("summary", {}),
         "gift_distribution": _normalise_distribution(doc.get("gift_distribution", [])),
-        "sender_distribution": _normalise_distribution(doc.get("sender_distribution", [])),
+        "sender_distribution": _enrich_distribution_current_names(_normalise_distribution(doc.get("sender_distribution", []))),
         "daily_distribution": _normalise_distribution(doc.get("daily_distribution", [])),
         "live_sessions": _normalise_distribution(doc.get("live_sessions", [])),
     }
@@ -397,6 +397,7 @@ def _filtered_detail_rows(
 
     doc = _load_dataset(season)
     items = _normalise_items(doc.get("items", []))
+    _apply_current_sender_names(items)
     _apply_business_state_overrides(items)
     rows = _filter_rows(
         items,
@@ -434,6 +435,40 @@ def _load_dataset(season: str = DEFAULT_SEASON) -> dict[str, Any]:
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_doc = doc
         return _cache_doc
+
+
+def _identity_index() -> dict[str, str]:
+    """口袋48 ID -> 身份索引中的最新昵称，用于把计分昵称归一为当前昵称。"""
+    return identity_index.latest_names_by_id()
+
+
+def _apply_current_sender_names(rows: list[dict[str, Any]]) -> None:
+    index = _identity_index()
+    for row in rows:
+        sender_id = str(row.get("sender_id") or "").strip()
+        current = index.get(sender_id, "")
+        row["current_sender_name"] = current or str(row.get("sender_name") or "").strip()
+
+
+def _enrich_distribution_current_names(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    index = _identity_index()
+    output: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        row = dict(item)
+        ids = row.get("sender_ids") if isinstance(row.get("sender_ids"), list) else []
+        if not ids and row.get("sender_id"):
+            ids = [row.get("sender_id")]
+        for sender_id in ids:
+            current = index.get(str(sender_id).strip(), "")
+            if current:
+                row["current_sender_name"] = current
+                break
+        output.append(row)
+    return output
 
 
 def _normalise_items(items: Any) -> list[dict[str, Any]]:
@@ -608,9 +643,16 @@ def _sender_distribution(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         live_rows = [row for row in group if row["source"] == "live"]
         ids = _sender_ids(group)
         names = _sender_names(group)
+        current_names = sorted({
+            _clean_text(row.get("current_sender_name"))
+            for row in group
+            if _valid_sender_name(row.get("current_sender_name"))
+        })
         output.append({
             "sender_key": sender_group_key,
             "sender_identifier": ids[0] if ids else (names[0] if names else ""),
+            "current_sender_name": current_names[0] if current_names else _sender_display_name(group, ids),
+            "current_sender_names": current_names,
             "sender_name": _sender_display_name(group, ids),
             "sender_names": names,
             "sender_ids": ids,
@@ -700,7 +742,8 @@ EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
     ("source_label", "来源"),
     ("event_time", "送礼时间"),
     ("date", "日期"),
-    ("sender_name", "送礼用户"),
+    ("current_sender_name", "当前昵称"),
+    ("sender_name", "计分昵称"),
     ("sender_id", "送礼用户ID"),
     ("sender_id_match_status", "用户ID匹配状态"),
     ("receiver_name", "收礼成员"),
@@ -736,7 +779,8 @@ EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
 )
 
 SENDER_SUMMARY_COLUMNS: tuple[tuple[str, str], ...] = (
-    ("sender_name", "送礼用户"),
+    ("current_sender_name", "当前昵称"),
+    ("sender_name", "计分昵称"),
     ("sender_ids", "送礼用户ID"),
     ("sender_names", "关联昵称"),
     ("total_score", "总分"),
@@ -752,7 +796,8 @@ SENDER_SUMMARY_COLUMNS: tuple[tuple[str, str], ...] = (
 )
 
 SENDER_DETAIL_COLUMNS: tuple[tuple[str, str], ...] = (
-    ("sender_name", "送礼用户"),
+    ("current_sender_name", "当前昵称"),
+    ("sender_name", "计分昵称"),
     ("sender_id", "送礼用户ID"),
     ("event_time", "送礼时间"),
     ("source_label", "投分来源"),
@@ -791,17 +836,17 @@ SENDER_DETAIL_COLUMNS: tuple[tuple[str, str], ...] = (
 )
 
 DETAIL_COLUMN_WIDTHS: tuple[int, ...] = (
-    10, 20, 12, 18, 16, 16, 14, 14, 16, 9, 11, 11,
+    10, 20, 12, 20, 18, 16, 16, 14, 14, 16, 9, 11, 11,
     24, 16, 30, 20, 12, 20, 34, 16, 16, 34, 16, 14,
     20, 34, 38, 26, 20, 20, 16, 14, 22, 18, 34, 34,
 )
 
 SENDER_SUMMARY_COLUMN_WIDTHS: tuple[int, ...] = (
-    20, 22, 28, 12, 12, 12, 16, 14, 14, 14, 12, 22, 22,
+    20, 20, 22, 28, 12, 12, 12, 16, 14, 14, 14, 12, 22, 22,
 )
 
 SENDER_DETAIL_COLUMN_WIDTHS: tuple[int, ...] = (
-    20, 18, 22, 12, 18, 10, 12, 12, 12, 18, 14, 14,
+    20, 20, 18, 22, 12, 18, 10, 12, 12, 12, 18, 14, 14,
     24, 16, 30, 20, 12, 20, 34, 16, 16, 34, 16, 14,
     20, 34, 38, 26, 20, 20, 16, 14, 22, 18, 34, 34,
 )
@@ -930,6 +975,8 @@ def _xlsx_table_sheet(
 
 def _sender_summary_export_value(row: dict[str, Any], key: str) -> Any:
     value = row.get(key)
+    if key == "current_sender_name":
+        return value or row.get("sender_name")
     if key in {"sender_ids", "sender_names"}:
         return "、".join(str(item) for item in value) if isinstance(value, list) else value
     return value
@@ -952,6 +999,8 @@ def _sender_grouped_detail_rows(
 def _export_cell_value(row: dict[str, Any], key: str) -> Any:
     if key == "source_label":
         return row.get("source_label") or _source_text(row.get("source"))
+    if key == "current_sender_name":
+        return row.get("current_sender_name") or row.get("sender_name")
     if key == "business_status":
         status_value = row.get("business_status")
         if status_value == "redeemed":
@@ -1267,6 +1316,7 @@ def _sender_key(row: dict[str, Any]) -> str:
 
 def _sender_search_text(row: dict[str, Any]) -> str:
     return " ".join((
+        _clean_text(row.get("current_sender_name")),
         _clean_text(row.get("sender_name")),
         _clean_text(row.get("sender_id")),
         _sender_key(row),

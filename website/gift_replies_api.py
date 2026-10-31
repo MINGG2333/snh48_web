@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from website import config as cfg
+from website.gift_reply_export import ExportTooLarge
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 
 router = APIRouter(prefix="/api/gift-replies", tags=["礼物回复页"])
@@ -30,6 +31,11 @@ DEFAULT_SENDER_DATE_FROM = "2026-05-30"
 MAX_TIMELINE_EXPORT_ROWS = 1500
 MAX_OVERVIEW_EXPORT_ROWS = 3000
 _export_lock = threading.Lock()
+_dataset_cache_lock = threading.Lock()
+_summary_cache_signature: tuple[str, int, int] | None = None
+_summary_cache_doc: dict[str, Any] | None = None
+_gift_rows_cache_signature: tuple[str, int, int] | None = None
+_gift_rows_cache: list[dict[str, Any]] | None = None
 
 
 async def verify_gift_replies_password(
@@ -372,6 +378,11 @@ def _render_export(render) -> bytes:
         return render()
     except HTTPException:
         raise
+    except ExportTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
     except ImportError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -398,24 +409,52 @@ def _data_dir() -> Path:
 
 
 def _load_summary_doc() -> dict[str, Any]:
+    global _summary_cache_signature, _summary_cache_doc
+
     path = _data_dir() / "summary.json"
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物回复汇总数据未生成")
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        stat = path.stat()
+    except OSError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物回复汇总数据读取失败") from exc
+    signature = (str(path), stat.st_mtime_ns, stat.st_size)
+    with _dataset_cache_lock:
+        if _summary_cache_signature == signature and _summary_cache_doc is not None:
+            return _summary_cache_doc
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物回复汇总数据读取失败") from exc
+        if not isinstance(doc, dict):
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物回复汇总数据格式无效")
+        _summary_cache_signature = signature
+        _summary_cache_doc = doc
+        return doc
 
 
 def _load_gift_rows() -> list[dict[str, Any]]:
+    global _gift_rows_cache_signature, _gift_rows_cache
+
     path = _data_dir() / "gifts.csv"
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物列表数据未生成")
     try:
-        with path.open("r", encoding="utf-8-sig", newline="") as f:
-            return [_normalise_gift_row(row) for row in csv.DictReader(f)]
+        stat = path.stat()
     except OSError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物列表数据读取失败") from exc
+    signature = (str(path), stat.st_mtime_ns, stat.st_size)
+    with _dataset_cache_lock:
+        if _gift_rows_cache_signature == signature and _gift_rows_cache is not None:
+            return _gift_rows_cache
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as f:
+                rows = [_normalise_gift_row(row) for row in csv.DictReader(f)]
+        except OSError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="礼物列表数据读取失败") from exc
+        _gift_rows_cache_signature = signature
+        _gift_rows_cache = rows
+        return rows
 
 
 def _normalise_gift_row(row: dict[str, str]) -> dict[str, Any]:

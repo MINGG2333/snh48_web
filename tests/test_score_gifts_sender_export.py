@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
 
+from website import config as cfg
+from website import identity_index
+from website import score_gifts_api as api
 from website.score_gifts_api import _build_score_gifts_xlsx, _build_sender_distribution_xlsx
 
 
@@ -96,19 +101,48 @@ class ScoreGiftSenderExportTests(unittest.TestCase):
             self.assertIn('name="投分明细"', workbook)
 
         summary_rows = _sheet_rows(payload, "xl/worksheets/sheet1.xml")
-        self.assertEqual(summary_rows[4][:8], [
-            "送礼用户", "送礼用户ID", "关联昵称", "总分", "房间分", "直播分", "计分礼物数量", "投分明细数",
+        self.assertEqual(summary_rows[4][:9], [
+            "当前昵称", "计分昵称", "送礼用户ID", "关联昵称", "总分", "房间分", "直播分", "计分礼物数量", "投分明细数",
         ])
-        self.assertEqual(summary_rows[5][:8], ["小甲", "1001", "小甲", "12.0", "6.0", "6.0", "5", "2"])
+        self.assertEqual(summary_rows[5][:9], ["小甲", "小甲", "1001", "小甲", "12.0", "6.0", "6.0", "5", "2"])
         self.assertEqual(summary_rows[6][0], "小乙")
 
         detail_rows = _sheet_rows(payload, "xl/worksheets/sheet2.xml")
-        self.assertEqual(detail_rows[4][:8], [
-            "送礼用户", "送礼用户ID", "送礼时间", "投分来源", "计分礼物", "数量", "单个分值", "对应分数",
+        self.assertEqual(detail_rows[4][:9], [
+            "当前昵称", "计分昵称", "送礼用户ID", "送礼时间", "投分来源", "计分礼物", "数量", "单个分值", "对应分数",
         ])
-        self.assertEqual(detail_rows[5][:8], ["小甲", "1001", "2026-08-08 10:00:00", "房间", "星梦棒", "2", "3", "6"])
-        self.assertEqual(detail_rows[6][:8], ["小甲", "1001", "2026-08-08 09:00:00", "直播", "小船", "3", "2", "6"])
-        self.assertEqual(detail_rows[7][:8], ["小乙", "1002", "2026-08-08 11:00:00", "直播", "彩虹", "1", "5", "5"])
+        self.assertEqual(detail_rows[5][:9], ["小甲", "小甲", "1001", "2026-08-08 10:00:00", "房间", "星梦棒", "2", "3", "6"])
+        self.assertEqual(detail_rows[6][:9], ["小甲", "小甲", "1001", "2026-08-08 09:00:00", "直播", "小船", "3", "2", "6"])
+        self.assertEqual(detail_rows[7][:9], ["小乙", "小乙", "1002", "2026-08-08 11:00:00", "直播", "彩虹", "1", "5", "5"])
+
+    def test_current_sender_name_uses_identity_index(self) -> None:
+        tmp = Path(tempfile.mkdtemp(prefix="score-identity-"))
+        identity = tmp / "identity.json"
+        identity.write_text(
+            json.dumps(
+                {
+                    "accounts": {
+                        "1001": {"latest_name": "小甲（新）"},
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        old = cfg.REDBLUE_IDENTITY_INDEX_PATH
+        cfg.REDBLUE_IDENTITY_INDEX_PATH = str(identity)
+        identity_index.clear_cache()
+        try:
+            rows = [_gift_row()]
+            api._apply_current_sender_names(rows)
+            self.assertEqual(rows[0]["current_sender_name"], "小甲（新）")
+            self.assertEqual(rows[0]["sender_name"], "小甲")
+            distribution = api._sender_distribution(rows)
+            self.assertEqual(distribution[0]["current_sender_name"], "小甲（新）")
+            self.assertEqual(distribution[0]["sender_name"], "小甲")
+        finally:
+            cfg.REDBLUE_IDENTITY_INDEX_PATH = old
+            identity_index.clear_cache()
 
     def test_score_page_has_sender_export_button_and_endpoint(self) -> None:
         template = Path("website/templates/score_gifts.html").read_text(encoding="utf-8")
