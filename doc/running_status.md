@@ -7,7 +7,8 @@
 - fan-hub 代码 `4c6617a2c`：播报名与台账显示名改为 本地覆盖 > 收货人，缺省「匿名」；AI 昵称识别 prompt 同步禁止把微店备注当作昵称/ID 证据。
 - 验证：`tests/test_redblue_ledger_api.py` 24 项通过（新增备注不得成为条目名称用例）；fan-hub 51 项相关单测通过。
 - 部署：网站仓库已推送 GitHub，腾讯云 `git pull` 到 `5b15579`。阿里云 `snh48-aliyun.service` PID `1109801`（19:15:44 起），腾讯云 `snh48-web.service` PID `541442`（19:15:50 起），均 active。
-- 边界：存量台账条目不会因历史备注自动改名；新同步/新订单按新规则使用收货人名称。
+- 存量迁移（19:29）：全表比对后只有订单 `857863000483260` 仍使用旧备注名。已在腾讯云主节点通过版本化 mutation 改为收货人「杨家宜」，保留 `fan_id 133038462`、补 alias `杨家宜` 并置 `identity_locked=true`，`weidian.buyer_name` 同步改为杨家宜；两端 revision 一致（`20261102T112947.608035Z-tencent-5ff88564a5a8`）。两端 `weidian_name_overrides.json` / `weidian_record/name_overrides.json` 中该订单的旧覆盖已清空，迁移前备份在 `/tmp/redblue_name_migration_20261102_*`。
+- 边界：后续不再自动把历史备注回填为名称；新同步/新订单按新规则使用收货人名称。
 
 ## 2026-11-02 17:31 CST 红蓝台账鸡腿条目双业务选择与微店档位备注（两端）
 
