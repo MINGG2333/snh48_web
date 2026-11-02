@@ -210,6 +210,47 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(data["summary"]["entry_count"], 3)
         self.assertEqual(data["summary"]["total_score"], 6.0)
 
+    def test_weidian_name_ignores_notes(self):
+        (self.tmp / "weidian.json").write_text(
+            json.dumps(
+                {
+                    "orders": [
+                        {
+                            "order_id": "O1",
+                            "item_id": "7879362063",
+                            "item_name": "红蓝鸡腿",
+                            "add_time": "2026-10-24 14:00:00",
+                            "status": "待发货",
+                            "buyer_name": "Alice",
+                            "buyer_note": "想要id合影业务谢谢",
+                            "seller_note": "EVOL笙",
+                            "quantity": 2,
+                            "amount": "52.50",
+                            "shipped": False,
+                            "shipped_at": "",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        job_id = "c" * 32
+        result_dir = self.tmp / "wd" / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / f"{job_id}.json").write_text(json.dumps({"status": "done"}), encoding="utf-8")
+        self.client.post(
+            "/api/redblue/weidian/sync/apply",
+            headers=self.headers,
+            json={"job_id": job_id},
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["raw_name"], "Alice")
+        self.assertEqual(entry["raw_id"], "")
+        self.assertEqual(entry["weidian"]["buyer_note"], "想要id合影业务谢谢")
+        self.assertEqual(entry["weidian"]["seller_note"], "EVOL笙")
+
     def test_scoring_method_is_derived_from_source(self):
         self.client.post("/api/redblue/sync/room-live", headers=self.headers)
         job_id = "b" * 32
