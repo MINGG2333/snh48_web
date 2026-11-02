@@ -731,10 +731,23 @@
       <form id="phoneForm" class="account-form" hidden>
         <div class="account-form-row">
           <label>地区
-            <select id="phoneArea">
-              <option value="86">+86</option>
-              <option value="852">+852</option>
-            </select>
+            <input id="phoneArea" list="phoneAreaOptions" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" value="86" required>
+            <datalist id="phoneAreaOptions">
+              <option value="86">中国大陆 +86</option>
+              <option value="852">香港 +852</option>
+              <option value="62">印度尼西亚 +62</option>
+              <option value="1">美国/加拿大 +1</option>
+              <option value="81">日本 +81</option>
+              <option value="82">韩国 +82</option>
+              <option value="65">新加坡 +65</option>
+              <option value="60">马来西亚 +60</option>
+              <option value="66">泰国 +66</option>
+              <option value="84">越南 +84</option>
+              <option value="44">英国 +44</option>
+              <option value="61">澳大利亚 +61</option>
+              <option value="886">台湾 +886</option>
+              <option value="853">澳门 +853</option>
+            </datalist>
           </label>
           <label>手机号
             <input id="phoneInput" type="tel" inputmode="numeric" autocomplete="tel" maxlength="20" required>
