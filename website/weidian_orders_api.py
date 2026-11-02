@@ -22,7 +22,7 @@ from fastapi import APIRouter, Body, Cookie, Depends, Header, HTTPException, Req
 
 from website import config as cfg
 from website import redblue_ledger_api
-from website.shared_runtime_state import SharedStatePeerError, peer_command
+from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, peer_command
 
 router = APIRouter(prefix="/api/weidian-orders", tags=["微店订单"])
 
@@ -250,5 +250,23 @@ def set_weidian_order_name(
         _peer("set-name", {"order_id": order_id, "name": name})
     except HTTPException as exc:
         remote_error = str(exc.detail)
+    redblue_result: dict[str, Any] = {}
+    redblue_error = ""
+    try:
+        response = execute_mutation(
+            redblue_ledger_api.RESOURCE,
+            "rename_weidian",
+            {"order_id": order_id, "name": name},
+        )
+        if isinstance(response, dict) and isinstance(response.get("result"), dict):
+            redblue_result = response["result"]
+    except (SharedStateError, SharedStatePeerError) as exc:
+        redblue_error = str(exc)
     _clear_cache()
-    return {"result": local, "remote_synced": not remote_error, "remote_error": remote_error}
+    return {
+        "result": local,
+        "remote_synced": not remote_error,
+        "remote_error": remote_error,
+        "redblue": redblue_result,
+        "redblue_error": redblue_error,
+    }

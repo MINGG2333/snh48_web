@@ -1182,6 +1182,31 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
     return doc, {"created": created, "updated": updated}
 
 
+def _mutator_rename_weidian(doc: dict[str, Any], payload: dict[str, Any]):
+    """Update a Weidian entry's static scoring nickname after a page rename."""
+    order_id = _clean(payload.get("order_id"), 120)
+    name = _clean(payload.get("name"), 120)
+    if not order_id or not name:
+        raise ValueError("订单号和播报名不能为空")
+    entry = _find_entry(doc, "weidian", order_id)
+    if entry is None:
+        return doc, {"updated": 0, "reason": "not_found", "order_id": order_id}
+    entry["raw_name"] = name
+    weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
+    weidian["buyer_name"] = name
+    entry["weidian"] = weidian
+    if not entry.get("identity_locked"):
+        _apply_identity(doc, entry, name, _clean(entry.get("raw_id"), 32), source="weidian")
+    entry["updated_at"] = _now()
+    return doc, {
+        "updated": 1,
+        "order_id": order_id,
+        "scoring_name": name,
+        "fan_id": entry.get("fan_id"),
+        "fan_name": entry.get("fan_name"),
+    }
+
+
 def _mutator_mark_shipped(doc: dict[str, Any], payload: dict[str, Any]):
     order_ids = {_clean(value, 120) for value in (payload.get("order_ids") or []) if _clean(value, 120)}
     shipped_at = _clean(payload.get("shipped_at"), 32) or _now()
@@ -1209,6 +1234,7 @@ register_mutator(RESOURCE, "duplicate", _mutator_duplicate)
 register_mutator(RESOURCE, "apply_ai", _mutator_apply_ai)
 register_mutator(RESOURCE, "upsert_room_live", _mutator_upsert_room_live)
 register_mutator(RESOURCE, "upsert_weidian", _mutator_upsert_weidian)
+register_mutator(RESOURCE, "rename_weidian", _mutator_rename_weidian)
 register_mutator(RESOURCE, "mark_shipped", _mutator_mark_shipped)
 
 

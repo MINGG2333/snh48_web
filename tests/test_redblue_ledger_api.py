@@ -318,6 +318,76 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entry["raw_name"], "AliceOld")
         self.assertEqual(entry["fan_name"], "AliceNew")
 
+    def test_weidian_rename_updates_scoring_name_not_current_nickname(self):
+        (self.tmp / "weidian.json").write_text(
+            json.dumps(
+                {
+                    "orders": [
+                        {
+                            "order_id": "O7",
+                            "item_id": "7879362063",
+                            "item_name": "红蓝鸡腿",
+                            "add_time": "2026-10-24 14:00:00",
+                            "status": "待发货",
+                            "buyer_name": "AliceOld",
+                            "buyer_note": "",
+                            "seller_note": "",
+                            "quantity": 1,
+                            "amount": "26.25",
+                            "shipped": False,
+                            "shipped_at": "",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        index = {
+            "version": 1,
+            "accounts": {
+                "1001": {
+                    "latest_name": "Alice",
+                    "names": {"Alice": {}, "AliceOld": {}, "AliceNew": {}},
+                    "last_seen": "2026-11-02 10:00:00",
+                }
+            },
+            "nicknames": {
+                "Alice": {"ids": ["1001"], "last_seen": "2026-11-02 10:00:00"},
+                "AliceOld": {"ids": ["1001"], "last_seen": "2026-11-01 10:00:00"},
+                "AliceNew": {"ids": ["1001"], "last_seen": "2026-11-01 11:00:00"},
+            },
+        }
+        (self.tmp / "identity.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+        identity_index.clear_cache()
+        job_id = "f" * 32
+        result_dir = self.tmp / "wd" / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / f"{job_id}.json").write_text(json.dumps({"status": "done"}), encoding="utf-8")
+        self.client.post(
+            "/api/redblue/weidian/sync/apply",
+            headers=self.headers,
+            json={"job_id": job_id},
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["raw_name"], "AliceOld")
+        self.assertEqual(entry["fan_name"], "Alice")
+
+        api.execute_mutation(
+            api.RESOURCE,
+            "rename_weidian",
+            {"order_id": "O7", "name": "AliceNew"},
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["raw_name"], "AliceNew")
+        self.assertEqual(entry["fan_name"], "Alice")
+        self.assertEqual(entry["weidian"]["buyer_name"], "AliceNew")
+        fan = next(item for item in data["fan_summary"] if item["fan_name"] == "Alice")
+        self.assertIn("AliceNew", fan["score_names"])
+        self.assertEqual(fan["score_name"], "AliceNew")
+
     def test_weidian_note_can_supply_id_but_not_name(self):
         (self.tmp / "weidian.json").write_text(
             json.dumps(
