@@ -1,14 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
-## 2026-11-02 19:15 CST 微店条目名称只使用收货人，不再回退备注（两端）
+## 2026-11-02 19:15 CST 微店播报名与台账计分昵称规则（两端）
 
-- 需求：部分买家把备注写成「想要id合影业务谢谢」等业务请求，红蓝台账与 QQ/飞书播报不应再把买家/卖家备注当作名称；通过 `/weidian-orders` 手动覆盖的名称仍保留。
-- web 代码 `5b15579` + `e4ddd8c`：`website/redblue_ledger_api.py` 的 `_mutator_upsert_weidian()` 令 `raw_name` 只取 `buyer_name`，不再执行 `note -> raw_name`；`raw_id` 仍可从备注或收货人名称中提取数字 ID。备注字段仍保存在 `weidian.buyer_note/seller_note`，台账备注列继续显示，方便看业务请求。新增回归测试验证台账主名称动态跟随身份索引最新昵称，而小字计分昵称保持 `raw_name`。
-- fan-hub 代码 `4c6617a2c` + `5392b9086`：播报名改为 最新口袋昵称（按手动覆盖/收货人名称查房间/直播身份索引，动态重载）> 手动覆盖 > 收货人 > 匿名；台账小字计分昵称仍用 `raw_name`，主名称由 `fan_id` + 身份索引最新昵称动态解析。
-- 验证：`tests/test_redblue_ledger_api.py` 26 项通过（含备注不得成为名称、备注中的数字 ID 仍可用于身份匹配、主名称动态跟随最新昵称）；fan-hub 54 项相关单测通过。
-- 部署：网站仓库已推送 GitHub，腾讯云 `git pull` 到 `5b15579`；后续修正提交 `e4ddd8c` 同样已同步。阿里云 `snh48-aliyun.service` 初始 19:15 PID `1109801`、修正后 20:30 PID `1192132`；腾讯云 `snh48-web.service` 初始 19:15 PID `541442`、修正后 20:30 PID `595393`；均 active。
-- 存量核对（19:28）：用户确认需要改的是 `M71` 订单 `858027865711661`；新规则同步后该条已显示收货人 `M71`，备注「想要id合影业务谢谢」只保留在备注列。`杨家宜` 订单 `857863000483260` 是此前通过 `/weidian-orders` 手动覆盖为 `EVOL笙`，不属于备注命名，已恢复 `EVOL笙`（移除误加 alias、恢复 `identity_locked=false`），并恢复两端覆盖文件。两端 revision 一致（`20261102T122824.863923Z-tencent-805071852cfd`）；迁移前备份在 `/tmp/redblue_name_migration_20261102_*`。
-- 边界：后续仍保留手动覆盖优先，只有未覆盖的订单按收货人名称显示。
+- 需求：微店自动播报只用收货人，不用备注；`/weidian-orders` 可改播报名，改名不改拉取订单/收货人，页面同时显示播报名和收货人，改名后可手动重播相同信息、只换名称；改名后红蓝台账对应条目静态计分昵称同步更新；台账分开展示静态计分昵称和动态当前昵称。
+- web 代码 `bebfe30`（含 `5b15579`、`e4ddd8c`）：`_mutator_upsert_weidian()` 的 `raw_name` 取播报名（覆盖 > 收货人），备注永不作为名称，备注中的显式数字 ID 仍可用于身份匹配；新增 `rename_weidian` mutation，`/api/weidian-orders/name` 写完播报名覆盖后立即更新台账 `raw_name`/`weidian.buyer_name`，未锁定身份时按新播报名重算当前昵称。`/api/weidian-orders/data` 同时返回 `receiver_name` 与 `display_name`，页面在两者不同时同时展示。台账主名称（当前昵称）由 `fan_id` + 身份索引 `latest_name` 动态解析，小字「计分昵称」使用静态 `raw_name`。
+- fan-hub 代码 `700a4f1aa`（含 `4c6617a2c`）：自动播报只取 `receiver.buyerName`，忽略备注和覆盖名；手动重播使用 播报名覆盖 > 收货人；空值显示「匿名」。
+- 验证：`tests/test_redblue_ledger_api.py` 27 项通过（含备注不得成为名称、备注数字 ID 可匹配、改播报名只更新计分昵称、当前昵称动态跟随身份索引）；fan-hub 52 项相关单测通过。腾讯云端到端改名烟测返回 `remote_synced=true`、`redblue.updated=1`，台账 revision `20261102T133345.449366Z-tencent-9fc1c37f2932`；阿里云 `/api/weidian-orders/data` 显示收货人 `杨家宜`、播报名 `EVOL笙`，`/api/redblue/data` 显示计分昵称/当前昵称均为 `EVOL笙`。
+- 部署：网站仓库已推送 GitHub，腾讯云 `git pull` 到 `bebfe30`。阿里云 `snh48-aliyun.service` PID `1263908`（21:28 启动，21:33:50 uvicorn ready）；腾讯云 `snh48-web.service` PID `638240`（21:28 起），均 active。
+- 存量核对：`M71` 订单 `858027865711661` 显示收货人 `M71`，备注「想要id合影业务谢谢」只保留在备注列；`杨家宜` 订单 `857863000483260` 保留 `/weidian-orders` 手动播报名 `EVOL笙`，收货人仍为 `杨家宜`，`identity_locked=false`。
+- 边界：自动播报永远使用收货人；播报名覆盖只影响手动重播和红蓝静态计分昵称，不修改拉取订单。后续昵称变化只影响当前昵称，不改静态计分昵称。
 
 ## 2026-11-02 17:31 CST 红蓝台账鸡腿条目双业务选择与微店档位备注（两端）
 
