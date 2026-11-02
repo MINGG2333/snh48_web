@@ -18,6 +18,11 @@ router = APIRouter(prefix="/api/fans-stats", tags=["粉丝数记录页"])
 
 TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+PUBLIC_ERROR_TEXT = {
+    "error": "本次采集失败，请稍后重试",
+    "unsupported": "暂无数据",
+}
+
 
 def _data_dir() -> Path:
     return Path(cfg.FAN_COUNTS_DATA_PATH)
@@ -32,6 +37,22 @@ def _load_latest() -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _public_platform(item: dict[str, Any]) -> dict[str, Any]:
+    """Expose only public status fields; internal errors stay server-side."""
+    status = str(item.get("status") or "error")
+    result: dict[str, Any] = {
+        "status": status,
+        "label": str(item.get("label") or ""),
+    }
+    if status == "ok":
+        for field in ("handle", "followers", "ts", "source"):
+            if item.get(field) is not None:
+                result[field] = item[field]
+    else:
+        result["error"] = PUBLIC_ERROR_TEXT.get(status, PUBLIC_ERROR_TEXT["error"])
+    return result
 
 
 def _load_series(days: int) -> dict[str, list[dict[str, Any]]]:
@@ -77,7 +98,12 @@ def get_fans_stats(
     """Return the latest per-platform fan counts and the recent time series."""
     response.headers["Cache-Control"] = "public, max-age=300"
     latest = _load_latest()
-    platforms = latest.get("platforms") if isinstance(latest.get("platforms"), dict) else {}
+    raw_platforms = latest.get("platforms") if isinstance(latest.get("platforms"), dict) else {}
+    platforms = {
+        str(key): _public_platform(item)
+        for key, item in raw_platforms.items()
+        if isinstance(item, dict)
+    }
     return {
         "available": bool(platforms),
         "fetched_at": str(latest.get("fetched_at", "")),
