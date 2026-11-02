@@ -298,6 +298,10 @@ if [ "$sync_hub" -eq 1 ]; then
   sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/codex_social_event_queue.json /home/snh48-fan-hub/notifications/codex_social_event_queue.json
   echo "$LOG_TAG hub codex_social_event_queue done"
 
+  # H4d. 微博采集心跳（腾讯云采集结果，阿里云黑板显示采集缺口）
+  sync_hub_file_from_tencent /home/snh48-fan-hub/notifications/weibo_collector_heartbeat.json /home/snh48-fan-hub/notifications/weibo_collector_heartbeat.json
+  echo "$LOG_TAG hub weibo_collector_heartbeat done"
+
   # H4c. 通知黑板跨端指令通道（2026-10-20 用户批准，设计稿 §4.3）：腾讯云 receiver
   # 把指向阿里云黑板的按钮/文本指令追加到该文件，阿里云黑板服务按游标消费。
   # 追加型 JSONL，只做交互指令路由，不代执行飞书操作（区别于已废除的 relay）。
