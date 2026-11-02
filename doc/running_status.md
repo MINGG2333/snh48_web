@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-02 21:56 CST 红蓝按条目导出新增选定业务名列（两端）
+
+- 需求：`/business/redblue2026` 按条目导出的最后一列新增显示选定业务名，仅显示业务名；多个业务用 `+` 连接。
+- 代码 `29bd138`：`website/redblue_export.py` 新增 `_business_text()`，从 `selected_business` / `selected_business_bonus` 去掉“分数-”前缀，按顺序去重后用 `+` 连接；按条目导出宽度 680→820，时间/昵称/计分列略左移，业务名右对齐在最后一列（18px、超长省略），无选定业务的行留空。`doc/website_pages.md` 同步。
+- 验证：`tests/test_redblue_ledger_api.py` 28 项通过（新增业务名拼接/去重用例、导出宽度断言 820）。腾讯云实际导出 `/api/redblue/export/entries.png?source=weidian` 宽 820，微店条目最后列显示 `ID 合影+答案之书`；阿里云导出宽 820。
+- 部署：网站仓库已推送 GitHub，腾讯云 `git pull` 到 `29bd138`。阿里云 `snh48-aliyun.service` PID `1299055`（21:56 重启，21:58:23 启动完成）；腾讯云 `snh48-web.service` PID `658471`（21:56 起），均 active。
+
 ## 2026-11-02 19:15 CST 微店播报名与台账计分昵称规则（两端）
 
 - 需求：微店自动播报只用收货人，不用备注；`/weidian-orders` 可改播报名，改名不改拉取订单/收货人，页面同时显示播报名和收货人，改名后可手动重播相同信息、只换名称；改名后红蓝台账对应条目静态计分昵称同步更新；台账分开展示静态计分昵称和动态当前昵称。
