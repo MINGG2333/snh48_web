@@ -553,6 +553,42 @@ class RedblueLedgerApiTests(unittest.TestCase):
         row = next(item for item in data["entries"] if item["id"] == entry["id"])
         self.assertTrue(row["business_done"])
 
+    def test_business_options_use_score_prefix_from_chart(self):
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        options = data["business_options"]
+        values = {item["value"] for item in options}
+        self.assertIn("1-方言盲盒", values)
+        self.assertIn("6-点唱整首", values)
+        self.assertIn("9-答案之书", values)
+        self.assertIn("99-跳公演", values)
+        self.assertEqual(len(values), len(options))
+        card = next(item for item in options if item["value"] == "1-方言盲盒")
+        self.assertEqual(card["score"], 1)
+        self.assertEqual(card["name"], "方言盲盒")
+
+    def test_selected_business_is_saved_and_validated(self):
+        entry = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "Alice", "score": 6, "selected_business": "6-点唱整首"},
+        ).json()["result"]
+        self.assertEqual(entry["selected_business"], "6-点唱整首")
+        patched = self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={"selected_business": "9-歌词卡"},
+        ).json()["result"]
+        self.assertEqual(patched["selected_business"], "9-歌词卡")
+        cleared = self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={"selected_business": "不存在-业务"},
+        ).json()["result"]
+        self.assertEqual(cleared["selected_business"], "")
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        row = next(item for item in data["entries"] if item["id"] == entry["id"])
+        self.assertEqual(row["selected_business"], "")
+
     def test_cookie_secret_persists_across_reloads(self):
         api._COOKIE_SECRET_CACHE = None
         first = api._cookie_secret()

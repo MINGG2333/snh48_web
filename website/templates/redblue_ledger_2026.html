@@ -83,7 +83,7 @@
     .distribution-more-text { font-size: 13px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .distribution-more-action { color: var(--gold); font-size: 12px; font-weight: 760; white-space: nowrap; }
     .table-wrap { overflow-x: auto; margin-top: 12px; }
-    table { width: 100%; border-collapse: collapse; min-width: 1120px; }
+    table { width: 100%; border-collapse: collapse; min-width: 1280px; }
     th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
     th { color: var(--faint); font-weight: 600; font-size: 12px; white-space: nowrap; }
     tr.row:hover { background: rgba(65,185,170,.04); }
@@ -104,6 +104,8 @@
     .mini { min-height: 28px; padding: 0 8px; font-size: 12px; border-radius: 6px; }
     .business-btn { border-color: rgba(232,125,167,.45); color: var(--pink); }
     .business-btn.done { border-color: rgba(77,194,124,.55); color: var(--green); }
+    .business-select { width: 100%; min-width: 160px; min-height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--text); padding: 0 6px; outline: none; font-size: 12px; }
+    .business-select:focus { border-color: var(--teal); }
     .empty { color: var(--faint); text-align: center; padding: 30px 10px; }
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 360px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: none; }
     .toast.show { display: block; }
@@ -210,7 +212,7 @@
       <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><div class="spacer"></div><label class="check"><input type="checkbox" id="selectAll"> 全选当前列表</label></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th style="width:34px;"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务</th><th>备注</th><th>操作</th></tr></thead>
+          <thead><tr><th style="width:34px;"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务</th><th>选定的业务</th><th>备注</th><th>操作</th></tr></thead>
           <tbody id="entryBody"></tbody>
         </table>
       </div>
@@ -236,6 +238,7 @@
       <div class="field"><label>口袋48 ID</label><input id="entryId" placeholder="可选；填了会优先校验"></div>
       <div class="field"><label>分数</label><input id="entryScore" type="number" min="0.01" step="0.01" placeholder="1"></div>
       <div class="field"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
+      <div class="field full"><label>选定的业务</label><select id="entryBusinessSelected"></select></div>
       <div class="field full"><label>备注</label><textarea id="entryNote" placeholder="可选"></textarea></div>
       <div class="field full"><label class="check"><input id="entryBusinessDone" type="checkbox"> 业务已完成</label></div>
       <div class="field full"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
@@ -289,6 +292,7 @@
   var aiJobId = "";
   var aiSuggestions = {};
   var fanSummaryItems = [];
+  var businessOptions = [];
   var pollTimer = null;
   var confirmAction = null;
 
@@ -373,6 +377,7 @@
 
   function renderAll() {
     if (!data) return;
+    businessOptions = data.business_options || [];
     renderKpis();
     renderScoringSummary();
     renderFanSummary();
@@ -570,6 +575,33 @@
     return out.join(" ");
   }
 
+  function businessOptionsMarkup(current) {
+    var currentValue = current || "";
+    var groups = {};
+    var order = [];
+    businessOptions.forEach(function (option) {
+      var key = option.group || "other";
+      if (!groups[key]) {
+        groups[key] = {label: option.group_label || "业务", items: []};
+        order.push(key);
+      }
+      groups[key].items.push(option);
+    });
+    var html = '<option value="">未选择</option>';
+    order.forEach(function (key) {
+      html += '<optgroup label="' + esc(groups[key].label) + '">';
+      groups[key].items.forEach(function (option) {
+        html += '<option value="' + esc(option.value) + '"' + (option.value === currentValue ? " selected" : "") + '>' + esc(option.label || option.value) + '</option>';
+      });
+      html += '</optgroup>';
+    });
+    var known = businessOptions.some(function (option) { return option.value === currentValue; });
+    if (currentValue && !known) {
+      html += '<option value="' + esc(currentValue) + '" selected>' + esc(currentValue) + '</option>';
+    }
+    return html;
+  }
+
   function renderEntries() {
     var entries = data.entries || [];
     $("entryHint").textContent = "共 " + entries.length + " 条";
@@ -601,6 +633,7 @@
         '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
         '<td><button class="btn mini business-btn ' + (entry.business_done ? "done" : "") + '" data-business="' + esc(entry.id) + '" data-done="' + (entry.business_done ? "0" : "1") + '">' + (entry.business_done ? "已完成业务" : "未完成业务") + '</button></td>' +
+        '<td><select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business) + '</select></td>' +
         '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
         '<td><div class="actions">' +
           '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + aiBtn + shipBtn +
@@ -621,6 +654,7 @@
     $("entryId").value = entry ? (entry.fan_id || entry.raw_id || "") : "";
     $("entryScore").value = entry ? entry.score : "1";
     $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
+    $("entryBusinessSelected").innerHTML = businessOptionsMarkup(entry ? entry.selected_business : "");
     $("entryNote").value = entry ? (entry.note || "") : "";
     $("entryBusinessDone").checked = entry ? Boolean(entry.business_done) : false;
     $("entryDuplicate").checked = entry ? Boolean(entry.duplicate) : false;
@@ -636,6 +670,7 @@
       note: $("entryNote").value.trim(),
       settled: $("entrySettled").checked,
       business_done: $("entryBusinessDone").checked,
+      selected_business: $("entryBusinessSelected").value,
       duplicate: $("entryDuplicate").checked
     };
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
@@ -673,6 +708,17 @@
       });
       await loadData(true);
     } catch (error) { showToast(error.message || "业务状态更新失败", true); }
+  }
+
+  async function updateSelectedBusiness(id, value) {
+    try {
+      await api("/api/redblue/entries/" + encodeURIComponent(id), {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({selected_business: value})
+      });
+      await loadData(true);
+    } catch (error) { showToast(error.message || "选定业务保存失败", true); }
   }
 
   async function deleteEntry(id) {
@@ -938,6 +984,10 @@
       var action = confirmAction; confirmAction = null;
       $("confirmModal").classList.add("hidden");
       if (action) action();
+    });
+    document.addEventListener("change", function (event) {
+      var select = event.target.closest("[data-business-select]");
+      if (select) updateSelectedBusiness(select.getAttribute("data-business-select"), select.value);
     });
     document.addEventListener("click", function (event) {
       var close = event.target.closest("[data-close]");

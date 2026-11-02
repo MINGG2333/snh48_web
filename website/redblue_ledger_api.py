@@ -38,6 +38,62 @@ SOURCE_LABELS = {"manual": "暗票", "weidian": "微店", "room": "房间", "liv
 DEFAULT_SCORING_METHODS = {"manual": "计分卡", "weidian": "鸡腿", "room": "计分卡", "live": "计分卡"}
 SCORING_SOURCE_LABELS = {"manual": "暗票", "weidian": "应援会", "room": "房间", "live": "直播"}
 SCORING_METHODS = ("计分卡", "鸡腿")
+BUSINESS_OPTION_GROUPS = (
+    (
+        "card",
+        "甲鱼回馈（计分卡）",
+        (
+            (1, "方言盲盒"),
+            (1, "点播 BGM"),
+            (3, "答案之书"),
+            (3, "绕口令"),
+            (3, "点唱半首"),
+            (3, "点歌盲盒"),
+            (6, "点唱整首"),
+            (6, "查水表"),
+            (6, "re 视频"),
+            (6, "河曲朗诵"),
+            (6, "简笔画头像"),
+            (6, "ID 合影"),
+            (9, "公演 MC 开场白"),
+            (9, "歌词卡"),
+            (9, "成语接龙"),
+            (18, "公演 MC 指定动作"),
+            (18, "公演跳半首"),
+            (18, "换口袋头像或背景两天"),
+            (27, "跳公演"),
+            (27, "公演定制造型"),
+            (48, "舞蹈房半首"),
+            (99, "舞蹈房整首"),
+        ),
+    ),
+    (
+        "bonus",
+        "鸡腿计分加赠",
+        (
+            (3, "方言盲盒"),
+            (6, "答案之书"),
+            (9, "答案之书"),
+            (18, "点唱整首"),
+            (27, "公演 MC 开场白"),
+            (48, "公演 MC 指定动作"),
+            (99, "跳公演"),
+        ),
+    ),
+)
+BUSINESS_OPTIONS = [
+    {
+        "value": f"{score}-{name}",
+        "label": f"{score}-{name}",
+        "score": score,
+        "name": name,
+        "group": group_key,
+        "group_label": group_label,
+    }
+    for group_key, group_label, items in BUSINESS_OPTION_GROUPS
+    for score, name in items
+]
+BUSINESS_OPTION_VALUES = {item["value"] for item in BUSINESS_OPTIONS}
 WEEKDAYS = ("一", "二", "三", "四", "五", "六", "日")
 TEXT_LIMIT = 500
 JOB_ID_RE = re.compile(r"^[a-f0-9]{32}$")
@@ -112,6 +168,11 @@ def _weidian_order_score(order: dict[str, Any]) -> float:
         unit_price = max(_to_float(getattr(cfg, "REDBLUE_WEIDIAN_UNIT_PRICE", 26.25), 26.25), 0.01)
         return round(amount / unit_price, 4)
     return round(_to_float(order.get("quantity"), 0.0), 4)
+
+
+def _business_option(value: Any) -> str:
+    text = _clean(value, 80)
+    return text if text in BUSINESS_OPTION_VALUES else ""
 
 
 def _to_bool(value: Any, default: bool = False) -> bool:
@@ -585,6 +646,7 @@ def _new_entry(
     note: str = "",
     weidian: dict[str, Any] | None = None,
     scoring_method: str = "",
+    selected_business: str = "",
 ) -> dict[str, Any]:
     entry_id = f"rb-{uuid.uuid4().hex}"
     method = _clean(scoring_method, 10)
@@ -610,6 +672,7 @@ def _new_entry(
         "duplicate_note": "",
         "business_done": False,
         "business_done_at": "",
+        "selected_business": _business_option(selected_business),
         "note": _clean(note),
         "identity_locked": False,
         "ai_suggestion": {},
@@ -703,6 +766,7 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "duplicate_note": _clean(entry.get("duplicate_note")),
         "business_done": bool(entry.get("business_done")),
         "business_done_at": _clean(entry.get("business_done_at"), 32),
+        "selected_business": _clean(entry.get("selected_business"), 80),
         "note": _clean(entry.get("note")),
         "identity_locked": bool(entry.get("identity_locked")),
         "ai_suggestion": entry.get("ai_suggestion") if isinstance(entry.get("ai_suggestion"), dict) else {},
@@ -906,6 +970,7 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
         score=score,
         settled=_to_bool(payload.get("settled"), True),
         note=_clean(payload.get("note")),
+        selected_business=_business_option(payload.get("selected_business")),
     )
     doc.setdefault("entries", []).append(entry)
     return doc, _normalise_entry(entry, doc.get("aliases") or [])
@@ -938,6 +1003,8 @@ def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
     if payload.get("business_done") is not None:
         entry["business_done"] = _to_bool(payload.get("business_done"), bool(entry.get("business_done")))
         entry["business_done_at"] = _now() if entry["business_done"] else ""
+    if payload.get("selected_business") is not None:
+        entry["selected_business"] = _business_option(payload.get("selected_business"))
     entry["updated_at"] = _now()
     return doc, _normalise_entry(entry, doc.get("aliases") or [])
 
@@ -1291,6 +1358,7 @@ def get_redblue_data(
         "overall": _summary(all_entries),
         "fan_summary": _fan_summary(entries),
         "entries": entries,
+        "business_options": BUSINESS_OPTIONS,
         "total": len(entries),
         "filters": {
             "source": _clean(source, 20),
