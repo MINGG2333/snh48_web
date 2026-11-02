@@ -1,13 +1,15 @@
 """红蓝计分汇总 PNG 导出（Pillow 服务端渲染）。
 
 版式对齐 `private_handover/移交包/嘉仪业务/礼物回复/礼物回复时间线_近三周_20261021.png`：
-浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽、按条目 680px 逻辑宽，正文 20–27px。
+浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽、按条目 820px 逻辑宽，正文 20–27px。
 未登记口袋48昵称的条目不再标红，昵称统一颜色，只在名字后保留一个低对比度 ! 标记。
+按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接。
 """
 from __future__ import annotations
 
 import datetime as dt
 import io
+import re
 from collections import OrderedDict
 from typing import Any, Iterable
 
@@ -30,7 +32,7 @@ from website.gift_reply_export import (
 )
 
 WIDTH = 1000
-ENTRIES_WIDTH = 680
+ENTRIES_WIDTH = 820
 PAD = 24
 FAN_COLS = 2
 FAN_GAP = 14
@@ -168,6 +170,19 @@ def _draw_fans(draw, top: int, fans: list[dict[str, Any]], *, width: int, card_w
     return max(ys) + 10
 
 
+def _business_text(row: dict[str, Any]) -> str:
+    """Selected business names only, joined with '+' (score prefixes removed)."""
+    names: list[str] = []
+    for key in ("selected_business", "selected_business_bonus"):
+        value = str(row.get(key) or "").strip()
+        if not value:
+            continue
+        name = re.sub(r"^\d+-", "", value).strip()
+        if name and name not in names:
+            names.append(name)
+    return "+".join(names)
+
+
 def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WIDTH) -> int:
     groups: "OrderedDict[str, list[dict[str, Any]]]" = OrderedDict()
     for entry in entries:
@@ -195,6 +210,7 @@ def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WI
     time_font = _font(20)
     name_font = _font(24, bold=True)
     score_font = _font(22)
+    business_font = _font(18)
     for day, rows in groups.items():
         try:
             weekday = week[dt.datetime.strptime(day, "%Y-%m-%d").weekday()]
@@ -216,9 +232,9 @@ def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WI
             draw.text((x0, center_y), time_text, font=time_font, fill=FAINT, anchor="lm")
 
             name = row.get("fan_name") or row.get("raw_name") or "未登记"
-            name_x = x0 + 80
+            name_x = x0 + 70
             source_x = x0 + 300
-            score_x = x0 + 430
+            score_x = x0 + 400
             warning = bool(row.get("warning"))
             name_max = max(120, source_x - name_x - 10 - (24 if warning else 0))
             name_text = _fit(draw, _display_text(name), name_font, name_max)
@@ -229,13 +245,20 @@ def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WI
             method = row.get("scoring_method") or "计分卡"
             color, bg = SCORING_COLORS.get(method, (MUTED, (240, 240, 240)))
             _badge(draw, source_x, center_y - 14, SCORING_LABELS.get(method, method), color, bg, size=18)
+            score_text = f"送出了 {_score(row.get('score'))} 分"
             draw.text(
                 (score_x, center_y),
-                f"送出了 {_score(row.get('score'))} 分",
+                score_text,
                 font=score_font,
                 fill=MUTED if row.get("duplicate") else NAME,
                 anchor="lm",
             )
+            business = _business_text(row)
+            if business:
+                score_width = _text_width(draw, score_text, score_font)
+                business_max = max(40, right - (score_x + score_width + 16))
+                business_text = _fit(draw, _display_text(business), business_font, business_max)
+                draw.text((right, center_y), business_text, font=business_font, fill=SUBTITLE, anchor="rm")
 
             y += row_h
         draw.line([x0, y + 6, right, y + 6], fill=(240, 232, 245), width=1)

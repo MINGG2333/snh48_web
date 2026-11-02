@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from website import config as cfg
 from website import identity_index
 from website import redblue_ledger_api as api
+from website.redblue_export import _business_text
 from website.redblue_ledger_api import _weidian_changed, _weidian_order_score, router
 
 
@@ -859,6 +860,28 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(row["selected_business"], "")
         self.assertEqual(row["selected_business_bonus"], "")
 
+    def test_export_business_text_uses_names_only(self):
+        self.assertEqual(_business_text({"selected_business": "6-ID 合影"}), "ID 合影")
+        self.assertEqual(
+            _business_text(
+                {
+                    "selected_business": "6-ID 合影",
+                    "selected_business_bonus": "18-点唱整首",
+                }
+            ),
+            "ID 合影+点唱整首",
+        )
+        self.assertEqual(
+            _business_text(
+                {
+                    "selected_business": "9-答案之书",
+                    "selected_business_bonus": "9-答案之书",
+                }
+            ),
+            "答案之书",
+        )
+        self.assertEqual(_business_text({}), "")
+
     def test_cookie_secret_persists_across_reloads(self):
         api._COOKIE_SECRET_CACHE = None
         first = api._cookie_secret()
@@ -889,7 +912,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             images[name] = Image.open(io.BytesIO(response.content))
         self.assertLess(images["summary"].size[0], 1000)
         self.assertGreater(images["summary"].size[0], 500)
-        self.assertEqual(images["entries"].size[0], 680)
+        self.assertEqual(images["entries"].size[0], 820)
 
     def test_ai_job_is_queued_and_apply_validates_identity(self):
         entry = self.client.post(
