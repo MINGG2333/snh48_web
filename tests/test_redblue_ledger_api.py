@@ -251,6 +251,45 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entry["weidian"]["buyer_note"], "想要id合影业务谢谢")
         self.assertEqual(entry["weidian"]["seller_note"], "EVOL笙")
 
+    def test_weidian_note_can_supply_id_but_not_name(self):
+        (self.tmp / "weidian.json").write_text(
+            json.dumps(
+                {
+                    "orders": [
+                        {
+                            "order_id": "O5",
+                            "item_id": "7879362063",
+                            "item_name": "红蓝鸡腿",
+                            "add_time": "2026-10-24 14:00:00",
+                            "status": "待发货",
+                            "buyer_name": "Alice",
+                            "buyer_note": "口袋ID 133038462",
+                            "seller_note": "",
+                            "quantity": 1,
+                            "amount": "26.25",
+                            "shipped": False,
+                            "shipped_at": "",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        job_id = "d" * 32
+        result_dir = self.tmp / "wd" / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / f"{job_id}.json").write_text(json.dumps({"status": "done"}), encoding="utf-8")
+        self.client.post(
+            "/api/redblue/weidian/sync/apply",
+            headers=self.headers,
+            json={"job_id": job_id},
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["raw_name"], "Alice")
+        self.assertEqual(entry["raw_id"], "133038462")
+
     def test_scoring_method_is_derived_from_source(self):
         self.client.post("/api/redblue/sync/room-live", headers=self.headers)
         job_id = "b" * 32

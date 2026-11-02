@@ -2,13 +2,13 @@
 
 ## 2026-11-02 19:15 CST 微店条目名称只使用收货人，不再回退备注（两端）
 
-- 需求：部分买家把备注写成「想要id合影业务谢谢」等业务请求，红蓝台账与 QQ/飞书播报都不应再把买家/卖家备注当作名称。
-- web 代码 `5b15579`：`website/redblue_ledger_api.py` 的 `_mutator_upsert_weidian()` 令 `raw_name` 只取 `buyer_name`，`raw_id` 只从收货人名称中提取；不再执行 `note -> raw_name` 或 `note -> raw_id`。备注字段仍保存在 `weidian.buyer_note/seller_note`，台账备注列继续显示，方便看业务请求。
-- fan-hub 代码 `4c6617a2c`：播报名与台账显示名改为 本地覆盖 > 收货人，缺省「匿名」；AI 昵称识别 prompt 同步禁止把微店备注当作昵称/ID 证据。
-- 验证：`tests/test_redblue_ledger_api.py` 24 项通过（新增备注不得成为条目名称用例）；fan-hub 51 项相关单测通过。
+- 需求：部分买家把备注写成「想要id合影业务谢谢」等业务请求，红蓝台账与 QQ/飞书播报不应再把买家/卖家备注当作名称；通过 `/weidian-orders` 手动覆盖的名称仍保留。
+- web 代码 `5b15579`：`website/redblue_ledger_api.py` 的 `_mutator_upsert_weidian()` 令 `raw_name` 只取 `buyer_name`，不再执行 `note -> raw_name`；`raw_id` 仍可从备注或收货人名称中提取数字 ID。备注字段仍保存在 `weidian.buyer_note/seller_note`，台账备注列继续显示，方便看业务请求。
+- fan-hub 代码 `4c6617a2c`：播报名与台账显示名改为 本地覆盖 > 收货人，缺省「匿名」；手动覆盖优先级保持最高。
+- 验证：`tests/test_redblue_ledger_api.py` 25 项通过（含备注不得成为名称、备注中的数字 ID 仍可用于身份匹配）；fan-hub 51 项相关单测通过。
 - 部署：网站仓库已推送 GitHub，腾讯云 `git pull` 到 `5b15579`。阿里云 `snh48-aliyun.service` PID `1109801`（19:15:44 起），腾讯云 `snh48-web.service` PID `541442`（19:15:50 起），均 active。
-- 存量迁移（19:29）：全表比对后只有订单 `857863000483260` 仍使用旧备注名。已在腾讯云主节点通过版本化 mutation 改为收货人「杨家宜」，保留 `fan_id 133038462`、补 alias `杨家宜` 并置 `identity_locked=true`，`weidian.buyer_name` 同步改为杨家宜；两端 revision 一致（`20261102T112947.608035Z-tencent-5ff88564a5a8`）。两端 `weidian_name_overrides.json` / `weidian_record/name_overrides.json` 中该订单的旧覆盖已清空，迁移前备份在 `/tmp/redblue_name_migration_20261102_*`。
-- 边界：后续不再自动把历史备注回填为名称；新同步/新订单按新规则使用收货人名称。
+- 存量核对（19:28）：用户确认需要改的是 `M71` 订单 `858027865711661`；新规则同步后该条已显示收货人 `M71`，备注「想要id合影业务谢谢」只保留在备注列。`杨家宜` 订单 `857863000483260` 是此前通过 `/weidian-orders` 手动覆盖为 `EVOL笙`，不属于备注命名，已恢复 `EVOL笙`（移除误加 alias、恢复 `identity_locked=false`），并恢复两端覆盖文件。两端 revision 一致（`20261102T122824.863923Z-tencent-805071852cfd`）；迁移前备份在 `/tmp/redblue_name_migration_20261102_*`。
+- 边界：后续仍保留手动覆盖优先，只有未覆盖的订单按收货人名称显示。
 
 ## 2026-11-02 17:31 CST 红蓝台账鸡腿条目双业务选择与微店档位备注（两端）
 

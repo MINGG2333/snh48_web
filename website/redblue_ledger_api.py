@@ -1132,9 +1132,9 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
         buyer_note = _clean(order.get("buyer_note"))
         seller_note = _clean(order.get("seller_note"))
         note = buyer_note or seller_note
-        # Notes are only stored for display; they are never used as the entry
-        # name or ID evidence (members often put business requests there).
-        match = POCKET_ID_RE.search(buyer_name)
+        # Notes may be used only to find an explicit pocket48 ID; they are
+        # never used as the entry name (members often put business requests).
+        match = POCKET_ID_RE.search(note) or POCKET_ID_RE.search(buyer_name)
         raw_id = match.group(1) if match else ""
         raw_name = buyer_name
         status_desc = _clean(order.get("status"), 40)
