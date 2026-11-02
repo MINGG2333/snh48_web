@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-02 17:08 CST 红蓝台账新增“选定的业务”下拉列（两端）
+
+- 需求：`/business/redblue2026` 条目表增加“选定的业务”列，可直接从预设业务中选择，选项命名为“分数-业务名”；可选业务以 2026-10-30 最终交付业务图为准。
+- 代码：`website/redblue_ledger_api.py` 新增 `BUSINESS_OPTION_GROUPS` / `BUSINESS_OPTIONS`（甲鱼回馈 22 项、鸡腿计分加赠 7 项，共 29 项），`/api/redblue/data` 返回 `business_options`；条目新增并校验 `selected_business` 字段，新增/编辑/行内 PATCH 均可保存，非法值清空。`templates/redblue_ledger_2026.html` 表格新增“选定的业务”下拉列（按甲鱼回馈/鸡腿加赠分组），编辑弹窗同步增加下拉；表格最小宽度 1120→1280px。
+- 部署：网站仓库提交 `3cc0b54` 已推送 GitHub；腾讯云经安全桥对端拉取。阿里云 `snh48-aliyun.service` PID `944427`（16:53:37 起），腾讯云 `snh48-web.service` PID `448365`（17:08:10 起）。
+- 验证：两端 `tests/test_redblue_ledger_api.py` 22 项通过（新增业务选项、保存与非法值校验用例）；两端 `/business/redblue2026` 200，页面包含“选定的业务”和 `business-select`；`/api/redblue/data` 的 `business_options` 命名均为“分数-业务名”。
+
 ## 2026-11-01 07:14 CST 修复翻牌账号管理特权桥拒绝维护者 ACL 脚本（腾讯云）
 
 - 现象：`https://cjy.plus/flip` 的账号管理接口返回 503「账号管理服务暂时不可用」，`journalctl` 显示 `snh48-web.service` 对 `account-management/latest-job`、`send-sms` 返回 503，特权桥仅记录 `privileged bridge request failed: service=flip`。
