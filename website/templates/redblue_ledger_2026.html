@@ -106,6 +106,9 @@
     .business-btn.done { border-color: rgba(77,194,124,.55); color: var(--green); }
     .business-select { width: 100%; min-width: 160px; min-height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--text); padding: 0 6px; outline: none; font-size: 12px; }
     .business-select:focus { border-color: var(--teal); }
+    .business-pair { display: flex; flex-direction: column; gap: 4px; }
+    .business-pair .business-sublabel { color: var(--faint); font-size: 11px; line-height: 1; }
+    .business-pair .business-select { min-width: 150px; }
     .empty { color: var(--faint); text-align: center; padding: 30px 10px; }
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 360px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: none; }
     .toast.show { display: block; }
@@ -239,6 +242,7 @@
       <div class="field"><label>分数</label><input id="entryScore" type="number" min="0.01" step="0.01" placeholder="1"></div>
       <div class="field"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
       <div class="field full"><label>选定的业务</label><select id="entryBusinessSelected"></select></div>
+      <div class="field full hidden" id="entryBusinessBonusField"><label>鸡腿加赠业务</label><select id="entryBusinessBonus"></select></div>
       <div class="field full"><label>备注</label><textarea id="entryNote" placeholder="可选"></textarea></div>
       <div class="field full"><label class="check"><input id="entryBusinessDone" type="checkbox"> 业务已完成</label></div>
       <div class="field full"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
@@ -575,11 +579,12 @@
     return out.join(" ");
   }
 
-  function businessOptionsMarkup(current) {
+  function businessOptionsMarkup(current, group) {
     var currentValue = current || "";
+    var items = businessOptions.filter(function (option) { return !group || option.group === group; });
     var groups = {};
     var order = [];
-    businessOptions.forEach(function (option) {
+    items.forEach(function (option) {
       var key = option.group || "other";
       if (!groups[key]) {
         groups[key] = {label: option.group_label || "业务", items: []};
@@ -595,7 +600,7 @@
       });
       html += '</optgroup>';
     });
-    var known = businessOptions.some(function (option) { return option.value === currentValue; });
+    var known = items.some(function (option) { return option.value === currentValue; });
     if (currentValue && !known) {
       html += '<option value="' + esc(currentValue) + '" selected>' + esc(currentValue) + '</option>';
     }
@@ -616,14 +621,31 @@
       var warning = entry.warning ? '<span class="warn-icon" title="' + esc(entry.warning_reason || "待修正") + '">!</span>' : "";
       var note = entry.note || "";
       var weidian = entry.weidian || {};
-      if (entry.source === "weidian" && weidian.order_id) {
-        note = (note ? note + " · " : "") + "订单 " + weidian.order_id + (weidian.status ? " · " + weidian.status : "");
+      if (entry.source === "weidian") {
+        var tier = weidian.sku_title || "";
+        var quantity = Number(weidian.quantity || 0);
+        if (!tier) {
+          var tierScore = Number(weidian.score || entry.score || 0);
+          if (quantity > 0 && tierScore > 0) tier = score(tierScore / quantity) + "份";
+        }
+        if (tier) {
+          note = (note ? note + " · " : "") + tier + (quantity > 0 ? " × " + score(quantity) + "件" : "");
+        }
       }
       var ai = aiSuggestions[entry.id];
       var aiBtn = ai ? '<button class="btn mini gold" data-ai-apply="' + esc(entry.id) + '">应用AI</button>' : "";
       var shipBtn = (entry.source === "weidian" && !entry.settled && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
       var scoring = entry.scoring_method || "";
       var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
+      var isChicken = scoring === "鸡腿";
+      var businessCell = isChicken
+        ? '<div class="business-pair">' +
+            '<span class="business-sublabel">回馈</span>' +
+            '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>' +
+            '<span class="business-sublabel">加赠</span>' +
+            '<select class="business-select" data-business-bonus-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business_bonus, "bonus") + '</select>' +
+          '</div>'
+        : '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>';
       return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
@@ -633,7 +655,7 @@
         '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
         '<td><button class="btn mini business-btn ' + (entry.business_done ? "done" : "") + '" data-business="' + esc(entry.id) + '" data-done="' + (entry.business_done ? "0" : "1") + '">' + (entry.business_done ? "已完成业务" : "未完成业务") + '</button></td>' +
-        '<td><select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business) + '</select></td>' +
+        '<td>' + businessCell + '</td>' +
         '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
         '<td><div class="actions">' +
           '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + aiBtn + shipBtn +
@@ -654,7 +676,10 @@
     $("entryId").value = entry ? (entry.fan_id || entry.raw_id || "") : "";
     $("entryScore").value = entry ? entry.score : "1";
     $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
-    $("entryBusinessSelected").innerHTML = businessOptionsMarkup(entry ? entry.selected_business : "");
+    var isChicken = Boolean(entry && entry.scoring_method === "鸡腿");
+    $("entryBusinessSelected").innerHTML = businessOptionsMarkup(entry ? entry.selected_business : "", "card");
+    $("entryBusinessBonus").innerHTML = businessOptionsMarkup(entry ? entry.selected_business_bonus : "", "bonus");
+    $("entryBusinessBonusField").classList.toggle("hidden", !isChicken);
     $("entryNote").value = entry ? (entry.note || "") : "";
     $("entryBusinessDone").checked = entry ? Boolean(entry.business_done) : false;
     $("entryDuplicate").checked = entry ? Boolean(entry.duplicate) : false;
@@ -671,6 +696,7 @@
       settled: $("entrySettled").checked,
       business_done: $("entryBusinessDone").checked,
       selected_business: $("entryBusinessSelected").value,
+      selected_business_bonus: $("entryBusinessBonus").value,
       duplicate: $("entryDuplicate").checked
     };
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
@@ -710,12 +736,14 @@
     } catch (error) { showToast(error.message || "业务状态更新失败", true); }
   }
 
-  async function updateSelectedBusiness(id, value) {
+  async function updateSelectedBusiness(id, value, field) {
+    var payload = {};
+    payload[field || "selected_business"] = value;
     try {
       await api("/api/redblue/entries/" + encodeURIComponent(id), {
         method: "PATCH",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({selected_business: value})
+        body: JSON.stringify(payload)
       });
       await loadData(true);
     } catch (error) { showToast(error.message || "选定业务保存失败", true); }
@@ -986,8 +1014,13 @@
       if (action) action();
     });
     document.addEventListener("change", function (event) {
+      var bonusSelect = event.target.closest("[data-business-bonus-select]");
+      if (bonusSelect) {
+        updateSelectedBusiness(bonusSelect.getAttribute("data-business-bonus-select"), bonusSelect.value, "selected_business_bonus");
+        return;
+      }
       var select = event.target.closest("[data-business-select]");
-      if (select) updateSelectedBusiness(select.getAttribute("data-business-select"), select.value);
+      if (select) updateSelectedBusiness(select.getAttribute("data-business-select"), select.value, "selected_business");
     });
     document.addEventListener("click", function (event) {
       var close = event.target.closest("[data-close]");

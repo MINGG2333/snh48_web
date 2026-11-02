@@ -424,6 +424,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
                         "buyer_name": "Alice",
                         "buyer_note": "",
                         "seller_note": "",
+                        "quantity": 1,
                     },
                 }
             ]
@@ -460,6 +461,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
                         "buyer_name": "Alice",
                         "buyer_note": "",
                         "seller_note": "",
+                        "quantity": 2,
                     },
                 }
             ]
@@ -477,6 +479,44 @@ class RedblueLedgerApiTests(unittest.TestCase):
         }
         self.assertTrue(_weidian_changed(doc, [order]))
         doc["entries"][0]["weidian"]["item_name"] = "新商品名"
+        self.assertFalse(_weidian_changed(doc, [order]))
+
+    def test_weidian_sku_title_change_is_detected(self):
+        doc = {
+            "entries": [
+                {
+                    "source": "weidian",
+                    "source_id": "O4",
+                    "score": 1.0,
+                    "settled": False,
+                    "weidian": {
+                        "order_id": "O4",
+                        "item_id": "7879362063",
+                        "item_name": "红蓝鸡腿",
+                        "sku_title": "1份",
+                        "quantity": 1,
+                        "status": "待发货",
+                        "buyer_name": "Alice",
+                        "buyer_note": "",
+                        "seller_note": "",
+                    },
+                }
+            ]
+        }
+        order = {
+            "order_id": "O4",
+            "item_id": "7879362063",
+            "item_name": "红蓝鸡腿",
+            "sku_title": "99份",
+            "quantity": 1,
+            "status": "待发货",
+            "buyer_name": "Alice",
+            "buyer_note": "",
+            "seller_note": "",
+            "shipped": False,
+        }
+        self.assertTrue(_weidian_changed(doc, [order]))
+        doc["entries"][0]["weidian"]["sku_title"] = "99份"
         self.assertFalse(_weidian_changed(doc, [order]))
 
     def test_duplicate_is_excluded_from_summary(self):
@@ -585,9 +625,22 @@ class RedblueLedgerApiTests(unittest.TestCase):
             json={"selected_business": "不存在-业务"},
         ).json()["result"]
         self.assertEqual(cleared["selected_business"], "")
+        bonus = self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={"selected_business_bonus": "9-答案之书"},
+        ).json()["result"]
+        self.assertEqual(bonus["selected_business_bonus"], "9-答案之书")
+        bad_bonus = self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={"selected_business_bonus": "6-点唱整首"},
+        ).json()["result"]
+        self.assertEqual(bad_bonus["selected_business_bonus"], "")
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         row = next(item for item in data["entries"] if item["id"] == entry["id"])
         self.assertEqual(row["selected_business"], "")
+        self.assertEqual(row["selected_business_bonus"], "")
 
     def test_cookie_secret_persists_across_reloads(self):
         api._COOKIE_SECRET_CACHE = None

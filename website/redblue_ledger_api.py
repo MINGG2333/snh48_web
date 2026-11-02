@@ -94,6 +94,10 @@ BUSINESS_OPTIONS = [
     for score, name in items
 ]
 BUSINESS_OPTION_VALUES = {item["value"] for item in BUSINESS_OPTIONS}
+BUSINESS_GROUP_VALUES = {
+    group_key: {f"{score}-{name}" for score, name in items}
+    for group_key, _group_label, items in BUSINESS_OPTION_GROUPS
+}
 WEEKDAYS = ("一", "二", "三", "四", "五", "六", "日")
 TEXT_LIMIT = 500
 JOB_ID_RE = re.compile(r"^[a-f0-9]{32}$")
@@ -170,9 +174,10 @@ def _weidian_order_score(order: dict[str, Any]) -> float:
     return round(_to_float(order.get("quantity"), 0.0), 4)
 
 
-def _business_option(value: Any) -> str:
+def _business_option(value: Any, group: str | None = None) -> str:
     text = _clean(value, 80)
-    return text if text in BUSINESS_OPTION_VALUES else ""
+    allowed = BUSINESS_GROUP_VALUES.get(group, BUSINESS_OPTION_VALUES) if group else BUSINESS_OPTION_VALUES
+    return text if text in allowed else ""
 
 
 def _to_bool(value: Any, default: bool = False) -> bool:
@@ -647,6 +652,7 @@ def _new_entry(
     weidian: dict[str, Any] | None = None,
     scoring_method: str = "",
     selected_business: str = "",
+    selected_business_bonus: str = "",
 ) -> dict[str, Any]:
     entry_id = f"rb-{uuid.uuid4().hex}"
     method = _clean(scoring_method, 10)
@@ -672,7 +678,8 @@ def _new_entry(
         "duplicate_note": "",
         "business_done": False,
         "business_done_at": "",
-        "selected_business": _business_option(selected_business),
+        "selected_business": _business_option(selected_business, "card"),
+        "selected_business_bonus": _business_option(selected_business_bonus, "bonus"),
         "note": _clean(note),
         "identity_locked": False,
         "ai_suggestion": {},
@@ -767,6 +774,7 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "business_done": bool(entry.get("business_done")),
         "business_done_at": _clean(entry.get("business_done_at"), 32),
         "selected_business": _clean(entry.get("selected_business"), 80),
+        "selected_business_bonus": _clean(entry.get("selected_business_bonus"), 80),
         "note": _clean(entry.get("note")),
         "identity_locked": bool(entry.get("identity_locked")),
         "ai_suggestion": entry.get("ai_suggestion") if isinstance(entry.get("ai_suggestion"), dict) else {},
@@ -970,7 +978,8 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
         score=score,
         settled=_to_bool(payload.get("settled"), True),
         note=_clean(payload.get("note")),
-        selected_business=_business_option(payload.get("selected_business")),
+        selected_business=_clean(payload.get("selected_business"), 80),
+        selected_business_bonus=_clean(payload.get("selected_business_bonus"), 80),
     )
     doc.setdefault("entries", []).append(entry)
     return doc, _normalise_entry(entry, doc.get("aliases") or [])
@@ -1004,7 +1013,9 @@ def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
         entry["business_done"] = _to_bool(payload.get("business_done"), bool(entry.get("business_done")))
         entry["business_done_at"] = _now() if entry["business_done"] else ""
     if payload.get("selected_business") is not None:
-        entry["selected_business"] = _business_option(payload.get("selected_business"))
+        entry["selected_business"] = _business_option(payload.get("selected_business"), "card")
+    if payload.get("selected_business_bonus") is not None:
+        entry["selected_business_bonus"] = _business_option(payload.get("selected_business_bonus"), "bonus")
     entry["updated_at"] = _now()
     return doc, _normalise_entry(entry, doc.get("aliases") or [])
 
@@ -1137,6 +1148,7 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
             "order_id": order_id,
             "item_id": _clean(order.get("item_id"), 40),
             "item_name": _clean(order.get("item_name"), 160),
+            "sku_title": _clean(order.get("sku_title"), 40),
             "status": status_desc,
             "buyer_name": buyer_name,
             "buyer_note": buyer_note,
@@ -1314,6 +1326,10 @@ def _weidian_changed(doc: dict[str, Any], orders: list[dict[str, Any]]) -> bool:
         if bool(entry.get("settled")) != expected_settled:
             return True
         if _clean(weidian.get("item_name"), 160) != _clean(order.get("item_name"), 160):
+            return True
+        if _clean(weidian.get("sku_title"), 40) != _clean(order.get("sku_title"), 40):
+            return True
+        if abs(_to_float(weidian.get("quantity"), 0.0) - _to_float(order.get("quantity"), 0.0)) > 1e-9:
             return True
         if _clean(weidian.get("buyer_name"), 120) != _clean(order.get("buyer_name"), 120):
             return True
