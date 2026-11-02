@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-02 17:31 CST 红蓝台账鸡腿条目双业务选择与微店档位备注（两端）
+
+- 需求：计分方式为鸡腿的条目，“选定的业务”列提供回馈、加赠两个下拉；微店条目备注列改为显示“SKU 档位 × 件数”，不再显示订单号和发货状态。
+- 代码：`website/redblue_ledger_api.py` 新增 `selected_business_bonus` 字段（甲鱼回馈存 `selected_business`，鸡腿加赠存 `selected_business_bonus`，分别按 card/bonus 组校验）；微店状态新增 `sku_title`，变更检测补充 `sku_title`/`quantity`。`templates/redblue_ledger_2026.html` 鸡腿行渲染“回馈/加赠”两个下拉，编辑弹窗按计分方式显示加赠下拉；微店备注使用 `sku_title × quantity`，缺 `sku_title` 时用 `score / quantity` 推导档位。
+- 部署：网站仓库提交 `b3e0ee1` 已推送 GitHub；腾讯云经安全桥对端拉取。阿里云 `snh48-aliyun.service` PID `988315`（17:27:51 起），腾讯云 `snh48-web.service` PID `465616`（17:31:17 起）。
+- 验证：两端 `tests/test_redblue_ledger_api.py` 23 项通过（含鸡腿加赠字段、微店 SKU 档位变更检测）；两端 `/business/redblue2026` 200，页面包含 `data-business-bonus-select` 和“鸡腿加赠业务”。
+
 ## 2026-11-02 17:08 CST 红蓝台账新增“选定的业务”下拉列（两端）
 
 - 需求：`/business/redblue2026` 条目表增加“选定的业务”列，可直接从预设业务中选择，选项命名为“分数-业务名”；可选业务以 2026-10-30 最终交付业务图为准。
