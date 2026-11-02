@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +13,8 @@ from website import fan_stats_api
 
 
 class FanStatsApiTests(unittest.TestCase):
-    def test_internal_errors_are_not_exposed(self) -> None:
+    def test_failed_platform_uses_last_successful_value_without_internal_error(self) -> None:
+        last_success = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
         latest = {
             "fetched_at": "2026-11-02 08:51:59",
             "platforms": {
@@ -36,9 +38,19 @@ class FanStatsApiTests(unittest.TestCase):
                 },
             },
         }
+        series = {
+            "ts": last_success,
+            "platform": "weibo",
+            "handle": "SNH48-陈嘉仪",
+            "followers": 3129,
+            "source": "weibo_mymblog",
+        }
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "latest.json").write_text(
                 json.dumps(latest, ensure_ascii=False), encoding="utf-8"
+            )
+            Path(tmp, "fan_counts.jsonl").write_text(
+                json.dumps(series, ensure_ascii=False) + "\n", encoding="utf-8"
             )
             with patch.object(fan_stats_api.cfg, "FAN_COUNTS_DATA_PATH", tmp):
                 result = fan_stats_api.get_fans_stats(Response(), days=30)
@@ -47,14 +59,13 @@ class FanStatsApiTests(unittest.TestCase):
         self.assertNotIn("myblog", payload)
         self.assertNotIn("Cookie", payload)
         self.assertNotIn("账号池", payload)
-        self.assertEqual(
-            result["platforms"]["weibo"]["error"],
-            fan_stats_api.PUBLIC_ERROR_TEXT["error"],
-        )
-        self.assertEqual(
-            result["platforms"]["bilibili"]["error"],
-            fan_stats_api.PUBLIC_ERROR_TEXT["unsupported"],
-        )
+        weibo = result["platforms"]["weibo"]
+        self.assertEqual(weibo["status"], "error")
+        self.assertEqual(weibo["followers"], 3129)
+        self.assertEqual(weibo["ts"], last_success)
+        self.assertTrue(weibo["stale"])
+        self.assertNotIn("error", weibo)
+        self.assertNotIn("error", result["platforms"]["bilibili"])
         self.assertEqual(result["platforms"]["douyin"]["followers"], 11489)
         self.assertEqual(result["platforms"]["douyin"]["source"], "douyin_profile")
 

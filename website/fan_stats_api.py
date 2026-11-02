@@ -18,11 +18,6 @@ router = APIRouter(prefix="/api/fans-stats", tags=["粉丝数记录页"])
 
 TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-PUBLIC_ERROR_TEXT = {
-    "error": "本次采集失败，请稍后重试",
-    "unsupported": "暂无数据",
-}
-
 
 def _data_dir() -> Path:
     return Path(cfg.FAN_COUNTS_DATA_PATH)
@@ -40,18 +35,17 @@ def _load_latest() -> dict[str, Any]:
 
 
 def _public_platform(item: dict[str, Any]) -> dict[str, Any]:
-    """Expose only public status fields; internal errors stay server-side."""
+    """Expose public values; internal collection errors stay server-side."""
     status = str(item.get("status") or "error")
     result: dict[str, Any] = {
         "status": status,
         "label": str(item.get("label") or ""),
     }
-    if status == "ok":
-        for field in ("handle", "followers", "ts", "source"):
-            if item.get(field) is not None:
-                result[field] = item[field]
-    else:
-        result["error"] = PUBLIC_ERROR_TEXT.get(status, PUBLIC_ERROR_TEXT["error"])
+    for field in ("handle", "followers", "ts", "source"):
+        if item.get(field) is not None:
+            result[field] = item[field]
+    if item.get("stale") is not None:
+        result["stale"] = bool(item.get("stale"))
     return result
 
 
@@ -98,16 +92,26 @@ def get_fans_stats(
     """Return the latest per-platform fan counts and the recent time series."""
     response.headers["Cache-Control"] = "public, max-age=300"
     latest = _load_latest()
+    series = _load_series(days)
     raw_platforms = latest.get("platforms") if isinstance(latest.get("platforms"), dict) else {}
-    platforms = {
-        str(key): _public_platform(item)
-        for key, item in raw_platforms.items()
-        if isinstance(item, dict)
-    }
+    platforms: dict[str, Any] = {}
+    for key, item in raw_platforms.items():
+        if not isinstance(item, dict):
+            continue
+        merged = dict(item)
+        status = str(merged.get("status") or "error")
+        if status == "error" and merged.get("followers") is None:
+            points = series.get(str(key)) or []
+            if points:
+                merged["followers"] = points[-1]["followers"]
+                merged["ts"] = points[-1]["ts"]
+        if status == "error" and merged.get("followers") is not None:
+            merged["stale"] = True
+        platforms[str(key)] = _public_platform(merged)
     return {
         "available": bool(platforms),
         "fetched_at": str(latest.get("fetched_at", "")),
         "days": days,
         "platforms": platforms,
-        "series": _load_series(days),
+        "series": series,
     }

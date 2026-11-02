@@ -42,7 +42,7 @@
 | 服务条款 | `/terms` | 页脚 | `website/templates/terms.html` | 无专用脚本 | 法务页面 |
 | 隐私政策 | `/privacy` | 页脚 | `website/templates/privacy.html` | 无专用脚本 | 法务页面 |
 | 投诉举报 | `/complaint` | 页脚 | `website/templates/complaint.html` | `/api/complaint/submit` | 含验证码和提交限速 |
-| 粉丝数记录 | `/fans-stats`（短链 `/fans` 302 跳转） | 仅 URL，公开只读 | `website/templates/fans_stats.html`（继承 base.html） | `/api/fans-stats` | fan-hub `social_record/fan_counts/`（`FAN_COUNTS_DATA_PATH`），由 `fan_count_collector.py` 每日一次采集、临里程碑由 `fan_count_booster.service` 动态补采；展示口袋48、微博、抖音最新粉丝数与近 30 天趋势（B站无账号时不显示），卡片与趋势图各并排一行，横轴按真实时间映射，纵轴取整刻度，悬停曲线显示最近数据点的日期与数值；口袋48读取陈嘉仪公开 `user.info.home -> baseUserInfo.followers`；属公开数据，随网站必要数据同步阿里云 |
+| 粉丝数记录 | `/fans-stats`（短链 `/fans` 302 跳转） | 仅 URL，公开只读 | `website/templates/fans_stats.html`（继承 base.html） | `/api/fans-stats` | fan-hub `social_record/fan_counts/`（`FAN_COUNTS_DATA_PATH`），由 `fan_count_collector.py` 每日一次采集、临里程碑由 `fan_count_booster.service` 动态补采；展示口袋48、微博、抖音最近一次成功采集的粉丝数与近 30 天趋势（B站无账号时不显示），卡片与趋势图各并排一行，横轴按真实时间映射，纵轴取整刻度，悬停曲线显示最近数据点的日期与数值；单平台采集失败时保留上次成功值并标记「上次数据」，不显示全局采集时间；各平台按自身采集时间写入 latest.json/JSONL；口袋48读取陈嘉仪公开 `user.info.home -> baseUserInfo.followers`；属公开数据，随网站必要数据同步阿里云 |
 
 ## 管理和仅 URL 页面
 
