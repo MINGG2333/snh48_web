@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from website import config as cfg
+from website import identity_index
 from website import redblue_ledger_api as api
 from website.redblue_ledger_api import _weidian_changed, _weidian_order_score, router
 
@@ -131,6 +132,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.SHARED_STATE_SYNC_ENABLED = self._old["sync"]
         cfg.SHARED_STATE_IS_PRIMARY = self._old["primary"]
         api._COOKIE_SECRET_CACHE = None
+        identity_index.clear_cache()
 
     def test_login_cookie_authenticates_and_logout_clears(self):
         response = self.client.post("/api/redblue/login", json={"password": "testpass"})
@@ -250,6 +252,71 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entry["raw_id"], "")
         self.assertEqual(entry["weidian"]["buyer_note"], "想要id合影业务谢谢")
         self.assertEqual(entry["weidian"]["seller_note"], "EVOL笙")
+
+    def test_weidian_main_name_uses_latest_pocket_nickname_dynamically(self):
+        (self.tmp / "weidian.json").write_text(
+            json.dumps(
+                {
+                    "orders": [
+                        {
+                            "order_id": "O6",
+                            "item_id": "7879362063",
+                            "item_name": "红蓝鸡腿",
+                            "add_time": "2026-10-24 14:00:00",
+                            "status": "待发货",
+                            "buyer_name": "AliceOld",
+                            "buyer_note": "",
+                            "seller_note": "",
+                            "quantity": 1,
+                            "amount": "26.25",
+                            "shipped": False,
+                            "shipped_at": "",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        index = {
+            "version": 1,
+            "accounts": {
+                "1001": {
+                    "latest_name": "Alice",
+                    "names": {"Alice": {}, "AliceOld": {}},
+                    "last_seen": "2026-11-02 10:00:00",
+                }
+            },
+            "nicknames": {
+                "Alice": {"ids": ["1001"], "last_seen": "2026-11-02 10:00:00"},
+                "AliceOld": {"ids": ["1001"], "last_seen": "2026-11-01 10:00:00"},
+            },
+        }
+        (self.tmp / "identity.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+        identity_index.clear_cache()
+        job_id = "e" * 32
+        result_dir = self.tmp / "wd" / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / f"{job_id}.json").write_text(json.dumps({"status": "done"}), encoding="utf-8")
+        self.client.post(
+            "/api/redblue/weidian/sync/apply",
+            headers=self.headers,
+            json={"job_id": job_id},
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["raw_name"], "AliceOld")
+        self.assertEqual(entry["fan_name"], "Alice")
+
+        index["accounts"]["1001"]["latest_name"] = "AliceNew"
+        index["accounts"]["1001"]["names"]["AliceNew"] = {}
+        index["nicknames"]["AliceNew"] = {"ids": ["1001"], "last_seen": "2026-11-03 10:00:00"}
+        (self.tmp / "identity.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+        identity_index.clear_cache()
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["raw_name"], "AliceOld")
+        self.assertEqual(entry["fan_name"], "AliceNew")
 
     def test_weidian_note_can_supply_id_but_not_name(self):
         (self.tmp / "weidian.json").write_text(
