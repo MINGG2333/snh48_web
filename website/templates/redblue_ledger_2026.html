@@ -82,6 +82,20 @@
     .trend-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
     .trend-canvas-wrap { position: relative; width: 100%; height: 300px; }
     .trend-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+    .modal-card.daily-modal-card { width: min(1120px,100%); }
+    .daily-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .daily-toggle { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .daily-toggle .btn.active { border-color: var(--teal); color: var(--teal); background: rgba(65,185,170,.1); }
+    .daily-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: 12px; margin-top: 14px; }
+    .daily-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+    .daily-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .daily-card-title { color: var(--text); font-size: 13px; font-weight: 740; }
+    .daily-card-total { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .daily-card-canvas { height: 190px; }
+    .daily-card-canvas canvas { display: block; width: 100%; height: 100%; }
+    .daily-combined { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+    .daily-combined .trend-canvas-wrap { height: 320px; }
+    @media (max-width: 620px) { .daily-card-canvas { height: 220px; } .daily-combined .trend-canvas-wrap { height: 280px; } }
     .distribution-more { display: none; width: calc(100% - 28px); min-height: 42px; margin: -3px 14px 14px; border: 1px solid rgba(65,185,170,.34); border-radius: 8px; background: linear-gradient(90deg, rgba(65,185,170,.12), rgba(240,184,75,.08)); color: var(--text); padding: 0 12px; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; text-align: left; }
     .distribution-more.show { display: flex; }
     .distribution-more::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--teal), var(--gold), var(--pink)); opacity: .9; }
@@ -196,7 +210,10 @@
       <section class="panel">
         <div class="panel-head">
           <h2>计分来源汇总</h2>
-          <span class="panel-count" id="scoringSummaryCount">6 类</span>
+          <div class="panel-actions">
+            <span class="panel-count" id="scoringSummaryCount">6 类</span>
+            <button class="btn mini" id="openDailyModalBtn" type="button">查看每日走势</button>
+          </div>
         </div>
         <div class="bar-list" id="scoringSummary"></div>
         <div class="trend-block">
@@ -277,6 +294,36 @@
     <div class="sub" id="fanModalSub"></div>
     <div class="bar-list" id="fanModalBars"></div>
     <div class="modal-actions"><button class="btn" data-close="fanModal">关闭</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="dailyModal">
+  <div class="modal-backdrop" data-close="dailyModal"></div>
+  <div class="modal-card wide daily-modal-card">
+    <div class="daily-modal-head">
+      <div>
+        <h2>每日计分走势</h2>
+        <div class="sub" id="dailyModalSub"></div>
+      </div>
+      <div class="panel-actions">
+        <div class="daily-toggle" role="group" aria-label="走势口径">
+          <button class="btn mini active" id="dailyViewSourceBtn" type="button">按来源（4）</button>
+          <button class="btn mini" id="dailyViewCategoryBtn" type="button">按计分来源（6）</button>
+        </div>
+        <button class="btn" type="button" data-close="dailyModal">关闭</button>
+      </div>
+    </div>
+    <div class="daily-grid" id="dailyModalGrid"></div>
+    <section class="daily-combined">
+      <div class="trend-head">
+        <div>
+          <div class="trend-title" id="dailyCombinedTitle">合成走势</div>
+          <div class="trend-sub" id="dailyCombinedSub">同一天多来源对比</div>
+        </div>
+        <button class="btn mini" id="exportDailyCombinedBtn" type="button">下载合成图</button>
+      </div>
+      <div class="trend-canvas-wrap"><canvas id="dailyCombinedChart" role="img" aria-label="计分来源合成走势图"></canvas></div>
+    </section>
   </div>
 </div>
 
@@ -403,6 +450,7 @@
     renderFanSummary();
     renderEntries();
     $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 6 类计分来源（房间/直播 × 计分卡/鸡腿、应援会/暗票） · 按时间正序";
+    if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
   }
 
   function renderKpis() {
@@ -442,6 +490,14 @@
     "weidian|鸡腿": "#8b6cc9",
     "manual|计分卡": "#e36f6f"
   };
+  var DAILY_SOURCE_DEFS = [
+    {key:"room", label:"房间", color:"#67a8ff", parts:["room|计分卡", "room|鸡腿"]},
+    {key:"live", label:"直播", color:"#41b9aa", parts:["live|计分卡", "live|鸡腿"]},
+    {key:"weidian", label:"应援会", color:"#8b6cc9", parts:["weidian|鸡腿"]},
+    {key:"manual", label:"暗票", color:"#e36f6f", parts:["manual|计分卡"]}
+  ];
+  var dailyModalView = "source";
+  var dailyModalSpecs = [];
   var dailyTrendResizeTimer = null;
 
   function renderScoringSummary() {
@@ -1173,6 +1229,333 @@
     finally { button.disabled = false; button.textContent = originalText; setStatus(""); }
   }
 
+  function dailySourceSpecs() {
+    var daily = dailyTrendData();
+    if (!daily) return [];
+    return DAILY_SOURCE_DEFS.map(function (source) {
+      var values = (daily.days || []).map(function (day) {
+        var total = 0;
+        source.parts.forEach(function (key) {
+          total += Number((day.scores || {})[key] || 0);
+        });
+        return Math.round(total * 10000) / 10000;
+      });
+      var total = values.reduce(function (sum, value) { return sum + value; }, 0);
+      return {label: source.label, color: source.color, values: values, total: Math.round(total * 10000) / 10000};
+    });
+  }
+
+  function dailyCategorySpecs() {
+    var daily = dailyTrendData();
+    if (!daily) return [];
+    var categories = (daily.categories && daily.categories.length)
+      ? daily.categories
+      : SCORING_CATEGORIES.map(function (item) { return {key: item.source + "|" + item.method, label: item.label}; });
+    return categories.map(function (category) {
+      var values = (daily.days || []).map(function (day) {
+        return Number((day.scores || {})[category.key] || 0);
+      });
+      var total = values.reduce(function (sum, value) { return sum + value; }, 0);
+      return {
+        label: category.label || (category.source + "·" + category.method),
+        color: DAILY_TREND_COLORS[category.key] || "#67a8ff",
+        values: values,
+        total: Math.round(total * 10000) / 10000
+      };
+    });
+  }
+
+  function drawTrendLegend(ctx, series, width, left, right, top) {
+    var x = left;
+    var y = top;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = dailyTrendFont(11, 500);
+    series.forEach(function (item) {
+      var itemWidth = 15 + ctx.measureText(item.label).width + 12;
+      if (x > left && x + itemWidth > right) { x = left; y += 20; }
+      ctx.fillStyle = item.color || "#67a8ff";
+      ctx.fillRect(x, y - 4, 10, 8);
+      ctx.fillStyle = "#95a4b6";
+      ctx.fillText(item.label, x + 15, y);
+      x += itemWidth;
+    });
+    return y + 12;
+  }
+
+  function drawTrendChart(canvas, width, height, dpr, options) {
+    options = options || {};
+    width = Math.max(240, Math.round(width));
+    height = Math.max(200, Math.round(height));
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#151b24";
+    ctx.fillRect(0, 0, width, height);
+
+    var daily = dailyTrendData();
+    var days = options.days || (daily && daily.days) || [];
+    var series = options.series || [];
+    var pad = options.header ? 24 : 14;
+    var left = pad + (options.header ? 42 : 36);
+    var right = width - pad;
+    var y = pad;
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    if (options.header) {
+      ctx.fillStyle = "#e8eef6";
+      ctx.font = dailyTrendFont(22, 700);
+      ctx.fillText(options.title || "每日计分走势", left, y + 8);
+      ctx.fillStyle = "#95a4b6";
+      ctx.font = dailyTrendFont(13, 400);
+      ctx.fillText(options.subtitle || "", left, y + 34);
+      y += 54;
+    }
+
+    var legendBottom = options.showLegend && series.length > 1
+      ? drawTrendLegend(ctx, series, width, left, right, y)
+      : y;
+    var plotTop = legendBottom + 10;
+    var plotBottom = height - (options.header ? 44 : 30);
+    if (!days.length || !series.length) {
+      ctx.fillStyle = "#95a4b6";
+      ctx.font = dailyTrendFont(13, 400);
+      ctx.textAlign = "center";
+      ctx.fillText("暂无数据", (left + right) / 2, (plotTop + plotBottom) / 2);
+      return;
+    }
+
+    var maxValue = 0;
+    series.forEach(function (item) {
+      (item.values || []).forEach(function (value) {
+        maxValue = Math.max(maxValue, Number(value || 0));
+      });
+    });
+    if (maxValue <= 0) {
+      ctx.fillStyle = "#95a4b6";
+      ctx.font = dailyTrendFont(13, 400);
+      ctx.textAlign = "center";
+      ctx.fillText("暂无数据", (left + right) / 2, (plotTop + plotBottom) / 2);
+      return;
+    }
+
+    var axis = dailyTrendAxis(maxValue);
+    var tickCount = Math.round(axis.max / axis.step);
+    var plotHeight = plotBottom - plotTop;
+    ctx.font = dailyTrendFont(10, 400);
+    for (var tick = 0; tick <= tickCount; tick += 1) {
+      var value = tick * axis.step;
+      var lineY = plotBottom - (value / axis.max) * plotHeight;
+      ctx.strokeStyle = tick === 0 ? "rgba(255,255,255,.16)" : "rgba(255,255,255,.07)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, lineY + 0.5);
+      ctx.lineTo(right, lineY + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = "#657386";
+      ctx.textAlign = "right";
+      ctx.fillText(score(value), left - 7, lineY);
+    }
+
+    var pointGap = days.length > 1 ? (right - left) / (days.length - 1) : 0;
+    var pointX = function (index) {
+      return days.length > 1 ? left + pointGap * index : (left + right) / 2;
+    };
+    series.forEach(function (item) {
+      var values = item.values || [];
+      ctx.beginPath();
+      values.forEach(function (value, index) {
+        var px = pointX(index);
+        var py = plotBottom - (Number(value || 0) / axis.max) * plotHeight;
+        if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = item.color || "#67a8ff";
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      if (days.length <= 45) {
+        values.forEach(function (value, index) {
+          var px = pointX(index);
+          var py = plotBottom - (Number(value || 0) / axis.max) * plotHeight;
+          ctx.beginPath();
+          ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+          ctx.fillStyle = item.color || "#67a8ff";
+          ctx.fill();
+        });
+      }
+    });
+
+    var labelStep = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor((right - left) / 54))));
+    var labelOffset = (days.length - 1) % labelStep;
+    ctx.font = dailyTrendFont(10, 400);
+    ctx.fillStyle = "#657386";
+    ctx.textAlign = "center";
+    days.forEach(function (day, index) {
+      if ((index - labelOffset) % labelStep !== 0) return;
+      ctx.fillText(day.date.slice(5), pointX(index), plotBottom + 14);
+    });
+  }
+
+  function dailyModalSubtitle(daily) {
+    return daily.start + " 至 " + daily.end + " · 共 " + daily.days.length + " 天";
+  }
+
+  function dailyModalCombinedTitle() {
+    return dailyModalView === "source" ? "四来源合成走势" : "六类计分来源合成走势";
+  }
+
+  function renderDailyModal() {
+    var daily = dailyTrendData();
+    var grid = $("dailyModalGrid");
+    if (!grid) return;
+    var isSource = dailyModalView === "source";
+    $("dailyViewSourceBtn").classList.toggle("active", isSource);
+    $("dailyViewCategoryBtn").classList.toggle("active", !isSource);
+
+    if (!daily || !daily.days || !daily.days.length) {
+      dailyModalSpecs = [];
+      $("dailyModalSub").textContent = "全部时间 · 暂无数据";
+      $("dailyCombinedTitle").textContent = dailyModalCombinedTitle();
+      $("dailyCombinedSub").textContent = "暂无数据";
+      grid.innerHTML = '<div class="empty">暂无计分数据</div>';
+      var emptyCanvas = $("dailyCombinedChart");
+      var emptyRect = emptyCanvas.parentElement.getBoundingClientRect();
+      drawTrendChart(emptyCanvas, Math.max(280, Math.round(emptyRect.width)), Math.max(220, Math.round(emptyRect.height)), Math.min(2.5, window.devicePixelRatio || 1), {days: [], series: [], showLegend: false});
+      return;
+    }
+
+    dailyModalSpecs = isSource ? dailySourceSpecs() : dailyCategorySpecs();
+    $("dailyModalSub").textContent = dailyModalSubtitle(daily) + " · 总计 " + score(daily.total_score) + " 分";
+    grid.innerHTML = dailyModalSpecs.map(function (spec, index) {
+      return '<section class="daily-card">'
+        + '<div class="daily-card-head"><div><div class="daily-card-title">' + esc(spec.label) + '</div><div class="daily-card-total">' + score(spec.total) + ' 分</div></div>'
+        + '<button class="btn mini" type="button" data-daily-export="' + index + '">下载</button></div>'
+        + '<div class="daily-card-canvas"><canvas data-daily-canvas="' + index + '" role="img" aria-label="' + esc(spec.label) + '每日走势图"></canvas></div>'
+        + '</section>';
+    }).join("");
+
+    var dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    dailyModalSpecs.forEach(function (spec, index) {
+      var canvas = grid.querySelector('[data-daily-canvas="' + index + '"]');
+      if (!canvas) return;
+      var rect = canvas.parentElement.getBoundingClientRect();
+      drawTrendChart(canvas, Math.max(240, Math.round(rect.width)), Math.max(180, Math.round(rect.height)), dpr, {
+        days: daily.days,
+        series: [{label: spec.label, color: spec.color, values: spec.values}],
+        showLegend: false
+      });
+    });
+
+    $("dailyCombinedTitle").textContent = dailyModalCombinedTitle();
+    $("dailyCombinedSub").textContent = (isSource ? "四来源每日对比" : "六类计分来源每日对比") + " · 可单独下载 PNG";
+    var combinedCanvas = $("dailyCombinedChart");
+    var combinedRect = combinedCanvas.parentElement.getBoundingClientRect();
+    drawTrendChart(combinedCanvas, Math.max(280, Math.round(combinedRect.width)), Math.max(220, Math.round(combinedRect.height)), dpr, {
+      days: daily.days,
+      series: dailyModalSpecs.map(function (spec) {
+        return {label: spec.label, color: spec.color, values: spec.values};
+      }),
+      showLegend: true
+    });
+  }
+
+  function openDailyModal() {
+    $("dailyModal").classList.remove("hidden");
+    renderDailyModal();
+  }
+
+  function setDailyModalView(view) {
+    dailyModalView = view === "category" ? "category" : "source";
+    if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
+  }
+
+  function dailyExportFilename(label, suffix) {
+    var safe = String(label || "走势").replace(/[\\/:*?"<>|]/g, "_");
+    var daily = dailyTrendData();
+    return "红蓝计分_每日走势_" + safe + (suffix || "") + "_" + (daily && daily.end ? daily.end : new Date().toISOString().slice(0, 10)) + ".png";
+  }
+
+  function savePngBlob(blob, filename, button, originalText) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    if (!blob) { showToast("导出失败", true); return; }
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    showToast("已保存 PNG");
+  }
+
+  function exportDailyCard(index) {
+    var daily = dailyTrendData();
+    var spec = dailyModalSpecs[index];
+    if (!daily || !spec) return;
+    var button = $("dailyModalGrid").querySelector('[data-daily-export="' + index + '"]');
+    var originalText = button ? button.textContent : "";
+    if (button) { button.disabled = true; button.textContent = "生成中…"; }
+    try {
+      var canvas = document.createElement("canvas");
+      drawTrendChart(canvas, 1000, 440, 2, {
+        header: true,
+        title: spec.label,
+        subtitle: dailyModalSubtitle(daily) + " · 总计 " + score(spec.total) + " 分",
+        days: daily.days,
+        series: [{label: spec.label, color: spec.color, values: spec.values}],
+        showLegend: false
+      });
+      canvas.toBlob(function (blob) {
+        savePngBlob(blob, dailyExportFilename(spec.label), button, originalText);
+      }, "image/png");
+    } catch (error) {
+      if (button) { button.disabled = false; button.textContent = originalText; }
+      showToast("导出失败", true);
+    }
+  }
+
+  function exportDailyCombined() {
+    var daily = dailyTrendData();
+    if (!daily || !daily.days || !daily.days.length || !dailyModalSpecs.length) {
+      showToast("暂无可导出的合成走势", true);
+      return;
+    }
+    var button = $("exportDailyCombinedBtn");
+    var originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "生成中…";
+    try {
+      var title = dailyModalCombinedTitle();
+      var canvas = document.createElement("canvas");
+      drawTrendChart(canvas, 1400, 620, 2, {
+        header: true,
+        title: title,
+        subtitle: dailyModalSubtitle(daily) + " · 同一天多来源对比",
+        days: daily.days,
+        series: dailyModalSpecs.map(function (spec) {
+          return {label: spec.label, color: spec.color, values: spec.values};
+        }),
+        showLegend: true
+      });
+      canvas.toBlob(function (blob) {
+        savePngBlob(blob, dailyExportFilename(title), button, originalText);
+      }, "image/png");
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = originalText;
+      showToast("导出失败", true);
+    }
+  }
+
   function updateSelectAll() {
     var boxes = document.querySelectorAll("[data-select]");
     var all = boxes.length > 0 && Array.from(boxes).every(function (box) { return box.checked; });
@@ -1200,6 +1583,14 @@
     $("refreshBtn").addEventListener("click", function () { loadData().catch(function () {}); });
     $("exportSummaryBtn").addEventListener("click", function () { exportImage("summary"); });
     $("exportDailyBtn").addEventListener("click", exportDailyTrend);
+    $("openDailyModalBtn").addEventListener("click", openDailyModal);
+    $("dailyViewSourceBtn").addEventListener("click", function () { setDailyModalView("source"); });
+    $("dailyViewCategoryBtn").addEventListener("click", function () { setDailyModalView("category"); });
+    $("exportDailyCombinedBtn").addEventListener("click", exportDailyCombined);
+    $("dailyModalGrid").addEventListener("click", function (event) {
+      var button = event.target.closest("[data-daily-export]");
+      if (button) exportDailyCard(Number(button.getAttribute("data-daily-export")));
+    });
     $("openFanModalBtn").addEventListener("click", openFanModal);
     $("fanMoreBar").addEventListener("click", openFanModal);
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
@@ -1221,7 +1612,11 @@
     $("keywordInput").addEventListener("keydown", function (event) { if (event.key === "Enter") loadData().catch(function () {}); });
     window.addEventListener("resize", function () {
       clearTimeout(dailyTrendResizeTimer);
-      dailyTrendResizeTimer = setTimeout(function () { if (data) renderDailyTrend(); }, 180);
+      dailyTrendResizeTimer = setTimeout(function () {
+        if (!data) return;
+        renderDailyTrend();
+        if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
+      }, 180);
     });
     $("saveEntryBtn").addEventListener("click", saveEntry);
     $("closeAiPanelBtn").addEventListener("click", function () { $("aiPanel").classList.add("hidden"); });
