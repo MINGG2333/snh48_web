@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-04 05:43 CST 红蓝每日柱状图支持悬停/点击查看当天明细（阿里云已生效）
+
+- 需求：鼠标接近或点击每日柱状图的某一天，显示当天积分明细，包括时间、粉丝、来源、礼物或微店档位×数量、分数。
+- 数据：`website/redblue_ledger_api.py` 的 `daily_scoring.days[]` 新增 `records`，每条含 `time`、`fan_name`、`source_label`、`scoring_method`、`score`、`note`、`sku_title`、`quantity`、`weidian_score`；仅统计非重复条目，按时间升序。
+- 页面：`templates/redblue_ledger_2026.html` 新增跟随鼠标的明细浮层；底部堆叠图和弹窗内各分图/合成图共用；来源分图只显示该来源明细，6 类分图只显示该类别，合成图与底部总图显示当天全部明细；悬停显示、点击固定、点击别处关闭，长列表可滚动。
+- 验证：`tests/test_redblue_ledger_api.py` 31 项通过；`node --check` 通过；jsdom 实测悬停、固定、点击外部关闭、来源范围过滤和微店档位×数量显示正常；阿里云 `/api/redblue/data` 已返回 10/30 的 7 条、10/31 的 8 条、11/01 的 15 条当天明细。
+- 部署：网站仓库提交 `d9db2a7` 已推送 GitHub；阿里云 `snh48-aliyun.service` PID `3153290`（05:18:35 起），腾讯云模板已通过 peer pull 热加载，`snh48-web.service` 需重启后 `/api/redblue/data` 才会带上 `records`。
+
 ## 2026-11-04 04:52 CST 红蓝每日走势弹窗与分图/合成图下载（两端已生效）
 
 - 需求：从“计分来源汇总”进入弹窗，查看每一个积分来源的每日走势，并支持逐张下载和合成图下载。
