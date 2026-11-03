@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-04 00:10 CST 红蓝台账增加每日计分来源走势图（阿里云已部署）
+
+- 需求：`/business/redblue2026` 的“计分来源汇总”底部展示从最早记录到今天的每日计分情况，并可下载 PNG。
+- 数据：`website/redblue_ledger_api.py` 的 `/api/redblue/data` 新增 `daily_scoring`，按 6 类来源逐日汇总全部非重复条目，从最早记录连续补齐到今天；不受页面筛选影响，`start`/`end`/`days`/`total_score` 一并返回。
+- 页面：`templates/redblue_ledger_2026.html` 在计分来源汇总面板底部新增“每日计分走势” canvas，用 6 色堆叠柱按天显示，带图例、坐标轴、每日合计和响应式重绘；面板内“下载 PNG”按钮用同一绘制函数导出 1200×620 逻辑宽、2x 像素的 `红蓝计分_每日计分来源_YYYY-MM-DD.png`。
+- 验证：`tests/test_redblue_ledger_api.py` 31 项通过；线上 `/business/redblue2026` 200 且包含 `dailyTrendChart`、`exportDailyBtn`；`/api/redblue/data` 的 `daily_scoring` 为 2026-10-24 至 2026-11-04 连续 12 天，总计 424 分、87 条，6 类 key 完整；Node 模拟画布覆盖桌面、窄屏、40 天、空数据四种绘制路径无异常。
+- 部署：网站仓库提交 `7db5968` 已推送 GitHub；阿里云 `snh48-aliyun.service` PID `2795287`（23:53:52 起），腾讯云代码已通过 `peer pull` 快进到 `7db5968`，服务实际重启待腾讯云节点执行。
+
 ## 2026-11-03 19:25 CST 导出图用备用字体保留昵称装饰符号（两端）
 
 - 需求：昵称里的特殊装饰符号（如 `嘉菲猫不吃鱼𓈒𓂂𓏸` 的埃及圣书体）要在导出图中保留显示，而不是过滤掉。
