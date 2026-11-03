@@ -252,7 +252,8 @@
 
   function statusPill(row) {
     var kind = row.status_kind || "unknown";
-    return '<span class="pill ' + esc(kind) + '">' + esc(row.status_label || row.status || kind) + '</span>';
+    var refund = row.refund_state === "refunding" ? '<div class="raw">退款中</div>' : "";
+    return '<span class="pill ' + esc(kind) + '">' + esc(row.status_label || row.status || kind) + '</span>' + refund;
   }
 
   function broadcastText(row) {

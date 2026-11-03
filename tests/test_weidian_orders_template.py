@@ -54,6 +54,8 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertNotIn('value="broadcast_none"', self.template)
         self.assertIn(".pill.closed", self.template)
         self.assertIn(".pill.refunded", self.template)
+        self.assertIn('row.refund_state === "refunding"', self.template)
+        self.assertIn("退款中", self.template)
 
 
 if __name__ == "__main__":
