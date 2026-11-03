@@ -938,6 +938,21 @@ class RedblueLedgerApiTests(unittest.TestCase):
         image = Image.open(io.BytesIO(response.content))
         self.assertGreater(image.size[0], 820)
 
+    def test_entries_export_expands_for_full_fan_name(self):
+        import io
+
+        from PIL import Image
+
+        self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "很长很长很长很长很长很长很长的粉丝昵称", "score": 1},
+        )
+        response = self.client.get("/api/redblue/export/entries.png", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        image = Image.open(io.BytesIO(response.content))
+        self.assertGreater(image.size[0], 820)
+
     def test_ai_job_is_queued_and_apply_validates_identity(self):
         entry = self.client.post(
             "/api/redblue/entries",

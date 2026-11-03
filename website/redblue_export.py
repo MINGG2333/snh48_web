@@ -1,7 +1,7 @@
 """红蓝计分汇总 PNG 导出（Pillow 服务端渲染）。
 
 版式对齐 `private_handover/移交包/嘉仪业务/礼物回复/礼物回复时间线_近三周_20261021.png`：
-浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽、按条目按最长业务名动态定宽（最小 820px），正文 20–27px。
+浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽，按条目按最长昵称/业务名动态定宽（最小 820px），正文 20–27px。
 未登记口袋48昵称的条目不再标红，昵称统一颜色，只在名字后保留一个低对比度 ! 标记。
 按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接。
 """
@@ -25,7 +25,6 @@ from website.gift_reply_export import (
     SUBTITLE,
     TITLE,
     _display_text,
-    _fit,
     _font as _gift_font,
     _pil,
     _text_width,
@@ -183,7 +182,13 @@ def _business_text(row: dict[str, Any]) -> str:
     return "+".join(names)
 
 
-def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WIDTH) -> int:
+def _draw_entries(
+    draw,
+    top: int,
+    entries: list[dict[str, Any]],
+    width: int = WIDTH,
+    source_offset: int = 300,
+) -> int:
     groups: "OrderedDict[str, list[dict[str, Any]]]" = OrderedDict()
     for entry in entries:
         day = str(entry.get("source_time") or entry.get("created_at") or "")[:10] or "未标日期"
@@ -233,11 +238,10 @@ def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WI
 
             name = row.get("fan_name") or row.get("raw_name") or "未登记"
             name_x = x0 + 70
-            source_x = x0 + 300
-            score_x = x0 + 400
+            source_x = x0 + source_offset
+            score_x = source_x + 100
             warning = bool(row.get("warning"))
-            name_max = max(120, source_x - name_x - 10 - (24 if warning else 0))
-            name_text = _fit(draw, _display_text(name), name_font, name_max)
+            name_text = _display_text(name)
             draw.text((name_x, center_y), name_text, font=name_font, fill=NAME, anchor="lm")
             if warning:
                 _warn_icon(draw, name_x + _text_width(draw, name_text, name_font) + 8, center_y)
@@ -346,18 +350,25 @@ def render_entries_png(
     title = "红蓝计分汇总 · 按条目"
     Image, ImageDraw, _ = _pil()
     measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    name_font = _font(24, bold=True)
     score_font = _font(22)
     business_font = _font(18)
+    max_name_width = 0
+    for item in items:
+        name = item.get("fan_name") or item.get("raw_name") or "未登记"
+        name_width = _text_width(measure, _display_text(name), name_font) + (26 if item.get("warning") else 0)
+        max_name_width = max(max_name_width, name_width)
+    source_offset = max(300, 70 + int(max_name_width) + 16)
     width = ENTRIES_WIDTH
     for item in items:
         business = _business_text(item)
-        if not business:
-            continue
+        business_width = _text_width(measure, _display_text(business), business_font) if business else 0
         score_text = f"送出了 {_score(item.get('score'))} 分"
         required = (
-            504
+            204
+            + source_offset
             + _text_width(measure, score_text, score_font)
-            + _text_width(measure, _display_text(business), business_font)
+            + business_width
         )
         width = max(width, int(required) + 1)
     header_w = max(
@@ -368,7 +379,7 @@ def render_entries_png(
     width = max(width, int(header_w))
 
     def body(draw, top, width):
-        return _draw_entries(draw, top, items, width=width)
+        return _draw_entries(draw, top, items, width=width, source_offset=source_offset)
 
     day_rows: "OrderedDict[str, int]" = OrderedDict()
     for item in items:
