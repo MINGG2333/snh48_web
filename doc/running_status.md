@@ -7,6 +7,12 @@
 - 验证：`tests/test_redblue_ledger_api.py` 31 项通过；`node --check` 通过；用 jsdom 实测弹窗打开、4/6 视图切换、空数据、单图导出和合成图导出均正常；阿里云本地页面和腾讯云 `https://cjy.plus/business/redblue2026` 均包含 `openDailyModalBtn`、`dailyViewCategoryBtn`、`dailyCombinedChart`。
 - 部署：网站仓库提交 `ea646f4` 已推送 GitHub；两端仅改模板和文档，Jinja 模板热加载，无需重启网站服务。
 
+## 2026-11-04 04:52 CST 微店订单页状态筛选改为分组多选（两端已部署）
+
+- 状态筛选改为「全部状态」多选下拉，按 进行中（待付款/待发货/已发货）、已结束（已完成/已关闭）、退款/售后（退款中/已退款）分组；选项保留括号语义；移除状态图例行和「全部退款/售后」选项；多选按并集过滤。
+- 部署：网站仓库 `618bd8e`；腾讯云已快进并重启 `snh48-web.service`（PID `2328133`，04:52:16 起）；阿里云模板热加载；两端页面 200。
+- 验证：`tests/test_weidian_orders_template.py` 4 项 + `tests/test_weidian_orders_frontend.cjs` 通过；页面含 `statusMenu`/`STATUS_GROUPS`/`data-status-key`，无 `status-legend`、`全部退款/售后`、`statusFilter`。
+
 ## 2026-11-04 04:46 CST 微店订单页状态分组与语义说明（两端已部署）
 
 - 状态筛选按状态模型分组：进行中（待付款/待发货/已发货）、已结束（已完成/已关闭）、退款/售后（全部/退款中/已退款）。
