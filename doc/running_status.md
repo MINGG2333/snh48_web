@@ -1,5 +1,11 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-04 04:29 CST 微店订单页显示退款中（两端已部署）
+
+- 依赖 fan-hub 新增的 `refund_state`：`statusPill` 在 `refunding` 时在状态下显示「退款中」，退款/售后筛选保持不变。
+- 部署：网站仓库 `c487e3a`；腾讯云已快进并重启 `snh48-web.service`（PID `2305285`，04:28:32 起）；阿里云模板热加载（PID `2966893` 不变）；两端页面 200。
+- 验证：`tests/test_weidian_orders_template.py` 4 项 + `tests/test_weidian_orders_frontend.cjs` 通过。
+
 ## 2026-11-04 04:05 CST 微店订单页状态筛选按 6 态拆分（两端已部署）
 
 - 需求：已关闭与已退款不是同一状态；关闭单仍需采集并可在页面单独筛选；移除「未自动播报」筛选。
