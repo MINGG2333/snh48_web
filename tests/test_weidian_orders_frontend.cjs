@@ -62,7 +62,7 @@ function match(overrides) {
     .filter(item =>
       context.orderMatchesFilters(
         item,
-        Object.assign({ status: "all", item: "all", keyword: "", accounts: {} }, overrides || {})
+        Object.assign({ statuses: {}, item: "all", keyword: "", accounts: {} }, overrides || {})
       )
     )
     .map(item => item.order_id);
@@ -79,20 +79,24 @@ assert.deepEqual(match({ accounts: { __unknown__: true } }), ["o4"], "unknown ac
 assert.deepEqual(match({ keyword: "2111166808" }), ["o2", "o6"], "keyword matches buyer id");
 assert.deepEqual(match({ keyword: "177****4879" }), ["o1"], "keyword matches masked phone");
 assert.deepEqual(match({ keyword: "补邮" }), ["o2"], "keyword still matches item name");
-assert.deepEqual(match({ status: "awaiting_shipment" }), ["o1", "o3", "o4"], "awaiting filter");
-assert.deepEqual(match({ status: "closed" }), ["o5"], "closed filter is separate");
-assert.deepEqual(match({ status: "refunded" }), ["o6", "o8"], "refund bucket includes both substates");
-assert.deepEqual(match({ status: "refunding" }), ["o6"], "refunding filter");
-assert.deepEqual(match({ status: "refunded_only" }), ["o8"], "refunded-only filter");
-assert.deepEqual(match({ status: "completed" }), ["o7"], "completed filter");
+assert.deepEqual(match({ statuses: { awaiting_shipment: true } }), ["o1", "o3", "o4"], "awaiting filter");
+assert.deepEqual(match({ statuses: { shipped: true } }), ["o2"], "shipped filter");
+assert.deepEqual(match({ statuses: { awaiting_shipment: true, shipped: true } }), ["o1", "o2", "o3", "o4"], "status multi-select union");
+assert.deepEqual(match({ statuses: { completed: true } }), ["o7"], "completed filter");
+assert.deepEqual(match({ statuses: { closed: true } }), ["o5"], "closed filter");
+assert.deepEqual(match({ statuses: { completed: true, closed: true } }), ["o5", "o7"], "finished multi-select union");
+assert.deepEqual(match({ statuses: { refunding: true } }), ["o6"], "refunding filter");
+assert.deepEqual(match({ statuses: { refunded_only: true } }), ["o8"], "refunded-only filter");
+assert.deepEqual(match({ statuses: { refunding: true, refunded_only: true } }), ["o6", "o8"], "refund multi-select union");
 assert.deepEqual(match({ item: "I2" }), ["o3", "o4"], "item filter still works");
 assert.deepEqual(match({ item: "I2", accounts: { __unknown__: true } }), ["o4"], "filters combine");
 
-assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, "refunding"), true);
-assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, "refunded_only"), false);
-assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunded" }, "refunded"), true);
-assert.equal(context.statusMatches({ status_kind: "closed", refund_state: "none" }, "closed"), true);
-assert.equal(context.statusMatches({ status_kind: "awaiting_shipment", refund_state: "none" }, "all"), true);
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunding: true }), true);
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunded_only: true }), false);
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunded" }, { refunded_only: true }), true);
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunding: true, refunded_only: true }), true);
+assert.equal(context.statusMatches({ status_kind: "closed", refund_state: "none" }, { closed: true }), true);
+assert.equal(context.statusMatches({ status_kind: "awaiting_shipment", refund_state: "none" }, {}), true);
 
 assert.equal(context.accountKey({ buyer_id: "2068326847" }), "2068326847");
 assert.equal(context.accountKey({ buyer_id: "" }), "__unknown__");

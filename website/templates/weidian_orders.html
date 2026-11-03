@@ -64,7 +64,7 @@
     .toast.show { opacity:1; transform:none; }
     .toast.err { background:#991b1b; }
     .statusbar { color:var(--muted); font-size:12px; min-height:18px; margin-left:6px; }
-    .status-legend { color:var(--muted); font-size:12px; margin:-2px 0 10px; line-height:1.6; }
+    .multi-group { color:var(--muted); font-size:12px; font-weight:600; padding:6px 6px 2px; }
     .job { color:var(--muted); font-size:12px; }
     @media (max-width: 900px) { th:nth-child(2), td:nth-child(2) { display:none; } }
   </style>
@@ -96,23 +96,16 @@
   <div class="card">
     <div class="toolbar">
       <button class="btn primary" id="refreshBtn">立即刷新订单</button>
-      <select id="statusFilter">
-        <option value="all">全部状态</option>
-        <optgroup label="进行中">
-          <option value="pending_payment">待付款（未付款）</option>
-          <option value="awaiting_shipment">待发货（已付款）</option>
-          <option value="shipped">已发货（运输中）</option>
-        </optgroup>
-        <optgroup label="已结束">
-          <option value="completed">已完成（交易成功）</option>
-          <option value="closed">已关闭（未付款/取消）</option>
-        </optgroup>
-        <optgroup label="退款/售后">
-          <option value="refunded">全部退款/售后</option>
-          <option value="refunding">退款中（退款处理中）</option>
-          <option value="refunded_only">已退款（钱已退回买家）</option>
-        </optgroup>
-      </select>
+      <details class="multi" id="statusMenu">
+        <summary id="statusSummary">全部状态</summary>
+        <div class="multi-panel">
+          <div class="multi-actions">
+            <button type="button" class="btn mini" id="statusAll">全选</button>
+            <button type="button" class="btn mini" id="statusClear">清空</button>
+          </div>
+          <div class="multi-options" id="statusOptions"></div>
+        </div>
+      </details>
       <select id="itemFilter"><option value="all">全部商品</option></select>
       <details class="multi" id="accountMenu">
         <summary id="accountSummary">全部账号</summary>
@@ -129,7 +122,6 @@
       <label class="chk"><input type="checkbox" id="marker" checked> 标记（更正播报）</label>
       <span class="statusbar" id="statusBar"></span>
     </div>
-    <div class="status-legend">已完成＝交易成功；已关闭＝未付款/取消；已退款＝已付款后钱已退回买家；退款中＝退款处理中。</div>
     <div style="overflow:auto;">
       <table>
         <thead>
@@ -150,6 +142,12 @@
 (function () {
   var allOrders = [];
   var selectedAccounts = {};
+  var selectedStatuses = {};
+  var STATUS_GROUPS = [
+    { label: "进行中", items: [["pending_payment", "待付款（未付款）"], ["awaiting_shipment", "待发货（已付款）"], ["shipped", "已发货（运输中）"]] },
+    { label: "已结束", items: [["completed", "已完成（交易成功）"], ["closed", "已关闭（未付款/取消）"]] },
+    { label: "退款/售后", items: [["refunding", "退款中（退款处理中）"], ["refunded_only", "已退款（钱已退回买家）"]] }
+  ];
   var loading = false;
 
   function $(id) { return document.getElementById(id); }
@@ -313,15 +311,24 @@
     return "未知账号";
   }
 
-  function statusMatches(row, status) {
-    if (!status || status === "all") return true;
-    if (status === "refunding") return row.status_kind === "refunded" && row.refund_state === "refunding";
-    if (status === "refunded_only") return row.status_kind === "refunded" && row.refund_state === "refunded";
-    return row.status_kind === status;
+  function statusMatches(row, statuses) {
+    var keys = Object.keys(statuses || {});
+    if (!keys.length) return true;
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (key === "refunding") {
+        if (row.status_kind === "refunded" && row.refund_state === "refunding") return true;
+      } else if (key === "refunded_only") {
+        if (row.status_kind === "refunded" && row.refund_state === "refunded") return true;
+      } else if (row.status_kind === key) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function orderMatchesFilters(row, filters) {
-    if (!statusMatches(row, filters.status)) return false;
+    if (!statusMatches(row, filters.statuses)) return false;
     if (filters.item && filters.item !== "all" && row.item_id !== filters.item) return false;
     var accounts = filters.accounts || {};
     var accountKeys = Object.keys(accounts);
@@ -368,9 +375,27 @@
     updateAccountSummary();
   }
 
+  function updateStatusSummary() {
+    var count = Object.keys(selectedStatuses).length;
+    $("statusSummary").textContent = count ? ("已选 " + count + " 个状态") : "全部状态";
+  }
+
+  function renderStatusOptions() {
+    var container = $("statusOptions");
+    if (!container) return;
+    container.innerHTML = STATUS_GROUPS.map(function (group) {
+      var items = group.items.map(function (item) {
+        var checked = selectedStatuses[item[0]] ? " checked" : "";
+        return '<label><input type="checkbox" data-status-key="' + esc(item[0]) + '"' + checked + '> <span>' + esc(item[1]) + '</span></label>';
+      }).join("");
+      return '<div class="multi-group">' + esc(group.label) + '</div>' + items;
+    }).join("");
+    updateStatusSummary();
+  }
+
   function render() {
     var filters = {
-      status: $("statusFilter").value,
+      statuses: selectedStatuses,
       item: $("itemFilter").value,
       keyword: $("keyword").value.trim(),
       accounts: selectedAccounts
@@ -506,8 +531,29 @@
     else if (target.dataset.ship) shipOrder(target.dataset.ship, target.dataset.item);
   });
   $("refreshBtn").addEventListener("click", refreshOrders);
-  $("statusFilter").addEventListener("change", render);
   $("itemFilter").addEventListener("change", render);
+  $("statusOptions").addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.dataset || !target.dataset.statusKey) return;
+    if (target.checked) selectedStatuses[target.dataset.statusKey] = true;
+    else delete selectedStatuses[target.dataset.statusKey];
+    updateStatusSummary();
+    render();
+  });
+  $("statusAll").addEventListener("click", function (event) {
+    event.preventDefault();
+    STATUS_GROUPS.forEach(function (group) {
+      group.items.forEach(function (item) { selectedStatuses[item[0]] = true; });
+    });
+    renderStatusOptions();
+    render();
+  });
+  $("statusClear").addEventListener("click", function (event) {
+    event.preventDefault();
+    selectedStatuses = {};
+    renderStatusOptions();
+    render();
+  });
   $("accountOptions").addEventListener("change", function (event) {
     var target = event.target;
     if (!target || !target.dataset || !target.dataset.accountKey) return;
@@ -529,8 +575,10 @@
     render();
   });
   document.addEventListener("click", function (event) {
-    var menu = $("accountMenu");
-    if (menu && menu.open && !menu.contains(event.target)) menu.open = false;
+    ["accountMenu", "statusMenu"].forEach(function (id) {
+      var menu = $(id);
+      if (menu && menu.open && !menu.contains(event.target)) menu.open = false;
+    });
   });
   $("keyword").addEventListener("input", render);
   $("loginBtn").addEventListener("click", doLogin);
@@ -538,6 +586,7 @@
     if (event.key === "Enter") doLogin();
   });
   (async function boot() {
+    renderStatusOptions();
     var ok = await loadData();
     if (ok) showApp();
     else showLogin("请输入管理密码");
