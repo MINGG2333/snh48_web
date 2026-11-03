@@ -914,6 +914,30 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertGreater(images["summary"].size[0], 500)
         self.assertEqual(images["entries"].size[0], 820)
 
+    def test_entries_export_expands_for_full_business_name(self):
+        import io
+
+        from PIL import Image
+
+        entry = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={
+                "raw_name": "Alice",
+                "score": 18,
+                "selected_business": "18-换口袋头像或背景两天",
+            },
+        ).json()["result"]
+        self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={"selected_business_bonus": "48-公演 MC 指定动作"},
+        )
+        response = self.client.get("/api/redblue/export/entries.png", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        image = Image.open(io.BytesIO(response.content))
+        self.assertGreater(image.size[0], 820)
+
     def test_ai_job_is_queued_and_apply_validates_identity(self):
         entry = self.client.post(
             "/api/redblue/entries",

@@ -1,7 +1,7 @@
 """红蓝计分汇总 PNG 导出（Pillow 服务端渲染）。
 
 版式对齐 `private_handover/移交包/嘉仪业务/礼物回复/礼物回复时间线_近三周_20261021.png`：
-浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽、按条目 820px 逻辑宽，正文 20–27px。
+浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽、按条目按最长业务名动态定宽（最小 820px），正文 20–27px。
 未登记口袋48昵称的条目不再标红，昵称统一颜色，只在名字后保留一个低对比度 ! 标记。
 按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接。
 """
@@ -255,10 +255,7 @@ def _draw_entries(draw, top: int, entries: list[dict[str, Any]], width: int = WI
             )
             business = _business_text(row)
             if business:
-                score_width = _text_width(draw, score_text, score_font)
-                business_max = max(40, right - (score_x + score_width + 16))
-                business_text = _fit(draw, _display_text(business), business_font, business_max)
-                draw.text((right, center_y), business_text, font=business_font, fill=SUBTITLE, anchor="rm")
+                draw.text((right, center_y), _display_text(business), font=business_font, fill=SUBTITLE, anchor="rm")
 
             y += row_h
         draw.line([x0, y + 6, right, y + 6], fill=(240, 232, 245), width=1)
@@ -346,6 +343,29 @@ def render_entries_png(
     updated: str = "",
 ) -> bytes:
     items = list(entries)
+    title = "红蓝计分汇总 · 按条目"
+    Image, ImageDraw, _ = _pil()
+    measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    score_font = _font(22)
+    business_font = _font(18)
+    width = ENTRIES_WIDTH
+    for item in items:
+        business = _business_text(item)
+        if not business:
+            continue
+        score_text = f"送出了 {_score(item.get('score'))} 分"
+        required = (
+            504
+            + _text_width(measure, score_text, score_font)
+            + _text_width(measure, _display_text(business), business_font)
+        )
+        width = max(width, int(required) + 1)
+    header_w = max(
+        _text_width(measure, title, _font(50, bold=True)),
+        _text_width(measure, f"{period} · 数据更新至 {updated or '-'}", _font(22)),
+        _text_width(measure, f"筛选：{filter_text}", _font(18)) if filter_text else 0,
+    ) + 2 * PAD
+    width = max(width, int(header_w))
 
     def body(draw, top, width):
         return _draw_entries(draw, top, items, width=width)
@@ -356,11 +376,11 @@ def render_entries_png(
         day_rows[day] = day_rows.get(day, 0) + 1
     estimated = 280 + sum(46 + count * 44 + 12 for count in day_rows.values()) + 80
     return _render(
-        "红蓝计分汇总 · 按条目",
+        title,
         body,
         period=period,
         filter_text=filter_text,
         updated=updated,
         estimated_height=estimated,
-        width=ENTRIES_WIDTH,
+        width=width,
     )
