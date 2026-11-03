@@ -1361,33 +1361,22 @@
       ctx.fillText(score(value), left - 7, lineY);
     }
 
-    var pointGap = days.length > 1 ? (right - left) / (days.length - 1) : 0;
-    var pointX = function (index) {
-      return days.length > 1 ? left + pointGap * index : (left + right) / 2;
-    };
-    series.forEach(function (item) {
-      var values = item.values || [];
-      ctx.beginPath();
-      values.forEach(function (value, index) {
-        var px = pointX(index);
-        var py = plotBottom - (Number(value || 0) / axis.max) * plotHeight;
-        if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    var slotWidth = (right - left) / days.length;
+    var barWidth = series.length > 1
+      ? Math.max(0.4, (slotWidth * 0.72) / series.length)
+      : Math.max(0.6, Math.min(28, slotWidth * 0.62));
+    var groupWidth = barWidth * series.length;
+    var barGap = barWidth > 4 ? 1 : 0;
+    days.forEach(function (day, index) {
+      var centerX = left + slotWidth * (index + 0.5);
+      var startX = centerX - groupWidth / 2;
+      series.forEach(function (item, seriesIndex) {
+        var value = Number((item.values || [])[index] || 0);
+        if (value <= 0) return;
+        var barHeight = (value / axis.max) * plotHeight;
+        ctx.fillStyle = item.color || "#67a8ff";
+        ctx.fillRect(startX + seriesIndex * barWidth, plotBottom - barHeight, Math.max(0.5, barWidth - barGap), barHeight);
       });
-      ctx.strokeStyle = item.color || "#67a8ff";
-      ctx.lineWidth = 2;
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.stroke();
-      if (days.length <= 45) {
-        values.forEach(function (value, index) {
-          var px = pointX(index);
-          var py = plotBottom - (Number(value || 0) / axis.max) * plotHeight;
-          ctx.beginPath();
-          ctx.arc(px, py, 2.4, 0, Math.PI * 2);
-          ctx.fillStyle = item.color || "#67a8ff";
-          ctx.fill();
-        });
-      }
     });
 
     var labelStep = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor((right - left) / 54))));
@@ -1397,7 +1386,7 @@
     ctx.textAlign = "center";
     days.forEach(function (day, index) {
       if ((index - labelOffset) % labelStep !== 0) return;
-      ctx.fillText(day.date.slice(5), pointX(index), plotBottom + 14);
+      ctx.fillText(day.date.slice(5), left + slotWidth * (index + 0.5), plotBottom + 14);
     });
   }
 
