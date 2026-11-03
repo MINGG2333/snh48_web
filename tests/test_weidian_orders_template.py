@@ -40,22 +40,28 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertIn("WEIDIAN_ACCOUNT_FILTER_PURE_START", self.template)
         self.assertIn("WEIDIAN_ACCOUNT_FILTER_PURE_END", self.template)
 
-    def test_status_filter_matches_weidian_six_states(self) -> None:
+    def test_status_filter_uses_grouped_status_model(self) -> None:
+        for group in ('optgroup label="进行中"', 'optgroup label="已结束"', 'optgroup label="退款/售后"'):
+            self.assertIn(group, self.template)
         for value, label in (
             ("pending_payment", "待付款"),
             ("awaiting_shipment", "待发货"),
             ("shipped", "已发货"),
             ("completed", "已完成"),
             ("closed", "已关闭"),
-            ("refunded", "已退款/售后"),
+            ("refunded", "全部退款/售后"),
+            ("refunding", "退款中"),
+            ("refunded_only", "已退款"),
         ):
             self.assertIn(f'<option value="{value}">{label}</option>', self.template)
         self.assertNotIn('value="final"', self.template)
         self.assertNotIn('value="broadcast_none"', self.template)
         self.assertIn(".pill.closed", self.template)
         self.assertIn(".pill.refunded", self.template)
-        self.assertIn('row.refund_state === "refunding"', self.template)
-        self.assertIn("退款中", self.template)
+        self.assertIn("function statusMatches", self.template)
+        self.assertIn('status === "refunding"', self.template)
+        self.assertIn('status === "refunded_only"', self.template)
+        self.assertIn("function statusText", self.template)
 
 
 if __name__ == "__main__":

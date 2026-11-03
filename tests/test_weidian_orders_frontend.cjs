@@ -19,6 +19,7 @@ vm.runInContext(
   template.slice(start + startMarker.length, end) + `
     this.accountKey = accountKey;
     this.accountLabel = accountLabel;
+    this.statusMatches = statusMatches;
     this.orderMatchesFilters = orderMatchesFilters;
   `,
   context
@@ -30,6 +31,7 @@ function row(overrides) {
       order_id: "",
       item_id: "I1",
       status_kind: "awaiting_shipment",
+      refund_state: "none",
       broadcast_at: "",
       buyer_id: "",
       buyer_phone_masked: "",
@@ -50,8 +52,9 @@ const rows = [
   row({ order_id: "o3", item_id: "I2", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "真实买家", receiver_name: "真实买家" }),
   row({ order_id: "o4", item_id: "I2", display_name: "旧订单", receiver_name: "旧订单" }),
   row({ order_id: "o5", status_kind: "closed", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "已关闭", receiver_name: "已关闭" }),
-  row({ order_id: "o6", status_kind: "refunded", buyer_id: "2111166808", buyer_phone_masked: "852****0725", display_name: "已退款", receiver_name: "已退款" }),
-  row({ order_id: "o7", status_kind: "completed", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "已完成", receiver_name: "已完成" })
+  row({ order_id: "o6", status_kind: "refunded", refund_state: "refunding", buyer_id: "2111166808", buyer_phone_masked: "852****0725", display_name: "退款中", receiver_name: "退款中" }),
+  row({ order_id: "o7", status_kind: "completed", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "已完成", receiver_name: "已完成" }),
+  row({ order_id: "o8", status_kind: "refunded", refund_state: "refunded", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "已退款", receiver_name: "已退款" })
 ];
 
 function match(overrides) {
@@ -65,7 +68,7 @@ function match(overrides) {
     .map(item => item.order_id);
 }
 
-assert.deepEqual(match(), ["o1", "o2", "o3", "o4", "o5", "o6", "o7"], "empty filters keep all orders");
+assert.deepEqual(match(), ["o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8"], "empty filters keep all orders");
 assert.deepEqual(
   match({ accounts: { "2068326847": true, "2111166808": true } }),
   ["o1", "o2", "o6"],
@@ -78,10 +81,18 @@ assert.deepEqual(match({ keyword: "177****4879" }), ["o1"], "keyword matches mas
 assert.deepEqual(match({ keyword: "补邮" }), ["o2"], "keyword still matches item name");
 assert.deepEqual(match({ status: "awaiting_shipment" }), ["o1", "o3", "o4"], "awaiting filter");
 assert.deepEqual(match({ status: "closed" }), ["o5"], "closed filter is separate");
-assert.deepEqual(match({ status: "refunded" }), ["o6"], "refunded filter is separate");
+assert.deepEqual(match({ status: "refunded" }), ["o6", "o8"], "refund bucket includes both substates");
+assert.deepEqual(match({ status: "refunding" }), ["o6"], "refunding filter");
+assert.deepEqual(match({ status: "refunded_only" }), ["o8"], "refunded-only filter");
 assert.deepEqual(match({ status: "completed" }), ["o7"], "completed filter");
 assert.deepEqual(match({ item: "I2" }), ["o3", "o4"], "item filter still works");
 assert.deepEqual(match({ item: "I2", accounts: { __unknown__: true } }), ["o4"], "filters combine");
+
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, "refunding"), true);
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, "refunded_only"), false);
+assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunded" }, "refunded"), true);
+assert.equal(context.statusMatches({ status_kind: "closed", refund_state: "none" }, "closed"), true);
+assert.equal(context.statusMatches({ status_kind: "awaiting_shipment", refund_state: "none" }, "all"), true);
 
 assert.equal(context.accountKey({ buyer_id: "2068326847" }), "2068326847");
 assert.equal(context.accountKey({ buyer_id: "" }), "__unknown__");
