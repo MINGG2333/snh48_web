@@ -40,6 +40,21 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertIn("WEIDIAN_ACCOUNT_FILTER_PURE_START", self.template)
         self.assertIn("WEIDIAN_ACCOUNT_FILTER_PURE_END", self.template)
 
+    def test_status_filter_matches_weidian_six_states(self) -> None:
+        for value, label in (
+            ("pending_payment", "待付款"),
+            ("awaiting_shipment", "待发货"),
+            ("shipped", "已发货"),
+            ("completed", "已完成"),
+            ("closed", "已关闭"),
+            ("refunded", "已退款/售后"),
+        ):
+            self.assertIn(f'<option value="{value}">{label}</option>', self.template)
+        self.assertNotIn('value="final"', self.template)
+        self.assertNotIn('value="broadcast_none"', self.template)
+        self.assertIn(".pill.closed", self.template)
+        self.assertIn(".pill.refunded", self.template)
+
 
 if __name__ == "__main__":
     unittest.main()
