@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-04 03:22 CST 微店订单页增加下单账号多选筛选（两端已部署）
+
+- 需求：`/weidian-orders` 支持按下单账号筛选，且可多选；账号信息只展示脱敏字段。
+- 数据：fan-hub canonical store 新增 `buyer_id`、`buyer_phone_masked`（绑定手机只保留 3+4 位），`/api/weidian-orders/data` 原样透出；完整电话/地址仍不进入 store 或页面。
+- 页面：新增「全部账号」多选下拉（复选框、全选、清空），每行显示「下单账号」，关键词搜索覆盖 `buyer_id` 与脱敏手机；筛选逻辑抽成纯函数并加前端测试。
+- 验证：`tests/test_weidian_orders_template.py` 3 项、`tests/test_weidian_orders_frontend.cjs` 通过；两端 `/weidian-orders` 200 且含 `id="accountMenu"`；阿里云经腾讯云 peer 返回 91 单、91 单带 `buyer_id`，测试账号标签 `177****4879 · ID 2068326847`、`852****0725 · ID 2111166808`。
+- 部署：网站仓库功能提交 `568d065`，本运行快照随后单独提交；腾讯云已快进到 `568d065` 并重启 `snh48-web.service`（PID `2237177`，03:10:54 起）；阿里云 `snh48-aliyun.service` 03:10:53 重启，模型加载后 03:19:28 监听（PID `2966893`）。
+
 ## 2026-11-04 00:10 CST 红蓝台账增加每日计分来源走势图（阿里云已部署）
 
 - 需求：`/business/redblue2026` 的“计分来源汇总”底部展示从最早记录到今天的每日计分情况，并可下载 PNG。
