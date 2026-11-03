@@ -3,9 +3,9 @@
 ## 2026-11-04 04:52 CST 红蓝每日走势弹窗与分图/合成图下载（两端已生效）
 
 - 需求：从“计分来源汇总”进入弹窗，查看每一个积分来源的每日走势，并支持逐张下载和合成图下载。
-- 页面：`templates/redblue_ledger_2026.html` 面板头新增“查看每日走势”；弹窗支持“按来源（4：房间/直播/应援会/暗票）”和“按计分来源（6）”两种口径切换；每个来源/类别一张折线走势卡，各自带下载按钮，底部提供当前口径的合成折线图及“下载合成图”；导出复用 canvas，单图为 1000×440 逻辑宽 2x PNG，合成图为 1400×620 逻辑宽 2x PNG。
-- 验证：`tests/test_redblue_ledger_api.py` 31 项通过；`node --check` 通过；用 jsdom 实测弹窗打开、4/6 视图切换、空数据、单图导出和合成图导出均正常；阿里云本地页面和腾讯云 `https://cjy.plus/business/redblue2026` 均包含 `openDailyModalBtn`、`dailyViewCategoryBtn`、`dailyCombinedChart`。
-- 部署：网站仓库提交 `ea646f4` 已推送 GitHub；两端仅改模板和文档，Jinja 模板热加载，无需重启网站服务。
+- 页面：`templates/redblue_ledger_2026.html` 面板头新增“查看每日走势”；弹窗支持“按来源（4：房间/直播/应援会/暗票）”和“按计分来源（6）”两种口径切换；每个来源/类别一张柱状走势卡，各自带下载按钮，底部提供当前口径的合成柱状图及“下载合成图”；导出复用 canvas，单图为 1000×440 逻辑宽 2x PNG，合成图为 1400×620 逻辑宽 2x PNG。
+- 验证：`tests/test_redblue_ledger_api.py` 31 项通过；`node --check` 通过；用 jsdom 实测弹窗打开、4/6 视图切换、空数据、单图导出和合成图导出均正常；分图与合成图均按用户要求使用柱状图；阿里云本地页面和腾讯云 `https://cjy.plus/business/redblue2026` 均包含 `openDailyModalBtn`、`dailyViewCategoryBtn`、`dailyCombinedChart`。
+- 部署：网站仓库提交 `ea646f4`（弹窗）和 `9115a7c`（柱状图）已推送 GitHub；两端仅改模板和文档，Jinja 模板热加载，无需重启网站服务。
 
 ## 2026-11-04 04:52 CST 微店订单页状态筛选改为分组多选（两端已部署）
 
