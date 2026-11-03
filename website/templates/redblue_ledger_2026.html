@@ -95,6 +95,21 @@
     .daily-card-canvas canvas { display: block; width: 100%; height: 100%; }
     .daily-combined { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
     .daily-combined .trend-canvas-wrap { height: 320px; }
+    .daily-tooltip { position: fixed; z-index: 70; width: min(360px, calc(100vw - 24px)); max-height: min(420px, 70vh); overflow: auto; background: rgba(21,27,36,.98); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.5); padding: 11px 12px; pointer-events: none; }
+    .daily-tooltip.pinned { pointer-events: auto; border-left-color: var(--gold); }
+    .daily-tip-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .daily-tip-date { color: var(--text); font-size: 13px; font-weight: 760; }
+    .daily-tip-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .daily-tip-hint { color: var(--faint); font-size: 10px; white-space: nowrap; padding-top: 2px; }
+    .daily-tip-row { padding: 7px 0; border-top: 1px solid rgba(255,255,255,.06); }
+    .daily-tip-row:first-of-type { border-top: 0; }
+    .daily-tip-line { display: flex; align-items: baseline; gap: 8px; }
+    .daily-tip-time { color: var(--faint); font-size: 11px; min-width: 34px; }
+    .daily-tip-name { color: var(--text); font-size: 12px; font-weight: 680; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .daily-tip-score { color: var(--gold); font-size: 12px; font-weight: 760; white-space: nowrap; }
+    .daily-tip-detail { color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 3px; padding-left: 42px; }
+    .daily-tip-source { color: var(--teal); margin-right: 6px; }
+    .daily-tip-empty { color: var(--faint); font-size: 12px; padding: 10px 0; text-align: center; }
     @media (max-width: 620px) { .daily-card-canvas { height: 220px; } .daily-combined .trend-canvas-wrap { height: 280px; } }
     .distribution-more { display: none; width: calc(100% - 28px); min-height: 42px; margin: -3px 14px 14px; border: 1px solid rgba(65,185,170,.34); border-radius: 8px; background: linear-gradient(90deg, rgba(65,185,170,.12), rgba(240,184,75,.08)); color: var(--text); padding: 0 12px; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; text-align: left; }
     .distribution-more.show { display: flex; }
@@ -263,6 +278,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="daily-tooltip hidden" id="dailyTooltip" role="status"></div>
 
 <div class="modal hidden" id="entryModal">
   <div class="modal-backdrop" data-close="entryModal"></div>
@@ -450,6 +466,7 @@
     renderFanSummary();
     renderEntries();
     $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 6 类计分来源（房间/直播 × 计分卡/鸡腿、应援会/暗票） · 按时间正序";
+    hideDailyTooltip();
     if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
   }
 
@@ -499,6 +516,10 @@
   var dailyModalView = "source";
   var dailyModalSpecs = [];
   var dailyTrendResizeTimer = null;
+  var dailyTooltipPinned = false;
+  var dailyTooltipKey = "";
+  var dailyCanvasIds = new WeakMap();
+  var dailyCanvasSeq = 0;
 
   function renderScoringSummary() {
     var buckets = {};
@@ -609,6 +630,7 @@
     var plotBottom = height - (options.header ? 44 : 30);
     var days = (daily && daily.days) || [];
     if (!days.length) {
+      canvas.__dailyChart = null;
       ctx.fillStyle = "#95a4b6";
       ctx.font = dailyTrendFont(13, 400);
       ctx.textAlign = "center";
@@ -672,6 +694,17 @@
       if ((index - labelOffset) % labelStep !== 0) return;
       ctx.fillText(day.date.slice(5), left + slotWidth * (index + 0.5), plotBottom + 14);
     });
+    canvas.__dailyChart = {
+      width: width,
+      height: height,
+      left: left,
+      right: right,
+      plotTop: plotTop,
+      plotBottom: plotBottom,
+      slotWidth: slotWidth,
+      days: days,
+      scope: options.scope || null
+    };
   }
 
   function renderDailyTrend() {
@@ -1241,7 +1274,7 @@
         return Math.round(total * 10000) / 10000;
       });
       var total = values.reduce(function (sum, value) { return sum + value; }, 0);
-      return {label: source.label, color: source.color, values: values, total: Math.round(total * 10000) / 10000};
+      return {label: source.label, color: source.color, values: values, total: Math.round(total * 10000) / 10000, scope: {source: source.key}};
     });
   }
 
@@ -1258,9 +1291,11 @@
       var total = values.reduce(function (sum, value) { return sum + value; }, 0);
       return {
         label: category.label || (category.source + "·" + category.method),
+        key: category.key,
         color: DAILY_TREND_COLORS[category.key] || "#67a8ff",
         values: values,
-        total: Math.round(total * 10000) / 10000
+        total: Math.round(total * 10000) / 10000,
+        scope: {category: category.key}
       };
     });
   }
@@ -1322,6 +1357,7 @@
     var plotTop = legendBottom + 10;
     var plotBottom = height - (options.header ? 44 : 30);
     if (!days.length || !series.length) {
+      canvas.__dailyChart = null;
       ctx.fillStyle = "#95a4b6";
       ctx.font = dailyTrendFont(13, 400);
       ctx.textAlign = "center";
@@ -1336,6 +1372,7 @@
       });
     });
     if (maxValue <= 0) {
+      canvas.__dailyChart = null;
       ctx.fillStyle = "#95a4b6";
       ctx.font = dailyTrendFont(13, 400);
       ctx.textAlign = "center";
@@ -1388,6 +1425,17 @@
       if ((index - labelOffset) % labelStep !== 0) return;
       ctx.fillText(day.date.slice(5), left + slotWidth * (index + 0.5), plotBottom + 14);
     });
+    canvas.__dailyChart = {
+      width: width,
+      height: height,
+      left: left,
+      right: right,
+      plotTop: plotTop,
+      plotBottom: plotBottom,
+      slotWidth: slotWidth,
+      days: days,
+      scope: options.scope || null
+    };
   }
 
   function dailyModalSubtitle(daily) {
@@ -1436,7 +1484,8 @@
       drawTrendChart(canvas, Math.max(240, Math.round(rect.width)), Math.max(180, Math.round(rect.height)), dpr, {
         days: daily.days,
         series: [{label: spec.label, color: spec.color, values: spec.values}],
-        showLegend: false
+        showLegend: false,
+        scope: spec.scope || null
       });
     });
 
@@ -1545,6 +1594,156 @@
     }
   }
 
+  function dailyRecordDetail(record) {
+    var note = record.note || "";
+    if (record.source === "weidian") {
+      var tier = record.sku_title || "";
+      var quantity = Number(record.quantity || 0);
+      if (!tier) {
+        var tierScore = Number(record.weidian_score || record.score || 0);
+        if (quantity > 0 && tierScore > 0) tier = score(tierScore / quantity) + "份";
+      }
+      if (tier) note = (note ? note + " · " : "") + tier + (quantity > 0 ? " × " + score(quantity) + "件" : "");
+    }
+    return note || "—";
+  }
+
+  function dailyRecordsForScope(day, scope) {
+    var records = (day && day.records) || [];
+    if (!scope) return records;
+    if (scope.source) return records.filter(function (record) { return record.source === scope.source; });
+    if (scope.category) {
+      return records.filter(function (record) {
+        return (record.source + "|" + record.scoring_method) === scope.category;
+      });
+    }
+    return records;
+  }
+
+  function dailyDayLabel(date) {
+    var parts = String(date || "").split("-");
+    if (parts.length !== 3) return date || "";
+    var parsed = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return (parsed.getMonth() + 1) + "月" + parsed.getDate() + "日 周" + "日一二三四五六".charAt(parsed.getDay());
+  }
+
+  function dailyCanvasKey(canvas) {
+    if (!dailyCanvasIds.has(canvas)) {
+      dailyCanvasSeq += 1;
+      dailyCanvasIds.set(canvas, dailyCanvasSeq);
+    }
+    return dailyCanvasIds.get(canvas);
+  }
+
+  function dailyTooltipDay(canvas, event) {
+    var meta = canvas.__dailyChart;
+    if (!meta || !meta.days || !meta.days.length) return null;
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    var x = (event.clientX - rect.left) * meta.width / rect.width;
+    var y = (event.clientY - rect.top) * meta.height / rect.height;
+    if (y < meta.plotTop - 10 || y > meta.plotBottom + 24) return null;
+    if (x < meta.left - 8 || x > meta.right + 8) return null;
+    var index = Math.floor((x - meta.left) / meta.slotWidth);
+    index = Math.max(0, Math.min(meta.days.length - 1, index));
+    return {index: index};
+  }
+
+  function placeDailyTooltip(element, event) {
+    var margin = 10;
+    var width = element.offsetWidth || 340;
+    var height = element.offsetHeight || 120;
+    var x = event.clientX + 16;
+    var y = event.clientY + 16;
+    if (x + width > window.innerWidth - margin) x = event.clientX - width - 16;
+    if (y + height > window.innerHeight - margin) y = event.clientY - height - 16;
+    element.style.left = Math.max(margin, x) + "px";
+    element.style.top = Math.max(margin, y) + "px";
+  }
+
+  function showDailyTooltip(canvas, index, event, pinned) {
+    var meta = canvas.__dailyChart;
+    if (!meta) return;
+    var day = meta.days[index];
+    if (!day) return;
+    var element = $("dailyTooltip");
+    var cacheKey = dailyCanvasKey(canvas) + ":" + index + ":" + (pinned ? "1" : "0");
+    if (!pinned && !element.classList.contains("hidden") && element.dataset.key === cacheKey) {
+      placeDailyTooltip(element, event);
+      return;
+    }
+    var records = dailyRecordsForScope(day, meta.scope);
+    var total = records.reduce(function (sum, record) { return sum + Number(record.score || 0); }, 0);
+    var rows = records.map(function (record) {
+      return '<div class="daily-tip-row">'
+        + '<div class="daily-tip-line">'
+        + '<span class="daily-tip-time">' + esc((record.time || "").slice(0, 5)) + '</span>'
+        + '<span class="daily-tip-name" title="' + esc(record.fan_name) + '">' + esc(record.fan_name) + '</span>'
+        + '<span class="daily-tip-score">+' + esc(score(record.score)) + '</span>'
+        + '</div>'
+        + '<div class="daily-tip-detail"><span class="daily-tip-source">' + esc(record.source_label || record.source || "") + '</span>' + esc(dailyRecordDetail(record)) + '</div>'
+        + '</div>';
+    }).join("");
+    if (!rows) rows = '<div class="daily-tip-empty">当天该范围暂无计分明细</div>';
+    var hint = pinned ? "已固定 · 点击别处关闭" : "点击固定";
+    element.innerHTML = '<div class="daily-tip-head">'
+      + '<div><div class="daily-tip-date">' + esc(dailyDayLabel(day.date)) + '</div>'
+      + '<div class="daily-tip-meta">' + records.length + ' 条 · 合计 ' + esc(score(total)) + ' 分</div></div>'
+      + '<span class="daily-tip-hint">' + hint + '</span>'
+      + '</div>' + rows;
+    element.dataset.key = cacheKey;
+    element.classList.remove("hidden");
+    element.classList.toggle("pinned", pinned);
+    placeDailyTooltip(element, event);
+  }
+
+  function hideDailyTooltip() {
+    var element = $("dailyTooltip");
+    if (!element) return;
+    if (!dailyTooltipPinned && element.classList.contains("hidden")) return;
+    dailyTooltipPinned = false;
+    dailyTooltipKey = "";
+    element.classList.add("hidden");
+    element.classList.remove("pinned");
+  }
+
+  function handleDailyHover(event) {
+    if (dailyTooltipPinned) return;
+    var target = event.target;
+    var canvas = target && target.closest ? target.closest("canvas") : null;
+    if (!canvas || !canvas.__dailyChart) {
+      hideDailyTooltip();
+      return;
+    }
+    var hit = dailyTooltipDay(canvas, event);
+    if (!hit) {
+      hideDailyTooltip();
+      return;
+    }
+    showDailyTooltip(canvas, hit.index, event, false);
+  }
+
+  function handleDailyClick(event) {
+    var target = event.target;
+    if (target && target.closest && target.closest("#dailyTooltip")) return;
+    var canvas = target && target.closest ? target.closest("canvas") : null;
+    if (canvas && canvas.__dailyChart) {
+      var hit = dailyTooltipDay(canvas, event);
+      if (hit) {
+        var key = dailyCanvasKey(canvas) + ":" + hit.index;
+        if (dailyTooltipPinned && dailyTooltipKey === key) {
+          hideDailyTooltip();
+          return;
+        }
+        dailyTooltipPinned = true;
+        dailyTooltipKey = key;
+        showDailyTooltip(canvas, hit.index, event, true);
+        return;
+      }
+    }
+    hideDailyTooltip();
+  }
+
   function updateSelectAll() {
     var boxes = document.querySelectorAll("[data-select]");
     var all = boxes.length > 0 && Array.from(boxes).every(function (box) { return box.checked; });
@@ -1603,10 +1802,13 @@
       clearTimeout(dailyTrendResizeTimer);
       dailyTrendResizeTimer = setTimeout(function () {
         if (!data) return;
+        hideDailyTooltip();
         renderDailyTrend();
         if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
       }, 180);
     });
+    document.addEventListener("mousemove", handleDailyHover);
+    document.addEventListener("click", handleDailyClick);
     $("saveEntryBtn").addEventListener("click", saveEntry);
     $("closeAiPanelBtn").addEventListener("click", function () { $("aiPanel").classList.add("hidden"); });
     $("viewPromptBtn").addEventListener("click", showAiPrompt);

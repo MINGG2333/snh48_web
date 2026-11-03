@@ -472,6 +472,12 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(first["scores"]["live|计分卡"], 1.0)
         self.assertEqual(first["total"], 4.0)
         self.assertEqual(first["count"], 2)
+        self.assertEqual(len(first["records"]), 2)
+        self.assertEqual(first["records"][0]["time"], "12:00:00")
+        self.assertEqual(first["records"][0]["fan_name"], "Alice")
+        self.assertEqual(first["records"][0]["source_label"], "房间·计分卡")
+        self.assertEqual(first["records"][0]["note"], "礼物 × 3")
+        self.assertEqual(first["records"][1]["time"], "13:00:00")
         expected_days = (date.fromisoformat(daily["end"]) - date.fromisoformat(daily["start"])).days + 1
         self.assertEqual(len(daily["days"]), expected_days)
         self.assertEqual(daily["total_score"], data["overall"]["total_score"])

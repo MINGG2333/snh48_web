@@ -870,10 +870,32 @@ def _summary(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _daily_record(item: dict[str, Any]) -> dict[str, Any]:
+    weidian = item.get("weidian") if isinstance(item.get("weidian"), dict) else {}
+    method = _entry_scoring_method(item)
+    source = _clean(item.get("source"), 20)
+    source_label = _clean(item.get("source_scoring_label"), 40)
+    if not source_label:
+        source_label = f"{SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source))}·{method}"
+    return {
+        "time": _entry_time(item)[11:19],
+        "fan_name": _clean(item.get("fan_name") or item.get("raw_name") or "未登记", 120),
+        "source": source,
+        "source_label": source_label,
+        "scoring_method": method,
+        "score": round(_to_float(item.get("score"), 0.0), 4),
+        "note": _clean(item.get("note"), 200),
+        "sku_title": _clean(weidian.get("sku_title"), 80),
+        "quantity": _to_float(weidian.get("quantity"), 0.0),
+        "weidian_score": _to_float(weidian.get("score"), 0.0),
+    }
+
+
 def _daily_scoring(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """全部条目按天汇总 6 类计分来源，从最早记录连续补到今天。"""
     buckets: dict[str, dict[str, float]] = {}
     counts: dict[str, int] = {}
+    records: dict[str, list[dict[str, Any]]] = {}
     for item in entries:
         if not isinstance(item, dict) or item.get("duplicate"):
             continue
@@ -888,6 +910,9 @@ def _daily_scoring(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         bucket = buckets.setdefault(day, {})
         bucket[key] = round(bucket.get(key, 0.0) + _to_float(item.get("score"), 0.0), 4)
         counts[day] = counts.get(day, 0) + 1
+        records.setdefault(day, []).append(_daily_record(item))
+    for day_records in records.values():
+        day_records.sort(key=lambda record: record["time"])
     if not buckets:
         return {
             "start": "",
@@ -916,6 +941,7 @@ def _daily_scoring(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
                 "scores": scores,
                 "total": day_total,
                 "count": counts.get(day, 0),
+                "records": records.get(day, []),
             }
         )
         cursor += timedelta(days=1)
