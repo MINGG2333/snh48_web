@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -455,6 +456,25 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(labels["live"], "直播·计分卡")
         self.assertEqual(labels["weidian"], "应援会·鸡腿")
         self.assertEqual(labels["manual"], "暗票·计分卡")
+
+    def test_daily_scoring_fills_days_from_start(self):
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        daily = data["daily_scoring"]
+        self.assertEqual(daily["start"], "2026-10-24")
+        self.assertEqual(
+            [item["key"] for item in daily["categories"]],
+            ["room|计分卡", "room|鸡腿", "live|计分卡", "live|鸡腿", "weidian|鸡腿", "manual|计分卡"],
+        )
+        first = daily["days"][0]
+        self.assertEqual(first["date"], "2026-10-24")
+        self.assertEqual(first["scores"]["room|计分卡"], 3.0)
+        self.assertEqual(first["scores"]["live|计分卡"], 1.0)
+        self.assertEqual(first["total"], 4.0)
+        self.assertEqual(first["count"], 2)
+        expected_days = (date.fromisoformat(daily["end"]) - date.fromisoformat(daily["start"])).days + 1
+        self.assertEqual(len(daily["days"]), expected_days)
+        self.assertEqual(daily["total_score"], data["overall"]["total_score"])
 
     def test_chicken_gift_is_marked_as_chicken_leg(self):
         (self.tmp / "score.json").write_text(

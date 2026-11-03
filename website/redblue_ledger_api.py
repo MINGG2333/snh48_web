@@ -38,6 +38,15 @@ SOURCE_LABELS = {"manual": "暗票", "weidian": "微店", "room": "房间", "liv
 DEFAULT_SCORING_METHODS = {"manual": "计分卡", "weidian": "鸡腿", "room": "计分卡", "live": "计分卡"}
 SCORING_SOURCE_LABELS = {"manual": "暗票", "weidian": "应援会", "room": "房间", "live": "直播"}
 SCORING_METHODS = ("计分卡", "鸡腿")
+DAILY_SCORING_CATEGORIES = (
+    {"key": "room|计分卡", "label": "房间·计分卡", "source": "room", "method": "计分卡"},
+    {"key": "room|鸡腿", "label": "房间·鸡腿", "source": "room", "method": "鸡腿"},
+    {"key": "live|计分卡", "label": "直播·计分卡", "source": "live", "method": "计分卡"},
+    {"key": "live|鸡腿", "label": "直播·鸡腿", "source": "live", "method": "鸡腿"},
+    {"key": "weidian|鸡腿", "label": "应援会·鸡腿", "source": "weidian", "method": "鸡腿"},
+    {"key": "manual|计分卡", "label": "暗票·计分卡", "source": "manual", "method": "计分卡"},
+)
+DAILY_SCORING_KEYS = {item["key"] for item in DAILY_SCORING_CATEGORIES}
 BUSINESS_OPTION_GROUPS = (
     (
         "card",
@@ -861,6 +870,65 @@ def _summary(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _daily_scoring(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """全部条目按天汇总 6 类计分来源，从最早记录连续补到今天。"""
+    buckets: dict[str, dict[str, float]] = {}
+    counts: dict[str, int] = {}
+    for item in entries:
+        if not isinstance(item, dict) or item.get("duplicate"):
+            continue
+        key = f"{item.get('source') or ''}|{_entry_scoring_method(item)}"
+        if key not in DAILY_SCORING_KEYS:
+            continue
+        day = _entry_time(item)[:10]
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            continue
+        bucket = buckets.setdefault(day, {})
+        bucket[key] = round(bucket.get(key, 0.0) + _to_float(item.get("score"), 0.0), 4)
+        counts[day] = counts.get(day, 0) + 1
+    if not buckets:
+        return {
+            "start": "",
+            "end": "",
+            "categories": [dict(item) for item in DAILY_SCORING_CATEGORIES],
+            "days": [],
+            "total_score": 0.0,
+            "entry_count": 0,
+        }
+
+    start = datetime.strptime(min(buckets), "%Y-%m-%d").date()
+    latest = datetime.strptime(max(buckets), "%Y-%m-%d").date()
+    today = datetime.now(BJ_TZ).date()
+    end = max(latest, today)
+    days: list[dict[str, Any]] = []
+    total_score = 0.0
+    cursor = start
+    while cursor <= end:
+        day = cursor.isoformat()
+        scores = {item["key"]: round(buckets.get(day, {}).get(item["key"], 0.0), 4) for item in DAILY_SCORING_CATEGORIES}
+        day_total = round(sum(scores.values()), 4)
+        total_score = round(total_score + day_total, 4)
+        days.append(
+            {
+                "date": day,
+                "scores": scores,
+                "total": day_total,
+                "count": counts.get(day, 0),
+            }
+        )
+        cursor += timedelta(days=1)
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "categories": [dict(item) for item in DAILY_SCORING_CATEGORIES],
+        "days": days,
+        "total_score": total_score,
+        "entry_count": sum(counts.values()),
+    }
+
+
 def _fan_summary(entries: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     for item in entries:
@@ -1396,6 +1464,7 @@ def get_redblue_data(
         "generated_at": _clean(doc.get("updated_at"), 32),
         "summary": _summary(entries),
         "overall": _summary(all_entries),
+        "daily_scoring": _daily_scoring(all_entries),
         "fan_summary": _fan_summary(entries),
         "entries": entries,
         "business_options": BUSINESS_OPTIONS,

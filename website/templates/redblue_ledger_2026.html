@@ -76,6 +76,12 @@
     .bar-row.warn .bar-name { color: var(--red); }
     .bar-value { color: var(--text); font-size: 13px; font-weight: 740; text-align: right; white-space: nowrap; }
     .split-score { color: var(--faint); font-size: 12px; margin-top: 2px; }
+    .trend-block { border-top: 1px solid var(--line); padding: 13px 14px 15px; }
+    .trend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .trend-title { color: var(--text); font-size: 13px; font-weight: 740; }
+    .trend-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .trend-canvas-wrap { position: relative; width: 100%; height: 300px; }
+    .trend-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
     .distribution-more { display: none; width: calc(100% - 28px); min-height: 42px; margin: -3px 14px 14px; border: 1px solid rgba(65,185,170,.34); border-radius: 8px; background: linear-gradient(90deg, rgba(65,185,170,.12), rgba(240,184,75,.08)); color: var(--text); padding: 0 12px; align-items: center; justify-content: space-between; gap: 12px; position: relative; overflow: hidden; text-align: left; }
     .distribution-more.show { display: flex; }
     .distribution-more::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--teal), var(--gold), var(--pink)); opacity: .9; }
@@ -131,7 +137,7 @@
     .ai-panel { margin-top: 12px; }
     .notice { color: var(--muted); font-size: 12px; line-height: 1.6; }
     @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3,minmax(0,1fr)); } .filters { grid-template-columns: repeat(2,minmax(0,1fr)); } .analytics-grid { grid-template-columns: 1fr; } }
-    @media (max-width: 620px) { .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } .filters { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) { .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } .filters { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } .trend-canvas-wrap { height: 260px; } }
   </style>
 </head>
 <body>
@@ -193,6 +199,16 @@
           <span class="panel-count" id="scoringSummaryCount">6 类</span>
         </div>
         <div class="bar-list" id="scoringSummary"></div>
+        <div class="trend-block">
+          <div class="trend-head">
+            <div>
+              <div class="trend-title">每日计分走势</div>
+              <div class="trend-sub" id="dailyTrendMeta">全部时间 · 按天堆叠</div>
+            </div>
+            <button class="btn mini" id="exportDailyBtn" type="button">下载 PNG</button>
+          </div>
+          <div class="trend-canvas-wrap"><canvas id="dailyTrendChart"></canvas></div>
+        </div>
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -418,6 +434,15 @@
     {source:"weidian", method:"鸡腿", label:"应援会·鸡腿", cls:"leg"},
     {source:"manual", method:"计分卡", label:"暗票·计分卡", cls:"card"}
   ];
+  var DAILY_TREND_COLORS = {
+    "room|计分卡": "#67a8ff",
+    "room|鸡腿": "#e87da7",
+    "live|计分卡": "#41b9aa",
+    "live|鸡腿": "#f0b84b",
+    "weidian|鸡腿": "#8b6cc9",
+    "manual|计分卡": "#e36f6f"
+  };
+  var dailyTrendResizeTimer = null;
 
   function renderScoringSummary() {
     var buckets = {};
@@ -447,6 +472,201 @@
       value: function (item) { return item.total_score; },
       split: function (item) { return "已投 " + score(item.settled) + " · 待投 " + score(item.pending); }
     });
+    renderDailyTrend();
+  }
+
+  function dailyTrendData() {
+    return data && data.daily_scoring ? data.daily_scoring : null;
+  }
+
+  function dailyTrendFont(size, weight) {
+    return (weight || 500) + " " + size + "px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif";
+  }
+
+  function dailyTrendAxis(maxValue) {
+    if (!(maxValue > 0)) return {max: 10, step: 5};
+    var rough = maxValue / 5;
+    var power = Math.pow(10, Math.floor(Math.log(rough) / Math.LN10));
+    var norm = rough / power;
+    var step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * power;
+    return {max: Math.ceil(maxValue / step) * step, step: step};
+  }
+
+  function drawDailyTrendLegend(ctx, categories, width, left, right, top) {
+    var x = left;
+    var y = top;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = dailyTrendFont(11, 500);
+    categories.forEach(function (cat) {
+      var label = cat.label || (cat.source + "·" + cat.method);
+      var itemWidth = 15 + ctx.measureText(label).width + 12;
+      if (x > left && x + itemWidth > right) { x = left; y += 20; }
+      ctx.fillStyle = DAILY_TREND_COLORS[cat.key] || "#67a8ff";
+      ctx.fillRect(x, y - 4, 10, 8);
+      ctx.fillStyle = "#95a4b6";
+      ctx.fillText(label, x + 15, y);
+      x += itemWidth;
+    });
+    return y + 12;
+  }
+
+  function drawDailyTrend(canvas, width, height, dpr, options) {
+    options = options || {};
+    width = Math.max(240, Math.round(width));
+    height = Math.max(220, Math.round(height));
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#151b24";
+    ctx.fillRect(0, 0, width, height);
+
+    var daily = dailyTrendData();
+    var pad = options.header ? 24 : 14;
+    var left = pad + (options.header ? 40 : 34);
+    var right = width - pad;
+    var y = pad;
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    if (options.header) {
+      ctx.fillStyle = "#e8eef6";
+      ctx.font = dailyTrendFont(23, 700);
+      ctx.fillText("红蓝计分 · 每日计分来源", left, y + 8);
+      ctx.fillStyle = "#95a4b6";
+      ctx.font = dailyTrendFont(13, 400);
+      var subtitle = daily && daily.start
+        ? daily.start + " 至 " + daily.end + " · 共 " + daily.days.length + " 天 · 总计 " + score(daily.total_score) + " 分"
+        : "全部时间 · 按天堆叠";
+      ctx.fillText(subtitle, left, y + 34);
+      y += 54;
+    }
+
+    var categories = (daily && daily.categories && daily.categories.length)
+      ? daily.categories
+      : SCORING_CATEGORIES.map(function (item) { return {key: item.source + "|" + item.method, label: item.label}; });
+    var legendBottom = drawDailyTrendLegend(ctx, categories, width, left, right, y);
+    var plotTop = legendBottom + 10;
+    var plotBottom = height - (options.header ? 44 : 30);
+    var days = (daily && daily.days) || [];
+    if (!days.length) {
+      ctx.fillStyle = "#95a4b6";
+      ctx.font = dailyTrendFont(13, 400);
+      ctx.textAlign = "center";
+      ctx.fillText("暂无计分数据", width / 2, (plotTop + plotBottom) / 2);
+      return;
+    }
+
+    var maxTotal = days.reduce(function (max, day) { return Math.max(max, Number(day.total || 0)); }, 0);
+    var axis = dailyTrendAxis(maxTotal);
+    var tickCount = Math.round(axis.max / axis.step);
+    var plotHeight = plotBottom - plotTop;
+    ctx.font = dailyTrendFont(10, 400);
+    for (var tick = 0; tick <= tickCount; tick += 1) {
+      var value = tick * axis.step;
+      var lineY = plotBottom - (value / axis.max) * plotHeight;
+      ctx.strokeStyle = tick === 0 ? "rgba(255,255,255,.16)" : "rgba(255,255,255,.07)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, lineY + 0.5);
+      ctx.lineTo(right, lineY + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = "#657386";
+      ctx.textAlign = "right";
+      ctx.fillText(score(value), left - 7, lineY);
+    }
+
+    var slotWidth = (right - left) / days.length;
+    var barWidth = Math.max(2, Math.min(28, slotWidth * 0.62));
+    days.forEach(function (day, index) {
+      var centerX = left + slotWidth * (index + 0.5);
+      var x = centerX - barWidth / 2;
+      var stackBottom = plotBottom;
+      categories.forEach(function (cat) {
+        var value = Number((day.scores || {})[cat.key] || 0);
+        if (value <= 0) return;
+        var barHeight = (value / axis.max) * plotHeight;
+        stackBottom -= barHeight;
+        ctx.fillStyle = DAILY_TREND_COLORS[cat.key] || "#67a8ff";
+        ctx.fillRect(x, stackBottom, barWidth, barHeight);
+      });
+      if (Number(day.total || 0) > 0 && slotWidth >= 30) {
+        var text = score(day.total);
+        ctx.font = dailyTrendFont(10, 700);
+        ctx.textAlign = "center";
+        if (stackBottom - plotTop >= 13) {
+          ctx.fillStyle = "#c8d3e0";
+          ctx.fillText(text, centerX, stackBottom - 6);
+        } else {
+          ctx.fillStyle = "#0c1016";
+          ctx.fillText(text, centerX, stackBottom + 6);
+        }
+      }
+    });
+
+    var labelStep = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor((right - left) / 40))));
+    var labelOffset = (days.length - 1) % labelStep;
+    ctx.font = dailyTrendFont(10, 400);
+    ctx.fillStyle = "#657386";
+    ctx.textAlign = "center";
+    days.forEach(function (day, index) {
+      if ((index - labelOffset) % labelStep !== 0) return;
+      ctx.fillText(day.date.slice(5), left + slotWidth * (index + 0.5), plotBottom + 14);
+    });
+  }
+
+  function renderDailyTrend() {
+    var canvas = $("dailyTrendChart");
+    if (!canvas) return;
+    var daily = dailyTrendData();
+    var meta = $("dailyTrendMeta");
+    if (!daily || !daily.days || !daily.days.length) {
+      meta.textContent = "全部时间 · 暂无数据";
+    } else {
+      meta.textContent = daily.start + " 至 " + daily.end + " · " + daily.days.length + " 天 · 总计 " + score(daily.total_score) + " 分";
+    }
+    var rect = canvas.parentElement.getBoundingClientRect();
+    var width = Math.max(260, Math.round(rect.width));
+    var height = Math.max(220, Math.round(rect.height));
+    var dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    drawDailyTrend(canvas, width, height, dpr, {header: false});
+  }
+
+  function exportDailyTrend() {
+    var daily = dailyTrendData();
+    if (!daily || !daily.days || !daily.days.length) {
+      showToast("暂无可导出的每日计分数据", true);
+      return;
+    }
+    var button = $("exportDailyBtn");
+    var originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "生成中…";
+    try {
+      var canvas = document.createElement("canvas");
+      drawDailyTrend(canvas, 1200, 620, 2, {header: true});
+      canvas.toBlob(function (blob) {
+        button.disabled = false;
+        button.textContent = originalText;
+        if (!blob) { showToast("导出失败", true); return; }
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "红蓝计分_每日计分来源_" + (daily.end || new Date().toISOString().slice(0, 10)) + ".png";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        showToast("已保存 PNG");
+      }, "image/png");
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = originalText;
+      showToast("导出失败", true);
+    }
   }
 
   function fanScoreParts(fan) {
@@ -979,6 +1199,7 @@
     });
     $("refreshBtn").addEventListener("click", function () { loadData().catch(function () {}); });
     $("exportSummaryBtn").addEventListener("click", function () { exportImage("summary"); });
+    $("exportDailyBtn").addEventListener("click", exportDailyTrend);
     $("openFanModalBtn").addEventListener("click", openFanModal);
     $("fanMoreBar").addEventListener("click", openFanModal);
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
@@ -998,6 +1219,10 @@
       $(id).addEventListener("change", function () { loadData().catch(function () {}); });
     });
     $("keywordInput").addEventListener("keydown", function (event) { if (event.key === "Enter") loadData().catch(function () {}); });
+    window.addEventListener("resize", function () {
+      clearTimeout(dailyTrendResizeTimer);
+      dailyTrendResizeTimer = setTimeout(function () { if (data) renderDailyTrend(); }, 180);
+    });
     $("saveEntryBtn").addEventListener("click", saveEntry);
     $("closeAiPanelBtn").addEventListener("click", function () { $("aiPanel").classList.add("hidden"); });
     $("viewPromptBtn").addEventListener("click", showAiPrompt);
