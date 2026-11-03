@@ -37,6 +37,15 @@
     .btn.mini { height:28px; padding:0 8px; font-size:12px; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
     .chk { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
+    .multi { position:relative; }
+    .multi > summary { list-style:none; height:34px; display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:0 10px; background:#fff; cursor:pointer; user-select:none; }
+    .multi > summary::-webkit-details-marker { display:none; }
+    .multi > summary::after { content:"▾"; color:var(--muted); font-size:11px; }
+    .multi[open] > summary { border-color:var(--pink); color:var(--pink); }
+    .multi-panel { position:absolute; z-index:20; top:calc(100% + 4px); left:0; width:min(360px,90vw); max-height:320px; overflow:auto; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.12); padding:8px; }
+    .multi-actions { display:flex; gap:6px; margin-bottom:6px; }
+    .multi-options label { display:flex; align-items:center; gap:8px; padding:6px; border-radius:6px; cursor:pointer; font-size:13px; }
+    .multi-options label:hover { background:#fafafa; }
     table { width:100%; border-collapse:collapse; }
     th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
     th { color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
@@ -74,7 +83,7 @@
   <header>
     <div>
       <h1>微店订单管理</h1>
-      <div class="sub">所有商品 · 数据来自本机 canonical 订单库 · 不展示地址/电话</div>
+      <div class="sub">所有商品 · 数据来自本机 canonical 订单库 · 不展示地址/完整电话 · 账号仅展示脱敏信息</div>
     </div>
     <div class="actions">
       <a class="btn" href="/business/redblue2026">红蓝台账</a>
@@ -95,7 +104,17 @@
         <option value="broadcast_none">未自动播报</option>
       </select>
       <select id="itemFilter"><option value="all">全部商品</option></select>
-      <input type="text" id="keyword" placeholder="订单号 / 昵称 / 备注 / 商品">
+      <details class="multi" id="accountMenu">
+        <summary id="accountSummary">全部账号</summary>
+        <div class="multi-panel">
+          <div class="multi-actions">
+            <button type="button" class="btn mini" id="accountAll">全选</button>
+            <button type="button" class="btn mini" id="accountClear">清空</button>
+          </div>
+          <div class="multi-options" id="accountOptions"></div>
+        </div>
+      </details>
+      <input type="text" id="keyword" placeholder="订单号 / 昵称 / 账号 / 备注 / 商品">
       <label class="chk"><input type="checkbox" id="includeTest" checked> 重播含测试群</label>
       <label class="chk"><input type="checkbox" id="marker" checked> 标记（更正播报）</label>
       <span class="statusbar" id="statusBar"></span>
@@ -119,6 +138,7 @@
 <script>
 (function () {
   var allOrders = [];
+  var selectedAccounts = {};
   var loading = false;
 
   function $(id) { return document.getElementById(id); }
@@ -202,6 +222,7 @@
       var data = await api("/api/weidian-orders/data");
       allOrders = data.orders || [];
       renderItems();
+      renderAccounts();
       render();
       setStatus("更新 " + (data.generated_at || "-") + " · 共 " + allOrders.length + " 单");
       return true;
@@ -250,23 +271,82 @@
     return "¥" + Number(row.amount || 0).toFixed(2);
   }
 
-  function render() {
-    var status = $("statusFilter").value;
-    var item = $("itemFilter").value;
-    var keyword = $("keyword").value.trim().toLowerCase();
-    var rows = allOrders.filter(function (row) {
-      if (status === "broadcast_none") {
-        if (row.broadcast_at && row.broadcast_at !== "baseline") return false;
-      } else if (status !== "all" && row.status_kind !== status) {
-        return false;
-      }
-      if (item !== "all" && row.item_id !== item) return false;
-      if (keyword) {
-        var hay = [row.order_id, row.display_name, row.receiver_name, row.buyer_note, row.seller_note, row.item_name, row.sku_title].join(" ").toLowerCase();
-        if (hay.indexOf(keyword) === -1) return false;
-      }
-      return true;
+  // WEIDIAN_ACCOUNT_FILTER_PURE_START
+  function accountKey(row) {
+    var id = row.buyer_id ? String(row.buyer_id) : "";
+    return id || "__unknown__";
+  }
+
+  function accountLabel(row) {
+    var id = row.buyer_id ? String(row.buyer_id) : "";
+    var phone = row.buyer_phone_masked ? String(row.buyer_phone_masked) : "";
+    if (phone && id) return phone + " · ID " + id;
+    if (phone) return phone;
+    if (id) return "ID " + id;
+    return "未知账号";
+  }
+
+  function orderMatchesFilters(row, filters) {
+    var status = filters.status || "all";
+    if (status === "broadcast_none") {
+      if (row.broadcast_at && row.broadcast_at !== "baseline") return false;
+    } else if (status !== "all" && row.status_kind !== status) {
+      return false;
+    }
+    if (filters.item && filters.item !== "all" && row.item_id !== filters.item) return false;
+    var accounts = filters.accounts || {};
+    var accountKeys = Object.keys(accounts);
+    if (accountKeys.length && accountKeys.indexOf(accountKey(row)) === -1) return false;
+    var keyword = (filters.keyword || "").toLowerCase();
+    if (keyword) {
+      var hay = [row.order_id, row.display_name, row.receiver_name, row.buyer_id, row.buyer_phone_masked, row.buyer_note, row.seller_note, row.item_name, row.sku_title].join(" ").toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
+    return true;
+  }
+  // WEIDIAN_ACCOUNT_FILTER_PURE_END
+
+  function updateAccountSummary() {
+    var count = Object.keys(selectedAccounts).length;
+    $("accountSummary").textContent = count ? ("已选 " + count + " 个账号") : "全部账号";
+  }
+
+  function renderAccounts() {
+    var container = $("accountOptions");
+    if (!container) return;
+    var seen = {};
+    var accounts = [];
+    allOrders.forEach(function (row) {
+      var key = accountKey(row);
+      if (seen[key]) return;
+      seen[key] = true;
+      accounts.push({ key: key, label: accountLabel(row) });
     });
+    accounts.sort(function (left, right) {
+      if (left.key === "__unknown__") return 1;
+      if (right.key === "__unknown__") return -1;
+      return left.label.localeCompare(right.label, "zh-CN");
+    });
+    var valid = {};
+    accounts.forEach(function (item) { valid[item.key] = true; });
+    Object.keys(selectedAccounts).forEach(function (key) {
+      if (!valid[key]) delete selectedAccounts[key];
+    });
+    container.innerHTML = accounts.map(function (item) {
+      var checked = selectedAccounts[item.key] ? " checked" : "";
+      return '<label><input type="checkbox" data-account-key="' + esc(item.key) + '"' + checked + '> <span>' + esc(item.label) + '</span></label>';
+    }).join("");
+    updateAccountSummary();
+  }
+
+  function render() {
+    var filters = {
+      status: $("statusFilter").value,
+      item: $("itemFilter").value,
+      keyword: $("keyword").value.trim(),
+      accounts: selectedAccounts
+    };
+    var rows = allOrders.filter(function (row) { return orderMatchesFilters(row, filters); });
     if (!rows.length) {
       $("rows").innerHTML = '<tr><td colspan="10" class="muted">没有匹配的订单</td></tr>';
       return;
@@ -276,6 +356,7 @@
       if (row.seller_note) notes.push("商家：" + row.seller_note);
       if (row.buyer_note) notes.push("买家：" + row.buyer_note);
       var raw = row.receiver_name && row.receiver_name !== row.display_name ? '<div class="raw">收货人：' + esc(row.receiver_name) + '</div>' : "";
+      var account = (row.buyer_id || row.buyer_phone_masked) ? '<div class="raw">下单账号：' + esc(accountLabel(row)) + '</div>' : "";
       var ship = row.shipped
         ? '<span class="pill shipped">已发货</span><div class="raw">' + esc(row.shipped_at || "") + '</div>'
         : (row.status_kind === "awaiting_shipment" ? '<span class="pill awaiting">待发货</span>' : '<span class="muted">-</span>');
@@ -286,7 +367,7 @@
         '<td class="raw">' + esc(row.order_id || "") + '</td>' +
         '<td>' + esc(row.item_name || "") + (row.sku_title ? '<div class="raw">' + esc(row.sku_title) + '</div>' : "") + '</td>' +
         '<td>' + statusPill(row) + '</td>' +
-        '<td><div class="name">' + esc(row.display_name || "") + '</div>' + raw + '</td>' +
+        '<td><div class="name">' + esc(row.display_name || "") + '</div>' + raw + account + '</td>' +
         '<td class="muted">' + (notes.length ? esc(notes.join(" / ")) : "-") + '</td>' +
         '<td>' + moneyText(row) + '<div class="raw">¥' + Number(row.amount || 0).toFixed(2) + '</div></td>' +
         '<td>' + ship + '</td>' +
@@ -398,6 +479,30 @@
   $("refreshBtn").addEventListener("click", refreshOrders);
   $("statusFilter").addEventListener("change", render);
   $("itemFilter").addEventListener("change", render);
+  $("accountOptions").addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.dataset || !target.dataset.accountKey) return;
+    if (target.checked) selectedAccounts[target.dataset.accountKey] = true;
+    else delete selectedAccounts[target.dataset.accountKey];
+    updateAccountSummary();
+    render();
+  });
+  $("accountAll").addEventListener("click", function (event) {
+    event.preventDefault();
+    allOrders.forEach(function (row) { selectedAccounts[accountKey(row)] = true; });
+    renderAccounts();
+    render();
+  });
+  $("accountClear").addEventListener("click", function (event) {
+    event.preventDefault();
+    selectedAccounts = {};
+    renderAccounts();
+    render();
+  });
+  document.addEventListener("click", function (event) {
+    var menu = $("accountMenu");
+    if (menu && menu.open && !menu.contains(event.target)) menu.open = false;
+  });
   $("keyword").addEventListener("input", render);
   $("loginBtn").addEventListener("click", doLogin);
   $("passwordInput").addEventListener("keydown", function (event) {
