@@ -6,7 +6,8 @@
 版式与字号对齐交接包本地图（1000px 逻辑宽，正文 20-24px），
 按 2x 像素密度渲染（输出 2000px 宽），长图放大或在高分屏上更清晰。
 
-只依赖 Pillow 与系统 CJK 字体（阿里云文泉驿/腾讯云 Noto 均可）。
+只依赖 Pillow 与系统 CJK 字体（阿里云文泉驿/腾讯云 Noto 均可）；仓库内置
+Noto Sans Egyptian Hieroglyphs 作为装饰字符备用字体。
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import datetime as dt
 import io
 import unicodedata
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Iterable
 
 SCALE = 2
@@ -65,6 +67,7 @@ BOLD_CANDIDATES = (
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
 ) + FONT_CANDIDATES
+FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "static" / "fonts" / "NotoSansEgyptianHieroglyphs-Regular.ttf"
 
 
 def _pil():
@@ -138,8 +141,80 @@ def _glyph_is_missing(font, char: str) -> bool:
         return True
 
 
-def _display_text(text: Any, font=None) -> str:
-    """去掉字体无法渲染的 emoji/装饰符号，避免导出图出现方框。"""
+@lru_cache(maxsize=64)
+def _fallback_font(size: int):
+    """补充 WQY/Noto CJK 不含的装饰字符（如埃及圣书体）。"""
+    _, _, ImageFont = _pil()
+    try:
+        return ImageFont.truetype(str(FALLBACK_FONT_PATH), max(1, int(size)))
+    except OSError:
+        return None
+
+
+def _fallback_for(font):
+    size = getattr(font, "size", None)
+    if not size:
+        return None
+    return _fallback_font(int(size))
+
+
+def _font_runs(text: str, font, fallback=None):
+    runs: list[list[Any]] = []
+    for char in text:
+        use = font
+        if fallback is not None and _glyph_is_missing(font, char) and not _glyph_is_missing(fallback, char):
+            use = fallback
+        if runs and runs[-1][1] is use:
+            runs[-1][0] += char
+        else:
+            runs.append([char, use])
+    return runs
+
+
+def _text_width_fallback(draw, text: str, font, fallback=None) -> float:
+    fallback = fallback if fallback is not None else _fallback_for(font)
+    if fallback is None:
+        return draw.textlength(text, font=font)
+    return sum(draw.textlength(run, font=use) for run, use in _font_runs(text, font, fallback))
+
+
+def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
+    fallback = fallback if fallback is not None else _fallback_for(font)
+    if fallback is None:
+        return draw.text(xy, text, font=font, **kwargs)
+    runs = _font_runs(text, font, fallback)
+    if len(runs) <= 1 and (not runs or runs[0][1] is font):
+        return draw.text(xy, text, font=font, **kwargs)
+    anchor = kwargs.pop("anchor", None) or "la"
+    total = sum(draw.textlength(run, font=use) for run, use in runs)
+    x, y = xy
+    horizontal = anchor[0] if anchor else "l"
+    vertical = anchor[1] if len(anchor) > 1 else "a"
+    if horizontal == "r":
+        cursor = x - total
+    elif horizontal == "m":
+        cursor = x - total / 2
+    else:
+        cursor = x
+    scale = getattr(draw, "_scale", 1) or 1
+    ascent, descent = font.getmetrics()
+    ascent /= scale
+    descent /= scale
+    if vertical == "m":
+        baseline = y + (ascent - descent) / 2
+    elif vertical == "s":
+        baseline = y
+    elif vertical == "d":
+        baseline = y - descent
+    else:
+        baseline = y + ascent
+    for run, use in runs:
+        draw.text((cursor, baseline), run, font=use, anchor="ls", **kwargs)
+        cursor += draw.textlength(run, font=use)
+
+
+def _display_text(text: Any, font=None, fallback_font=None) -> str:
+    """去掉字体和备用字体都无法渲染的 emoji/装饰符号，避免导出图出现方框。"""
     value = "" if text is None else str(text)
     cleaned = []
     for char in value:
@@ -153,7 +228,8 @@ def _display_text(text: Any, font=None) -> str:
         if unicodedata.category(char) in {"Mn", "Me", "So", "Cs", "Cn", "Co"}:
             continue
         if font is not None and _glyph_is_missing(font, char):
-            continue
+            if fallback_font is None or _glyph_is_missing(fallback_font, char):
+                continue
         cleaned.append(char)
     return "".join(cleaned)
 
@@ -162,15 +238,15 @@ def _text_width(draw, text: str, font) -> float:
     return draw.textlength(text, font=font)
 
 
-def _fit(draw, text: str, font, max_width: float) -> str:
+def _fit(draw, text: str, font, max_width: float, fallback=None) -> str:
     text = "" if text is None else str(text)
-    if _text_width(draw, text, font) <= max_width:
+    if _text_width_fallback(draw, text, font, fallback) <= max_width:
         return text
     ellipsis = "…"
     low, high = 0, len(text)
     while low < high:
         mid = (low + high + 1) // 2
-        if _text_width(draw, text[:mid] + ellipsis, font) <= max_width:
+        if _text_width_fallback(draw, text[:mid] + ellipsis, font, fallback) <= max_width:
             low = mid
         else:
             high = mid - 1
@@ -370,8 +446,23 @@ def render_timeline_png(
             draw.text((x0, center_y), time_text, font=time_font, fill=FAINT, anchor="lm")
             sender_x = x0 + 90
             sender_max = 320
-            sender_text = _fit(draw, _display_text(row.get("sender_name") or "未知用户", sender_font), sender_font, sender_max)
-            draw.text((sender_x, center_y), sender_text, font=sender_font, fill=NAME if not replied else MUTED, anchor="lm")
+            sender_fallback = _fallback_for(sender_font)
+            sender_text = _fit(
+                draw,
+                _display_text(row.get("sender_name") or "未知用户", sender_font, sender_fallback),
+                sender_font,
+                sender_max,
+                sender_fallback,
+            )
+            _draw_text_fallback(
+                draw,
+                (sender_x, center_y),
+                sender_text,
+                sender_font,
+                sender_fallback,
+                fill=NAME if not replied else MUTED,
+                anchor="lm",
+            )
             gift_x = sender_x + sender_max + 14
             badge_w = 70
             count = _count(row)
@@ -475,8 +566,15 @@ def render_overview_png(
                 width=1,
             )
             name_font = _font(28, bold=True)
-            name = _fit(draw, _display_text(group.get("sender_name") or "未知用户", name_font), name_font, card_width - 28)
-            draw.text((x + 14, y + 8), name, font=name_font, fill=NAME, anchor="la")
+            name_fallback = _fallback_for(name_font)
+            name = _fit(
+                draw,
+                _display_text(group.get("sender_name") or "未知用户", name_font, name_fallback),
+                name_font,
+                card_width - 28,
+                name_fallback,
+            )
+            _draw_text_fallback(draw, (x + 14, y + 8), name, name_font, name_fallback, fill=NAME, anchor="la")
             row_y = y + 52
             time_font = _font(20)
             gift_font = _font(24)

@@ -14,6 +14,7 @@ from website.gift_reply_export import (
     ExportTooLarge,
     SCALE,
     _display_text,
+    _fallback_for,
     _font,
     render_overview_png,
     render_timeline_png,
@@ -123,10 +124,14 @@ class GiftReplyExportTests(unittest.TestCase):
         data = render_timeline_png([], period="全部时间")
         self.assertTrue(data.startswith(b"\x89PNG"))
 
-    def test_display_text_drops_unsupported_decorative_glyphs(self) -> None:
+    def test_display_text_preserves_decorative_glyphs_with_fallback(self) -> None:
         font = _font(24)
-        self.assertEqual(_display_text("嘉菲猫不吃鱼𓈒𓂂𓏸", font), "嘉菲猫不吃鱼")
-        self.assertEqual(_display_text("嘉菲猫不吃鱼", font), "嘉菲猫不吃鱼")
+        fallback = _fallback_for(font)
+        self.assertIsNotNone(fallback)
+        name = "嘉菲猫不吃鱼𓈒𓂂𓏸"
+        self.assertEqual(_display_text(name, font, fallback), name)
+        self.assertEqual(_display_text(name, font), "嘉菲猫不吃鱼")
+        self.assertEqual(_display_text("嘉菲猫不吃鱼", font, fallback), "嘉菲猫不吃鱼")
 
     def test_filter_labels(self) -> None:
         self.assertEqual(_export_period_text("2026-10-01", "2026-10-23"), "2026-10-01 至 2026-10-23")

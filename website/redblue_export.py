@@ -25,9 +25,12 @@ from website.gift_reply_export import (
     SUBTITLE,
     TITLE,
     _display_text,
+    _draw_text_fallback,
+    _fallback_for,
     _font as _gift_font,
     _pil,
     _text_width,
+    _text_width_fallback,
 )
 
 WIDTH = 1000
@@ -110,12 +113,13 @@ def _warn_icon(draw, x: float, center_y: float) -> None:
 
 def _summary_card_width(draw, fans: list[dict[str, Any]]) -> float:
     name_font = _font(FAN_NAME_SIZE, bold=True)
+    name_fallback = _fallback_for(name_font)
     score_font = _font(FAN_SCORE_SIZE, bold=True)
     badge_font = _font(FAN_BADGE_SIZE)
     width = 0.0
     for fan in fans:
-        name = _display_text(fan.get("fan_name") or "未登记", name_font)
-        name_width = _text_width(draw, name, name_font) + (26 if fan.get("warning") else 0)
+        name = _display_text(fan.get("fan_name") or "未登记", name_font, name_fallback)
+        name_width = _text_width_fallback(draw, name, name_font, name_fallback) + (26 if fan.get("warning") else 0)
         score_width = _text_width(draw, _score(fan.get("total_score")), score_font)
         width = max(width, 16 + name_width + 10 + score_width + 16)
         scoring = fan.get("scoring") or {}
@@ -135,10 +139,11 @@ def _fan_card(draw, x: float, y: int, width: float, fan: dict[str, Any]) -> int:
     draw.rounded_rectangle([x, y, x + width, y + height], radius=12, fill=CARD_BG, outline=CARD_BORDER)
     warning = bool(fan.get("warning"))
     name_font = _font(FAN_NAME_SIZE, bold=True)
-    name = _display_text(fan.get("fan_name") or "未登记", name_font)
-    draw.text((x + 16, y + 10), name, font=name_font, fill=NAME, anchor="la")
+    name_fallback = _fallback_for(name_font)
+    name = _display_text(fan.get("fan_name") or "未登记", name_font, name_fallback)
+    _draw_text_fallback(draw, (x + 16, y + 10), name, name_font, name_fallback, fill=NAME, anchor="la")
     if warning:
-        _warn_icon(draw, x + 16 + _text_width(draw, name, name_font) + 6, y + 21)
+        _warn_icon(draw, x + 16 + _text_width_fallback(draw, name, name_font, name_fallback) + 6, y + 21)
     draw.text(
         (x + width - 16, y + 6),
         _score(fan.get("total_score")),
@@ -214,8 +219,10 @@ def _draw_entries(
     y = section_top + 74
     time_font = _font(20)
     name_font = _font(24, bold=True)
+    name_fallback = _fallback_for(name_font)
     score_font = _font(22)
     business_font = _font(18)
+    business_fallback = _fallback_for(business_font)
     for day, rows in groups.items():
         try:
             weekday = week[dt.datetime.strptime(day, "%Y-%m-%d").weekday()]
@@ -241,10 +248,10 @@ def _draw_entries(
             source_x = x0 + source_offset
             score_x = source_x + 100
             warning = bool(row.get("warning"))
-            name_text = _display_text(name, name_font)
-            draw.text((name_x, center_y), name_text, font=name_font, fill=NAME, anchor="lm")
+            name_text = _display_text(name, name_font, name_fallback)
+            _draw_text_fallback(draw, (name_x, center_y), name_text, name_font, name_fallback, fill=NAME, anchor="lm")
             if warning:
-                _warn_icon(draw, name_x + _text_width(draw, name_text, name_font) + 8, center_y)
+                _warn_icon(draw, name_x + _text_width_fallback(draw, name_text, name_font, name_fallback) + 8, center_y)
 
             method = row.get("scoring_method") or "计分卡"
             color, bg = SCORING_COLORS.get(method, (MUTED, (240, 240, 240)))
@@ -259,7 +266,15 @@ def _draw_entries(
             )
             business = _business_text(row)
             if business:
-                draw.text((right, center_y), _display_text(business, business_font), font=business_font, fill=SUBTITLE, anchor="rm")
+                _draw_text_fallback(
+                    draw,
+                    (right, center_y),
+                    _display_text(business, business_font, business_fallback),
+                    business_font,
+                    business_fallback,
+                    fill=SUBTITLE,
+                    anchor="rm",
+                )
 
             y += row_h
         draw.line([x0, y + 6, right, y + 6], fill=(240, 232, 245), width=1)
@@ -351,18 +366,34 @@ def render_entries_png(
     Image, ImageDraw, _ = _pil()
     measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     name_font = _font(24, bold=True)
+    name_fallback = _fallback_for(name_font)
     score_font = _font(22)
     business_font = _font(18)
+    business_fallback = _fallback_for(business_font)
     max_name_width = 0
     for item in items:
         name = item.get("fan_name") or item.get("raw_name") or "未登记"
-        name_width = _text_width(measure, _display_text(name, name_font), name_font) + (26 if item.get("warning") else 0)
+        name_width = _text_width_fallback(
+            measure,
+            _display_text(name, name_font, name_fallback),
+            name_font,
+            name_fallback,
+        ) + (26 if item.get("warning") else 0)
         max_name_width = max(max_name_width, name_width)
     source_offset = max(300, 70 + int(max_name_width) + 16)
     width = ENTRIES_WIDTH
     for item in items:
         business = _business_text(item)
-        business_width = _text_width(measure, _display_text(business, business_font), business_font) if business else 0
+        business_width = (
+            _text_width_fallback(
+                measure,
+                _display_text(business, business_font, business_fallback),
+                business_font,
+                business_fallback,
+            )
+            if business
+            else 0
+        )
         score_text = f"送出了 {_score(item.get('score'))} 分"
         required = (
             204
