@@ -44,24 +44,26 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         for group in ('optgroup label="进行中"', 'optgroup label="已结束"', 'optgroup label="退款/售后"'):
             self.assertIn(group, self.template)
         for value, label in (
-            ("pending_payment", "待付款"),
-            ("awaiting_shipment", "待发货"),
-            ("shipped", "已发货"),
-            ("completed", "已完成"),
-            ("closed", "已关闭"),
+            ("pending_payment", "待付款（未付款）"),
+            ("awaiting_shipment", "待发货（已付款）"),
+            ("shipped", "已发货（运输中）"),
+            ("completed", "已完成（交易成功）"),
+            ("closed", "已关闭（未付款/取消）"),
             ("refunded", "全部退款/售后"),
-            ("refunding", "退款中"),
-            ("refunded_only", "已退款"),
+            ("refunding", "退款中（退款处理中）"),
+            ("refunded_only", "已退款（钱已退回买家）"),
         ):
             self.assertIn(f'<option value="{value}">{label}</option>', self.template)
         self.assertNotIn('value="final"', self.template)
         self.assertNotIn('value="broadcast_none"', self.template)
+        self.assertIn("已完成＝交易成功；已关闭＝未付款/取消；已退款＝已付款后钱已退回买家", self.template)
         self.assertIn(".pill.closed", self.template)
         self.assertIn(".pill.refunded", self.template)
         self.assertIn("function statusMatches", self.template)
         self.assertIn('status === "refunding"', self.template)
         self.assertIn('status === "refunded_only"', self.template)
         self.assertIn("function statusText", self.template)
+        self.assertIn("function statusTitle", self.template)
 
 
 if __name__ == "__main__":

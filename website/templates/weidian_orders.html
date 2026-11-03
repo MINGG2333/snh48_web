@@ -64,6 +64,7 @@
     .toast.show { opacity:1; transform:none; }
     .toast.err { background:#991b1b; }
     .statusbar { color:var(--muted); font-size:12px; min-height:18px; margin-left:6px; }
+    .status-legend { color:var(--muted); font-size:12px; margin:-2px 0 10px; line-height:1.6; }
     .job { color:var(--muted); font-size:12px; }
     @media (max-width: 900px) { th:nth-child(2), td:nth-child(2) { display:none; } }
   </style>
@@ -98,18 +99,18 @@
       <select id="statusFilter">
         <option value="all">全部状态</option>
         <optgroup label="进行中">
-          <option value="pending_payment">待付款</option>
-          <option value="awaiting_shipment">待发货</option>
-          <option value="shipped">已发货</option>
+          <option value="pending_payment">待付款（未付款）</option>
+          <option value="awaiting_shipment">待发货（已付款）</option>
+          <option value="shipped">已发货（运输中）</option>
         </optgroup>
         <optgroup label="已结束">
-          <option value="completed">已完成</option>
-          <option value="closed">已关闭</option>
+          <option value="completed">已完成（交易成功）</option>
+          <option value="closed">已关闭（未付款/取消）</option>
         </optgroup>
         <optgroup label="退款/售后">
           <option value="refunded">全部退款/售后</option>
-          <option value="refunding">退款中</option>
-          <option value="refunded_only">已退款</option>
+          <option value="refunding">退款中（退款处理中）</option>
+          <option value="refunded_only">已退款（钱已退回买家）</option>
         </optgroup>
       </select>
       <select id="itemFilter"><option value="all">全部商品</option></select>
@@ -128,6 +129,7 @@
       <label class="chk"><input type="checkbox" id="marker" checked> 标记（更正播报）</label>
       <span class="statusbar" id="statusBar"></span>
     </div>
+    <div class="status-legend">已完成＝交易成功；已关闭＝未付款/取消；已退款＝已付款后钱已退回买家；退款中＝退款处理中。</div>
     <div style="overflow:auto;">
       <table>
         <thead>
@@ -266,9 +268,17 @@
     return row.status_label || row.status || row.status_kind || "未知";
   }
 
+  function statusTitle(row) {
+    var parts = [];
+    if (row.status_description) parts.push(row.status_description);
+    if (row.refund_state_description) parts.push(row.refund_state_description);
+    return parts.join(" · ");
+  }
+
   function statusPill(row) {
     var kind = row.status_kind || "unknown";
-    return '<span class="pill ' + esc(kind) + '">' + esc(statusText(row)) + '</span>';
+    var title = statusTitle(row);
+    return '<span class="pill ' + esc(kind) + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(statusText(row)) + '</span>';
   }
 
   function broadcastText(row) {
