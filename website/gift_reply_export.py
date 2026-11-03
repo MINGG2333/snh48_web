@@ -118,8 +118,28 @@ def _font(size: int, bold: bool = False, scale: int = SCALE):
         return ImageFont.load_default()
 
 
-def _display_text(text: Any) -> str:
-    """去掉 CJK 字体无法渲染的 emoji/补充平面字符，避免导出图出现方框。"""
+@lru_cache(maxsize=8)
+def _missing_glyph_mask(font) -> bytes:
+    """字体缺失字形通常共用同一个 .notdef 位图，用未分配码位取样。"""
+    try:
+        return bytes(font.getmask("\U0010FFFF", mode="L"))
+    except (AttributeError, OSError, ValueError):
+        return b""
+
+
+@lru_cache(maxsize=65536)
+def _glyph_is_missing(font, char: str) -> bool:
+    mask = _missing_glyph_mask(font)
+    if not mask:
+        return False
+    try:
+        return bytes(font.getmask(char, mode="L")) == mask
+    except (AttributeError, OSError, ValueError):
+        return True
+
+
+def _display_text(text: Any, font=None) -> str:
+    """去掉字体无法渲染的 emoji/装饰符号，避免导出图出现方框。"""
     value = "" if text is None else str(text)
     cleaned = []
     for char in value:
@@ -131,6 +151,8 @@ def _display_text(text: Any) -> str:
         if 0x2500 <= code <= 0x28FF:
             continue
         if unicodedata.category(char) in {"Mn", "Me", "So", "Cs", "Cn", "Co"}:
+            continue
+        if font is not None and _glyph_is_missing(font, char):
             continue
         cleaned.append(char)
     return "".join(cleaned)
@@ -348,7 +370,7 @@ def render_timeline_png(
             draw.text((x0, center_y), time_text, font=time_font, fill=FAINT, anchor="lm")
             sender_x = x0 + 90
             sender_max = 320
-            sender_text = _fit(draw, _display_text(row.get("sender_name") or "未知用户"), sender_font, sender_max)
+            sender_text = _fit(draw, _display_text(row.get("sender_name") or "未知用户", sender_font), sender_font, sender_max)
             draw.text((sender_x, center_y), sender_text, font=sender_font, fill=NAME if not replied else MUTED, anchor="lm")
             gift_x = sender_x + sender_max + 14
             badge_w = 70
@@ -356,7 +378,7 @@ def render_timeline_png(
             count_text = f"×{count}" if count > 1 else ""
             count_w = _text_width(draw, count_text, count_font) + 8 if count_text else 0
             gift_max = right - badge_w - 10 - count_w - 8 - gift_x
-            gift_text = _fit(draw, _display_text(row.get("gift_name") or "-"), gift_font, max(80, gift_max))
+            gift_text = _fit(draw, _display_text(row.get("gift_name") or "-", gift_font), gift_font, max(80, gift_max))
             draw.text((gift_x, center_y), gift_text, font=gift_font, fill=NAME if not replied else MUTED, anchor="lm")
             if count_text:
                 draw.text(
@@ -453,7 +475,7 @@ def render_overview_png(
                 width=1,
             )
             name_font = _font(28, bold=True)
-            name = _fit(draw, _display_text(group.get("sender_name") or "未知用户"), name_font, card_width - 28)
+            name = _fit(draw, _display_text(group.get("sender_name") or "未知用户", name_font), name_font, card_width - 28)
             draw.text((x + 14, y + 8), name, font=name_font, fill=NAME, anchor="la")
             row_y = y + 52
             time_font = _font(20)
@@ -471,7 +493,7 @@ def render_overview_png(
                 count_width = _text_width(draw, count_text, count_font) + 8 if count_text else 0
                 badge_width = 70
                 gift_max = right - badge_width - 8 - count_width - 8 - gift_x
-                gift_text = _fit(draw, _display_text(row.get("gift_name") or "-"), gift_font, max(50, gift_max))
+                gift_text = _fit(draw, _display_text(row.get("gift_name") or "-", gift_font), gift_font, max(50, gift_max))
                 draw.text((gift_x, center_y), gift_text, font=gift_font, fill=NAME if not replied else MUTED, anchor="lm")
                 if count_text:
                     draw.text(

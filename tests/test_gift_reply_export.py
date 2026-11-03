@@ -10,7 +10,14 @@ from website.gift_replies_api import (
     _sender_filter_text,
     _timeline_filter_text,
 )
-from website.gift_reply_export import ExportTooLarge, SCALE, render_overview_png, render_timeline_png
+from website.gift_reply_export import (
+    ExportTooLarge,
+    SCALE,
+    _display_text,
+    _font,
+    render_overview_png,
+    render_timeline_png,
+)
 
 
 def row(
@@ -115,6 +122,11 @@ class GiftReplyExportTests(unittest.TestCase):
     def test_empty_export_is_still_png(self) -> None:
         data = render_timeline_png([], period="全部时间")
         self.assertTrue(data.startswith(b"\x89PNG"))
+
+    def test_display_text_drops_unsupported_decorative_glyphs(self) -> None:
+        font = _font(24)
+        self.assertEqual(_display_text("嘉菲猫不吃鱼𓈒𓂂𓏸", font), "嘉菲猫不吃鱼")
+        self.assertEqual(_display_text("嘉菲猫不吃鱼", font), "嘉菲猫不吃鱼")
 
     def test_filter_labels(self) -> None:
         self.assertEqual(_export_period_text("2026-10-01", "2026-10-23"), "2026-10-01 至 2026-10-23")
