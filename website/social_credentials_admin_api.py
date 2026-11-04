@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/social-credentials", tags=["社交凭据管理"]
 AUTH_COOKIE = "social_credentials_auth"
 AUTH_COOKIE_MAX_AGE = 30 * 60
 _COOKIE_SECRET = os.urandom(32)
-PLATFORMS = {"weibo", "douyin", "bilibili"}
+PLATFORMS = {"weibo", "douyin", "bilibili", "xianyu"}
 SLOTS = {"primary", "backup"}
 
 
@@ -199,7 +199,11 @@ async def update_credential(payload: UpdateRequest, request: Request, response: 
     platform = payload.platform.strip().lower()
     slot = payload.slot.strip().lower()
     cookie = payload.cookie.strip()
-    if platform not in PLATFORMS or slot not in SLOTS or (platform == "bilibili" and slot != "primary"):
+    if (
+        platform not in PLATFORMS
+        or slot not in SLOTS
+        or (platform in {"bilibili", "xianyu"} and slot != "primary")
+    ):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="平台或 Cookie 槽位无效")
     if len(cookie) < 20 or len(cookie) > 65536 or "\n" in cookie or "\r" in cookie:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cookie 必须是单行完整文本")

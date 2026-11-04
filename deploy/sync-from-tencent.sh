@@ -99,6 +99,31 @@ sync_hub_file_from_tencent() {
   esac
 }
 
+# 凭据类单文件同步：源端存在才覆盖；源端缺失时保留本机副本。
+# 用于 config/xianyu_cookie.json：首次更新由腾讯云网页创建，迁移期阿里云已有
+# 从旧临时文件迁入的副本，不能被“源缺失删除”逻辑误删。
+sync_hub_credential_from_tencent() {
+  local source_path=$1
+  local destination_path=$2
+  local source_state
+  if ! source_state=$(ssh "${SSH_OPTS[@]}" -S "$CONTROL_PATH" "$TENCENT" "if [ -f '$source_path' ]; then printf present; elif [ -e '$source_path' ]; then printf invalid; else printf absent; fi"); then
+    echo "$LOG_TAG unable to inspect source file: $source_path" >&2
+    return 1
+  fi
+  case "$source_state" in
+    present)
+      rsync -az --partial -e "$RSYNC_RSH" "$TENCENT:$source_path" "$destination_path"
+      ;;
+    absent)
+      echo "$LOG_TAG credential source missing, keeping local copy: $destination_path"
+      ;;
+    *)
+      echo "$LOG_TAG source path is not a regular file: $source_path" >&2
+      return 1
+      ;;
+  esac
+}
+
 remove_retired_local_file() {
   local destination_path=$1
   if [ -d "$destination_path" ]; then
@@ -318,6 +343,12 @@ if [ "$sync_hub" -eq 1 ]; then
   sync_hub_file_from_tencent /home/snh48-fan-hub/config/accounts.json /home/snh48-fan-hub/config/accounts.json
   sync_hub_file_from_tencent /home/snh48-fan-hub/config/koudai_token.json /home/snh48-fan-hub/config/koudai_token.json
   echo "$LOG_TAG hub pocket48 config done"
+
+  # H5b. 闲鱼 Cookie（2026-11-04 新增）：cjy.plus 社交凭据管理页验证后写入
+  # 腾讯云 config/xianyu_cookie.json，阿里云每日查价读取同一路径。
+  # 源端缺失时保留阿里云本机副本，避免迁移期误删。
+  sync_hub_credential_from_tencent /home/snh48-fan-hub/config/xianyu_cookie.json /home/snh48-fan-hub/config/xianyu_cookie.json
+  echo "$LOG_TAG hub xianyu cookie done"
 
   # H6. 行程组稿件（仅此子目录）。--update 防回滚：2026-10-16 起该目录
   # 转为阿里云权威、腾讯云不再写；正向仅作迁移窗口的初始投递，阿里云侧

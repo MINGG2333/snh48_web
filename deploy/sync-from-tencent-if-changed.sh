@@ -78,6 +78,7 @@ case "$group" in
         /home/snh48-fan-hub/notifications/blackboard_remote_commands.jsonl
         /home/snh48-fan-hub/config/accounts.json
         /home/snh48-fan-hub/config/koudai_token.json
+        /home/snh48-fan-hub/config/xianyu_cookie.json
       )
       for f in "${files[@]}"; do
         if [ -f "$f" ]; then
