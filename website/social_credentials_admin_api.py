@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/social-credentials", tags=["社交凭据管理"]
 AUTH_COOKIE = "social_credentials_auth"
 AUTH_COOKIE_MAX_AGE = 30 * 60
 _COOKIE_SECRET = os.urandom(32)
-PLATFORMS = {"weibo", "douyin", "bilibili", "xianyu"}
+PLATFORMS = {"weibo", "douyin", "bilibili", "xianyu", "shop48"}
 SLOTS = {"primary", "backup"}
 
 

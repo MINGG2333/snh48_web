@@ -81,6 +81,31 @@ class SocialCredentialsAdminApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 403)
 
 
+    def test_shop48_primary_and_backup_updates_are_accepted(self) -> None:
+        with (
+            patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", True),
+            patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_PASSWORD", "correct-password"),
+            patch.object(social_credentials_admin_api.cfg, "SECURE_COOKIES", False),
+            patch.object(
+                social_credentials_admin_api,
+                "_run_bridge",
+                return_value={"ok": True, "platform": "shop48", "slot": "primary"},
+            ) as run_bridge,
+        ):
+            web = client()
+            web.post("/api/social-credentials/login", json={"password": "correct-password"})
+            for slot in ("primary", "backup"):
+                response = web.post(
+                    "/api/social-credentials/update",
+                    headers={"Origin": "http://testserver"},
+                    json={"platform": "shop48", "slot": slot, "cookie": "secret-shop48-cookie-value-long-enough"},
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn("secret-shop48", response.text)
+                self.assertEqual(run_bridge.call_args.args[1]["platform"], "shop48")
+                self.assertEqual(run_bridge.call_args.args[1]["slot"], slot)
+
+
 class SocialCredentialsAdminPageTests(unittest.IsolatedAsyncioTestCase):
     async def test_page_is_not_exposed_on_disabled_nodes(self) -> None:
         with patch.object(website_main.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", False):
