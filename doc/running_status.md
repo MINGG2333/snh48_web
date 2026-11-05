@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-05 22:47 CST 红蓝台账改用精简身份索引并加速 PNG 导出（腾讯云已生效）
+
+- 现象：`/business/redblue2026` 登录后首个 `/api/redblue/data` 在腾讯云冷加载完整身份索引时耗时 17.8s；按条目导出约 1.7–2.1s，`PNG optimize=True` 占主要耗时。
+- 页面/代码：`website/identity_index.py` 优先读取 fan-hub 生成的 `room_record/all_members/fan_identity_web.json`（2.28MB，`ID→当前昵称`、`昵称→ID`），缺失或比完整索引旧时回退 `fan_identity_index.json`；`website/redblue_export.py` 改为 `optimize=False`。
+- 验证：精简索引独立加载约 0.15s / 38MB，完整索引约 2.4s / 134MB。腾讯云重启 `snh48-web.service` 后，`/api/redblue/data` 0.043–0.065s，按条目导出首次 1.09s、热请求 0.49–0.63s，按昵称导出 0.26–0.30s；`tests/test_identity_index.py`、`tests/test_redblue_ledger_api.py` 等 34 项通过。
+- 部署：网站提交 `e8eb28c` 已推送并双端 pull；腾讯云 `snh48-web.service` 22:46:21 重启，MainPID `309238`。阿里云 `snh48-aliyun.service` 暂不重启：其启动会加载 QA，历史上需约 33 分钟，重启会造成全站长时间 502；旧进程继续读完整索引，功能正确，下次维护窗口重启后切换精简索引。
+
 ## 2026-11-05 18:00 CST 红蓝台账当前昵称刷新与计分昵称换行（两端已生效）
 
 - 现象：`/business/redblue2026` 仍有“当前昵称”过期。核对口袋ID `8189378947`：身份索引停在 `2026-10-30 06:21:33`，该粉丝在 `2026-10-30 22:00:25` 已改名为「深宅不露Zzzz」；台账两条房间计分分别在 `2026-10-24 14:39:22`、`2026-10-30 19:49:53`，当时计分昵称确实均为「至此间 我知觉流年应有限/」。
