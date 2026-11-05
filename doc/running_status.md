@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-06 07:39 CST 导出图保留符号与 emoji；阿里云重启完成（两端已生效）
+
+- 现象：红蓝/礼物导出昵称中的 `JOJO⭐`、`拾蹄悦(悦悦🌲)` 等符号和 emoji 被 `_display_text()` 按 Unicode `So` 类别直接过滤；腾讯云又没有 FreeSerif/Unifont 系统字体。
+- 代码：`gift_reply_export.py` 不再无条件丢弃 `So`，改为按主字体+备用字体链逐字判断；新增 FreeSerif/Unifont/DejaVu 系统路径和 Noto Color Emoji 回退（109px 渲染后 LANCZOS 缩放到目标字号）。埃及圣书体、⭐、🌲、🐒 等均保留。
+- 验证：阿里云 `_display_text` 与腾讯云 `_font_runs` 均保留 `JOJO⭐`/`拾蹄悦(悦悦🌲)`/`衡绥suí🌲🐒`/`嘉菲猫不吃鱼𓈒𓂂𓏸`；腾讯云 ⭐ 命中 `_ColorEmojiFont`；网站测试 43 项、腾讯云礼物导出测试 9 项通过。
+- 部署：网站提交 `0c0e67d`、`5740868` 已推送并双端 pull；腾讯云 `snh48-web.service` 07:32:13 重启（MainPID `796621`），阿里云 `snh48-aliyun.service` 07:32:37 重启（MainPID `1599651`，07:34:48 启动完成），两端均 active。
+- 性能复测：阿里云 `/api/redblue/data` 0.078–0.118s、按条目导出 0.997–1.208s；腾讯云 data 0.037–0.191s、按条目导出 0.490–0.616s、按昵称导出 0.206–0.208s；两节点均读取 `fan_identity_web.json`。
+
 ## 2026-11-06 00:05 CST 社交凭据管理增加 48 商城 Cookie（腾讯云已生效）
 
 - 页面：`/social-credentials-admin` 新增“48商城”，SNH48 商城/GNZ48 商城两槽；状态只显示已配置/最近验证时间，不回显 Cookie；页面 200，未登录 `/api/social-credentials/status` 401。
@@ -12,7 +20,7 @@
 - 现象：`/business/redblue2026` 登录后首个 `/api/redblue/data` 在腾讯云冷加载完整身份索引时耗时 17.8s；按条目导出约 1.7–2.1s，`PNG optimize=True` 占主要耗时。
 - 页面/代码：`website/identity_index.py` 优先读取 fan-hub 生成的 `room_record/all_members/fan_identity_web.json`（2.28MB，`ID→当前昵称`、`昵称→ID`），缺失或比完整索引旧时回退 `fan_identity_index.json`；`website/redblue_export.py` 改为 `optimize=False`。
 - 验证：精简索引独立加载约 0.15s / 38MB，完整索引约 2.4s / 134MB。腾讯云重启 `snh48-web.service` 后，`/api/redblue/data` 0.043–0.065s，按条目导出首次 1.09s、热请求 0.49–0.63s，按昵称导出 0.26–0.30s；`tests/test_identity_index.py`、`tests/test_redblue_ledger_api.py` 等 34 项通过。
-- 部署：网站提交 `e8eb28c` 已推送并双端 pull；腾讯云 `snh48-web.service` 22:46:21 重启，MainPID `309238`。阿里云 `snh48-aliyun.service` 暂不重启：其启动会加载 QA，历史上需约 33 分钟，重启会造成全站长时间 502；旧进程继续读完整索引，功能正确，下次维护窗口重启后切换精简索引。
+- 部署：网站提交 `e8eb28c` 已推送并双端 pull；腾讯云 `snh48-web.service` 22:46:21 重启，MainPID `309238`。阿里云 `snh48-aliyun.service` 后于 2026-11-06 07:32:37 重启（MainPID `1599651`，07:34:48 启动完成），已切换精简索引。
 
 ## 2026-11-05 18:00 CST 红蓝台账当前昵称刷新与计分昵称换行（两端已生效）
 
