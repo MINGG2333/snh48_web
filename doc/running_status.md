@@ -4,7 +4,7 @@
 
 - 页面：`/social-credentials-admin` 新增“48商城”，SNH48 商城/GNZ48 商城两槽；状态只显示已配置/最近验证时间，不回显 Cookie；页面 200，未登录 `/api/social-credentials/status` 401。
 - 桥：`scripts/web/social_credentials_admin.py` 新增 `shop48` 平台与 `validate_shop48`，分别用 `shop.48.cn`/`48.gnz48.com` 的 `GetShowBids` 验证；成功后原子写 fan-hub `config/shop48_cookie_snh.txt`/`gnz.txt`（600）。已用当前有效 Cookie 实测两槽 `validated_at=2026-11-05 23:52:02/03`，状态 configured/valid。
-- 部署：网站提交 `da47c08` 已推送；腾讯云 `snh48-web.service` 已重启，页面与模板加载新平台；桥测试 4 项、网站 API 测试 5 项通过。阿里云页面仍硬禁用，未重启。
+- 部署：网站 `da47c08`（代码）+ `2ed9062`（文档）已推送；腾讯云 `snh48-web.service` 已重启，页面与模板加载新平台；桥测试 4 项、网站 API 测试 5 项通过。阿里云已 pull，页面仍硬禁用，未重启。
 - 用途：48 竞价全量归档服务读取这两个文件；用户在页面更新 Cookie 后，下一次 6 小时归档自动使用新值。
 
 ## 2026-11-05 22:47 CST 红蓝台账改用精简身份索引并加速 PNG 导出（腾讯云已生效）
