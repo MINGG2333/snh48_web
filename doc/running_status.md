@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-05 18:00 CST 红蓝台账当前昵称刷新与计分昵称换行（两端已生效）
+
+- 现象：`/business/redblue2026` 仍有“当前昵称”过期。核对口袋ID `8189378947`：身份索引停在 `2026-10-30 06:21:33`，该粉丝在 `2026-10-30 22:00:25` 已改名为「深宅不露Zzzz」；台账两条房间计分分别在 `2026-10-24 14:39:22`、`2026-10-30 19:49:53`，当时计分昵称确实均为「至此间 我知觉流年应有限/」。
+- 数据：腾讯云重跑 `scripts/live_monitor/fan_identity_exporter.py`，新索引 `generated_at=2026-11-05 17:57:39`，accounts `35,106`、nicknames `39,742`；经 `dynamic` 组同步到阿里云。两端 `_normalise_entry` 现均输出当前昵称「深宅不露Zzzz」、计分昵称「至此间 我知觉流年应有限/」。
+- 页面：`templates/redblue_ledger_2026.html` 将「计分昵称」从 ID 同一行拆出，显示在 ID 下方单独一行；未改名条目不显示计分昵称。
+- 部署：网站仓库提交 `12af20e` 已推送 GitHub，腾讯云已 peer pull；两端仅改模板，Jinja 热加载，无需重启。阿里云 `snh48-aliyun.service` PID `832`，腾讯云 `snh48-web.service` PID `3161496`。
+- 验证：`tests/test_redblue_ledger_api.py` 31 项 + `tests/test_password_page_security.py` 3 项通过；`node --check` 通过；两端页面源码均为 `identityNote` 两个独立 `notice` 行。
+
 ## 2026-11-04 05:43 CST 红蓝每日柱状图支持悬停/点击查看当天明细（阿里云已生效）
 
 - 需求：鼠标接近或点击每日柱状图的某一天，显示当天积分明细，包括时间、粉丝、来源、礼物或微店档位×数量、分数。
