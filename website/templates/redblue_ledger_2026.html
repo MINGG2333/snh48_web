@@ -926,7 +926,8 @@
       var rawId = entry.fan_id ? "ID " + entry.fan_id : (entry.raw_id ? "ID " + entry.raw_id : "");
       var scoringName = entry.raw_name || "";
       var scoreNote = scoringName && scoringName !== name ? "计分昵称：" + scoringName : "";
-      var identityNote = [rawId || "未登记 ID", scoreNote].filter(Boolean).join(" · ");
+      var identityNote = '<div class="notice">' + esc(rawId || "未登记 ID") + '</div>' +
+        (scoreNote ? '<div class="notice">' + esc(scoreNote) + '</div>' : "");
       var warning = entry.warning ? '<span class="warn-icon" title="' + esc(entry.warning_reason || "待修正") + '">!</span>' : "";
       var note = entry.note || "";
       var weidian = entry.weidian || {};
@@ -958,7 +959,7 @@
       return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
-        '<td><strong>' + esc(name) + '</strong>' + warning + '<div class="notice">' + esc(identityNote) + '</div></td>' +
+        '<td><strong>' + esc(name) + '</strong>' + warning + identityNote + '</td>' +
         '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || entry.source) + '</span></td>' +
         '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span></td>' +
         '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
