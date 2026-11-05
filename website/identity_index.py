@@ -1,8 +1,9 @@
 """Shared cache for the pocket48 fan identity index.
 
-The 9.7MB index is used by both the red-blue ledger and score-gift pages.  A
-single parse/build keeps both consumers warm and avoids each module paying the
-same two-second cold load after a website restart.
+The full index is used by the AI resolver and retains every historical
+nickname.  Websites read the compact ``fan_identity_web.json`` instead: it only
+maps ID -> latest name and name -> IDs, so it loads in ~0.15s / ~38MB instead of
+~2.4s / ~134MB.  A single in-process parse keeps both consumers warm.
 """
 from __future__ import annotations
 
@@ -31,7 +32,19 @@ def _clean(value: Any, limit: int = 120) -> str:
 
 
 def _path() -> Path:
-    return Path(cfg.REDBLUE_IDENTITY_INDEX_PATH)
+    full = Path(cfg.REDBLUE_IDENTITY_INDEX_PATH)
+    web_path = str(getattr(cfg, "REDBLUE_IDENTITY_WEB_PATH", "") or "")
+    if web_path:
+        web = Path(web_path)
+        try:
+            if web.exists() and (
+                not full.exists()
+                or web.stat().st_mtime_ns >= full.stat().st_mtime_ns
+            ):
+                return web
+        except OSError:
+            pass
+    return full
 
 
 def _file_signature(path: Path) -> tuple[str, int, int]:
@@ -68,10 +81,47 @@ def _add(by_id: dict[str, dict[str, Any]], by_name: dict[str, dict[str, Any]], f
             nick["last_seen"] = seen
 
 
+def _build_web(data: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, str], str]:
+    by_id: dict[str, dict[str, Any]] = {}
+    latest = data.get("latest")
+    if isinstance(latest, dict):
+        for fan_id, name in latest.items():
+            fan_id = _clean(fan_id, 32)
+            name = _clean(name, 120)
+            if fan_id and name:
+                by_id[fan_id] = {"fan_id": fan_id, "latest_name": name, "last_seen": ""}
+    by_name: dict[str, dict[str, Any]] = {}
+    names = data.get("names")
+    if isinstance(names, dict):
+        for name, values in names.items():
+            name = _clean(name, 120)
+            if not name:
+                continue
+            if isinstance(values, dict):
+                values = values.get("ids")
+            if not isinstance(values, (list, tuple, set)):
+                continue
+            ids = {_clean(item, 32) for item in values if _clean(item, 32)}
+            if ids:
+                by_name[name] = {"name": name, "ids": ids, "last_seen": ""}
+    latest_by_id = {
+        fan_id: str(account.get("latest_name") or "")
+        for fan_id, account in by_id.items()
+        if account.get("latest_name")
+    }
+    return by_id, by_name, latest_by_id, _clean(data.get("generated_at"), 40)
+
+
 def _build(data: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, str], str]:
+    generated_at = _clean(data.get("generated_at"), 40)
+    if (
+        isinstance(data.get("latest"), dict)
+        and isinstance(data.get("names"), dict)
+        and not isinstance(data.get("accounts"), dict)
+    ):
+        return _build_web(data)
     by_id: dict[str, dict[str, Any]] = {}
     by_name: dict[str, dict[str, Any]] = {}
-    generated_at = _clean(data.get("generated_at"), 40)
 
     accounts = data.get("accounts")
     if isinstance(accounts, dict):

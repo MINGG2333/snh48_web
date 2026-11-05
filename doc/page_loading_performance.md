@@ -7,10 +7,11 @@
 
 代码：`website/identity_index.py`。
 
-- `fan_identity_index.json` 约 9.7MB，红蓝台账和计分礼物页都需要读取。
-- 两个模块现在共用一份解析结果：`by_id`、`by_name` 和 `latest_by_id`。
-- 网站启动后由 `identity_index.start_warmup()` 在后台预热，避免服务重启后第一次打开页面等待约 2.5 秒。
-- 红蓝台账的主索引存在时，fallback 文件（`sender_identity_map.json` 等）的频繁更新不再使主索引缓存失效。该文件约每 1–2 分钟更新一次，之前会导致红蓝页反复重新解析 9.7MB。
+- 网站优先读取精简索引 `fan_identity_web.json`（约 2.3MB，只含 `ID→当前昵称` 和 `昵称→ID`），红蓝台账和计分礼物页共用这份解析结果。
+- 完整索引 `fan_identity_index.json`（约 12.5MB，含每个账号的全部历史昵称）仅供 AI 解析器使用；精简索引不存在或比完整索引旧时，网站回退到完整索引。
+- 实测精简索引加载约 0.15 秒 / 38MB；完整索引约 2.4 秒 / 134MB。腾讯云内存紧张时完整索引冷加载可能被 swap 拖到十几秒，因此不再让网页请求读完整索引。
+- 网站启动后由 `identity_index.start_warmup()` 在后台预热；`fan-identity-index.timer` 每小时重建两份索引，网页优先使用精简索引。
+- 红蓝台账的主索引存在时，fallback 文件（`sender_identity_map.json` 等）的频繁更新不再使主索引缓存失效。
 
 ## 红蓝台账
 

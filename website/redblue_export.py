@@ -312,7 +312,7 @@ def _render(title: str, body, *, period: str, filter_text: str, updated: str, es
     draw = ImageDraw.Draw(image)
     _footer(draw, content_height, width=width)
     buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=True)
+    image.save(buffer, format="PNG", optimize=False)
     return buffer.getvalue()
 
 

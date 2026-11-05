@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -43,6 +44,48 @@ class IdentityIndexCacheTests(unittest.TestCase):
                 self.assertEqual(identity_index.latest_names_by_id()["1001"], "小甲")
             finally:
                 cfg.REDBLUE_IDENTITY_INDEX_PATH = old_path
+                cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = old_fallback
+                identity_index.clear_cache()
+
+    def test_compact_web_index_is_preferred(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            full = root / "fan_identity_index.json"
+            web = root / "fan_identity_web.json"
+            full.write_text(
+                json.dumps(
+                    {"accounts": {"1001": {"latest_name": "旧昵称"}}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            time.sleep(0.01)
+            web.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-11-05 12:00:00",
+                        "latest": {"1001": "新昵称"},
+                        "names": {"新昵称": ["1001"], "旧昵称": ["1001"]},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            old_path = cfg.REDBLUE_IDENTITY_INDEX_PATH
+            old_web = getattr(cfg, "REDBLUE_IDENTITY_WEB_PATH", "")
+            old_fallback = cfg.REDBLUE_IDENTITY_FALLBACK_PATHS
+            cfg.REDBLUE_IDENTITY_INDEX_PATH = str(full)
+            cfg.REDBLUE_IDENTITY_WEB_PATH = str(web)
+            cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = {}
+            identity_index.clear_cache()
+            try:
+                index = identity_index.redblue_index()
+                self.assertEqual(index["by_id"]["1001"]["latest_name"], "新昵称")
+                self.assertEqual(index["by_name"]["旧昵称"]["ids"], {"1001"})
+                self.assertEqual(identity_index.latest_names_by_id()["1001"], "新昵称")
+            finally:
+                cfg.REDBLUE_IDENTITY_INDEX_PATH = old_path
+                cfg.REDBLUE_IDENTITY_WEB_PATH = old_web
                 cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = old_fallback
                 identity_index.clear_cache()
 

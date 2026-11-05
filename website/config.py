@@ -456,6 +456,16 @@ REDBLUE_IDENTITY_INDEX_PATH = os.getenv(
         / "fan_identity_index.json"
     ),
 )
+REDBLUE_IDENTITY_WEB_PATH = os.getenv(
+    "REDBLUE_IDENTITY_WEB_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "all_members"
+        / "fan_identity_web.json"
+    ),
+)
 REDBLUE_IDENTITY_FALLBACK_PATHS = {
     "sender_identity_map": str(
         PROJECT_ROOT.parent
