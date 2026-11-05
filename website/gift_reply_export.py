@@ -6,8 +6,9 @@
 版式与字号对齐交接包本地图（1000px 逻辑宽，正文 20-24px），
 按 2x 像素密度渲染（输出 2000px 宽），长图放大或在高分屏上更清晰。
 
-只依赖 Pillow 与系统 CJK 字体（阿里云文泉驿/腾讯云 Noto 均可）；仓库内置
-Noto Sans Egyptian Hieroglyphs 作为装饰字符备用字体。
+只依赖 Pillow 与系统 CJK 字体（阿里云文泉驿/腾讯云 Noto 均可）；备用字体链为
+仓库内置 Noto Sans Egyptian Hieroglyphs + 系统 FreeSerif/Unifont/DejaVu，
+覆盖埃及圣书体、符号和常见 emoji。
 """
 from __future__ import annotations
 
@@ -67,7 +68,14 @@ BOLD_CANDIDATES = (
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
 ) + FONT_CANDIDATES
-FALLBACK_FONT_PATH = Path(__file__).resolve().parent / "static" / "fonts" / "NotoSansEgyptianHieroglyphs-Regular.ttf"
+FALLBACK_FONT_PATHS = (
+    Path(__file__).resolve().parent / "static" / "fonts" / "NotoSansEgyptianHieroglyphs-Regular.ttf",
+    Path("/usr/share/fonts/truetype/freefont/FreeSerif.ttf"),
+    Path("/usr/share/fonts/truetype/unifont/unifont.ttf"),
+    Path("/usr/share/fonts/truetype/unifont/unifont_upper.ttf"),
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+)
+FALLBACK_FONT_PATH = FALLBACK_FONT_PATHS[0]
 
 
 def _pil():
@@ -142,28 +150,47 @@ def _glyph_is_missing(font, char: str) -> bool:
 
 
 @lru_cache(maxsize=64)
-def _fallback_font(size: int):
-    """补充 WQY/Noto CJK 不含的装饰字符（如埃及圣书体）。"""
+def _fallback_fonts(size: int):
+    """补充 WQY/Noto CJK 不含的装饰字符、符号和 emoji。"""
     _, _, ImageFont = _pil()
-    try:
-        return ImageFont.truetype(str(FALLBACK_FONT_PATH), max(1, int(size)))
-    except OSError:
-        return None
+    fonts = []
+    for path in FALLBACK_FONT_PATHS:
+        try:
+            fonts.append(ImageFont.truetype(str(path), max(1, int(size))))
+        except OSError:
+            continue
+    return tuple(fonts)
 
 
 def _fallback_for(font):
     size = getattr(font, "size", None)
     if not size:
-        return None
-    return _fallback_font(int(size))
+        return ()
+    return _fallback_fonts(int(size))
+
+
+def _fallback_list(fallback):
+    if fallback is None:
+        return ()
+    if isinstance(fallback, (list, tuple)):
+        return tuple(fallback)
+    return (fallback,)
+
+
+def _pick_font(char: str, font, fallbacks):
+    if not _glyph_is_missing(font, char):
+        return font
+    for fallback in fallbacks:
+        if not _glyph_is_missing(fallback, char):
+            return fallback
+    return font
 
 
 def _font_runs(text: str, font, fallback=None):
+    fallbacks = _fallback_list(fallback)
     runs: list[list[Any]] = []
     for char in text:
-        use = font
-        if fallback is not None and _glyph_is_missing(font, char) and not _glyph_is_missing(fallback, char):
-            use = fallback
+        use = _pick_font(char, font, fallbacks)
         if runs and runs[-1][1] is use:
             runs[-1][0] += char
         else:
@@ -172,17 +199,17 @@ def _font_runs(text: str, font, fallback=None):
 
 
 def _text_width_fallback(draw, text: str, font, fallback=None) -> float:
-    fallback = fallback if fallback is not None else _fallback_for(font)
-    if fallback is None:
+    fallbacks = _fallback_list(fallback if fallback is not None else _fallback_for(font))
+    if not fallbacks:
         return draw.textlength(text, font=font)
-    return sum(draw.textlength(run, font=use) for run, use in _font_runs(text, font, fallback))
+    return sum(draw.textlength(run, font=use) for run, use in _font_runs(text, font, fallbacks))
 
 
 def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
-    fallback = fallback if fallback is not None else _fallback_for(font)
-    if fallback is None:
+    fallbacks = _fallback_list(fallback if fallback is not None else _fallback_for(font))
+    if not fallbacks:
         return draw.text(xy, text, font=font, **kwargs)
-    runs = _font_runs(text, font, fallback)
+    runs = _font_runs(text, font, fallbacks)
     if len(runs) <= 1 and (not runs or runs[0][1] is font):
         return draw.text(xy, text, font=font, **kwargs)
     anchor = kwargs.pop("anchor", None) or "la"
@@ -216,6 +243,7 @@ def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
 def _display_text(text: Any, font=None, fallback_font=None) -> str:
     """去掉字体和备用字体都无法渲染的 emoji/装饰符号，避免导出图出现方框。"""
     value = "" if text is None else str(text)
+    fallbacks = _fallback_list(fallback_font)
     cleaned = []
     for char in value:
         code = ord(char)
@@ -225,10 +253,10 @@ def _display_text(text: Any, font=None, fallback_font=None) -> str:
             continue
         if 0x2500 <= code <= 0x28FF:
             continue
-        if unicodedata.category(char) in {"Mn", "Me", "So", "Cs", "Cn", "Co"}:
+        if unicodedata.category(char) in {"Mn", "Me", "Cs", "Cn", "Co"}:
             continue
         if font is not None and _glyph_is_missing(font, char):
-            if fallback_font is None or _glyph_is_missing(fallback_font, char):
+            if not any(not _glyph_is_missing(item, char) for item in fallbacks):
                 continue
         cleaned.append(char)
     return "".join(cleaned)

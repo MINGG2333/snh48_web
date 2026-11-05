@@ -133,6 +133,13 @@ class GiftReplyExportTests(unittest.TestCase):
         self.assertEqual(_display_text(name, font), "嘉菲猫不吃鱼")
         self.assertEqual(_display_text("嘉菲猫不吃鱼", font, fallback), "嘉菲猫不吃鱼")
 
+    def test_display_text_preserves_symbol_and_emoji_with_fallback(self) -> None:
+        font = _font(24)
+        fallback = _fallback_for(font)
+        for name in ("JOJO⭐", "拾蹄悦(悦悦🌲)", "衡绥suí🌲🐒"):
+            with self.subTest(name=name):
+                self.assertEqual(_display_text(name, font, fallback), name)
+
     def test_filter_labels(self) -> None:
         self.assertEqual(_export_period_text("2026-10-01", "2026-10-23"), "2026-10-01 至 2026-10-23")
         self.assertEqual(_export_period_text("2026-10-01", ""), "2026-10-01 起")
