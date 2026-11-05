@@ -8,7 +8,7 @@
 
 只依赖 Pillow 与系统 CJK 字体（阿里云文泉驿/腾讯云 Noto 均可）；备用字体链为
 仓库内置 Noto Sans Egyptian Hieroglyphs + 系统 FreeSerif/Unifont/DejaVu，
-覆盖埃及圣书体、符号和常见 emoji。
+覆盖埃及圣书体、符号和常见 emoji；缺字平台再用 Noto Color Emoji 缩放回退。
 """
 from __future__ import annotations
 
@@ -74,6 +74,11 @@ FALLBACK_FONT_PATHS = (
     Path("/usr/share/fonts/truetype/unifont/unifont.ttf"),
     Path("/usr/share/fonts/truetype/unifont/unifont_upper.ttf"),
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+)
+COLOR_EMOJI_FONT_PATHS = (
+    Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"),
+    Path("/usr/share/fonts/google-noto-emoji-fonts/NotoColorEmoji.ttf"),
 )
 FALLBACK_FONT_PATH = FALLBACK_FONT_PATHS[0]
 
@@ -149,6 +154,53 @@ def _glyph_is_missing(font, char: str) -> bool:
         return True
 
 
+class _ColorEmojiFont:
+    """Noto Color Emoji only loads at 109px; render then scale to the target size."""
+
+    def __init__(self, size: int, base):
+        self.size = max(1, int(size))
+        self._base = base
+
+    def getmask(self, char: str, mode: str = "L"):
+        return self._base.getmask(char, mode=mode)
+
+    def getbbox(self, char: str):
+        return self._base.getbbox(char)
+
+    def getlength(self, text: str, *args, **kwargs) -> float:
+        return self.size * 1.06 * len(text)
+
+    def getmetrics(self):
+        return self.size, max(2, int(self.size * 0.2))
+
+    def render(self, text: str):
+        Image, ImageDraw, _ = _pil()
+        width = max(64, 160 * max(1, len(text)))
+        canvas = Image.new("RGBA", (width, 200), (0, 0, 0, 0))
+        ImageDraw.Draw(canvas).text(
+            (10, 170), text, font=self._base, embedded_color=True, anchor="ls"
+        )
+        bbox = canvas.getbbox()
+        if not bbox:
+            return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+        glyph = canvas.crop(bbox)
+        glyph_width, glyph_height = glyph.size
+        target_height = self.size
+        target_width = max(1, round(glyph_width * target_height / glyph_height))
+        return glyph.resize((target_width, target_height), Image.LANCZOS)
+
+
+@lru_cache(maxsize=16)
+def _color_emoji_font(size: int):
+    _, _, ImageFont = _pil()
+    for path in COLOR_EMOJI_FONT_PATHS:
+        try:
+            return _ColorEmojiFont(size, ImageFont.truetype(str(path), 109))
+        except OSError:
+            continue
+    return None
+
+
 @lru_cache(maxsize=64)
 def _fallback_fonts(size: int):
     """补充 WQY/Noto CJK 不含的装饰字符、符号和 emoji。"""
@@ -159,6 +211,9 @@ def _fallback_fonts(size: int):
             fonts.append(ImageFont.truetype(str(path), max(1, int(size))))
         except OSError:
             continue
+    color_emoji = _color_emoji_font(int(size))
+    if color_emoji is not None:
+        fonts.append(color_emoji)
     return tuple(fonts)
 
 
@@ -205,6 +260,20 @@ def _text_width_fallback(draw, text: str, font, fallback=None) -> float:
     return sum(draw.textlength(run, font=use) for run, use in _font_runs(text, font, fallbacks))
 
 
+def _draw_color_emoji(draw, x, baseline, text: str, font: _ColorEmojiFont) -> None:
+    scale = getattr(draw, "_scale", 1) or 1
+    image_draw = getattr(draw, "_draw", draw)
+    image = getattr(image_draw, "_image", None)
+    if image is None:
+        return
+    glyph = font.render(text)
+    image.paste(
+        glyph,
+        (round(x * scale), round(baseline * scale) - glyph.height),
+        glyph,
+    )
+
+
 def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
     fallbacks = _fallback_list(fallback if fallback is not None else _fallback_for(font))
     if not fallbacks:
@@ -236,7 +305,10 @@ def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
     else:
         baseline = y + ascent
     for run, use in runs:
-        draw.text((cursor, baseline), run, font=use, anchor="ls", **kwargs)
+        if isinstance(use, _ColorEmojiFont):
+            _draw_color_emoji(draw, cursor, baseline, run, use)
+        else:
+            draw.text((cursor, baseline), run, font=use, anchor="ls", **kwargs)
         cursor += draw.textlength(run, font=use)
 
 
