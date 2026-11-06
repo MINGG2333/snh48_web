@@ -1,5 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-07 05:30 CST 统一业务兑换展示、支持微店加赠并迁移旧业务（双端已生效）
+
+- 需求：兑换业务列不再同时存在“逐条业务下拉”和“兑换记录”两套模式；微店兑换需要额外叠加一个加赠业务。
+- 代码：移除条目表和编辑弹窗里的旧 `selected_business`/`selected_business_bonus`/`business_done` 控件；所有业务统一走 `business_redemptions`。兑换弹窗新增“加赠业务（仅微店）”，只允许 bonus 组选项，不额外扣分，但要求分摊条目包含微店来源；条目详情、兑换列表、按昵称汇总均显示加赠。
+- 导出：`business_completion_labels` 会把主食业和加赠业务一起放在拼成条目上，用 `+` 连接；贡献条目仍显示 `—`。
+- 迁移：新增幂等接口 `POST /api/redblue/migrate-legacy-business`，把旧条目业务转为兑换记录并清空旧字段；生产执行结果 `created=15, skipped=1, cleared=15`。跳过的是「再坏对你不好吗」：该微店条目没有口袋48 ID，暂保留为只读“历史业务”并提示补 ID 后重新迁移。
+- 部署：网站 `9896b3a`、`c09ff2a` 已推送并双端 pull；腾讯云 `snh48-web.service` 05:29:24 重启（PID `1990103`），阿里云 `snh48-aliyun.service` 05:29:23 重启（PID `2612494`）。迁移前台账备份在 `/home/snh48-fan-hub/private_handover/web_state/redblue_ledger_2026.json.bak.before_business_migration_20261107`。
+- 验证：50 项网站测试通过；`node --check` 通过；临时数据 Playwright 实测自动分摊 5+1、加赠《答案之书》、完成/删除和统一“未兑换/管理兑换”显示；生产只读 Playwright 确认 SnowYee 兑换、PLANET 迁移后的“ID 合影+答案之书”、无旧业务下拉、微店加赠可选。
+
 ## 2026-11-07 05:00 CST 修复 logrotate 超大 rotate 数量导致 CPU 空转（阿里云）
 
 - 现象：`logrotate.service` 每日 00:00 启动后持续约 3h39m 占用 100% CPU；根因是 `/etc/logrotate.d/nginx` 的 `rotate 1000000000`——logrotate 3.19 每次轮转会枚举约 10 亿个代次。对照实验：`rotate 5` 用时 0.00s，`rotate 1000000000` 20s 超时。
