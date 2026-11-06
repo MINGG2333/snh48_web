@@ -175,8 +175,24 @@ def _draw_fans(draw, top: int, fans: list[dict[str, Any]], *, width: int, card_w
 
 
 def _business_text(row: dict[str, Any]) -> str:
-    """Selected business names only, joined with '+' (score prefixes removed)."""
-    names: list[str] = []
+    """Export only marks the entry where a business is completed.
+
+    Earlier contributing entries show an em dash; multiple businesses completed
+    on the same entry are joined with '+'.
+    """
+    completion_labels = row.get("business_completion_labels")
+    if isinstance(completion_labels, list) and completion_labels:
+        names: list[str] = []
+        for value in completion_labels:
+            name = str(value or "").strip()
+            if name:
+                names.append(name)
+        if names:
+            return "+".join(names)
+    allocations = row.get("business_allocations")
+    if isinstance(allocations, list) and allocations:
+        return "—"
+    names = []
     for key in ("selected_business", "selected_business_bonus"):
         value = str(row.get(key) or "").strip()
         if not value:

@@ -144,6 +144,18 @@
     .business-pair { display: flex; flex-direction: column; gap: 4px; }
     .business-pair .business-sublabel { color: var(--faint); font-size: 11px; line-height: 1; }
     .business-pair .business-select { min-width: 150px; }
+    .business-detail { display: flex; flex-direction: column; gap: 5px; min-width: 180px; }
+    .business-alloc { border-left: 2px solid var(--teal); padding-left: 6px; }
+    .business-alloc strong { font-size: 12px; }
+    .redemption-table { min-width: 0; }
+    .redemption-table th, .redemption-table td { font-size: 12px; padding: 6px; white-space: nowrap; }
+    .redemption-table input { width: 72px; min-height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--text); padding: 0 6px; }
+    .redemption-summary { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 8px; }
+    .redemption-summary strong { color: var(--text); }
+    .redemption-list { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .redemption-item { border: 1px solid var(--line); border-radius: 8px; padding: 9px; display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+    .redemption-item .notice { line-height: 1.5; }
+    .redemption-item .actions { flex-shrink: 0; }
     .empty { color: var(--faint); text-align: center; padding: 30px 10px; }
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 360px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: none; }
     .toast.show { display: block; }
@@ -204,6 +216,7 @@
         <button class="btn" id="syncRoomLiveBtn">立即同步房间/直播</button>
         <button class="btn pink" id="syncWeidianBtn">立即同步微店</button>
         <button class="btn gold" id="aiResolveBtn">AI 识别未登记</button>
+        <button class="btn" id="businessRedeemBtn">业务兑换</button>
         <button class="btn" id="applySelectedAiBtn">应用选中 AI 建议</button>
         <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
         <button class="btn" id="duplicateSelectedBtn">标记重复</button>
@@ -263,7 +276,7 @@
       <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><div class="spacer"></div><label class="check"><input type="checkbox" id="selectAll"> 全选当前列表</label></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th style="width:34px;"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务</th><th>选定的业务</th><th>备注</th><th>操作</th></tr></thead>
+          <thead><tr><th style="width:34px;"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务状态</th><th>兑换业务</th><th>备注</th><th>操作</th></tr></thead>
           <tbody id="entryBody"></tbody>
         </table>
       </div>
@@ -310,6 +323,34 @@
     <div class="sub" id="fanModalSub"></div>
     <div class="bar-list" id="fanModalBars"></div>
     <div class="modal-actions"><button class="btn" data-close="fanModal">关闭</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="redemptionModal">
+  <div class="modal-backdrop" data-close="redemptionModal"></div>
+  <div class="modal-card wide">
+    <h2 id="redemptionModalTitle">业务兑换</h2>
+    <div class="sub" id="redemptionModalSub">选择粉丝和业务，按最早条目自动分摊；可手动调整每条使用分数。</div>
+    <div class="form-grid">
+      <div class="field"><label>粉丝</label><select id="redemptionFan"></select></div>
+      <div class="field"><label>业务</label><select id="redemptionBusiness"></select></div>
+      <div class="field"><label>状态</label><select id="redemptionStatus"><option value="pending">兑换中</option><option value="done">已完成</option></select></div>
+      <div class="field"><label>备注</label><input id="redemptionNote" placeholder="可选"></div>
+    </div>
+    <div class="redemption-summary" id="redemptionSummary"></div>
+    <div class="table-wrap">
+      <table class="redemption-table">
+        <thead><tr><th>条目时间</th><th>来源</th><th>条目分数</th><th>可用</th><th>本次使用</th></tr></thead>
+        <tbody id="redemptionAllocBody"></tbody>
+      </table>
+    </div>
+    <div class="redemption-list" id="redemptionList"></div>
+    <div class="modal-actions">
+      <button class="btn" data-close="redemptionModal">取消</button>
+      <button class="btn" id="newRedemptionBtn" type="button">新建兑换</button>
+      <button class="btn" id="redemptionAutoBtn" type="button">自动分摊</button>
+      <button class="btn primary" id="saveRedemptionBtn">保存兑换</button>
+    </div>
   </div>
 </div>
 
@@ -376,6 +417,8 @@
   var aiSuggestions = {};
   var fanSummaryItems = [];
   var businessOptions = [];
+  var redemptionData = null;
+  var editingRedemptionId = "";
   var pollTimer = null;
   var confirmAction = null;
 
@@ -788,6 +831,10 @@
         if (scoreNames.length) parts.push("计分昵称 " + scoreNames.slice(0, 2).join(" / "));
         parts.push("记录 " + (item.entry_count || 0));
         parts.push("已投 " + score(item.settled_score) + " · 待投 " + score(item.pending_score));
+        if (Number(item.business_allocated_score || 0) > 0) {
+          parts.push("已兑换 " + score(item.business_allocated_score) + " 分" + ((item.business_labels || []).length ? "（" + item.business_labels.join("+") + "）" : ""));
+          parts.push("剩余 " + score(item.business_remaining_score) + " 分");
+        }
         return parts.join(" · ");
       },
       value: function (item) { return item.total_score; },
@@ -916,6 +963,27 @@
     return html;
   }
 
+  function businessAllocationMarkup(entry) {
+    var allocations = entry.business_allocations || [];
+    if (!allocations.length) return "";
+    var lines = allocations.map(function (item) {
+      var status = item.status === "done" ? "已完成" : "兑换中";
+      return '<div class="business-alloc"><strong>' + esc(item.business || item.business_name || "") + '</strong>' +
+        '<div class="notice">本条 ' + score(item.score) + ' 分' + (item.completion ? " · 拼成点" : "") + ' · ' + status + '</div></div>';
+    });
+    lines.push('<div class="notice">本条剩余 ' + score(entry.business_remaining_score) + ' 分</div>');
+    return '<div class="business-detail">' + lines.join("") + '</div>';
+  }
+
+  function businessStatusMarkup(entry) {
+    var allocations = entry.business_allocations || [];
+    if (allocations.length) {
+      var done = entry.business_status === "done";
+      return '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成业务" : "兑换中") + '</span>';
+    }
+    return '<button class="btn mini business-btn ' + (entry.business_done ? "done" : "") + '" data-business="' + esc(entry.id) + '" data-done="' + (entry.business_done ? "0" : "1") + '">' + (entry.business_done ? "已完成业务" : "未完成业务") + '</button>';
+  }
+
   function renderEntries() {
     var entries = data.entries || [];
     $("entryHint").textContent = "共 " + entries.length + " 条";
@@ -948,14 +1016,15 @@
       var scoring = entry.scoring_method || "";
       var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
       var isChicken = scoring === "鸡腿";
-      var businessCell = isChicken
+      var allocatedBusiness = businessAllocationMarkup(entry);
+      var businessCell = allocatedBusiness || (isChicken
         ? '<div class="business-pair">' +
             '<span class="business-sublabel">回馈</span>' +
             '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>' +
             '<span class="business-sublabel">加赠</span>' +
             '<select class="business-select" data-business-bonus-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business_bonus, "bonus") + '</select>' +
           '</div>'
-        : '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>';
+        : '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>');
       return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
@@ -964,11 +1033,12 @@
         '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span></td>' +
         '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
-        '<td><button class="btn mini business-btn ' + (entry.business_done ? "done" : "") + '" data-business="' + esc(entry.id) + '" data-done="' + (entry.business_done ? "0" : "1") + '">' + (entry.business_done ? "已完成业务" : "未完成业务") + '</button></td>' +
+        '<td>' + businessStatusMarkup(entry) + '</td>' +
         '<td>' + businessCell + '</td>' +
         '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
         '<td><div class="actions">' +
           '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + aiBtn + shipBtn +
+          (entry.fan_id ? '<button class="btn mini" data-redeem-fan="' + esc(entry.fan_id) + '">兑换</button>' : "") +
           '<button class="btn mini" data-dup="' + esc(entry.id) + '">' + (entry.duplicate ? "取消重复" : "重复") + '</button>' +
           '<button class="btn mini danger" data-delete="' + esc(entry.id) + '">删除</button>' +
         '</div></td>' +
@@ -1057,6 +1127,293 @@
       });
       await loadData(true);
     } catch (error) { showToast(error.message || "选定业务保存失败", true); }
+  }
+
+  function redemptionFullQuery() {
+    return "/api/redblue/data?source=all&status=all&keyword=&date_from=&date_to=&sort=time_asc&include_duplicate=true";
+  }
+
+  function redemptionById(id) {
+    if (!redemptionData) return null;
+    return (redemptionData.business_redemptions || []).find(function (item) { return item.id === id; }) || null;
+  }
+
+  function editingRedemption() {
+    return editingRedemptionId ? redemptionById(editingRedemptionId) : null;
+  }
+
+  function fanSummary(fanId) {
+    if (!redemptionData) return null;
+    return (redemptionData.fan_summary || []).find(function (item) { return String(item.fan_id) === String(fanId); }) || null;
+  }
+
+  function fanEntries(fanId) {
+    if (!redemptionData) return [];
+    return (redemptionData.entries || []).filter(function (entry) {
+      return String(entry.fan_id) === String(fanId) && !entry.duplicate;
+    }).sort(function (left, right) {
+      return String(left.source_time || left.created_at || "").localeCompare(String(right.source_time || right.created_at || ""));
+    });
+  }
+
+  function editingEntryScore(entryId) {
+    var redemption = editingRedemption();
+    if (!redemption) return 0;
+    return (redemption.allocations || []).reduce(function (total, item) {
+      return item.entry_id === entryId ? total + Number(item.score || 0) : total;
+    }, 0);
+  }
+
+  function entryAvailable(entry) {
+    return Math.max(0, Number(entry.score || 0) - Math.max(0, Number(entry.business_allocated_score || 0) - editingEntryScore(entry.id)));
+  }
+
+  function fanAvailable(fanId) {
+    var fan = fanSummary(fanId);
+    if (!fan) return 0;
+    var allocated = Number(fan.business_allocated_score || 0);
+    var editing = editingRedemption();
+    if (editing && String(editing.fan_id) === String(fanId)) allocated -= Number(editing.cost || 0);
+    return Math.max(0, Number(fan.total_score || 0) - allocated);
+  }
+
+  function businessCost(value) {
+    var option = businessOptions.find(function (item) { return item.value === value; });
+    if (option) return Number(option.score || 0);
+    var match = String(value || "").match(/^(\d+(?:\.\d+)?)-/);
+    return match ? Number(match[1]) : 0;
+  }
+
+  function populateRedemptionFans(selected) {
+    var fans = ((redemptionData && redemptionData.fan_summary) || []).filter(function (fan) { return fan.fan_id; });
+    var html = '<option value="">请选择粉丝</option>';
+    fans.forEach(function (fan) {
+      var available = Number(fan.business_remaining_score);
+      var editing = editingRedemption();
+      if (editing && String(editing.fan_id) === String(fan.fan_id)) {
+        available += Number(editing.cost || 0);
+      }
+      html += '<option value="' + esc(fan.fan_id) + '">' + esc(fan.fan_name || "未登记") +
+        ' · ID ' + esc(fan.fan_id) + ' · 可用 ' + score(available) + ' 分</option>';
+    });
+    $("redemptionFan").innerHTML = html;
+    $("redemptionFan").value = selected || "";
+  }
+
+  function renderRedemptionList(fanId) {
+    var target = $("redemptionList");
+    var redemptions = ((redemptionData && redemptionData.business_redemptions) || []).filter(function (item) {
+      return String(item.fan_id) === String(fanId);
+    });
+    if (!redemptions.length) {
+      target.innerHTML = '<div class="notice">该粉丝暂无兑换记录</div>';
+      return;
+    }
+    target.innerHTML = '<div class="notice" style="font-weight:700;color:var(--text);">已登记兑换</div>' +
+      redemptions.map(function (item) {
+        var done = item.status === "done";
+        var allocations = (item.allocations || []).map(function (row) {
+          return (row.entry_time || "-").slice(0, 10) + " " + score(row.score) + "分";
+        }).join(" + ");
+        return '<div class="redemption-item"><div><strong>' + esc(item.business) + '</strong> ' +
+          '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成" : "兑换中") + '</span>' +
+          '<div class="notice">分摊：' + esc(allocations || "-") + '</div>' +
+          (item.note ? '<div class="notice">备注：' + esc(item.note) + '</div>' : '') +
+          '</div><div class="actions">' +
+          '<button class="btn mini" data-edit-redemption="' + esc(item.id) + '">编辑</button>' +
+          '<button class="btn mini" data-toggle-redemption="' + esc(item.id) + '" data-status="' + (done ? "pending" : "done") + '">' + (done ? "改为兑换中" : "标记完成") + '</button>' +
+          '<button class="btn mini danger" data-delete-redemption="' + esc(item.id) + '">删除</button>' +
+          '</div></div>';
+      }).join("");
+  }
+
+  function updateRedemptionSummary() {
+    var fanId = $("redemptionFan").value;
+    var business = $("redemptionBusiness").value;
+    var cost = businessCost(business);
+    var total = 0;
+    Array.prototype.forEach.call($("redemptionAllocBody").querySelectorAll("input[data-entry-id]"), function (input) {
+      total += Number(input.value || 0);
+    });
+    if (!fanId) {
+      $("redemptionSummary").textContent = "请选择粉丝。";
+      return;
+    }
+    var available = fanAvailable(fanId);
+    var parts = [
+      "粉丝可用 " + score(available) + " 分",
+      business ? "业务需要 " + score(cost) + " 分" : "请选择业务",
+      "本次分摊 " + score(total) + " 分"
+    ];
+    if (business) parts.push("兑换后剩余 " + score(Math.max(0, available - cost)) + " 分");
+    $("redemptionSummary").innerHTML = parts.map(function (text) { return esc(text); }).join(" · ");
+  }
+
+  function renderRedemptionAllocations() {
+    var fanId = $("redemptionFan").value;
+    var body = $("redemptionAllocBody");
+    if (!fanId) {
+      body.innerHTML = '<tr><td colspan="5" class="empty">请选择粉丝</td></tr>';
+      $("redemptionSummary").textContent = "请选择粉丝。";
+      renderRedemptionList("");
+      return;
+    }
+    var entries = fanEntries(fanId);
+    if (!entries.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty">该粉丝没有可兑换条目</td></tr>';
+    } else {
+      body.innerHTML = entries.map(function (entry) {
+        var available = entryAvailable(entry);
+        var current = editingEntryScore(entry.id);
+        return '<tr data-entry-id="' + esc(entry.id) + '" data-available="' + esc(available) + '">' +
+          '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0, 16)) + '</td>' +
+          '<td>' + esc(entry.source_label || entry.source || "-") + '</td>' +
+          '<td>' + score(entry.score) + '</td>' +
+          '<td>' + score(available) + '</td>' +
+          '<td><input type="number" min="0" step="0.01" data-entry-id="' + esc(entry.id) + '" value="' + esc(current || 0) + '"' + (available <= 0 && current <= 0 ? " disabled" : "") + '></td>' +
+          '</tr>';
+      }).join("");
+    }
+    renderRedemptionList(fanId);
+    updateRedemptionSummary();
+  }
+
+  function resetRedemptionForm() {
+    editingRedemptionId = "";
+    $("redemptionFan").disabled = false;
+    $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+    $("redemptionStatus").value = "pending";
+    $("redemptionNote").value = "";
+    renderRedemptionAllocations();
+  }
+
+  async function openRedemptionModal(fanId, redemptionId) {
+    editingRedemptionId = redemptionId || "";
+    try {
+      redemptionData = await api(redemptionFullQuery());
+      populateRedemptionFans(fanId || "");
+      var redemption = editingRedemption();
+      if (redemption) {
+        $("redemptionFan").value = redemption.fan_id;
+        $("redemptionFan").disabled = true;
+        $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
+        $("redemptionStatus").value = redemption.status;
+        $("redemptionNote").value = redemption.note || "";
+      } else {
+        $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+        $("redemptionStatus").value = "pending";
+        $("redemptionNote").value = "";
+      }
+      renderRedemptionAllocations();
+      $("redemptionModal").classList.remove("hidden");
+    } catch (error) {
+      showToast(error.message || "兑换数据加载失败", true);
+    }
+  }
+
+  function autoAllocateRedemption() {
+    var cost = businessCost($("redemptionBusiness").value);
+    if (!cost) { showToast("请先选择业务", true); return; }
+    var remaining = cost;
+    Array.prototype.forEach.call($("redemptionAllocBody").querySelectorAll("tr[data-entry-id]"), function (row) {
+      var input = row.querySelector("input[data-entry-id]");
+      var available = Number(row.getAttribute("data-available") || 0);
+      var amount = Math.min(available, remaining);
+      input.value = amount > 0 ? score(amount) : "0";
+      remaining = Math.max(0, remaining - amount);
+    });
+    if (remaining > 0.0001) showToast("可用分数不足，还差 " + score(remaining) + " 分", true);
+    updateRedemptionSummary();
+  }
+
+  async function saveRedemption() {
+    var fanId = $("redemptionFan").value;
+    var business = $("redemptionBusiness").value;
+    if (!fanId) { showToast("请选择粉丝", true); return; }
+    if (!business) { showToast("请选择业务", true); return; }
+    var cost = businessCost(business);
+    var allocations = [];
+    var total = 0;
+    Array.prototype.forEach.call($("redemptionAllocBody").querySelectorAll("input[data-entry-id]"), function (input) {
+      var amount = Number(input.value || 0);
+      if (amount > 0) {
+        allocations.push({entry_id: input.getAttribute("data-entry-id"), score: amount});
+        total += amount;
+      }
+    });
+    if (Math.abs(total - cost) > 0.0001) {
+      showToast("分摊合计 " + score(total) + " 分，与业务 " + score(cost) + " 分不一致", true);
+      return;
+    }
+    var payload = {
+      fan_id: fanId,
+      fan_name: (fanSummary(fanId) || {}).fan_name || "",
+      business: business,
+      status: $("redemptionStatus").value,
+      note: $("redemptionNote").value.trim(),
+      allocations: allocations
+    };
+    $("saveRedemptionBtn").disabled = true;
+    try {
+      if (editingRedemptionId) {
+        await api("/api/redblue/redemptions/" + encodeURIComponent(editingRedemptionId), {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await api("/api/redblue/redemptions", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+      }
+      $("redemptionModal").classList.add("hidden");
+      editingRedemptionId = "";
+      await loadData(true);
+      showToast("兑换已保存");
+    } catch (error) {
+      showToast(error.message || "兑换保存失败", true);
+    } finally {
+      $("saveRedemptionBtn").disabled = false;
+    }
+  }
+
+  function editRedemption(id) {
+    var redemption = redemptionById(id);
+    if (!redemption) return;
+    editingRedemptionId = id;
+    $("redemptionFan").value = redemption.fan_id;
+    $("redemptionFan").disabled = true;
+    $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
+    $("redemptionStatus").value = redemption.status;
+    $("redemptionNote").value = redemption.note || "";
+    renderRedemptionAllocations();
+  }
+
+  function deleteRedemption(id) {
+    openConfirm("删除业务兑换", "删除后会释放对应分摊分数，确定删除？", async function () {
+      try {
+        var fanId = (redemptionById(id) || {}).fan_id || $("redemptionFan").value;
+        await api("/api/redblue/redemptions/" + encodeURIComponent(id), {method: "DELETE"});
+        await loadData(true);
+        await openRedemptionModal(fanId, "");
+        showToast("兑换已删除");
+      } catch (error) { showToast(error.message || "删除失败", true); }
+    });
+  }
+
+  async function toggleRedemptionStatus(id, status) {
+    try {
+      var fanId = (redemptionById(id) || {}).fan_id || $("redemptionFan").value;
+      await api("/api/redblue/redemptions/" + encodeURIComponent(id), {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status: status})
+      });
+      await loadData(true);
+      await openRedemptionModal(fanId, "");
+    } catch (error) { showToast(error.message || "状态更新失败", true); }
   }
 
   async function deleteEntry(id) {
@@ -1784,6 +2141,23 @@
     $("fanMoreBar").addEventListener("click", openFanModal);
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null); });
+    $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
+    $("redemptionFan").addEventListener("change", function () { renderRedemptionAllocations(); });
+    $("redemptionBusiness").addEventListener("change", updateRedemptionSummary);
+    $("redemptionAutoBtn").addEventListener("click", autoAllocateRedemption);
+    $("saveRedemptionBtn").addEventListener("click", saveRedemption);
+    $("newRedemptionBtn").addEventListener("click", resetRedemptionForm);
+    $("redemptionAllocBody").addEventListener("input", updateRedemptionSummary);
+    $("redemptionList").addEventListener("click", function (event) {
+      var edit = event.target.closest("[data-edit-redemption]");
+      if (edit) { editRedemption(edit.getAttribute("data-edit-redemption")); return; }
+      var del = event.target.closest("[data-delete-redemption]");
+      if (del) { deleteRedemption(del.getAttribute("data-delete-redemption")); return; }
+      var toggle = event.target.closest("[data-toggle-redemption]");
+      if (toggle) {
+        toggleRedemptionStatus(toggle.getAttribute("data-toggle-redemption"), toggle.getAttribute("data-status"));
+      }
+    });
     $("syncRoomLiveBtn").addEventListener("click", function () { syncRoomLive(false); });
     $("syncWeidianBtn").addEventListener("click", function () { syncWeidian(false); });
     $("aiResolveBtn").addEventListener("click", aiResolve);
@@ -1844,6 +2218,8 @@
         updateSelectAll();
         return;
       }
+      var redeem = event.target.closest("[data-redeem-fan]");
+      if (redeem) { openRedemptionModal(redeem.getAttribute("data-redeem-fan"), ""); return; }
       var edit = event.target.closest("[data-edit]");
       if (edit) {
         var entry = (data.entries || []).find(function (row) { return row.id === edit.getAttribute("data-edit"); });

@@ -96,7 +96,7 @@ def default_document(resource: str) -> dict[str, Any]:
         "score_business": {"version": 1, "records": {}},
         "memories": {"version": 1, "items": []},
         "business_tasks": {"version": 1, "tasks": []},
-        "redblue_ledger": {"version": 1, "entries": [], "aliases": []},
+        "redblue_ledger": {"version": 1, "entries": [], "aliases": [], "business_redemptions": []},
     }
     return deepcopy(defaults[resource])
 
@@ -122,6 +122,8 @@ def normalise_document(resource: str, value: Any) -> dict[str, Any]:
             doc["entries"] = []
         if not isinstance(doc.get("aliases"), list):
             doc["aliases"] = []
+        if not isinstance(doc.get("business_redemptions"), list):
+            doc["business_redemptions"] = []
     return doc
 
 

@@ -136,6 +136,40 @@ class RedblueLedgerApiTests(unittest.TestCase):
         api._COOKIE_SECRET_CACHE = None
         identity_index.clear_cache()
 
+    def _write_business_ledger(self) -> None:
+        entries = [
+            {
+                "id": "e1",
+                "fan_id": "1001",
+                "fan_name": "Alice",
+                "raw_name": "Alice",
+                "raw_id": "1001",
+                "score": 5.0,
+                "source": "manual",
+                "source_time": "2026-10-31 10:00:00",
+                "created_at": "2026-10-31 10:00:00",
+                "settled": True,
+                "duplicate": False,
+            },
+            {
+                "id": "e2",
+                "fan_id": "1001",
+                "fan_name": "Alice",
+                "raw_name": "Alice",
+                "raw_id": "1001",
+                "score": 3.0,
+                "source": "manual",
+                "source_time": "2026-11-01 10:00:00",
+                "created_at": "2026-11-01 10:00:00",
+                "settled": True,
+                "duplicate": False,
+            },
+        ]
+        (self.tmp / "ledger.json").write_text(
+            json.dumps({"version": 1, "entries": entries, "aliases": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
     def test_login_cookie_authenticates_and_logout_clears(self):
         response = self.client.post("/api/redblue/login", json={"password": "testpass"})
         self.assertEqual(response.status_code, 200)
@@ -213,6 +247,78 @@ class RedblueLedgerApiTests(unittest.TestCase):
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         self.assertEqual(data["summary"]["entry_count"], 3)
         self.assertEqual(data["summary"]["total_score"], 6.0)
+
+    def test_business_redemption_splits_and_marks_completion_entry(self):
+        self._write_business_ledger()
+        response = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={"fan_id": "1001", "fan_name": "Alice", "business": "6-点唱整首"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        redemption = response.json()["result"]["redemption"]
+        self.assertEqual(redemption["completion_entry_id"], "e2")
+        self.assertEqual(
+            [(item["entry_id"], item["score"]) for item in redemption["allocations"]],
+            [("e1", 5.0), ("e2", 1.0)],
+        )
+
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entries = {entry["id"]: entry for entry in data["entries"]}
+        self.assertEqual(entries["e1"]["business_completion_labels"], [])
+        self.assertEqual(entries["e1"]["business_allocations"][0]["score"], 5.0)
+        self.assertEqual(entries["e1"]["business_remaining_score"], 0.0)
+        self.assertEqual(entries["e2"]["business_completion_labels"], ["点唱整首"])
+        self.assertEqual(entries["e2"]["business_allocations"][0]["score"], 1.0)
+        self.assertEqual(entries["e2"]["business_remaining_score"], 2.0)
+        fan = next(item for item in data["fan_summary"] if item["fan_id"] == "1001")
+        self.assertEqual(fan["business_remaining_score"], 2.0)
+        exported = self.client.get("/api/redblue/export/entries.png", headers=self.headers)
+        self.assertEqual(exported.status_code, 200)
+        self.assertTrue(exported.content.startswith(b"\x89PNG"))
+
+        updated = self.client.patch(
+            f"/api/redblue/redemptions/{redemption['id']}",
+            headers=self.headers,
+            json={"status": "done"},
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entries = {entry["id"]: entry for entry in data["entries"]}
+        self.assertEqual(entries["e2"]["business_status"], "done")
+        self.assertEqual(data["business_redemptions"][0]["completed_at"] != "", True)
+
+        deleted = self.client.delete(
+            f"/api/redblue/redemptions/{redemption['id']}",
+            headers=self.headers,
+        )
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+
+    def test_business_redemption_rejects_invalid_allocation(self):
+        self._write_business_ledger()
+        bad_total = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={
+                "fan_id": "1001",
+                "business": "6-点唱整首",
+                "allocations": [
+                    {"entry_id": "e1", "score": 5},
+                    {"entry_id": "e2", "score": 2},
+                ],
+            },
+        )
+        self.assertEqual(bad_total.status_code, 422)
+        over_entry = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={
+                "fan_id": "1001",
+                "business": "6-点唱整首",
+                "allocations": [{"entry_id": "e1", "score": 6}],
+            },
+        )
+        self.assertEqual(over_entry.status_code, 422)
 
     def test_weidian_name_ignores_notes(self):
         (self.tmp / "weidian.json").write_text(
@@ -907,6 +1013,19 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "答案之书",
         )
         self.assertEqual(_business_text({}), "")
+        self.assertEqual(
+            _business_text({"business_allocations": [{"entry_id": "e1", "score": 5}]}),
+            "—",
+        )
+        self.assertEqual(
+            _business_text(
+                {
+                    "business_completion_labels": ["点唱整首", "查水表"],
+                    "business_allocations": [{"entry_id": "e2", "score": 6}],
+                }
+            ),
+            "点唱整首+查水表",
+        )
 
     def test_cookie_secret_persists_across_reloads(self):
         api._COOKIE_SECRET_CACHE = None

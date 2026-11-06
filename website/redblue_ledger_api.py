@@ -103,6 +103,7 @@ BUSINESS_OPTIONS = [
     for score, name in items
 ]
 BUSINESS_OPTION_VALUES = {item["value"] for item in BUSINESS_OPTIONS}
+BUSINESS_OPTION_MAP = {item["value"]: item for item in BUSINESS_OPTIONS}
 BUSINESS_GROUP_VALUES = {
     group_key: {f"{score}-{name}" for score, name in items}
     for group_key, _group_label, items in BUSINESS_OPTION_GROUPS
@@ -520,6 +521,236 @@ def _entry_key(item: dict[str, Any]) -> str:
     if fan_id:
         return f"id:{fan_id}"
     return f"name:{_clean(item.get('fan_name') or item.get('raw_name'), 120)}"
+
+
+def _business_name(value: Any) -> str:
+    text = _clean(value, 80)
+    option = BUSINESS_OPTION_MAP.get(text)
+    if option:
+        return str(option["name"])
+    return re.sub(r"^\d+(?:\.\d+)?-", "", text)
+
+
+def _redemption_status(value: Any) -> str:
+    return "done" if _clean(value, 20).lower() in {"done", "complete", "completed", "finished", "已完成"} else "pending"
+
+
+def _redemption_allocations_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = payload.get("allocations")
+    if not isinstance(rows, list):
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        entry_id = _clean(row.get("entry_id"), 80)
+        amount = _to_float(row.get("score"), 0.0)
+        if not entry_id or amount <= 0:
+            continue
+        if entry_id in seen:
+            raise ValueError("同一条目不能重复分摊")
+        seen.add(entry_id)
+        result.append({"entry_id": entry_id, "score": round(amount, 4)})
+    return result
+
+
+def _entry_used_scores(redemptions: Iterable[dict[str, Any]], exclude_id: str = "") -> dict[str, float]:
+    used: dict[str, float] = {}
+    exclude_id = _clean(exclude_id, 80)
+    for redemption in redemptions:
+        if not isinstance(redemption, dict) or _clean(redemption.get("id"), 80) == exclude_id:
+            continue
+        allocations = redemption.get("allocations") if isinstance(redemption.get("allocations"), list) else []
+        for row in allocations:
+            if not isinstance(row, dict):
+                continue
+            entry_id = _clean(row.get("entry_id"), 80)
+            if entry_id:
+                used[entry_id] = round(used.get(entry_id, 0.0) + _to_float(row.get("score"), 0.0), 4)
+    return used
+
+
+def _auto_allocate_redemption(
+    entries: Iterable[dict[str, Any]],
+    used: dict[str, float],
+    cost: float,
+) -> list[dict[str, Any]]:
+    remaining = round(cost, 4)
+    allocations: list[dict[str, Any]] = []
+    candidates = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict)
+        and not entry.get("duplicate")
+        and _to_float(entry.get("score"), 0.0) > 0
+    ]
+    for entry in sorted(candidates, key=lambda item: (_entry_time(item), _clean(item.get("id"), 80))):
+        entry_id = _clean(entry.get("id"), 80)
+        if not entry_id:
+            continue
+        available = round(_to_float(entry.get("score"), 0.0) - used.get(entry_id, 0.0), 4)
+        if available <= 0:
+            continue
+        amount = round(min(available, remaining), 4)
+        allocations.append({"entry_id": entry_id, "score": amount})
+        remaining = round(remaining - amount, 4)
+        if remaining <= 0.0001:
+            break
+    if remaining > 0.0001:
+        raise ValueError("该粉丝剩余可兑换分数不足")
+    return allocations
+
+
+def _completion_entry_id(
+    allocations: list[dict[str, Any]],
+    entries_by_id: dict[str, dict[str, Any]],
+    cost: float,
+) -> str:
+    ordered = []
+    for row in allocations:
+        entry = entries_by_id.get(row["entry_id"])
+        if entry is None:
+            continue
+        ordered.append((_entry_time(entry), row["entry_id"], _to_float(row.get("score"), 0.0)))
+    ordered.sort()
+    total = 0.0
+    for _time, entry_id, amount in ordered:
+        total = round(total + amount, 4)
+        if total >= cost - 0.0001:
+            return entry_id
+    return ordered[-1][1] if ordered else ""
+
+
+def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    business = _clean(raw.get("business"), 80)
+    option = BUSINESS_OPTION_MAP.get(business)
+    allocations = []
+    for row in raw.get("allocations") if isinstance(raw.get("allocations"), list) else []:
+        if not isinstance(row, dict):
+            continue
+        entry_id = _clean(row.get("entry_id"), 80)
+        amount = _to_float(row.get("score"), 0.0)
+        if not entry_id or amount <= 0:
+            continue
+        entry = entries_by_id.get(entry_id) or {}
+        allocations.append({
+            "entry_id": entry_id,
+            "score": round(amount, 4),
+            "entry_time": _entry_time(entry),
+            "entry_source": _clean(entry.get("source"), 20),
+        })
+    allocations.sort(key=lambda item: (item.get("entry_time") or "", item["entry_id"]))
+    cost = round(_to_float(raw.get("cost"), _to_float(option["score"] if option else 0.0, 0.0)), 4)
+    completion_entry_id = _completion_entry_id(allocations, entries_by_id, cost)
+    completion_entry = entries_by_id.get(completion_entry_id) or {}
+    fan_id = _clean(raw.get("fan_id"), 32)
+    fan_name = _clean(raw.get("fan_name"), 120)
+    if not fan_name and allocations:
+        first = entries_by_id.get(allocations[0]["entry_id"]) or {}
+        fan_name = _clean(first.get("fan_name") or first.get("raw_name"), 120)
+    status = _redemption_status(raw.get("status"))
+    return {
+        "id": _clean(raw.get("id"), 80),
+        "fan_id": fan_id,
+        "fan_name": fan_name,
+        "business": business,
+        "business_name": str(option["name"]) if option else _business_name(business),
+        "group": _clean(raw.get("group") or (option["group"] if option else ""), 20),
+        "cost": cost,
+        "status": status,
+        "note": _clean(raw.get("note")),
+        "allocations": allocations,
+        "completion_entry_id": completion_entry_id,
+        "completion_entry_time": _entry_time(completion_entry),
+        "created_at": _clean(raw.get("created_at"), 32),
+        "updated_at": _clean(raw.get("updated_at"), 32),
+        "completed_at": _clean(raw.get("completed_at"), 32),
+    }
+
+
+def _normalise_redemptions(raw_redemptions: Iterable[dict[str, Any]], all_entries: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    entries_by_id = {
+        _clean(entry.get("id"), 80): entry
+        for entry in all_entries
+        if isinstance(entry, dict) and _clean(entry.get("id"), 80)
+    }
+    result = [
+        _normalise_redemption(item, entries_by_id)
+        for item in raw_redemptions
+        if isinstance(item, dict) and _clean(item.get("id"), 80)
+    ]
+    return sorted(result, key=lambda item: (item.get("created_at") or "", item["id"]))
+
+
+def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions: list[dict[str, Any]]) -> None:
+    allocations_by_entry: dict[str, list[dict[str, Any]]] = {}
+    completion_labels_by_entry: dict[str, list[str]] = {}
+    for redemption in redemptions:
+        completion_id = _clean(redemption.get("completion_entry_id"), 80)
+        for row in redemption.get("allocations") or []:
+            entry_id = _clean(row.get("entry_id"), 80)
+            if not entry_id:
+                continue
+            allocations_by_entry.setdefault(entry_id, []).append({
+                "redemption_id": redemption["id"],
+                "business": redemption["business"],
+                "business_name": redemption["business_name"],
+                "group": redemption["group"],
+                "cost": redemption["cost"],
+                "score": row["score"],
+                "status": redemption["status"],
+                "completion": entry_id == completion_id,
+            })
+        if completion_id:
+            completion_labels_by_entry.setdefault(completion_id, []).append(redemption["business_name"])
+    for entry in entries:
+        entry_id = _clean(entry.get("id"), 80)
+        allocations = allocations_by_entry.get(entry_id, [])
+        allocated = round(sum(_to_float(item.get("score"), 0.0) for item in allocations), 4)
+        entry["business_allocations"] = allocations
+        entry["business_allocated_score"] = allocated
+        entry["business_remaining_score"] = round(max(0.0, _to_float(entry.get("score"), 0.0) - allocated), 4)
+        entry["business_completion_labels"] = completion_labels_by_entry.get(entry_id, [])
+        statuses = [item.get("status") for item in allocations]
+        entry["business_status"] = (
+            "done" if statuses and all(item == "done" for item in statuses) else
+            "pending" if statuses else ""
+        )
+
+
+def _attach_fan_business(fan_summary: Iterable[dict[str, Any]], redemptions: list[dict[str, Any]]) -> None:
+    by_fan: dict[str, list[dict[str, Any]]] = {}
+    for redemption in redemptions:
+        fan_id = _clean(redemption.get("fan_id"), 32)
+        if fan_id:
+            by_fan.setdefault(fan_id, []).append(redemption)
+    for fan in fan_summary:
+        fan_id = _clean(fan.get("fan_id"), 32)
+        items = by_fan.get(fan_id, [])
+        allocated = round(sum(_to_float(item.get("cost"), 0.0) for item in items), 4)
+        names: list[str] = []
+        for item in items:
+            name = _clean(item.get("business_name"), 80)
+            if name and name not in names:
+                names.append(name)
+        fan["business_redemptions"] = [
+            {
+                "id": item["id"],
+                "business": item["business"],
+                "business_name": item["business_name"],
+                "cost": item["cost"],
+                "status": item["status"],
+            }
+            for item in items
+        ]
+        fan["business_allocated_score"] = allocated
+        fan["business_remaining_score"] = round(max(0.0, _to_float(fan.get("total_score"), 0.0) - allocated), 4)
+        fan["business_labels"] = names
+        fan["business_status"] = (
+            "done" if items and all(item.get("status") == "done" for item in items) else
+            "pending" if items else ""
+        )
 
 
 def _add_alias(doc: dict[str, Any], raw_name: str, fan_id: str, fan_name: str, source: str) -> None:
@@ -1121,6 +1352,105 @@ def _mutator_delete(doc: dict[str, Any], payload: dict[str, Any]):
     return doc, {"deleted": before - len(doc["entries"])}
 
 
+def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
+    redemptions = doc.setdefault("business_redemptions", [])
+    if not isinstance(redemptions, list):
+        redemptions = []
+        doc["business_redemptions"] = redemptions
+    redemption_id = _clean(payload.get("id"), 80)
+    existing = next(
+        (item for item in redemptions if isinstance(item, dict) and _clean(item.get("id"), 80) == redemption_id),
+        None,
+    )
+    if existing is None:
+        redemption_id = redemption_id or f"rbr-{uuid.uuid4().hex}"
+    source = existing or {}
+    fan_id = _clean(payload.get("fan_id") or source.get("fan_id"), 32)
+    if not fan_id:
+        raise ValueError("请选择粉丝")
+    entries = [item for item in doc.get("entries") or [] if isinstance(item, dict)]
+    fan_entries = [
+        item
+        for item in entries
+        if _clean(item.get("fan_id"), 32) == fan_id and not item.get("duplicate")
+    ]
+    if not fan_entries:
+        raise ValueError("该粉丝没有可兑换的计分条目")
+    business = _clean(payload.get("business") or source.get("business"), 80)
+    option = BUSINESS_OPTION_MAP.get(business)
+    if option is None:
+        raise ValueError("请选择有效业务")
+    cost = round(_to_float(option.get("score"), 0.0), 4)
+    if cost <= 0:
+        raise ValueError("业务分值无效")
+    status = _redemption_status(payload.get("status") if "status" in payload else source.get("status"))
+    if "allocations" in payload:
+        allocations = _redemption_allocations_from_payload(payload)
+    elif existing is not None:
+        allocations = _redemption_allocations_from_payload(existing)
+    else:
+        allocations = []
+    used = _entry_used_scores(redemptions, exclude_id=redemption_id)
+    if not allocations:
+        allocations = _auto_allocate_redemption(fan_entries, used, cost)
+    entry_map = {_clean(item.get("id"), 80): item for item in fan_entries}
+    seen: set[str] = set()
+    total = 0.0
+    for row in allocations:
+        entry_id = row["entry_id"]
+        entry = entry_map.get(entry_id)
+        if entry is None:
+            raise ValueError("分摊条目不属于该粉丝或已被标记重复")
+        if entry_id in seen:
+            raise ValueError("同一条目不能重复分摊")
+        seen.add(entry_id)
+        amount = _to_float(row.get("score"), 0.0)
+        available = round(_to_float(entry.get("score"), 0.0) - used.get(entry_id, 0.0), 4)
+        if amount <= 0 or amount > available + 0.0001:
+            raise ValueError("分摊分数超过条目可用分数")
+        total = round(total + amount, 4)
+    if abs(total - cost) > 0.0001:
+        raise ValueError(f"分摊合计 {total:g} 与业务分值 {cost:g} 不一致")
+    now = _now()
+    fan_name = _clean(payload.get("fan_name") or source.get("fan_name"), 120)
+    if not fan_name:
+        fan_name = _clean(fan_entries[0].get("fan_name") or fan_entries[0].get("raw_name"), 120)
+    record = {
+        "id": redemption_id,
+        "fan_id": fan_id,
+        "fan_name": fan_name,
+        "business": business,
+        "group": _clean(option.get("group"), 20),
+        "cost": cost,
+        "status": status,
+        "note": _clean(payload.get("note") if "note" in payload else source.get("note")),
+        "allocations": allocations,
+        "created_at": _clean(source.get("created_at"), 32) or now,
+        "updated_at": now,
+        "completed_at": (
+            _clean(source.get("completed_at"), 32) or now
+            if status == "done"
+            else ""
+        ),
+    }
+    if existing is not None:
+        redemptions[redemptions.index(existing)] = record
+    else:
+        redemptions.append(record)
+    return doc, {"redemption": _normalise_redemption(record, entry_map), "created": existing is None}
+
+
+def _mutator_delete_redemption(doc: dict[str, Any], payload: dict[str, Any]):
+    redemption_id = _clean(payload.get("id"), 80)
+    redemptions = doc.get("business_redemptions") if isinstance(doc.get("business_redemptions"), list) else []
+    before = len(redemptions)
+    doc["business_redemptions"] = [
+        item for item in redemptions
+        if not (isinstance(item, dict) and _clean(item.get("id"), 80) == redemption_id)
+    ]
+    return doc, {"deleted": before - len(doc["business_redemptions"])}
+
+
 def _mutator_duplicate(doc: dict[str, Any], payload: dict[str, Any]):
     entry_id = _clean(payload.get("id"), 80)
     entry = next((item for item in doc.get("entries") or [] if isinstance(item, dict) and item.get("id") == entry_id), None)
@@ -1330,6 +1660,8 @@ register_mutator(RESOURCE, "upsert_room_live", _mutator_upsert_room_live)
 register_mutator(RESOURCE, "upsert_weidian", _mutator_upsert_weidian)
 register_mutator(RESOURCE, "rename_weidian", _mutator_rename_weidian)
 register_mutator(RESOURCE, "mark_shipped", _mutator_mark_shipped)
+register_mutator(RESOURCE, "upsert_redemption", _mutator_upsert_redemption)
+register_mutator(RESOURCE, "delete_redemption", _mutator_delete_redemption)
 
 
 def _build_room_live_items() -> list[dict[str, Any]]:
@@ -1485,15 +1817,22 @@ def get_redblue_data(
         sort=sort,
         include_duplicate=include_duplicate,
     )
-    all_entries = [_normalise_entry(item, doc.get("aliases") or []) for item in doc.get("entries") or [] if isinstance(item, dict)]
+    raw_entries = doc.get("entries") or []
+    all_entries = [_normalise_entry(item, doc.get("aliases") or []) for item in raw_entries if isinstance(item, dict)]
+    redemptions = _normalise_redemptions(doc.get("business_redemptions") or [], raw_entries)
+    _attach_business_allocations(all_entries, redemptions)
+    _attach_business_allocations(entries, redemptions)
+    fan_summary = _fan_summary(entries)
+    _attach_fan_business(fan_summary, redemptions)
     return {
         "generated_at": _clean(doc.get("updated_at"), 32),
         "summary": _summary(entries),
         "overall": _summary(all_entries),
         "daily_scoring": _daily_scoring(all_entries),
-        "fan_summary": _fan_summary(entries),
+        "fan_summary": fan_summary,
         "entries": entries,
         "business_options": BUSINESS_OPTIONS,
+        "business_redemptions": redemptions,
         "total": len(entries),
         "filters": {
             "source": _clean(source, 20),
@@ -1519,7 +1858,7 @@ def _export_context(
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str]:
     date_from = _norm_date(date_from)
     date_to = _norm_date(date_to)
-    _, entries = _load_filtered(
+    doc, entries = _load_filtered(
         source=source,
         status_filter=status_filter,
         keyword=keyword,
@@ -1528,6 +1867,8 @@ def _export_context(
         sort=sort,
         include_duplicate=include_duplicate,
     )
+    redemptions = _normalise_redemptions(doc.get("business_redemptions") or [], doc.get("entries") or [])
+    _attach_business_allocations(entries, redemptions)
     if not entries:
         raise HTTPException(status_code=404, detail="当前筛选条件下没有条目")
     if len(entries) > cfg.REDBLUE_IMAGE_EXPORT_MAX_ROWS:
@@ -1665,6 +2006,23 @@ def mark_duplicate(entry_id: str, request: Request, payload: dict[str, Any] = Bo
     data = dict(payload or {})
     data["id"] = entry_id
     return _mutate("duplicate", data, request)
+
+
+@router.post("/redemptions")
+def add_redemption(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    return _mutate("upsert_redemption", payload, request)
+
+
+@router.patch("/redemptions/{redemption_id}")
+def update_redemption(redemption_id: str, request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    data = dict(payload)
+    data["id"] = redemption_id
+    return _mutate("upsert_redemption", data, request)
+
+
+@router.delete("/redemptions/{redemption_id}")
+def delete_redemption(redemption_id: str, request: Request, _=Depends(verify_redblue_password)):
+    return _mutate("delete_redemption", {"id": redemption_id}, request)
 
 
 @router.post("/sync/room-live")
