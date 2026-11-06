@@ -1,5 +1,15 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-07 04:42 CST 红蓝台账支持按人业务兑换与导出完成点标记（双端已生效）
+
+- 需求：SnowYee 等粉丝可能用多条计分（如 5+3）拼一个 6 分业务；网页需显示分摊与剩余，导出按条目图只在“拼成业务”的条目写业务名，之前贡献条目写 `—`，同一条目完成多个业务用 `+` 连接。
+- 数据：`redblue_ledger_2026.json` 新增顶层 `business_redemptions`（`fan_id`、`business`、`cost`、`status`、`allocations[{entry_id,score}]`、`note`）。新增 `/api/redblue/redemptions` 的 POST/PATCH/DELETE；默认按最早条目自动分摊，校验总分摊=业务分值、不超过条目可用分、不能重复使用；`completion_entry_id` 按条目时间累计到业务成本时确定。旧 `selected_business`/`business_done` 保留兼容。
+- 网页：工具栏新增“业务兑换”；弹窗支持选粉丝、选业务、自动分摊、逐条改分数、标记完成/兑换中、备注、编辑/删除；条目“兑换业务”列显示 `本条 X 分 · 余 Y` 与拼成点，“业务状态”列显示兑换中/已完成；按昵称汇总显示已兑换和剩余分。
+- 导出：`redblue_export._business_text()` 只在 `business_completion_labels` 存在的条目显示业务名（多个 `+`），有分摊但非完成条目显示 `—`，未参与兑换的旧项目仍按原 `selected_business` 显示；不再显示余数/分摊比例。
+- 验证：`tests/test_redblue_ledger_api.py` 33 项及 identity/gift/password 合计 48 项通过；`node --check` 通过；本地临时数据（Alice 5+3）用 Playwright 实测登录、自动分摊 5+1、保存、条目显示、标记完成、删除后恢复原下拉均正常。
+- 部署：网站提交 `b1bc4d1` 已推送并双端 pull；腾讯云 `snh48-web.service` 04:40:57 重启（PID `1945399`），阿里云 `snh48-aliyun.service` 04:41:05 重启（PID `2552368`，04:41:07 启动完成，QA warmup 已关闭），两端 `/api/redblue/data` 均返回 `business_redemptions` 与条目分摊字段，当前尚无兑换记录。
+- 文档：`doc/website_pages.md`、`doc/shared_runtime_state.md` 已更新；未修改 fan-hub 脚本或服务。
+
 ## 2026-11-07 04:05 CST 修复直播回放链接不可用与时光轴未来场次缓存（阿里云）
 
 - 现象：`/replay/1325592362732032000` 等新回放页显示「回放链接不可用」。根因：`replay_page` 先命中过期的 `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/summary.csv`，未找到 `live_id` 却仍执行 `break`，导致永远不会读取权威的 `live_record/live_index.csv`。
