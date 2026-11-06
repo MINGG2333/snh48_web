@@ -303,10 +303,7 @@
       <div class="field"><label>口袋48 ID</label><input id="entryId" placeholder="可选；填了会优先校验"></div>
       <div class="field"><label>分数</label><input id="entryScore" type="number" min="0.01" step="0.01" placeholder="1"></div>
       <div class="field"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
-      <div class="field full"><label>选定的业务</label><select id="entryBusinessSelected"></select></div>
-      <div class="field full hidden" id="entryBusinessBonusField"><label>鸡腿加赠业务</label><select id="entryBusinessBonus"></select></div>
       <div class="field full"><label>备注</label><textarea id="entryNote" placeholder="可选"></textarea></div>
-      <div class="field full"><label class="check"><input id="entryBusinessDone" type="checkbox"> 业务已完成</label></div>
       <div class="field full"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
     </div>
     <div class="modal-actions">
@@ -334,6 +331,7 @@
     <div class="form-grid">
       <div class="field"><label>粉丝</label><select id="redemptionFan"></select></div>
       <div class="field"><label>业务</label><select id="redemptionBusiness"></select></div>
+      <div class="field"><label>加赠业务（仅微店）</label><select id="redemptionBonus"></select></div>
       <div class="field"><label>状态</label><select id="redemptionStatus"><option value="pending">兑换中</option><option value="done">已完成</option></select></div>
       <div class="field"><label>备注</label><input id="redemptionNote" placeholder="可选"></div>
     </div>
@@ -833,6 +831,7 @@
         parts.push("已投 " + score(item.settled_score) + " · 待投 " + score(item.pending_score));
         if (Number(item.business_allocated_score || 0) > 0) {
           parts.push("已兑换 " + score(item.business_allocated_score) + " 分" + ((item.business_labels || []).length ? "（" + item.business_labels.join("+") + "）" : ""));
+          if ((item.business_bonus_labels || []).length) parts.push("加赠 " + item.business_bonus_labels.join("+"));
           parts.push("剩余 " + score(item.business_remaining_score) + " 分");
         }
         return parts.join(" · ");
@@ -965,13 +964,20 @@
 
   function businessAllocationMarkup(entry) {
     var allocations = entry.business_allocations || [];
-    if (!allocations.length) return "";
     var lines = allocations.map(function (item) {
       var status = item.status === "done" ? "已完成" : "兑换中";
+      var bonus = item.bonus_business_name ? " · 加赠 " + item.bonus_business_name : "";
       return '<div class="business-alloc"><strong>' + esc(item.business || item.business_name || "") + '</strong>' +
-        '<div class="notice">本条 ' + score(item.score) + ' 分' + (item.completion ? " · 拼成点" : "") + ' · ' + status + '</div></div>';
+        '<div class="notice">本条 ' + score(item.score) + ' 分' + (item.completion ? " · 拼成点" : "") + bonus + ' · ' + status + '</div></div>';
     });
-    lines.push('<div class="notice">本条剩余 ' + score(entry.business_remaining_score) + ' 分</div>');
+    if (allocations.length) {
+      lines.push('<div class="notice">本条剩余 ' + score(entry.business_remaining_score) + ' 分</div>');
+    } else {
+      lines.push('<div class="notice">未兑换</div>');
+    }
+    if (entry.fan_id) {
+      lines.push('<button class="btn mini" data-redeem-fan="' + esc(entry.fan_id) + '">' + (allocations.length ? "管理兑换" : "兑换业务") + '</button>');
+    }
     return '<div class="business-detail">' + lines.join("") + '</div>';
   }
 
@@ -981,7 +987,7 @@
       var done = entry.business_status === "done";
       return '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成业务" : "兑换中") + '</span>';
     }
-    return '<button class="btn mini business-btn ' + (entry.business_done ? "done" : "") + '" data-business="' + esc(entry.id) + '" data-done="' + (entry.business_done ? "0" : "1") + '">' + (entry.business_done ? "已完成业务" : "未完成业务") + '</button>';
+    return '<span class="notice">未兑换</span>';
   }
 
   function renderEntries() {
@@ -1015,16 +1021,7 @@
       var shipBtn = (entry.source === "weidian" && !entry.settled && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
       var scoring = entry.scoring_method || "";
       var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
-      var isChicken = scoring === "鸡腿";
-      var allocatedBusiness = businessAllocationMarkup(entry);
-      var businessCell = allocatedBusiness || (isChicken
-        ? '<div class="business-pair">' +
-            '<span class="business-sublabel">回馈</span>' +
-            '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>' +
-            '<span class="business-sublabel">加赠</span>' +
-            '<select class="business-select" data-business-bonus-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business_bonus, "bonus") + '</select>' +
-          '</div>'
-        : '<select class="business-select" data-business-select="' + esc(entry.id) + '">' + businessOptionsMarkup(entry.selected_business, "card") + '</select>');
+      var businessCell = businessAllocationMarkup(entry);
       return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
@@ -1038,7 +1035,6 @@
         '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
         '<td><div class="actions">' +
           '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + aiBtn + shipBtn +
-          (entry.fan_id ? '<button class="btn mini" data-redeem-fan="' + esc(entry.fan_id) + '">兑换</button>' : "") +
           '<button class="btn mini" data-dup="' + esc(entry.id) + '">' + (entry.duplicate ? "取消重复" : "重复") + '</button>' +
           '<button class="btn mini danger" data-delete="' + esc(entry.id) + '">删除</button>' +
         '</div></td>' +
@@ -1056,12 +1052,7 @@
     $("entryId").value = entry ? (entry.fan_id || entry.raw_id || "") : "";
     $("entryScore").value = entry ? entry.score : "1";
     $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
-    var isChicken = Boolean(entry && entry.scoring_method === "鸡腿");
-    $("entryBusinessSelected").innerHTML = businessOptionsMarkup(entry ? entry.selected_business : "", "card");
-    $("entryBusinessBonus").innerHTML = businessOptionsMarkup(entry ? entry.selected_business_bonus : "", "bonus");
-    $("entryBusinessBonusField").classList.toggle("hidden", !isChicken);
     $("entryNote").value = entry ? (entry.note || "") : "";
-    $("entryBusinessDone").checked = entry ? Boolean(entry.business_done) : false;
     $("entryDuplicate").checked = entry ? Boolean(entry.duplicate) : false;
     $("entryModal").classList.remove("hidden");
     setTimeout(function () { $("entryName").focus(); }, 30);
@@ -1074,9 +1065,6 @@
       score: Number($("entryScore").value || 0),
       note: $("entryNote").value.trim(),
       settled: $("entrySettled").checked,
-      business_done: $("entryBusinessDone").checked,
-      selected_business: $("entryBusinessSelected").value,
-      selected_business_bonus: $("entryBusinessBonus").value,
       duplicate: $("entryDuplicate").checked
     };
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
@@ -1103,30 +1091,6 @@
       await api("/api/redblue/entries/" + encodeURIComponent(id) + "/duplicate", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({duplicate: duplicate})});
       await loadData(true);
     } catch (error) { showToast(error.message || "操作失败", true); }
-  }
-
-  async function toggleBusiness(id, done) {
-    try {
-      await api("/api/redblue/entries/" + encodeURIComponent(id), {
-        method: "PATCH",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({business_done: done})
-      });
-      await loadData(true);
-    } catch (error) { showToast(error.message || "业务状态更新失败", true); }
-  }
-
-  async function updateSelectedBusiness(id, value, field) {
-    var payload = {};
-    payload[field || "selected_business"] = value;
-    try {
-      await api("/api/redblue/entries/" + encodeURIComponent(id), {
-        method: "PATCH",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-      });
-      await loadData(true);
-    } catch (error) { showToast(error.message || "选定业务保存失败", true); }
   }
 
   function redemptionFullQuery() {
@@ -1184,6 +1148,16 @@
     return match ? Number(match[1]) : 0;
   }
 
+  function fanHasWeidian(fanId) {
+    return fanEntries(fanId).some(function (entry) { return entry.source === "weidian"; });
+  }
+
+  function updateBonusAvailability() {
+    var enabled = Boolean($("redemptionFan").value && fanHasWeidian($("redemptionFan").value));
+    $("redemptionBonus").disabled = !enabled;
+    if (!enabled) $("redemptionBonus").value = "";
+  }
+
   function populateRedemptionFans(selected) {
     var fans = ((redemptionData && redemptionData.fan_summary) || []).filter(function (fan) { return fan.fan_id; });
     var html = '<option value="">请选择粉丝</option>';
@@ -1217,6 +1191,7 @@
         }).join(" + ");
         return '<div class="redemption-item"><div><strong>' + esc(item.business) + '</strong> ' +
           '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成" : "兑换中") + '</span>' +
+          (item.bonus_business_name ? ' <span class="notice">加赠 ' + esc(item.bonus_business_name) + '</span>' : '') +
           '<div class="notice">分摊：' + esc(allocations || "-") + '</div>' +
           (item.note ? '<div class="notice">备注：' + esc(item.note) + '</div>' : '') +
           '</div><div class="actions">' +
@@ -1275,6 +1250,7 @@
       }).join("");
     }
     renderRedemptionList(fanId);
+    updateBonusAvailability();
     updateRedemptionSummary();
   }
 
@@ -1282,6 +1258,7 @@
     editingRedemptionId = "";
     $("redemptionFan").disabled = false;
     $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+    $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
     $("redemptionStatus").value = "pending";
     $("redemptionNote").value = "";
     renderRedemptionAllocations();
@@ -1297,10 +1274,12 @@
         $("redemptionFan").value = redemption.fan_id;
         $("redemptionFan").disabled = true;
         $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
+        $("redemptionBonus").innerHTML = businessOptionsMarkup(redemption.bonus_business || "", "bonus");
         $("redemptionStatus").value = redemption.status;
         $("redemptionNote").value = redemption.note || "";
       } else {
         $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+        $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
         $("redemptionStatus").value = "pending";
         $("redemptionNote").value = "";
       }
@@ -1349,6 +1328,7 @@
       fan_id: fanId,
       fan_name: (fanSummary(fanId) || {}).fan_name || "",
       business: business,
+      bonus_business: $("redemptionBonus").value,
       status: $("redemptionStatus").value,
       note: $("redemptionNote").value.trim(),
       allocations: allocations
@@ -1386,6 +1366,7 @@
     $("redemptionFan").value = redemption.fan_id;
     $("redemptionFan").disabled = true;
     $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
+    $("redemptionBonus").innerHTML = businessOptionsMarkup(redemption.bonus_business || "", "bonus");
     $("redemptionStatus").value = redemption.status;
     $("redemptionNote").value = redemption.note || "";
     renderRedemptionAllocations();
@@ -2199,15 +2180,6 @@
       $("confirmModal").classList.add("hidden");
       if (action) action();
     });
-    document.addEventListener("change", function (event) {
-      var bonusSelect = event.target.closest("[data-business-bonus-select]");
-      if (bonusSelect) {
-        updateSelectedBusiness(bonusSelect.getAttribute("data-business-bonus-select"), bonusSelect.value, "selected_business_bonus");
-        return;
-      }
-      var select = event.target.closest("[data-business-select]");
-      if (select) updateSelectedBusiness(select.getAttribute("data-business-select"), select.value, "selected_business");
-    });
     document.addEventListener("click", function (event) {
       var close = event.target.closest("[data-close]");
       if (close) { $(close.getAttribute("data-close")).classList.add("hidden"); return; }
@@ -2234,8 +2206,6 @@
       }
       var del = event.target.closest("[data-delete]");
       if (del) { deleteEntry(del.getAttribute("data-delete")); return; }
-      var biz = event.target.closest("[data-business]");
-      if (biz) { toggleBusiness(biz.getAttribute("data-business"), biz.getAttribute("data-done") === "1"); return; }
       var aiApply = event.target.closest("[data-ai-apply]");
       if (aiApply) { applyAi(aiApply.getAttribute("data-ai-apply")); return; }
       var ship = event.target.closest("[data-ship]");

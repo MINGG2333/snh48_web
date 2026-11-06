@@ -104,6 +104,7 @@ BUSINESS_OPTIONS = [
 ]
 BUSINESS_OPTION_VALUES = {item["value"] for item in BUSINESS_OPTIONS}
 BUSINESS_OPTION_MAP = {item["value"]: item for item in BUSINESS_OPTIONS}
+BONUS_OPTION_MAP = {item["value"]: item for item in BUSINESS_OPTIONS if item["group"] == "bonus"}
 BUSINESS_GROUP_VALUES = {
     group_key: {f"{score}-{name}" for score, name in items}
     for group_key, _group_label, items in BUSINESS_OPTION_GROUPS
@@ -642,6 +643,10 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
         })
     allocations.sort(key=lambda item: (item.get("entry_time") or "", item["entry_id"]))
     cost = round(_to_float(raw.get("cost"), _to_float(option["score"] if option else 0.0, 0.0)), 4)
+    bonus_business = _clean(raw.get("bonus_business"), 80)
+    bonus_option = BONUS_OPTION_MAP.get(bonus_business) if bonus_business else None
+    if bonus_option is None:
+        bonus_business = ""
     completion_entry_id = _completion_entry_id(allocations, entries_by_id, cost)
     completion_entry = entries_by_id.get(completion_entry_id) or {}
     fan_id = _clean(raw.get("fan_id"), 32)
@@ -656,6 +661,8 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
         "fan_name": fan_name,
         "business": business,
         "business_name": str(option["name"]) if option else _business_name(business),
+        "bonus_business": bonus_business,
+        "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
         "group": _clean(raw.get("group") or (option["group"] if option else ""), 20),
         "cost": cost,
         "status": status,
@@ -696,6 +703,8 @@ def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions:
                 "redemption_id": redemption["id"],
                 "business": redemption["business"],
                 "business_name": redemption["business_name"],
+                "bonus_business": redemption.get("bonus_business") or "",
+                "bonus_business_name": redemption.get("bonus_business_name") or "",
                 "group": redemption["group"],
                 "cost": redemption["cost"],
                 "score": row["score"],
@@ -704,6 +713,8 @@ def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions:
             })
         if completion_id:
             completion_labels_by_entry.setdefault(completion_id, []).append(redemption["business_name"])
+            if redemption.get("bonus_business_name"):
+                completion_labels_by_entry.setdefault(completion_id, []).append(redemption["bonus_business_name"])
     for entry in entries:
         entry_id = _clean(entry.get("id"), 80)
         allocations = allocations_by_entry.get(entry_id, [])
@@ -730,15 +741,21 @@ def _attach_fan_business(fan_summary: Iterable[dict[str, Any]], redemptions: lis
         items = by_fan.get(fan_id, [])
         allocated = round(sum(_to_float(item.get("cost"), 0.0) for item in items), 4)
         names: list[str] = []
+        bonus_names: list[str] = []
         for item in items:
             name = _clean(item.get("business_name"), 80)
             if name and name not in names:
                 names.append(name)
+            bonus_name = _clean(item.get("bonus_business_name"), 80)
+            if bonus_name and bonus_name not in bonus_names:
+                bonus_names.append(bonus_name)
         fan["business_redemptions"] = [
             {
                 "id": item["id"],
                 "business": item["business"],
                 "business_name": item["business_name"],
+                "bonus_business": item.get("bonus_business") or "",
+                "bonus_business_name": item.get("bonus_business_name") or "",
                 "cost": item["cost"],
                 "status": item["status"],
             }
@@ -747,6 +764,7 @@ def _attach_fan_business(fan_summary: Iterable[dict[str, Any]], redemptions: lis
         fan["business_allocated_score"] = allocated
         fan["business_remaining_score"] = round(max(0.0, _to_float(fan.get("total_score"), 0.0) - allocated), 4)
         fan["business_labels"] = names
+        fan["business_bonus_labels"] = bonus_names
         fan["business_status"] = (
             "done" if items and all(item.get("status") == "done" for item in items) else
             "pending" if items else ""
@@ -1411,6 +1429,16 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         total = round(total + amount, 4)
     if abs(total - cost) > 0.0001:
         raise ValueError(f"分摊合计 {total:g} 与业务分值 {cost:g} 不一致")
+    bonus_business = _clean(
+        payload.get("bonus_business") if "bonus_business" in payload else source.get("bonus_business"),
+        80,
+    )
+    bonus_option = BONUS_OPTION_MAP.get(bonus_business) if bonus_business else None
+    if bonus_business and bonus_option is None:
+        raise ValueError("加赠业务无效")
+    if bonus_option is not None:
+        if not any(_clean(entry_map[entry_id].get("source"), 20) == "weidian" for entry_id in seen):
+            raise ValueError("只有微店条目可以叠加加赠业务")
     now = _now()
     fan_name = _clean(payload.get("fan_name") or source.get("fan_name"), 120)
     if not fan_name:
@@ -1420,6 +1448,8 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         "fan_id": fan_id,
         "fan_name": fan_name,
         "business": business,
+        "bonus_business": bonus_option["value"] if bonus_option else "",
+        "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
         "group": _clean(option.get("group"), 20),
         "cost": cost,
         "status": status,
@@ -1449,6 +1479,77 @@ def _mutator_delete_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         if not (isinstance(item, dict) and _clean(item.get("id"), 80) == redemption_id)
     ]
     return doc, {"deleted": before - len(doc["business_redemptions"])}
+
+
+def _mutator_migrate_legacy_business(doc: dict[str, Any], payload: dict[str, Any]):
+    redemptions = doc.setdefault("business_redemptions", [])
+    if not isinstance(redemptions, list):
+        redemptions = []
+        doc["business_redemptions"] = redemptions
+    entries = [item for item in doc.get("entries") or [] if isinstance(item, dict)]
+    migrated_entries = {
+        _clean(row.get("entry_id"), 80)
+        for redemption in redemptions
+        if isinstance(redemption, dict)
+        for row in (redemption.get("allocations") or [])
+        if isinstance(row, dict)
+    }
+    now = _now()
+    created = 0
+    skipped = 0
+    cleared = 0
+    for entry in entries:
+        selected = _clean(entry.get("selected_business"), 80)
+        selected_bonus = _clean(entry.get("selected_business_bonus"), 80)
+        if not selected and not selected_bonus:
+            continue
+        entry_id = _clean(entry.get("id"), 80)
+        fan_id = _clean(entry.get("fan_id"), 32)
+        if not entry_id or not fan_id or entry_id in migrated_entries:
+            skipped += 1
+            continue
+        option = BUSINESS_OPTION_MAP.get(selected)
+        if option is None or option.get("group") != "card":
+            skipped += 1
+            continue
+        cost = round(_to_float(option.get("score"), 0.0), 4)
+        if _to_float(entry.get("score"), 0.0) + 0.0001 < cost:
+            skipped += 1
+            continue
+        bonus_option = BONUS_OPTION_MAP.get(selected_bonus) if selected_bonus else None
+        if bonus_option is not None and _clean(entry.get("source"), 20) != "weidian":
+            bonus_option = None
+        status = "done" if entry.get("business_done") else "pending"
+        record = {
+            "id": f"rbr-legacy-{entry_id}"[:80],
+            "fan_id": fan_id,
+            "fan_name": _clean(entry.get("fan_name") or entry.get("raw_name"), 120),
+            "business": selected,
+            "bonus_business": bonus_option["value"] if bonus_option else "",
+            "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
+            "group": "card",
+            "cost": cost,
+            "status": status,
+            "note": "",
+            "legacy_entry_id": entry_id,
+            "allocations": [{"entry_id": entry_id, "score": cost}],
+            "created_at": _entry_time(entry) or now,
+            "updated_at": now,
+            "completed_at": (
+                _clean(entry.get("business_done_at"), 32) or now
+                if status == "done"
+                else ""
+            ),
+        }
+        redemptions.append(record)
+        migrated_entries.add(entry_id)
+        entry["selected_business"] = ""
+        entry["selected_business_bonus"] = ""
+        entry["business_done"] = False
+        entry["business_done_at"] = ""
+        created += 1
+        cleared += 1
+    return doc, {"created": created, "skipped": skipped, "cleared": cleared}
 
 
 def _mutator_duplicate(doc: dict[str, Any], payload: dict[str, Any]):
@@ -1662,6 +1763,7 @@ register_mutator(RESOURCE, "rename_weidian", _mutator_rename_weidian)
 register_mutator(RESOURCE, "mark_shipped", _mutator_mark_shipped)
 register_mutator(RESOURCE, "upsert_redemption", _mutator_upsert_redemption)
 register_mutator(RESOURCE, "delete_redemption", _mutator_delete_redemption)
+register_mutator(RESOURCE, "migrate_legacy_business", _mutator_migrate_legacy_business)
 
 
 def _build_room_live_items() -> list[dict[str, Any]]:
@@ -2023,6 +2125,11 @@ def update_redemption(redemption_id: str, request: Request, payload: dict[str, A
 @router.delete("/redemptions/{redemption_id}")
 def delete_redemption(redemption_id: str, request: Request, _=Depends(verify_redblue_password)):
     return _mutate("delete_redemption", {"id": redemption_id}, request)
+
+
+@router.post("/migrate-legacy-business")
+def migrate_legacy_business(request: Request, _=Depends(verify_redblue_password)):
+    return _mutate("migrate_legacy_business", {}, request)
 
 
 @router.post("/sync/room-live")

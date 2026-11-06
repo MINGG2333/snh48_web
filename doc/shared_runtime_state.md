@@ -19,7 +19,7 @@
 | `room_ignore` | `website/data/room_messages_ignored_batches.json` | 房间消息忽略/撤销 | 无 |
 | `score_business` | fan-hub `score_gifts/live_business_fulfillments.json` | 直播计分礼物人工核实/修正 | 腾讯云 `score_gift_business_analyzer.py` |
 | `memories` | `website/data/memories/memories.json` | 粉丝提交、应援会审核、本人确认 | `script/build_memories_seed.py` |
-| `redblue_ledger` | fan-hub `private_handover/web_state/redblue_ledger_2026.json` | 红蓝计分台账 2026（`entries`、`aliases`、`business_redemptions`） | 本机 root worker 队列（AI/微店结果由网页应用） |
+| `redblue_ledger` | fan-hub `private_handover/web_state/redblue_ledger_2026.json` | 红蓝计分台账 2026（`entries`、`aliases`、`business_redemptions`，兑换含可选 `bonus_business` 加赠） | 本机 root worker 队列（AI/微店结果由网页应用） |
 
 五个当前状态文件都只走版本化复制通道，不再由普通 `core` / `dynamic` rsync 覆盖。计分礼物目录中的 `score_gifts.json` 等只读派生文件仍按 `dynamic` 拉取，但明确排除 `live_business_fulfillments.json` 和 `.*.lock`；手动 `deploy.py sync-data` 也使用相同排除规则。这样旧文件不会在新 revision 到达后把副本回滚。
 
