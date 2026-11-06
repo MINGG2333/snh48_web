@@ -120,6 +120,49 @@ class TimelineApiContractTests(unittest.TestCase):
                         self.assertIn('src="/live-covers/cover.jpg"', html)
                         self.assertIn("电台信息", html)
 
+    def test_replay_page_skips_stale_earlier_csv_and_reads_unified_index(self) -> None:
+        from starlette.requests import Request
+        from website import main
+
+        with tempfile.TemporaryDirectory() as stale, tempfile.TemporaryDirectory() as unified:
+            stale_summary = Path(stale) / "陈嘉仪_161808449" / "summary.csv"
+            stale_summary.parent.mkdir(parents=True)
+            with stale_summary.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["live_id", "push_bj", "title", "live_type", "play_url", "video_status"],
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "live_id": "old", "push_bj": "2026-01-01 00:00:00", "title": "旧回放",
+                    "live_type": "1", "play_url": "https://example.com/old.m3u8",
+                    "video_status": "available",
+                })
+            index = Path(unified) / "live_index.csv"
+            with index.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=[
+                        "live_id", "live_ctime_bj", "title", "live_type",
+                        "official_replay_url", "official_replay_status",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "live_id": "new", "live_ctime_bj": "2026-11-06 22:30:48", "title": "啵一下",
+                    "live_type": "1", "official_replay_url": "https://example.com/new.m3u8",
+                    "official_replay_status": "replaced",
+                })
+            with mock.patch.object(main.cfg, "LIVE_PUSH_REPLAY_ROOT", stale), mock.patch.object(
+                main.cfg, "LIVE_RECORD_ROOT", unified
+            ):
+                request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+                response = asyncio.run(main.replay_page(request, "new"))
+                html = response.body.decode()
+        self.assertIn('const replayUrl = "https://example.com/new.m3u8"', html)
+        self.assertIn("啵一下", html)
+        self.assertIn("2026-11-06 22:30:48", html)
+
     def write_schedule(self, path: Path) -> None:
         with path.open("w", encoding="utf-8-sig", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)

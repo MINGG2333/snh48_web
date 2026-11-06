@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 import re
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 
 from website import config as cfg
 from website.debut_milestones import debut_date, milestone_date, timeline_milestone_days
@@ -441,8 +441,11 @@ def group_live_by_date(records: List[Dict]) -> Dict[str, List[Dict]]:
 
 
 @router.get("/live-pushes")
-def get_live_pushes(limit: int = Query(500, ge=1, le=2000)):
+def get_live_pushes(response: Response, limit: int = Query(500, ge=1, le=2000)):
     """Return live+replay records as timeline-ready event list."""
+    # Timeline data changes as new shows are announced; never let a browser or
+    # proxy serve a stale copy (otherwise upcoming events appear to vanish).
+    response.headers["Cache-Control"] = "no-store"
     records = read_live_pushes(limit=limit)
     return {
         "success": True,
@@ -453,8 +456,9 @@ def get_live_pushes(limit: int = Query(500, ge=1, le=2000)):
 
 
 @router.get("/live-pushes/grouped")
-def get_live_pushes_grouped(limit: int = Query(500, ge=1, le=2000)):
+def get_live_pushes_grouped(response: Response, limit: int = Query(500, ge=1, le=2000)):
     """Return records grouped by date."""
+    response.headers["Cache-Control"] = "no-store"
     records = read_live_pushes(limit=limit)
     groups = group_live_by_date(records)
     return {
@@ -492,15 +496,17 @@ def read_social_timeline() -> List[Dict[str, Any]]:
 
 
 @router.get("/social")
-def get_social_timeline():
+def get_social_timeline(response: Response):
     """Return each authored Weibo/Douyin item as an independent timeline card."""
+    response.headers["Cache-Control"] = "no-store"
     records = read_social_timeline()
     return {"success": True, "data": records, "total": len(records), "member": MEMBER_NAME}
 
 
 @router.get("/danmu")
-def get_live_danmu(live_id: str = Query(..., min_length=1)):
+def get_live_danmu(response: Response, live_id: str = Query(..., min_length=1)):
     """Return danmaku items for the requested live replay."""
+    response.headers["Cache-Control"] = "no-store"
     row = _find_summary_row(live_id)
     if not row:
         return {
@@ -748,8 +754,9 @@ def read_schedule(on_date: Optional[date] = None) -> List[Dict[str, Any]]:
 
 
 @router.get("/schedule")
-def get_schedule():
+def get_schedule(response: Response):
     """Return schedule records as timeline-ready event list."""
+    response.headers["Cache-Control"] = "no-store"
     records = read_schedule()
     return {
         "success": True,

@@ -1,5 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-07 04:05 CST 修复直播回放链接不可用与时光轴未来场次缓存（阿里云）
+
+- 现象：`/replay/1325592362732032000` 等新回放页显示「回放链接不可用」。根因：`replay_page` 先命中过期的 `/home/snh48-fan-hub/live_push_replays/陈嘉仪_161808449/summary.csv`，未找到 `live_id` 却仍执行 `break`，导致永远不会读取权威的 `live_record/live_index.csv`。
+- 修复：只有命中 `live_id` 时才跳出；未命中则继续扫描后续索引。`website/main.py`。
+- 时光轴：`/api/timeline/schedule`、`/live-pushes`、`/live-pushes/grouped`、`/social`、`/danmu` 增加 `Cache-Control: no-store`，避免浏览器/代理用旧缓存隐藏新公布的未来场次（现场日志显示移动端 timeline 只拉 JS、不再请求接口）。
+- 验证：`/replay/1325592362732032000` 返回 `replayUrl=https://idol-vod.48.cn/...m3u8`，浏览器 HLS 成功挂载 `blob:` 媒体源；`/api/timeline/schedule` 返回 172 条，其中未来 5 条（2026-11-07 / 11-15 / 11-21 / 12-05）；`/timeline` 客户端渲染 250 个日期节点，最大 2026-12-05。新增回放查找回归测试通过（`tests/test_timeline_api_contract.py`）。
+- 运行环境：阿里云内存/swap 严重不足，`snh48-aliyun` 启动时加载 QA 引擎长时间卡在 swap-in。临时把 `/home/snh48_web/.env` 的 `QA_WARMUP_ON_STARTUP` 改为 `false`（备份 `.env.bak.20261107_qa_warmup`），QA 改为首次使用时懒加载；服务已恢复监听 `127.0.0.1:8000`，PID `2492712`。内存恢复后如需恢复启动预热，把该值改回 `true` 并重启即可。
+- 部署：`snh48-aliyun.service` 已重启生效；Tencent/GitHub 同步待执行。
+
 ## 2026-11-06 07:39 CST 导出图保留符号与 emoji；阿里云重启完成（两端已生效）
 
 - 现象：红蓝/礼物导出昵称中的 `JOJO⭐`、`拾蹄悦(悦悦🌲)` 等符号和 emoji 被 `_display_text()` 按 Unicode `So` 类别直接过滤；腾讯云又没有 FreeSerif/Unifont 系统字体。

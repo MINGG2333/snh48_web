@@ -268,34 +268,39 @@ async def replay_page(request: Request, live_id: str):
             csv_paths.append(Path(live_root) / "live_index.csv")
             csv_paths.append(Path(live_root) / "陈嘉仪_161808449" / "summary.csv")
         seen_csv_paths = set()
+        matched = False
         for csv_path in csv_paths:
+            if matched:
+                break
             if csv_path in seen_csv_paths:
                 continue
             seen_csv_paths.add(csv_path)
-            if csv_path.exists():
-                with open(csv_path, "r", encoding="utf-8-sig") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        if (row.get("live_id") or "").strip() == live_id:
-                            play_url = (row.get("play_url") or row.get("official_replay_url") or "").strip()
-                            vstatus = (row.get("video_status") or row.get("official_replay_status") or "").strip()
-                            if play_url and vstatus in ("available", "downloaded", "replaced"):
-                                replay_url = play_url
-                            is_radio = (row.get("live_type") or "").strip() == "2"
-                            title = (row.get("title") or "").strip() or ("电台回放" if is_radio else "直播回放")
-                            date = (
-                                (row.get("push_bj") or "").strip()
-                                or (row.get("live_ctime_bj") or "").strip()
-                                or (row.get("start_bj") or "").strip()
-                            )
-                            cover_local = (row.get("cover_local_path") or "").strip()
-                            cover_cdn = (row.get("live_cover_url") or "").strip()
-                            if cover_local:
-                                cover_url = f"/live-covers/{Path(cover_local).name}"
-                            elif cover_cdn:
-                                cover_url = f"https://source3.48.cn{cover_cdn}"
-                            break
-                break
+            if not csv_path.exists():
+                continue
+            with open(csv_path, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if (row.get("live_id") or "").strip() != live_id:
+                        continue
+                    play_url = (row.get("play_url") or row.get("official_replay_url") or "").strip()
+                    vstatus = (row.get("video_status") or row.get("official_replay_status") or "").strip()
+                    if play_url and vstatus in ("available", "downloaded", "replaced"):
+                        replay_url = play_url
+                    is_radio = (row.get("live_type") or "").strip() == "2"
+                    title = (row.get("title") or "").strip() or ("电台回放" if is_radio else "直播回放")
+                    date = (
+                        (row.get("push_bj") or "").strip()
+                        or (row.get("live_ctime_bj") or "").strip()
+                        or (row.get("start_bj") or "").strip()
+                    )
+                    cover_local = (row.get("cover_local_path") or "").strip()
+                    cover_cdn = (row.get("live_cover_url") or "").strip()
+                    if cover_local:
+                        cover_url = f"/live-covers/{Path(cover_local).name}"
+                    elif cover_cdn:
+                        cover_url = f"https://source3.48.cn{cover_cdn}"
+                    matched = True
+                    break
     except Exception:
         pass
 
