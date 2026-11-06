@@ -972,6 +972,12 @@
     });
     if (allocations.length) {
       lines.push('<div class="notice">本条剩余 ' + score(entry.business_remaining_score) + ' 分</div>');
+    } else if (entry.selected_business || entry.selected_business_bonus) {
+      var legacy = [];
+      if (entry.selected_business) legacy.push(esc(entry.selected_business));
+      if (entry.selected_business_bonus) legacy.push("加赠 " + esc(entry.selected_business_bonus));
+      lines.push('<div class="notice">历史业务：' + legacy.join(" · ") + '</div>');
+      lines.push('<div class="notice" style="color:var(--red);">缺少口袋48 ID，暂不能迁移为兑换记录</div>');
     } else {
       lines.push('<div class="notice">未兑换</div>');
     }
