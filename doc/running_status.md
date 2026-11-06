@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-07 05:00 CST 修复 logrotate 超大 rotate 数量导致 CPU 空转（阿里云）
+
+- 现象：`logrotate.service` 每日 00:00 启动后持续约 3h39m 占用 100% CPU；根因是 `/etc/logrotate.d/nginx` 的 `rotate 1000000000`——logrotate 3.19 每次轮转会枚举约 10 亿个代次。对照实验：`rotate 5` 用时 0.00s，`rotate 1000000000` 20s 超时。
+- 修复：`deploy/logrotate/nginx` 与已安装 `/etc/logrotate.d/nginx` 改为 `rotate 3650`（约 10 年，仍保持“不按文件数量提前删除”的意图）；`deploy/install_observability.sh` 注释同步。
+- 验证：阿里云手动执行 `logrotate -v /etc/logrotate.conf` 完整跑完（rc=0），nginx 日志正常轮转并压缩，`systemctl reset-failed logrotate.service` 已清除失败状态。
+- 日志清理仍由 `snh48-website-log-archive.timer`（每天 03:20）负责：COS 上传并校验后才 `unlink`，未配置 COS 时拒绝删除。
+
 ## 2026-11-07 04:42 CST 红蓝台账支持按人业务兑换与导出完成点标记（双端已生效）
 
 - 需求：SnowYee 等粉丝可能用多条计分（如 5+3）拼一个 6 分业务；网页需显示分摊与剩余，导出按条目图只在“拼成业务”的条目写业务名，之前贡献条目写 `—`，同一条目完成多个业务用 `+` 连接。
