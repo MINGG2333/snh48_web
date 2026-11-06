@@ -48,10 +48,9 @@ if [[ -n "$DEFAULT_SERVICE_NAME" ]] && ! grep -q '^WEBSITE_METRICS_SERVICE_NAME=
     chmod 0600 /etc/snh48-web/observability.env
 fi
 
-# The production rule intentionally keeps a very large rotate count so that
-# logrotate does not delete by file count.  Its debug mode tries to enumerate
-# every generation and can become an unbounded CPU/output job.  Run that
-# optional check only when explicitly requested by an operator.
+# The production rule uses a bounded, large rotate count (3650 daily
+# generations) so logrotate does not delete by file count, while keeping the
+# enumeration cost small.  Validate it when explicitly requested.
 if [[ "${VALIDATE_LOGROTATE:-0}" == "1" ]]; then
     timeout 10s logrotate -d /etc/logrotate.d/nginx >/dev/null 2>&1 || {
         echo 'logrotate debug validation timed out or failed' >&2
