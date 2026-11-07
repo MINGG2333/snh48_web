@@ -1,5 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-07 15:05 CST 社交凭据页恢复平台卡片并新增微店 Cookie（腾讯云已生效）
+
+- 现象：`/social-credentials-admin` 登录后只显示“口袋48账号 Token”，微博/抖音/B站/闲鱼/48商城区块全部消失；后端 `status` 实际返回完整 6 项。
+- 根因：提交 `da47c08` 把 `slotLabel` 的取值写在 `for(const slot of platform.slots)` 循环外，引用未定义的 `slot`，`render()` 抛 `ReferenceError`，所有动态平台区块未渲染。
+- 修复：提交 `918c457` 把 `slotLabel` 移回槽位循环内；同时新增“微店”单槽，`PLATFORMS` 和主槽限制加入 `weidian`，模板增加名称、说明、无手机号表单和验证按钮。
+- 部署：网站 `918c457` 已推送，腾讯云 `snh48-web.service` 14:59:47 重启（PID `2504473`，active），页面与 API 加载新代码。阿里云未重启（该页在阿里云硬禁用，代码随下次重启生效）。
+- 验证：腾讯云桥 `status` 返回 `weibo/douyin/bilibili/xianyu/weidian/shop48`；`validate_weidian` 对当前过期 Cookie 正确报 `code=2`；页面 200、未登录 `/api/social-credentials/status` 401；用真实 status 数据执行 `render()` 生成 6 个平台区块；网站 6 项单测、fan-hub 23 项相关单测通过，`node --check` 与 `py_compile` 通过。
+- 待办：腾讯云 `config/weidian_cookies.txt` 当前已过期；管理员在页面登记新的微店 Cookie 后，`weidian-order-monitor` / `-test` 会在下一轮自动读取并恢复采集，无需人工重启。
+
 ## 2026-11-07 12:12 CST 兑换限制同计分方式、无口袋ID昵称也可兑换（双端已生效）
 
 - 需求：拼单只能同一种计分方式（鸡腿只能和鸡腿、计分卡只能和计分卡）；没有口袋ID/昵称的条目也必须能兑换，不能只读保留。
