@@ -65,6 +65,35 @@ class SocialCredentialsAdminApiTests(unittest.TestCase):
             self.assertEqual(rejected.status_code, 422)
 
 
+    def test_weidian_primary_updates_and_backup_is_rejected(self) -> None:
+        with (
+            patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", True),
+            patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_PASSWORD", "correct-password"),
+            patch.object(social_credentials_admin_api.cfg, "SECURE_COOKIES", False),
+            patch.object(
+                social_credentials_admin_api,
+                "_run_bridge",
+                return_value={"ok": True, "platform": "weidian", "slot": "primary"},
+            ) as run_bridge,
+        ):
+            web = client()
+            web.post("/api/social-credentials/login", json={"password": "correct-password"})
+            response = web.post(
+                "/api/social-credentials/update",
+                headers={"Origin": "http://testserver"},
+                json={"platform": "weidian", "slot": "primary", "cookie": "secret-weidian-cookie-value-long-enough"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("secret-weidian", response.text)
+            self.assertEqual(run_bridge.call_args.args[1]["platform"], "weidian")
+            rejected = web.post(
+                "/api/social-credentials/update",
+                headers={"Origin": "http://testserver"},
+                json={"platform": "weidian", "slot": "backup", "cookie": "secret-weidian-cookie-value-long-enough"},
+            )
+            self.assertEqual(rejected.status_code, 422)
+
+
     def test_update_rejects_cross_origin(self) -> None:
         with (
             patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", True),
