@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-07 21:13 CST 修复微店 Cookie 验证 503 与结果不可见（腾讯云已生效）
+
+- 现象：在 `/social-credentials-admin` 填写微店 Cookie 点“验证并更新”无反馈；服务日志显示 `POST /api/social-credentials/update` 连续 503。
+- 根因：特权桥把 venv Python 解析为系统 `/usr/bin/python3.11`，该环境缺 `websockets`；桥内 `validate_weidian` import 重型订单监控模块失败，stdout 为空，桥返回 503。页面错误消息又在长列表底部，用户看不到，表现为“没有反应”。
+- 修复：fan-hub `3a06e1007` 改为桥内用 `requests` 直接调店长版订单列表接口验证 `wdtoken`；web `f8526a2` 在验证中/成功/失败时把消息滚动到视口中央。
+- 部署：两仓库已推送并双端 pull；腾讯云 `snh48-web.service` 21:13:03 重启（PID `2842874`，active），页面 200、未登录 status 401。
+- 验证：特权桥客户端以当前过期 Cookie 实测返回 `ok:false` 和“微店 cookies 已过期”，不再 503；重新提交有效 Cookie 即可完成写入并恢复订单监控。
+
 ## 2026-11-07 15:05 CST 社交凭据页恢复平台卡片并新增微店 Cookie（腾讯云已生效）
 
 - 现象：`/social-credentials-admin` 登录后只显示“口袋48账号 Token”，微博/抖音/B站/闲鱼/48商城区块全部消失；后端 `status` 实际返回完整 6 项。
