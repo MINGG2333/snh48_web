@@ -436,6 +436,104 @@ class RedblueLedgerApiTests(unittest.TestCase):
         ).json()["result"]
         self.assertEqual(again["created"], 0)
 
+    def test_redemption_requires_same_scoring_method(self):
+        entries = [
+            {
+                "id": "w1", "fan_id": "1001", "fan_name": "Alice", "raw_name": "Alice",
+                "score": 3.0, "source": "weidian", "scoring_method": "鸡腿",
+                "source_time": "2026-11-01 10:00:00", "settled": True, "duplicate": False,
+            },
+            {
+                "id": "r1", "fan_id": "1001", "fan_name": "Alice", "raw_name": "Alice",
+                "score": 3.0, "source": "room", "scoring_method": "计分卡",
+                "source_time": "2026-11-02 10:00:00", "settled": True, "duplicate": False,
+            },
+        ]
+        (self.tmp / "ledger.json").write_text(
+            json.dumps({"version": 1, "entries": entries, "aliases": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        mixed = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={
+                "fan_id": "1001",
+                "scoring_method": "鸡腿",
+                "business": "6-点唱整首",
+                "allocations": [
+                    {"entry_id": "w1", "score": 3},
+                    {"entry_id": "r1", "score": 3},
+                ],
+            },
+        )
+        self.assertEqual(mixed.status_code, 422)
+        insufficient = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={"fan_id": "1001", "scoring_method": "鸡腿", "business": "6-点唱整首"},
+        )
+        self.assertEqual(insufficient.status_code, 422)
+        single = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={"fan_id": "1001", "scoring_method": "鸡腿", "business": "3-点唱半首"},
+        )
+        self.assertEqual(single.status_code, 200, single.text)
+        redemption = single.json()["result"]["redemption"]
+        self.assertEqual(redemption["scoring_method"], "鸡腿")
+        self.assertEqual([item["entry_id"] for item in redemption["allocations"]], ["w1"])
+
+    def test_name_only_fan_can_redeem(self):
+        entry = {
+            "id": "n1", "fan_id": "", "fan_name": "南方有嘉木", "raw_name": "南方有嘉木",
+            "score": 3.0, "source": "weidian", "scoring_method": "鸡腿",
+            "source_time": "2026-11-01 10:00:00", "settled": True, "duplicate": False,
+        }
+        (self.tmp / "ledger.json").write_text(
+            json.dumps({"version": 1, "entries": [entry], "aliases": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        response = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={"fan_name": "南方有嘉木", "scoring_method": "鸡腿", "business": "3-点唱半首"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        redemption = response.json()["result"]["redemption"]
+        self.assertEqual(redemption["fan_id"], "")
+        self.assertEqual(redemption["fan_name"], "南方有嘉木")
+        self.assertEqual(redemption["scoring_method"], "鸡腿")
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        row = next(item for item in data["entries"] if item["id"] == "n1")
+        self.assertEqual(row["business_completion_labels"], ["点唱半首"])
+        fan = next(item for item in data["fan_summary"] if item["fan_name"] == "南方有嘉木")
+        self.assertEqual(fan["business_remaining_score"], 0.0)
+
+    def test_migrate_name_only_legacy_business(self):
+        entry = {
+            "id": "n1", "fan_id": "", "fan_name": "再坏对你不好吗", "raw_name": "再坏对你不好吗",
+            "score": 3.0, "source": "weidian", "scoring_method": "鸡腿",
+            "source_time": "2026-11-01 10:00:00", "settled": True, "duplicate": False,
+            "selected_business": "3-点唱半首", "selected_business_bonus": "3-方言盲盒",
+            "business_done": False,
+        }
+        (self.tmp / "ledger.json").write_text(
+            json.dumps({"version": 1, "entries": [entry], "aliases": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        result = self.client.post(
+            "/api/redblue/migrate-legacy-business", headers=self.headers, json={}
+        ).json()["result"]
+        self.assertEqual(result["created"], 1)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        redemption = data["business_redemptions"][0]
+        self.assertEqual(redemption["fan_id"], "")
+        self.assertEqual(redemption["fan_name"], "再坏对你不好吗")
+        self.assertEqual(redemption["scoring_method"], "鸡腿")
+        row = next(item for item in data["entries"] if item["id"] == "n1")
+        self.assertEqual(row["business_completion_labels"], ["点唱半首", "方言盲盒"])
+        self.assertEqual(row["selected_business"], "")
+
     def test_weidian_name_ignores_notes(self):
         (self.tmp / "weidian.json").write_text(
             json.dumps(

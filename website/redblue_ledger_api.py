@@ -576,6 +576,7 @@ def _auto_allocate_redemption(
     entries: Iterable[dict[str, Any]],
     used: dict[str, float],
     cost: float,
+    scoring_method: str,
 ) -> list[dict[str, Any]]:
     remaining = round(cost, 4)
     allocations: list[dict[str, Any]] = []
@@ -584,6 +585,7 @@ def _auto_allocate_redemption(
         for entry in entries
         if isinstance(entry, dict)
         and not entry.get("duplicate")
+        and _entry_scoring_method(entry) == scoring_method
         and _to_float(entry.get("score"), 0.0) > 0
     ]
     for entry in sorted(candidates, key=lambda item: (_entry_time(item), _clean(item.get("id"), 80))):
@@ -643,6 +645,14 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
         })
     allocations.sort(key=lambda item: (item.get("entry_time") or "", item["entry_id"]))
     cost = round(_to_float(raw.get("cost"), _to_float(option["score"] if option else 0.0, 0.0)), 4)
+    methods = {
+        _entry_scoring_method(entries_by_id[row["entry_id"]])
+        for row in allocations
+        if entries_by_id.get(row["entry_id"])
+    }
+    derived_method = next(iter(methods)) if len(methods) == 1 else ""
+    raw_method = _clean(raw.get("scoring_method"), 10)
+    scoring_method = raw_method if raw_method in SCORING_METHODS else derived_method
     bonus_business = _clean(raw.get("bonus_business"), 80)
     bonus_option = BONUS_OPTION_MAP.get(bonus_business) if bonus_business else None
     if bonus_option is None:
@@ -663,6 +673,7 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
         "business_name": str(option["name"]) if option else _business_name(business),
         "bonus_business": bonus_business,
         "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
+        "scoring_method": scoring_method,
         "group": _clean(raw.get("group") or (option["group"] if option else ""), 20),
         "cost": cost,
         "status": status,
@@ -730,15 +741,23 @@ def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions:
         )
 
 
+def _fan_business_key(fan_id: Any, fan_name: Any) -> str:
+    fan_id = _clean(fan_id, 32)
+    if fan_id:
+        return f"id:{fan_id}"
+    fan_name = _clean(fan_name, 120)
+    return f"name:{fan_name}" if fan_name else ""
+
+
 def _attach_fan_business(fan_summary: Iterable[dict[str, Any]], redemptions: list[dict[str, Any]]) -> None:
     by_fan: dict[str, list[dict[str, Any]]] = {}
     for redemption in redemptions:
-        fan_id = _clean(redemption.get("fan_id"), 32)
-        if fan_id:
-            by_fan.setdefault(fan_id, []).append(redemption)
+        key = _fan_business_key(redemption.get("fan_id"), redemption.get("fan_name"))
+        if key:
+            by_fan.setdefault(key, []).append(redemption)
     for fan in fan_summary:
-        fan_id = _clean(fan.get("fan_id"), 32)
-        items = by_fan.get(fan_id, [])
+        key = _fan_business_key(fan.get("fan_id"), fan.get("fan_name"))
+        items = by_fan.get(key, [])
         allocated = round(sum(_to_float(item.get("cost"), 0.0) for item in items), 4)
         names: list[str] = []
         bonus_names: list[str] = []
@@ -1384,16 +1403,45 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         redemption_id = redemption_id or f"rbr-{uuid.uuid4().hex}"
     source = existing or {}
     fan_id = _clean(payload.get("fan_id") or source.get("fan_id"), 32)
-    if not fan_id:
-        raise ValueError("请选择粉丝")
+    fan_name = _clean(payload.get("fan_name") or source.get("fan_name"), 120)
     entries = [item for item in doc.get("entries") or [] if isinstance(item, dict)]
-    fan_entries = [
-        item
-        for item in entries
-        if _clean(item.get("fan_id"), 32) == fan_id and not item.get("duplicate")
-    ]
+    if fan_id:
+        fan_entries = [
+            item
+            for item in entries
+            if _clean(item.get("fan_id"), 32) == fan_id and not item.get("duplicate")
+        ]
+    elif fan_name:
+        fan_entries = [
+            item
+            for item in entries
+            if not item.get("duplicate")
+            and not _clean(item.get("fan_id"), 32)
+            and _clean(item.get("fan_name") or item.get("raw_name"), 120) == fan_name
+        ]
+    else:
+        raise ValueError("请选择粉丝")
     if not fan_entries:
         raise ValueError("该粉丝没有可兑换的计分条目")
+    entry_map = {_clean(item.get("id"), 80): item for item in fan_entries}
+    scoring_method = _clean(
+        payload.get("scoring_method") if "scoring_method" in payload else source.get("scoring_method"),
+        10,
+    )
+    if scoring_method not in SCORING_METHODS:
+        existing_allocations = source.get("allocations") if isinstance(source.get("allocations"), list) else []
+        methods = {
+            _entry_scoring_method(entry_map[_clean(row.get("entry_id"), 80)])
+            for row in existing_allocations
+            if isinstance(row, dict) and _clean(row.get("entry_id"), 80) in entry_map
+        }
+        if len(methods) == 1:
+            scoring_method = next(iter(methods))
+        else:
+            fan_methods = {_entry_scoring_method(item) for item in fan_entries}
+            scoring_method = next(iter(fan_methods)) if len(fan_methods) == 1 else ""
+    if scoring_method not in SCORING_METHODS:
+        raise ValueError("请选择计分方式；拼单只能使用同一种计分方式")
     business = _clean(payload.get("business") or source.get("business"), 80)
     option = BUSINESS_OPTION_MAP.get(business)
     if option is None:
@@ -1410,8 +1458,7 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         allocations = []
     used = _entry_used_scores(redemptions, exclude_id=redemption_id)
     if not allocations:
-        allocations = _auto_allocate_redemption(fan_entries, used, cost)
-    entry_map = {_clean(item.get("id"), 80): item for item in fan_entries}
+        allocations = _auto_allocate_redemption(fan_entries, used, cost, scoring_method)
     seen: set[str] = set()
     total = 0.0
     for row in allocations:
@@ -1419,6 +1466,8 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         entry = entry_map.get(entry_id)
         if entry is None:
             raise ValueError("分摊条目不属于该粉丝或已被标记重复")
+        if _entry_scoring_method(entry) != scoring_method:
+            raise ValueError("拼单只能使用同一种计分方式（当前为" + scoring_method + "）")
         if entry_id in seen:
             raise ValueError("同一条目不能重复分摊")
         seen.add(entry_id)
@@ -1440,7 +1489,6 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         if not any(_clean(entry_map[entry_id].get("source"), 20) == "weidian" for entry_id in seen):
             raise ValueError("只有微店条目可以叠加加赠业务")
     now = _now()
-    fan_name = _clean(payload.get("fan_name") or source.get("fan_name"), 120)
     if not fan_name:
         fan_name = _clean(fan_entries[0].get("fan_name") or fan_entries[0].get("raw_name"), 120)
     record = {
@@ -1450,6 +1498,7 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         "business": business,
         "bonus_business": bonus_option["value"] if bonus_option else "",
         "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
+        "scoring_method": scoring_method,
         "group": _clean(option.get("group"), 20),
         "cost": cost,
         "status": status,
@@ -1505,7 +1554,8 @@ def _mutator_migrate_legacy_business(doc: dict[str, Any], payload: dict[str, Any
             continue
         entry_id = _clean(entry.get("id"), 80)
         fan_id = _clean(entry.get("fan_id"), 32)
-        if not entry_id or not fan_id or entry_id in migrated_entries:
+        fan_name = _clean(entry.get("fan_name") or entry.get("raw_name"), 120)
+        if not entry_id or (not fan_id and not fan_name) or entry_id in migrated_entries:
             skipped += 1
             continue
         option = BUSINESS_OPTION_MAP.get(selected)
@@ -1523,10 +1573,11 @@ def _mutator_migrate_legacy_business(doc: dict[str, Any], payload: dict[str, Any
         record = {
             "id": f"rbr-legacy-{entry_id}"[:80],
             "fan_id": fan_id,
-            "fan_name": _clean(entry.get("fan_name") or entry.get("raw_name"), 120),
+            "fan_name": fan_name,
             "business": selected,
             "bonus_business": bonus_option["value"] if bonus_option else "",
             "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
+            "scoring_method": _entry_scoring_method(entry),
             "group": "card",
             "cost": cost,
             "status": status,
