@@ -17,6 +17,7 @@ from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, 
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from website import asr_corrections_store
 from website import config as cfg
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 
@@ -190,6 +191,22 @@ async def verify_flip_cards_auth(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
     check_admin_login_limit(get_client_ip(request), "翻牌记录页密码尝试过于频繁，请稍后再试")
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
+
+
+class AsrCorrectionPayload(BaseModel):
+    wrong: str
+    right: str
+    context: str = ""
+
+
+@router.post("/corrections")
+async def submit_asr_correction(payload: AsrCorrectionPayload, _=Depends(verify_flip_cards_auth)):
+    """记录一条翻牌语音纠错；worker 会在下一轮合并并应用。"""
+    try:
+        entry = asr_corrections_store.add(payload.wrong, payload.right, context=payload.context, by="website:flip-cards")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"ok": True, "id": entry["id"]}
 
 
 @router.post("/login")

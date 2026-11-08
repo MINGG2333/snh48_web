@@ -733,6 +733,28 @@
       word-break: break-word;
     }
 
+    .transcript-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .transcript-action {
+      border: 1px solid rgba(98, 168, 255, 0.45);
+      background: transparent;
+      color: var(--blue);
+      font-size: 11px;
+      padding: 2px 9px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .transcript-action:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
     .link-actions {
       display: flex;
       flex-wrap: wrap;
@@ -2759,19 +2781,71 @@
     }
 
     function createAudioTranscriptNode(transcript) {
-      if (!transcript || !String(transcript.text || "").trim()) return null;
-      var box = document.createElement("div");
+      if (!transcript) return null;
+      let primary = String(transcript.text || "").trim();
+      let alt = String(transcript.whisper_text || transcript.whisper_transcript || "").trim();
+      if (!primary && !alt) return null;
+      const box = document.createElement("div");
       box.className = "transcript";
 
-      var label = document.createElement("div");
+      const label = document.createElement("div");
       label.className = "transcript-label";
       label.textContent = "转录参考";
       box.appendChild(label);
 
-      var text = document.createElement("div");
+      const text = document.createElement("div");
       text.className = "transcript-text";
-      text.textContent = String(transcript.text || "").trim();
+      text.textContent = primary || alt;
       box.appendChild(text);
+
+      const actions = document.createElement("div");
+      actions.className = "transcript-actions";
+      let showingAlt = !primary;
+      if (alt && primary && alt !== primary) {
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "transcript-action";
+        toggle.textContent = "显示 Whisper 旧版";
+        toggle.addEventListener("click", function () {
+          showingAlt = !showingAlt;
+          text.textContent = showingAlt ? alt : primary;
+          toggle.textContent = showingAlt ? "显示 FireRed 新版" : "显示 Whisper 旧版";
+        });
+        actions.appendChild(toggle);
+      }
+
+      const fix = document.createElement("button");
+      fix.type = "button";
+      fix.className = "transcript-action";
+      fix.textContent = "纠错";
+      fix.addEventListener("click", async function () {
+        const current = text.textContent || "";
+        const wrong = window.prompt("需要纠正的原文（可只保留错误片段）", current);
+        if (!wrong) return;
+        const right = window.prompt("正确的写法", wrong);
+        if (!right || right === wrong) return;
+        try {
+          const resp = await fetch("/api/room-messages/corrections", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Room-Messages-Password": password },
+            body: JSON.stringify({ wrong: wrong, right: right, context: current.slice(0, 200) })
+          });
+          if (!resp.ok) {
+            let detail = "保存失败";
+            try { detail = (await resp.json()).detail || detail; } catch (_) {}
+            throw new Error(detail);
+          }
+          primary = primary.split(wrong).join(right);
+          alt = alt.split(wrong).join(right);
+          text.textContent = showingAlt ? alt : primary;
+          fix.textContent = "已记录";
+          fix.disabled = true;
+        } catch (err) {
+          window.alert("纠错保存失败：" + err.message);
+        }
+      });
+      actions.appendChild(fix);
+      box.appendChild(actions);
       return box;
     }
 

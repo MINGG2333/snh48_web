@@ -485,6 +485,28 @@
       word-break: break-word;
     }
 
+    .transcript-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .transcript-action {
+      border: 1px solid rgba(87, 107, 149, 0.45);
+      background: transparent;
+      color: #576b95;
+      font-size: 11px;
+      padding: 2px 9px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .transcript-action:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
     .download-link {
       display: inline-block;
       margin-top: 6px;
@@ -1326,12 +1348,55 @@
     }
 
     function createAudioTranscriptNode(transcript) {
-      const value = String((transcript && transcript.text) || "").trim();
-      if (!value) return null;
+      const primary = String((transcript && transcript.text) || "").trim();
+      let alt = String((transcript && (transcript.whisper_text || transcript.whisper_transcript)) || "").trim();
+      if (!primary && !alt) return null;
       const box = document.createElement("div");
       box.className = "transcript";
       appendText(box, "transcript-label", "转录参考");
-      appendText(box, "transcript-text", value);
+      const text = appendText(box, "transcript-text", primary || alt);
+      const actions = document.createElement("div");
+      actions.className = "transcript-actions";
+      let showingAlt = !primary;
+      if (alt && primary && alt !== primary) {
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "transcript-action";
+        toggle.textContent = "显示 Whisper 旧版";
+        toggle.addEventListener("click", function () {
+          showingAlt = !showingAlt;
+          text.textContent = showingAlt ? alt : primary;
+          toggle.textContent = showingAlt ? "显示 FireRed 新版" : "显示 Whisper 旧版";
+        });
+        actions.appendChild(toggle);
+      }
+      const fix = document.createElement("button");
+      fix.type = "button";
+      fix.className = "transcript-action";
+      fix.textContent = "纠错";
+      fix.addEventListener("click", async function () {
+        const current = text.textContent || "";
+        const wrong = window.prompt("需要纠正的原文（可只保留错误片段）", current);
+        if (!wrong) return;
+        const right = window.prompt("正确的写法", wrong);
+        if (!right || right === wrong) return;
+        try {
+          await apiJson("/corrections", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wrong: wrong, right: right, context: current.slice(0, 200) })
+          });
+          primary = primary.split(wrong).join(right);
+          alt = alt.split(wrong).join(right);
+          text.textContent = showingAlt ? alt : primary;
+          fix.textContent = "已记录";
+          fix.disabled = true;
+        } catch (err) {
+          window.alert("纠错保存失败：" + err.message);
+        }
+      });
+      actions.appendChild(fix);
+      box.appendChild(actions);
       return box;
     }
 
