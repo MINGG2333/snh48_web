@@ -750,6 +750,11 @@
       cursor: pointer;
     }
 
+
+    .karaoke-char { transition: color 0.12s ease; cursor: pointer; }
+    .karaoke-char.karaoke-active { color: #e11d48; font-weight: 700; }
+    .media-download { display: inline-block; margin-top: 6px; font-size: 12px; }
+
     .transcript-action:disabled {
       opacity: 0.6;
       cursor: default;
@@ -2759,9 +2764,18 @@
         audio.preload = "none";
         audio.src = item.media_url;
         media.appendChild(audio);
-        var transcript = createAudioTranscriptNode(item.audio_transcript);
+        var transcript = createAudioTranscriptNode(item.audio_transcript, audio);
         if (transcript) {
           media.appendChild(transcript);
+        }
+        if (item.media_url) {
+          var download = document.createElement("a");
+          download.href = item.media_url;
+          download.target = "_blank";
+          download.rel = "noopener noreferrer";
+          download.className = "media-download";
+          download.textContent = "官方下载";
+          media.appendChild(download);
         }
       } else if (item.media_kind === "video") {
         var video = document.createElement("video");
@@ -2780,23 +2794,102 @@
       return media;
     }
 
-    function createAudioTranscriptNode(transcript) {
+
+    function buildKaraokeTimings(text, transcript) {
+      const words = Array.isArray(transcript.words) ? transcript.words : [];
+      const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
+      const timings = [];
+      if (words.length) {
+        const flat = [];
+        words.forEach(function (word) {
+          const chars = Array.from(String(word.text || ""));
+          const start = Number(word.start_ms || 0);
+          const end = Number(word.end_ms || start);
+          chars.forEach(function (ch, idx) {
+            flat.push({ ch: ch, start: start + (end - start) * idx / chars.length, end: start + (end - start) * (idx + 1) / chars.length });
+          });
+        });
+        let ptr = 0;
+        Array.from(text).forEach(function (ch) {
+          if (ptr < flat.length && flat[ptr].ch === ch) {
+            timings.push(flat[ptr]); ptr += 1;
+          } else {
+            const prev = flat[Math.max(0, ptr - 1)];
+            const at = prev ? prev.end : 0;
+            timings.push({ ch: ch, start: at, end: at + 120 });
+          }
+        });
+      } else if (segments.length) {
+        segments.forEach(function (seg) {
+          const chars = Array.from(String(seg.text || ""));
+          const start = Number(seg.start_ms || 0);
+          const end = Number(seg.end_ms || start);
+          chars.forEach(function (ch, idx) {
+            timings.push({ ch: ch, start: start + (end - start) * idx / chars.length, end: start + (end - start) * (idx + 1) / chars.length });
+          });
+        });
+      }
+      return timings;
+    }
+
+    function renderKaraoke(container, text, transcript) {
+      container.textContent = "";
+      const timings = buildKaraokeTimings(text, transcript || {});
+      if (!timings.length) { container.textContent = text; return []; }
+      const spans = [];
+      timings.forEach(function (item) {
+        const span = document.createElement("span");
+        span.className = "karaoke-char";
+        span.textContent = item.ch;
+        span.dataset.start = String(item.start);
+        span.dataset.end = String(item.end);
+        container.appendChild(span);
+        spans.push(span);
+      });
+      return spans;
+    }
+
+    function attachKaraoke(audio, spans) {
+      if (!audio || !spans.length) return;
+      const update = function () {
+        const now = audio.currentTime * 1000;
+        spans.forEach(function (span) {
+          const start = Number(span.dataset.start || 0);
+          const end = Number(span.dataset.end || 0);
+          span.classList.toggle("karaoke-active", now >= start && now < end);
+        });
+      };
+      audio.addEventListener("timeupdate", update);
+      audio.addEventListener("seeked", update);
+      spans.forEach(function (span) {
+        span.addEventListener("click", function () {
+          audio.currentTime = Number(span.dataset.start || 0) / 1000;
+          audio.play().catch(function () {});
+        });
+      });
+      update();
+    }
+
+    function createAudioTranscriptNode(transcript, audioEl) {
       if (!transcript) return null;
       let primary = String(transcript.text || "").trim();
       let alt = String(transcript.whisper_text || transcript.whisper_transcript || "").trim();
       if (!primary && !alt) return null;
       const box = document.createElement("div");
       box.className = "transcript";
-
       const label = document.createElement("div");
       label.className = "transcript-label";
       label.textContent = "转录参考";
       box.appendChild(label);
-
       const text = document.createElement("div");
       text.className = "transcript-text";
-      text.textContent = primary || alt;
       box.appendChild(text);
+      let spans = [];
+      const showPrimary = function () {
+        spans = renderKaraoke(text, primary, transcript);
+        attachKaraoke(audioEl, spans);
+      };
+      if (primary) { showPrimary(); } else { text.textContent = alt; }
 
       const actions = document.createElement("div");
       actions.className = "transcript-actions";
@@ -2808,7 +2901,8 @@
         toggle.textContent = "显示 Whisper 旧版";
         toggle.addEventListener("click", function () {
           showingAlt = !showingAlt;
-          text.textContent = showingAlt ? alt : primary;
+          if (showingAlt) { text.textContent = alt; spans = []; }
+          else { showPrimary(); }
           toggle.textContent = showingAlt ? "显示 FireRed 新版" : "显示 Whisper 旧版";
         });
         actions.appendChild(toggle);
@@ -2819,7 +2913,7 @@
       fix.className = "transcript-action";
       fix.textContent = "纠错";
       fix.addEventListener("click", async function () {
-        const current = text.textContent || "";
+        const current = showingAlt ? alt : primary;
         const wrong = window.prompt("需要纠正的原文（可只保留错误片段）", current);
         if (!wrong) return;
         const right = window.prompt("正确的写法", wrong);
@@ -2837,7 +2931,7 @@
           }
           primary = primary.split(wrong).join(right);
           alt = alt.split(wrong).join(right);
-          text.textContent = showingAlt ? alt : primary;
+          if (showingAlt) { text.textContent = alt; spans = []; } else { showPrimary(); }
           fix.textContent = "已记录";
           fix.disabled = true;
         } catch (err) {
