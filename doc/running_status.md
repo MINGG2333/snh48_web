@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-08 20:05 CST 红蓝微店自动补采与阿里云转发（双端已生效）
+
+- 现象：`/business/redblue2026` 11-07 至 11-08 微店渠道缺失；阿里云微店 Cookie 11-07 00:38 后过期，页面每 5 分钟自动 sync 持续失败且静默，台账停在 11-06。
+- 代码（web `0498e75`）：`redblue_ledger_api.py` 新增 `_primary()/run_weidian_sync_once()/start_weidian_auto_sync()`；主节点每 10 分钟检查缓存/台账并自动 `sync + upsert_weidian`，失败 5 分钟重试，Cookie 恢复后全量补全。非主节点的 `sync/ship` 任务经 `peer_command("weidian-admin")` 转发腾讯云，`apply` 通过新增的 `redblue-cache` 读取腾讯云缓存，阿里云不再需要微店 Cookie。状态落 `private_handover/web_state/redblue_weidian_sync_state.json`，`/api/redblue/data` 返回 `weidian_sync`，页面顶部显示最近同步时间/失败原因。
+- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` 20:02:57 重启（PID `8490`），阿里云 `snh48-aliyun.service` 20:02:56 重启（PID `620580`）。阿里云 `redblue-weidian-worker.timer` 已停用，旧 `config/weidian_cookies.txt` 移到 `/root/weidian_cookies.txt.removed-20261108-2004`。
+- 验证：腾讯云启动日志 `Red-blue Weidian auto-sync checked (primary=True)`；20:03:22 自动同步完成，状态 `ok`、28 单、`skipped=true`。阿里云 peer 实测 `job-submit → job-result done → redblue-cache 28 单`。网站 41 项、fan-hub 48 项相关单测双端通过；两端页面 200、未登录 API 401。
+
 ## 2026-11-07 21:13 CST 修复微店 Cookie 验证 503 与结果不可见（腾讯云已生效）
 
 - 现象：在 `/social-credentials-admin` 填写微店 Cookie 点“验证并更新”无反馈；服务日志显示 `POST /api/social-credentials/update` 连续 503。
