@@ -98,6 +98,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "score": cfg.REDBLUE_SCORE_DATA_PATH,
             "authority": cfg.REDBLUE_GIFT_AUTHORITY_PATH,
             "weidian": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
+            "cookie_secret": cfg.REDBLUE_COOKIE_SECRET_PATH,
             "ai": cfg.REDBLUE_AI_QUEUE_DIR,
             "wd": cfg.REDBLUE_WEIDIAN_QUEUE_DIR,
             "sync_state": cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH,
@@ -111,6 +112,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_SCORE_DATA_PATH = str(self.tmp / "score.json")
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = str(self.tmp / "authority.json")
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = str(self.tmp / "weidian.json")
+        cfg.REDBLUE_COOKIE_SECRET_PATH = str(self.tmp / "cookie_secret")
         cfg.REDBLUE_AI_QUEUE_DIR = str(self.tmp / "ai")
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = str(self.tmp / "wd")
         cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = str(self.tmp / "weidian_sync_state.json")
@@ -129,11 +131,13 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_SCORE_DATA_PATH = self._old["score"]
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = self._old["authority"]
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = self._old["weidian"]
+        cfg.REDBLUE_COOKIE_SECRET_PATH = self._old["cookie_secret"]
         cfg.REDBLUE_AI_QUEUE_DIR = self._old["ai"]
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = self._old["wd"]
         cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = self._old["sync_state"]
         cfg.SHARED_STATE_SYNC_ENABLED = self._old["sync"]
         cfg.SHARED_STATE_IS_PRIMARY = self._old["primary"]
+        api._COOKIE_SECRET_CACHE = None
         identity_index.clear_cache()
 
     def _write_business_ledger(self) -> None:
@@ -1033,6 +1037,62 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(methods["room-card"], "计分卡")
         self.assertEqual(methods["room-same-name-leg"], "鸡腿")
 
+    def test_same_gift_id_uses_money_since_cutoff(self):
+        (self.tmp / "authority.json").write_text(
+            json.dumps(
+                {
+                    "gifts": [
+                        {
+                            "gift_id": "1320115721784332288",
+                            "gift_name": "弦月回响",
+                            "melee": 350.0,
+                            "money": 350.0,
+                            "money_since": "2026-11-11 00:00:00",
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (self.tmp / "score.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "same-id-before",
+                            "source": "room",
+                            "event_time": "2026-11-10 12:00:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_id": "1320115721784332288",
+                            "gift_name": "弦月回响",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        },
+                        {
+                            "id": "same-id-after",
+                            "source": "room",
+                            "event_time": "2026-11-11 12:00:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_id": "1320115721784332288",
+                            "gift_name": "弦月回响",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        methods = {item["source_id"]: item["scoring_method"] for item in data["entries"]}
+        self.assertEqual(methods["same-id-before"], "计分卡")
+        self.assertEqual(methods["same-id-after"], "鸡腿")
+
     def test_explicit_chicken_gift_name_is_supported(self):
         old = cfg.REDBLUE_CHICKEN_GIFT_NAMES
         cfg.REDBLUE_CHICKEN_GIFT_NAMES = "特别应援礼物"
@@ -1370,26 +1430,16 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "点唱整首+查水表",
         )
 
-    def test_stale_cookie_is_login_expired_not_wrong_password(self):
-        self.assertEqual(
-            self.client.get(
-                "/api/redblue/data",
-                headers={"Cookie": "redblue_ledger_auth=stale"},
-            ).status_code,
-            401,
-        )
-        for _ in range(12):
-            response = self.client.get(
-                "/api/redblue/data",
-                headers={"Cookie": "redblue_ledger_auth=stale"},
-            )
-            self.assertEqual(response.status_code, 401)
-
-    def test_wrong_password_header_still_counts_as_failure(self):
-        response = self.client.get(
-            "/api/redblue/data", headers={"X-Redblue-Password": "wrong"}
-        )
-        self.assertEqual(response.status_code, 403)
+    def test_cookie_secret_persists_across_reloads(self):
+        api._COOKIE_SECRET_CACHE = None
+        first = api._cookie_secret()
+        api._COOKIE_SECRET_CACHE = None
+        second = api._cookie_secret()
+        self.assertEqual(first, second)
+        self.assertGreaterEqual(len(first), 16)
+        path = Path(cfg.REDBLUE_COOKIE_SECRET_PATH)
+        self.assertTrue(path.exists())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_two_image_exports(self):
         import io

@@ -24,9 +24,7 @@ from pydantic import BaseModel
 
 from website import config as cfg
 from website import identity_index
-from website import password_session
-from website.rate_limiter import check_redblue_login_limit as _check_redblue_login_limit
-from website.rate_limiter import get_client_ip
+from website.rate_limiter import check_admin_login_limit, get_client_ip
 from website.shared_runtime_state import (
     SharedStateError,
     SharedStatePeerError,
@@ -124,7 +122,31 @@ JOB_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 POCKET_ID_RE = re.compile(r"(?<!\d)(\d{4,12})(?!\d)")
 MUTATION_HEADER = "X-Redblue-Operation-Id"
 AUTH_COOKIE = "redblue_ledger_auth"
-AUTH_COOKIE_MAX_AGE = password_session.cookie_max_age()
+AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
+_COOKIE_SECRET_CACHE: bytes | None = None
+
+
+def _cookie_secret() -> bytes:
+    """持久化 Cookie 签名密钥，避免网站重启后所有登录 Cookie 失效。"""
+    global _COOKIE_SECRET_CACHE
+    if _COOKIE_SECRET_CACHE is not None:
+        return _COOKIE_SECRET_CACHE
+    path = Path(cfg.REDBLUE_COOKIE_SECRET_PATH)
+    secret = b""
+    try:
+        secret = path.read_bytes()
+    except OSError:
+        pass
+    if len(secret) < 16:
+        secret = os.urandom(32)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(secret)
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+    _COOKIE_SECRET_CACHE = secret
+    return secret
 
 
 class LoginRequest(BaseModel):
@@ -132,7 +154,7 @@ class LoginRequest(BaseModel):
 
 
 def _cookie_token(password: str) -> str:
-    return password_session.cookie_token(password, context="redblue")
+    return hmac.new(_cookie_secret(), password.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _now() -> str:
@@ -526,17 +548,15 @@ def verify_redblue_password(
         return True
     if x_redblue_password and hmac.compare_digest(x_redblue_password, expected):
         return True
-    if not password_session.password_was_submitted(x_redblue_password):
-        # 缺密码或旧 Cookie 一律视为“登录已过期”，不计入密码失败限流。
+    if not redblue_ledger_auth and not x_redblue_password:
+        check_redblue_login_limit(request)
         raise HTTPException(status_code=401, detail="需要密码")
     check_redblue_login_limit(request)
     raise HTTPException(status_code=403, detail="密码错误")
 
 
 def check_redblue_login_limit(request: Request) -> None:
-    _check_redblue_login_limit(
-        get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试"
-    )
+    check_admin_login_limit(get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试")
 
 
 @router.post("/login")
@@ -1227,7 +1247,7 @@ _GIFT_PRICE_LOCK = threading.Lock()
 _GIFT_PRICE_CACHE: dict[str, Any] = {}
 
 
-def _gift_price_index() -> tuple[dict[str, float], dict[str, float]]:
+def _gift_price_index() -> tuple[dict[str, tuple[float, str]], dict[str, tuple[float, str]]]:
     path = Path(getattr(cfg, "REDBLUE_GIFT_AUTHORITY_PATH", "") or "")
     try:
         stat = path.stat()
@@ -1238,8 +1258,8 @@ def _gift_price_index() -> tuple[dict[str, float], dict[str, float]]:
         if _GIFT_PRICE_CACHE.get("signature") == signature:
             return _GIFT_PRICE_CACHE["by_id"], _GIFT_PRICE_CACHE["by_name"]
         data = _load_json(path)
-        by_id: dict[str, float] = {}
-        by_name: dict[str, float] = {}
+        by_id: dict[str, tuple[float, str]] = {}
+        by_name: dict[str, tuple[float, str]] = {}
         gifts = data.get("gifts") if isinstance(data, dict) else None
         for gift in gifts or []:
             if not isinstance(gift, dict):
@@ -1247,23 +1267,28 @@ def _gift_price_index() -> tuple[dict[str, float], dict[str, float]]:
             price = max(_to_float(gift.get("melee"), 0.0), _to_float(gift.get("money"), 0.0))
             if price <= 0:
                 continue
+            since = _clean(gift.get("money_since"), 32)
             gift_id = _clean(gift.get("gift_id"), 40)
             gift_name = _clean(gift.get("gift_name"), 160)
             if gift_id:
-                by_id[gift_id] = price
+                by_id[gift_id] = (price, since)
             if gift_name:
-                by_name[gift_name] = price
+                by_name[gift_name] = (price, since)
         _GIFT_PRICE_CACHE["signature"] = signature
         _GIFT_PRICE_CACHE["by_id"] = by_id
         _GIFT_PRICE_CACHE["by_name"] = by_name
         return by_id, by_name
 
 
-def _gift_price(gift_name: str, gift_id: str) -> float:
+def _gift_price_meta(gift_name: str, gift_id: str) -> tuple[float, str]:
     by_id, by_name = _gift_price_index()
     if gift_id and gift_id in by_id:
         return by_id[gift_id]
-    return by_name.get(_clean(gift_name, 160), 0.0)
+    return by_name.get(_clean(gift_name, 160), (0.0, ""))
+
+
+def _gift_price(gift_name: str, gift_id: str) -> float:
+    return _gift_price_meta(gift_name, gift_id)[0]
 
 
 def _is_card_gift(gift_name: str, gift_id: str = "") -> bool:
@@ -1274,11 +1299,13 @@ def _is_card_gift(gift_name: str, gift_id: str = "") -> bool:
     return False
 
 
-def _is_chicken_gift(gift_name: str, gift_id: str = "") -> bool:
-    # 先排除已知计分卡礼物（旧「弦月回响」1320115721784332288）。
-    # 2026-11-09 起不再按名字排除：同名但不同 gift_id 的鸡腿礼物必须能识别。
+def _is_chicken_gift(gift_name: str, gift_id: str = "", source_time: str = "") -> bool:
+    price, money_since = _gift_price_meta(gift_name, gift_id)
+    # 旧计分卡 ID 如果后来出现在 gift.list 并带上鸡腿价，则以首次出现价格的时间为界：
+    # 之前算计分卡，之后算鸡腿。这样同名同 ID 也能按时间区分。
     if _is_card_gift(gift_name, gift_id):
-        return False
+        source_time = _clean(source_time, 32)
+        return bool(price > 0 and source_time and money_since and source_time >= money_since)
     gift_id = _clean(gift_id, 40)
     if gift_id and gift_id in _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_IDS", "")):
         return True
@@ -1290,11 +1317,16 @@ def _is_chicken_gift(gift_name: str, gift_id: str = "") -> bool:
     keywords = _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_KEYWORDS", "鸡腿"))
     if any(keyword in name for keyword in keywords):
         return True
-    return _gift_price(name, gift_id) > 0
+    return price > 0
 
 
-def _gift_scoring_method(gift_name: str, source: str, gift_id: str = "") -> str:
-    if _is_chicken_gift(gift_name, gift_id):
+def _gift_scoring_method(
+    gift_name: str,
+    source: str,
+    gift_id: str = "",
+    source_time: str = "",
+) -> str:
+    if _is_chicken_gift(gift_name, gift_id, source_time):
         return "鸡腿"
     return DEFAULT_SCORING_METHODS.get(_clean(source, 20), "计分卡")
 
@@ -2132,6 +2164,7 @@ def _mutator_upsert_room_live(doc: dict[str, Any], payload: dict[str, Any]):
                 _clean(item.get("gift_name"), 160),
                 source,
                 _clean(item.get("gift_id"), 40),
+                _clean(item.get("source_time") or item.get("event_time"), 32),
             )
         candidate = _new_entry(
             doc,
@@ -2311,7 +2344,12 @@ def _build_room_live_items() -> list[dict[str, Any]]:
                 "note": note,
                 "gift_name": gift_name,
                 "gift_id": gift_id,
-                "scoring_method": _gift_scoring_method(gift_name, source, gift_id),
+                "scoring_method": _gift_scoring_method(
+                    gift_name,
+                    source,
+                    gift_id,
+                    _clean(item.get("event_time"), 32),
+                ),
             }
         )
     return items
