@@ -1639,6 +1639,7 @@
     var loginBusy = false;
     var loginVerified = false;
     var loadedCount = 0;
+    var globalTotalMessages = 0;
     var refreshSeconds = 60;
     var refreshTimer = null;
     var jumpStatusTimer = null;
@@ -2037,6 +2038,10 @@
 
     function renderSummary(data) {
       var summary = data.summary || {};
+      var summaryTotal = Number(summary.total_messages);
+      if (isFinite(summaryTotal) && summaryTotal >= 0) {
+        globalTotalMessages = summaryTotal;
+      }
       var total = typeof data.total === "number" ? data.total : summary.total_messages;
       if (typeof total === "number") {
         totalMessages.textContent = formatNumber(total);
@@ -2242,7 +2247,13 @@
       Array.prototype.forEach.call(messageList.querySelectorAll(".context-gap"), function(node) {
         node.remove();
       });
+      if (!isRoomFilterActive()) return;
       var nodes = Array.prototype.slice.call(messageList.querySelectorAll("article.message"));
+      if (nodes.length === 0) return;
+      var firstIndex = messageRowIndex(nodes[0]);
+      if (firstIndex !== null && firstIndex > 0) {
+        messageList.insertBefore(createEdgeContextGapNode(firstIndex, "before", nodes[0]), nodes[0]);
+      }
       for (var i = 1; i < nodes.length; i += 1) {
         var prevIndex = messageRowIndex(nodes[i - 1]);
         var currentIndex = messageRowIndex(nodes[i]);
@@ -2251,6 +2262,36 @@
         if (hidden <= 0) continue;
         messageList.insertBefore(createContextGapNode(nodes[i - 1], nodes[i], hidden), nodes[i]);
       }
+      var lastNode = nodes[nodes.length - 1];
+      var lastIndex = messageRowIndex(lastNode);
+      if (lastIndex !== null && globalTotalMessages > 0 && lastIndex < globalTotalMessages - 1) {
+        messageList.appendChild(createEdgeContextGapNode(globalTotalMessages - 1 - lastIndex, "after", lastNode));
+      }
+    }
+
+    function createEdgeContextGapNode(hiddenCount, direction, anchorNode) {
+      var gap = document.createElement("div");
+      gap.className = "context-gap";
+
+      var body = document.createElement("div");
+      body.className = "context-gap-body";
+
+      var label = document.createElement("span");
+      label.className = "context-gap-label";
+      label.textContent = (direction === "before" ? "上方还有 " : "下方还有 ") + formatNumber(hiddenCount) + " 条其他消息";
+      body.appendChild(label);
+
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "link-btn";
+      button.textContent = direction === "before" ? "↑ 拓展上文" : "↓ 拓展下文";
+      button.title = direction === "before" ? "展开上方这条消息之前的上下文" : "展开下方这条消息之后的上下文";
+      button.dataset.contextDirection = direction;
+      button.dataset.contextAnchor = anchorNode.dataset.messageId || "";
+      body.appendChild(button);
+
+      gap.appendChild(body);
+      return gap;
     }
 
     function createContextGapNode(upperNode, lowerNode, hiddenCount) {
@@ -3004,6 +3045,11 @@
           latestUnrepliedGiftBatch = data.summary.latest_unreplied_gift_batch || null;
           latestIgnoredBatch = data.summary.latest_ignored_batch || null;
           refreshSeconds = Number(data.refresh_interval_seconds || refreshSeconds || 60);
+          var summaryTotal = Number(data.summary.total_messages);
+          if (isFinite(summaryTotal) && summaryTotal >= 0 && summaryTotal !== globalTotalMessages) {
+            globalTotalMessages = summaryTotal;
+            refreshContextGaps();
+          }
           renderUnrepliedNav();
         }
         var latest = data.summary && data.summary.latest_bj_time;
@@ -3188,6 +3234,10 @@
         || Boolean(appliedDateFrom)
         || Boolean(appliedDateTo)
         || mediaSelect.value !== "all";
+    }
+
+    function isRoomFilterActive() {
+      return familyParam() !== "all" || hasExtraFilters();
     }
 
     function clearExtraFilters() {
