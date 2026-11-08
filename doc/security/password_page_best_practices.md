@@ -84,7 +84,7 @@ def _cookie_token(password: str) -> str:
 - 统一走 `website/password_session.py`，不要在页面里各写一套。
 - Cookie 有效期由 `PASSWORD_SESSION_MAX_AGE_SECONDS` 控制（默认 3600 秒；想更严格可设 1800）。
 - 签名密钥只在进程内存中（`password_session.COOKIE_SECRET`），网站重启后旧 Cookie 全部失效、页面回到登录页；这是有意为之，不落盘密钥。
-- 旧实现中红蓝台账的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`）已于 2026-11-09 停用，并移入 `private_handover/存档/停用密钥/`（附 README 说明）；`private_handover/web_state/` 下不应再出现该文件，不得再把它接回代码或 `.env`。
+- 旧实现中红蓝台账的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`）已于 2026-11-09 停用，并移入 `private_handover/存档/停用密钥/`（附 README 说明）；`private_handover/web_state/` 下不应再出现该文件，不得再把它接回代码或 `.env`。如果部署后发现该文件重新出现，说明有旧代码被回退，应立即检查 `website/redblue_ledger_api.py` 是否仍引用 `REDBLUE_COOKIE_SECRET_PATH`，并把新生成的文件再次归档。
 - 如果未来改成多 worker，必须把 `password_session.COOKIE_SECRET` 改为所有 worker 共享的密钥（环境变量），否则不同 worker 签发的 Cookie 会互相失效；这不改变“重启失效”的策略。
 
 ### 2.3 鉴权依赖
