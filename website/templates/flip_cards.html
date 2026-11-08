@@ -848,6 +848,7 @@
 
     let dataset = null;
     let records = [];
+    let accessPassword = "";
     let loginBusy = false;
     let loginVerified = false;
     let accountsManifest = { accounts: [], default_account_id: "" };
@@ -873,6 +874,7 @@
     function showLogin(message) {
       loginBusy = false;
       loginVerified = false;
+      accessPassword = "";
       loginOverlay.classList.remove("hidden");
       page.classList.remove("ready");
       stopDatasetUpdateTimer();
@@ -989,15 +991,23 @@
     }
 
     async function apiJson(path, options) {
-      const response = await fetch(API + path, Object.assign({
+      const requestOptions = Object.assign({
         credentials: "same-origin",
         cache: "no-store"
-      }, options || {}));
+      }, options || {});
+      if (accessPassword) {
+        requestOptions.headers = Object.assign(
+          { "X-Flip-Cards-Password": accessPassword },
+          requestOptions.headers || {}
+        );
+      }
+      const response = await fetch(API + path, requestOptions);
       let body = {};
       try { body = await response.json(); } catch (_) {}
       if (!response.ok) {
         const error = new Error(body.detail || "请求失败");
         error.status = response.status;
+        if (response.status === 401) showLogin("登录已失效，请重新输入密码");
         throw error;
       }
       return body;
@@ -1742,19 +1752,6 @@
       }
     }
 
-    async function openIfReady() {
-      try {
-        await loadApp();
-        track("login_attempt", { action: "reuse_cookie", result: "success" });
-      } catch (error) {
-        if (error.status === 401 || error.status === 403) {
-          showLogin("");
-          return;
-        }
-        showLogin(error.message || "无法载入翻牌记录");
-      }
-    }
-
     loginForm.addEventListener("submit", async function (event) {
       event.preventDefault();
       if (loginBusy) return;
@@ -1773,6 +1770,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ password })
           });
+          accessPassword = password;
           loginVerified = true;
           track("login_attempt", { action: "submit", result: "success" });
         } catch (error) {
@@ -1998,7 +1996,7 @@
       }, true);
     });
 
-    openIfReady();
+    showLogin("");
   </script>
 </body>
 </html>

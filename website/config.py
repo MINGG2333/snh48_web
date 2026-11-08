@@ -182,6 +182,10 @@ BALANCE_WINDOW_SECONDS = int(os.getenv("BALANCE_WINDOW_SECONDS", "60"))
 OB_LOGIN_MAX_PER_WINDOW = int(os.getenv("OB_LOGIN_MAX_PER_WINDOW", "10"))
 OB_LOGIN_WINDOW_SECONDS = int(os.getenv("OB_LOGIN_WINDOW_SECONDS", "300"))
 
+# 翻牌记录页密码错误尝试限速（与观察页分开，互不挤占）
+FLIP_LOGIN_MAX_PER_WINDOW = int(os.getenv("FLIP_LOGIN_MAX_PER_WINDOW", "10"))
+FLIP_LOGIN_WINDOW_SECONDS = int(os.getenv("FLIP_LOGIN_WINDOW_SECONDS", "300"))
+
 # 生产环境默认只通过 HTTPS 发送管理 Cookie；本地 HTTP 调试可设为 false
 SECURE_COOKIES = os.getenv("SECURE_COOKIES", "true").lower() not in ("0", "false", "no")
 

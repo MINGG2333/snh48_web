@@ -6,27 +6,29 @@ import asyncio
 import hashlib
 import hmac
 import json
-import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import AsyncIterator
 from urllib.parse import quote, urlsplit
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from website import asr_corrections_store
 from website import config as cfg
-from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website.rate_limiter import check_flip_login_limit, get_client_ip
 
 
 router = APIRouter(prefix="/api/flip-cards", tags=["翻牌记录页"])
 
-AUTH_COOKIE = "flip_cards_auth"
-AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
-_COOKIE_SECRET = os.urandom(32)
+# 页面访问密码只保存在浏览器页面内存里（请求头 X-Flip-Cards-Password），
+# 不写 Cookie：刷新页面必须重新输入密码。媒体元素无法带请求头，改用短时签名 URL。
+MEDIA_TOKEN_TTL_SECONDS = 8 * 60 * 60
+MEDIA_TOKEN_PARAM = "mt"
+MEDIA_SIGNATURE_PARAM = "ms"
 RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
 MEDIA_TYPES = {
     "audio": {
@@ -61,12 +63,32 @@ class VerifyCodeRequest(BaseModel):
     code: str
 
 
-def _cookie_token(password: str) -> str:
-    return hashlib.sha256(_COOKIE_SECRET + password.encode("utf-8")).hexdigest()
-
-
 def _expected_password() -> str:
     return cfg.FLIP_CARDS_PASSWORD
+
+
+def _media_signature(expires_at: int) -> str:
+    """给媒体 URL 签一个短时签名，避免依赖 Cookie（刷新页面即失效）。"""
+    key = _expected_password().encode("utf-8")
+    message = f"flip-media:{expires_at}".encode("utf-8")
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def _media_token_query() -> str:
+    expires_at = int(time.time()) + MEDIA_TOKEN_TTL_SECONDS
+    return f"{MEDIA_TOKEN_PARAM}={expires_at}&{MEDIA_SIGNATURE_PARAM}={_media_signature(expires_at)}"
+
+
+def _media_token_valid(expires_text: str, signature: str) -> bool:
+    if not expires_text or not signature or not _expected_password():
+        return False
+    try:
+        expires_at = int(expires_text)
+    except ValueError:
+        return False
+    if expires_at < time.time() or expires_at > time.time() + MEDIA_TOKEN_TTL_SECONDS + 60:
+        return False
+    return hmac.compare_digest(signature, _media_signature(expires_at))
 
 
 def _data_dir() -> Path:
@@ -178,19 +200,34 @@ def _run_account_admin(command: str, payload: dict) -> dict:
 async def verify_flip_cards_auth(
     request: Request,
     x_flip_cards_password: str = Header(None, alias="X-Flip-Cards-Password"),
-    flip_cards_auth: str = Cookie(None, alias=AUTH_COOKIE),
 ):
     expected = _expected_password()
     if not expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="翻牌记录页未启用")
-    if flip_cards_auth and hmac.compare_digest(flip_cards_auth, _cookie_token(expected)):
+    if not x_flip_cards_password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
+    if hmac.compare_digest(x_flip_cards_password, expected):
         return True
+    check_flip_login_limit(get_client_ip(request), "翻牌记录页密码尝试过于频繁，请稍后再试")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
+
+
+async def verify_flip_media_access(
+    request: Request,
+    x_flip_cards_password: str = Header(None, alias="X-Flip-Cards-Password"),
+):
+    """媒体元素（audio/video）不能带自定义请求头，允许短时签名 URL。"""
+    expected = _expected_password()
+    if not expected:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="翻牌记录页未启用")
     if x_flip_cards_password and hmac.compare_digest(x_flip_cards_password, expected):
         return True
-    if not flip_cards_auth and not x_flip_cards_password:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
-    check_admin_login_limit(get_client_ip(request), "翻牌记录页密码尝试过于频繁，请稍后再试")
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
+    if _media_token_valid(
+        request.query_params.get(MEDIA_TOKEN_PARAM, ""),
+        request.query_params.get(MEDIA_SIGNATURE_PARAM, ""),
+    ):
+        return True
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
 
 
 class AsrCorrectionPayload(BaseModel):
@@ -210,35 +247,19 @@ async def submit_asr_correction(payload: AsrCorrectionPayload, _=Depends(verify_
 
 
 @router.post("/login")
-async def login(payload: LoginRequest, response: Response, request: Request):
+async def login(payload: LoginRequest, request: Request):
+    """只校验密码，不下发 Cookie：密码由页面保存在内存里。"""
     expected = _expected_password()
     if not expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="翻牌记录页未启用")
     if not hmac.compare_digest(payload.password, expected):
-        check_admin_login_limit(get_client_ip(request), "翻牌记录页密码尝试过于频繁，请稍后再试")
+        check_flip_login_limit(get_client_ip(request), "翻牌记录页密码尝试过于频繁，请稍后再试")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
-    response.set_cookie(
-        key=AUTH_COOKIE,
-        value=_cookie_token(expected),
-        max_age=AUTH_COOKIE_MAX_AGE,
-        httponly=True,
-        secure=cfg.SECURE_COOKIES,
-        samesite="strict",
-        path="/api/flip-cards",
-    )
-    response.headers["Cache-Control"] = "no-store"
     return {"success": True}
 
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(
-        key=AUTH_COOKIE,
-        path="/api/flip-cards",
-        httponly=True,
-        secure=cfg.SECURE_COOKIES,
-        samesite="strict",
-    )
     response.headers["Cache-Control"] = "no-store"
     return {"success": True}
 
@@ -329,9 +350,14 @@ async def flip_cards_data(response: Response, account_id: str = "", _=Depends(ve
         filename = str(media.get("filename") or "")
         if kind in MEDIA_TYPES and filename:
             if selected_account_id:
-                media["url"] = f"/api/flip-cards/accounts/{selected_account_id}/flip_data/{kind}/{quote(filename)}"
+                media["url"] = (
+                    f"/api/flip-cards/accounts/{selected_account_id}/flip_data/{kind}/{quote(filename)}"
+                    f"?{_media_token_query()}"
+                )
             else:
-                media["url"] = f"/api/flip-cards/flip_data/{kind}/{quote(filename)}"
+                media["url"] = (
+                    f"/api/flip-cards/flip_data/{kind}/{quote(filename)}?{_media_token_query()}"
+                )
 
     response.headers["Cache-Control"] = "private, no-store"
     return payload
@@ -405,7 +431,7 @@ async def stream_media(
     request: Request,
     kind: str,
     filename: str,
-    _=Depends(verify_flip_cards_auth),
+    _=Depends(verify_flip_media_access),
 ):
     info = MEDIA_TYPES.get(kind)
     if not info:
@@ -440,7 +466,7 @@ async def stream_account_media(
     account_id: str,
     kind: str,
     filename: str,
-    _=Depends(verify_flip_cards_auth),
+    _=Depends(verify_flip_media_access),
 ):
     manifest = _load_accounts_manifest(allow_legacy=False)
     selected = _safe_account_id(account_id)

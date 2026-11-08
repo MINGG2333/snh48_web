@@ -50,9 +50,9 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         )
         app = FastAPI()
         app.include_router(router)
+        self.auth_headers = {"X-Flip-Cards-Password": "test-password"}
         self.patches = [
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_PASSWORD", "test-password"),
-            mock.patch("website.flip_cards_api.cfg.SECURE_COOKIES", False),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_DATASET_PATH", str(self.dataset_path)),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_DATA_DIR", str(self.data_dir)),
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNTS_PATH", str(self.data_dir / "web" / "accounts.json")),
@@ -71,30 +71,37 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             patcher.stop()
         self.tmp.cleanup()
 
-    async def test_login_unlocks_application_data_and_media(self) -> None:
+    async def test_login_is_memory_only_and_media_uses_signed_url(self) -> None:
         self.assertEqual((await self.client.get("/api/flip-cards/data")).status_code, 401)
         login = await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
         self.assertEqual(login.status_code, 200)
+        self.assertNotIn("flip_cards_auth", login.cookies)
 
-        status = await self.client.get("/api/flip-cards/status")
+        # 登录只校验密码，不再下发 Cookie：刷新页面必须重新输入密码。
+        self.assertEqual((await self.client.get("/api/flip-cards/data")).status_code, 401)
+
+        status = await self.client.get("/api/flip-cards/status", headers=self.auth_headers)
         self.assertEqual(status.status_code, 200)
         self.assertTrue(status.json()["dataset_exists"])
         self.assertTrue(status.json()["dataset_version"])
 
-        data = await self.client.get("/api/flip-cards/data")
+        data = await self.client.get("/api/flip-cards/data", headers=self.auth_headers)
         self.assertEqual(data.status_code, 200)
         record = data.json()["records"][0]
         self.assertEqual(record["qtime_text"], "2026-07-20 20:00")
         self.assertEqual(record["audio_transcript"]["text"], "这是语音转录")
-        self.assertEqual(record["media"]["url"], "/api/flip-cards/flip_data/audio/voice.mp3")
+        media_url = record["media"]["url"]
+        self.assertTrue(media_url.startswith("/api/flip-cards/flip_data/audio/voice.mp3?mt="))
+        self.assertIn("&ms=", media_url)
 
-        media = await self.client.get(
-            "/api/flip-cards/flip_data/audio/voice.mp3",
-            headers={"Range": "bytes=2-5"},
-        )
+        # 媒体元素带不了请求头，靠页面内短时签名 URL 播放。
+        media = await self.client.get(media_url, headers={"Range": "bytes=2-5"})
         self.assertEqual(media.status_code, 206)
         self.assertEqual(media.content, b"2345")
         self.assertEqual(media.headers["content-range"], "bytes 2-5/10")
+
+        tampered = media_url.replace("&ms=", "&ms=0")
+        self.assertEqual((await self.client.get(tampered)).status_code, 401)
 
         html = await self.client.get("/api/flip-cards/html")
         self.assertEqual(html.status_code, 404)
@@ -121,52 +128,58 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             }),
             encoding="utf-8",
         )
-        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
-
-        accounts = await self.client.get("/api/flip-cards/accounts")
+        accounts = await self.client.get("/api/flip-cards/accounts", headers=self.auth_headers)
         self.assertEqual(accounts.json()["accounts"][0]["nickname"], "xxgg2333")
-        data = await self.client.get(f"/api/flip-cards/data?account_id={account_id}")
-        self.assertEqual(data.json()["account"]["id"], account_id)
-        self.assertEqual(
-            data.json()["records"][0]["media"]["url"],
-            f"/api/flip-cards/accounts/{account_id}/flip_data/audio/scoped.mp3",
+        data = await self.client.get(
+            f"/api/flip-cards/data?account_id={account_id}", headers=self.auth_headers
         )
-        media = await self.client.get(f"/api/flip-cards/accounts/{account_id}/flip_data/audio/scoped.mp3")
+        self.assertEqual(data.json()["account"]["id"], account_id)
+        media_url = data.json()["records"][0]["media"]["url"]
+        self.assertTrue(
+            media_url.startswith(
+                f"/api/flip-cards/accounts/{account_id}/flip_data/audio/scoped.mp3?mt="
+            )
+        )
+        media = await self.client.get(media_url)
         self.assertEqual(media.content, b"account-audio")
-        missing = await self.client.get("/api/flip-cards/data?account_id=999999")
+        missing = await self.client.get(
+            "/api/flip-cards/data?account_id=999999", headers=self.auth_headers
+        )
         self.assertEqual(missing.status_code, 404)
 
-        status = await self.client.get(f"/api/flip-cards/status?account_id={account_id}")
+        status = await self.client.get(
+            f"/api/flip-cards/status?account_id={account_id}", headers=self.auth_headers
+        )
         self.assertEqual(status.json()["account_id"], account_id)
         self.assertTrue(status.json()["dataset_version"])
 
     async def test_account_management_is_disabled_on_non_primary_node(self) -> None:
-        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
-        capability = await self.client.get("/api/flip-cards/account-management/status")
+        capability = await self.client.get(
+            "/api/flip-cards/account-management/status", headers=self.auth_headers
+        )
         self.assertFalse(capability.json()["enabled"])
         response = await self.client.post(
             "/api/flip-cards/account-management/send-sms",
             json={"phone": "13800001234", "area": "86"},
-            headers={"Origin": "http://testserver"},
+            headers={**self.auth_headers, "Origin": "http://testserver"},
         )
         self.assertEqual(response.status_code, 403)
         latest = await self.client.get(
-            "/api/flip-cards/account-management/latest-job?account_id=172884074"
+            "/api/flip-cards/account-management/latest-job?account_id=172884074",
+            headers=self.auth_headers,
         )
         self.assertEqual(latest.status_code, 403)
 
     async def test_account_management_requires_same_origin(self) -> None:
-        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
         with mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNT_ADMIN_ENABLED", True):
             response = await self.client.post(
                 "/api/flip-cards/account-management/send-sms",
                 json={"phone": "13800001234", "area": "86"},
-                headers={"Origin": "https://evil.example"},
+                headers={**self.auth_headers, "Origin": "https://evil.example"},
             )
         self.assertEqual(response.status_code, 403)
 
     async def test_latest_job_uses_safe_account_id_and_admin_bridge(self) -> None:
-        await self.client.post("/api/flip-cards/login", json={"password": "test-password"})
         with (
             mock.patch("website.flip_cards_api.cfg.FLIP_CARDS_ACCOUNT_ADMIN_ENABLED", True),
             mock.patch(
@@ -175,7 +188,8 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
             ) as run_admin,
         ):
             response = await self.client.get(
-                "/api/flip-cards/account-management/latest-job?account_id=172884074"
+                "/api/flip-cards/account-management/latest-job?account_id=172884074",
+                headers=self.auth_headers,
             )
 
         self.assertEqual(response.status_code, 200)
@@ -197,6 +211,10 @@ class FlipCardsTemplateTests(unittest.TestCase):
         template = Path("website/templates/flip_cards.html").read_text(encoding="utf-8")
         self.assertIn('const API = "/api/flip-cards"', template)
         self.assertIn('apiJson("/data" + suffix)', template)
+        self.assertIn('"X-Flip-Cards-Password": accessPassword', template)
+        self.assertIn("let accessPassword = \"\";", template)
+        self.assertNotIn("openIfReady", template)
+        self.assertNotIn("reuse_cookie", template)
         self.assertIn('id="accountSelect"', template)
         self.assertIn('id="memberFilter"', template)
         self.assertIn('id="accountModal"', template)

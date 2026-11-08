@@ -155,6 +155,12 @@ ob_login_limiter = SlidingWindowLimiter(
     window_seconds=cfg.OB_LOGIN_WINDOW_SECONDS,
 )
 
+# 翻牌记录页密码错误尝试单独限速，避免和观察页共用预算
+flip_login_limiter = SlidingWindowLimiter(
+    max_requests=cfg.FLIP_LOGIN_MAX_PER_WINDOW,
+    window_seconds=cfg.FLIP_LOGIN_WINDOW_SECONDS,
+)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Per-User State (tracked by client_id)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -464,6 +470,7 @@ def get_rate_limiter_stats() -> dict:
         "memories_submit_limiter": memories_submit_limiter.stats,
         "balance_limiter": balance_limiter.stats,
         "ob_login_limiter": ob_login_limiter.stats,
+        "flip_login_limiter": flip_login_limiter.stats,
         "active_tasks": len(_active_tasks),
         "tracked_users": {
             "with_cooldown": len(_last_question_time),
@@ -570,3 +577,13 @@ def check_admin_login_limit(ip: str, detail: str) -> None:
 def check_ob_login_limit(ip: str) -> None:
     """Rate-limit failed OB password attempts."""
     check_admin_login_limit(ip, "观察页密码尝试过于频繁，请稍后再试")
+
+
+def check_flip_login_limit(ip: str, detail: str) -> None:
+    """Rate-limit failed flip-cards password attempts (separate budget)."""
+    allowed, count = flip_login_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+        )

@@ -294,7 +294,19 @@ assert s.get("https://example.com/api/xxx/data", timeout=15).status_code == 401
 ## 9. 参考实现
 
 - `website/redblue_ledger_api.py`：红蓝台账 Cookie 登录/登出、Cookie 优先鉴权、请求头兼容。
-- `website/flip_cards_api.py`：路径限定 Cookie、登录/登出、账号管理同源校验。
+- `website/flip_cards_api.py`：请求头密码（例外见第 10 节）、媒体短时签名 URL、账号管理同源校验。
 - `website/room_voice_replays_api.py`：路径限定 Cookie、独立监控 Token、音频 Range 鉴权。
 - `website/templates/redblue_ledger_2026.html`：登录、`/verify` 启动检查、401/403 回登录、导出走 Cookie。
 - `tests/test_password_page_security.py`：密码页静态护栏测试。
+
+## 10. 例外：翻牌记录页（2026-11-09 用户决定）
+
+翻牌记录页 `/flip`、`/flip-cards` **不适用**第 2 节“默认 HttpOnly Cookie”方案，改用“页面内存密码 + 请求头”：
+
+- 页面只把密码保存在 JS 内存变量 `accessPassword`，每次 `fetch` 带 `X-Flip-Cards-Password`；`POST /api/flip-cards/login` 只校验、不 `Set-Cookie`。
+- 刷新页面（F5）后内存清空，必须重新输入密码；页面内的“刷新数据”按钮继续可用，不需要重输。
+- `audio`/`video` 元素无法携带自定义请求头，`/data` 返回的媒体 URL 带 8 小时短时 HMAC 签名（`mt`/`ms` 参数）；媒体接口校验签名或请求头。
+- 旧 `flip_cards_auth` Cookie 不再识别；带了旧 Cookie 的请求按“未登录”返回 401，不计入密码失败限流，避免误报“密码错误”并把用户刷进限流。
+- 翻牌页密码失败使用独立的 `FLIP_LOGIN_MAX_PER_WINDOW`/`FLIP_LOGIN_WINDOW_SECONDS`，不与观察页共用预算。
+- 仍然禁止把密码写入 `localStorage`/`sessionStorage`/IndexedDB/URL；密码变量不得挂到 `window`。
+- 该例外的安全权衡：本机已解锁浏览器上的攻击者仍可直接读取已打开页面的 DOM，刷新重输只降低“离开后被重新打开”的风险；如果未来改回 Cookie，应同时实现持久密钥和“无效 Cookie 返回 401 不计限流”。
