@@ -2766,7 +2766,8 @@ def ai_prompt(_=Depends(verify_redblue_password)):
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise HTTPException(status_code=503, detail=f"AI Prompt 文档读取失败：{exc}") from exc
+        logger.warning("redblue AI prompt read failed: %s", exc)
+        raise HTTPException(status_code=503, detail="AI Prompt 文档暂时不可用") from exc
     return {"path": str(path), "text": text}
 
 
