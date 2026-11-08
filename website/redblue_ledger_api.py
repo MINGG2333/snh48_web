@@ -1003,6 +1003,8 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
             "fan_name": _entry_fan_name(entry),
         })
     allocations.sort(key=lambda item: (item.get("entry_time") or "", item["entry_id"]))
+    display_entry_id = _clean(allocations[0]["entry_id"], 80) if allocations else ""
+    display_entry = entries_by_id.get(display_entry_id) or {}
     cost = round(_to_float(raw.get("cost"), _to_float(option["score"] if option else 0.0, 0.0)), 4)
     methods = {
         _entry_scoring_method(entries_by_id[row["entry_id"]])
@@ -1047,6 +1049,8 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
         "status": status,
         "note": _clean(raw.get("note")),
         "allocations": allocations,
+        "display_entry_id": display_entry_id,
+        "display_entry_time": _entry_time(display_entry),
         "completion_entry_id": completion_entry_id,
         "completion_entry_time": _entry_time(completion_entry),
         "created_at": _clean(raw.get("created_at"), 32),
@@ -1071,10 +1075,14 @@ def _normalise_redemptions(raw_redemptions: Iterable[dict[str, Any]], all_entrie
 
 def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions: list[dict[str, Any]]) -> None:
     allocations_by_entry: dict[str, list[dict[str, Any]]] = {}
-    completion_labels_by_entry: dict[str, list[str]] = {}
+    display_labels_by_entry: dict[str, list[str]] = {}
     for redemption in redemptions:
         completion_id = _clean(redemption.get("completion_entry_id"), 80)
-        for row in redemption.get("allocations") or []:
+        allocations = redemption.get("allocations") or []
+        display_id = _clean(redemption.get("display_entry_id"), 80)
+        if not display_id and allocations:
+            display_id = _clean(allocations[0].get("entry_id"), 80)
+        for row in allocations:
             entry_id = _clean(row.get("entry_id"), 80)
             if not entry_id:
                 continue
@@ -1093,10 +1101,10 @@ def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions:
                 "completion": entry_id == completion_id,
                 "participants": redemption.get("participants") or [],
             })
-        if completion_id:
-            completion_labels_by_entry.setdefault(completion_id, []).append(redemption["business_name"])
+        if display_id:
+            display_labels_by_entry.setdefault(display_id, []).append(redemption["business_name"])
             if redemption.get("bonus_business_name"):
-                completion_labels_by_entry.setdefault(completion_id, []).append(redemption["bonus_business_name"])
+                display_labels_by_entry.setdefault(display_id, []).append(redemption["bonus_business_name"])
     for entry in entries:
         entry_id = _clean(entry.get("id"), 80)
         allocations = allocations_by_entry.get(entry_id, [])
@@ -1104,7 +1112,7 @@ def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions:
         entry["business_allocations"] = allocations
         entry["business_allocated_score"] = allocated
         entry["business_remaining_score"] = round(max(0.0, _to_float(entry.get("score"), 0.0) - allocated), 4)
-        entry["business_completion_labels"] = completion_labels_by_entry.get(entry_id, [])
+        entry["business_display_labels"] = display_labels_by_entry.get(entry_id, [])
         statuses = [item.get("status") for item in allocations]
         entry["business_status"] = (
             "done" if statuses and all(item == "done" for item in statuses) else

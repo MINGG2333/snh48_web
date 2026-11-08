@@ -3,7 +3,7 @@
 版式对齐 `private_handover/移交包/嘉仪业务/礼物回复/礼物回复时间线_近三周_20261021.png`：
 浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽，按条目按最长昵称/业务名动态定宽（最小 820px），正文 20–27px。
 未登记口袋48昵称的条目不再标红，昵称统一颜色，只在名字后保留一个低对比度 ! 标记。
-按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接。
+按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接；业务名固定显示在该笔兑换最早的分摊条目（第 1 条记录）上。
 """
 from __future__ import annotations
 
@@ -175,15 +175,15 @@ def _draw_fans(draw, top: int, fans: list[dict[str, Any]], *, width: int, card_w
 
 
 def _business_text(row: dict[str, Any]) -> str:
-    """Export only marks the entry where a business is completed.
+    """Export only marks the first contributing entry of a business redemption.
 
-    Earlier contributing entries show an em dash; multiple businesses completed
+    Later contributing entries show an em dash; multiple businesses completed
     on the same entry are joined with '+'.
     """
-    completion_labels = row.get("business_completion_labels")
-    if isinstance(completion_labels, list) and completion_labels:
+    display_labels = row.get("business_display_labels")
+    if isinstance(display_labels, list) and display_labels:
         names: list[str] = []
-        for value in completion_labels:
+        for value in display_labels:
             name = str(value or "").strip()
             if name:
                 names.append(name)

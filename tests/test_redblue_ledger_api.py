@@ -252,7 +252,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(data["summary"]["entry_count"], 3)
         self.assertEqual(data["summary"]["total_score"], 6.0)
 
-    def test_business_redemption_splits_and_marks_completion_entry(self):
+    def test_business_redemption_splits_and_marks_first_entry(self):
         self._write_business_ledger()
         response = self.client.post(
             "/api/redblue/redemptions",
@@ -262,6 +262,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         redemption = response.json()["result"]["redemption"]
         self.assertEqual(redemption["completion_entry_id"], "e2")
+        self.assertEqual(redemption["display_entry_id"], "e1")
         self.assertEqual(
             [(item["entry_id"], item["score"]) for item in redemption["allocations"]],
             [("e1", 5.0), ("e2", 1.0)],
@@ -269,10 +270,10 @@ class RedblueLedgerApiTests(unittest.TestCase):
 
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         entries = {entry["id"]: entry for entry in data["entries"]}
-        self.assertEqual(entries["e1"]["business_completion_labels"], [])
+        self.assertEqual(entries["e1"]["business_display_labels"], ["点唱整首"])
         self.assertEqual(entries["e1"]["business_allocations"][0]["score"], 5.0)
         self.assertEqual(entries["e1"]["business_remaining_score"], 0.0)
-        self.assertEqual(entries["e2"]["business_completion_labels"], ["点唱整首"])
+        self.assertEqual(entries["e2"]["business_display_labels"], [])
         self.assertEqual(entries["e2"]["business_allocations"][0]["score"], 1.0)
         self.assertEqual(entries["e2"]["business_remaining_score"], 2.0)
         fan = next(item for item in data["fan_summary"] if item["fan_id"] == "1001")
@@ -361,7 +362,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(redemption["bonus_business_name"], "答案之书")
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         entry = data["entries"][0]
-        self.assertEqual(entry["business_completion_labels"], ["ID 合影", "答案之书"])
+        self.assertEqual(entry["business_display_labels"], ["ID 合影", "答案之书"])
         self.assertEqual(_business_text(entry), "ID 合影+答案之书")
 
         self._write_single_entry(source="room")
@@ -428,8 +429,8 @@ class RedblueLedgerApiTests(unittest.TestCase):
 
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         entries = {entry["id"]: entry for entry in data["entries"]}
-        self.assertEqual(entries["w1"]["business_completion_labels"], ["ID 合影", "答案之书"])
-        self.assertEqual(entries["r1"]["business_completion_labels"], ["查水表"])
+        self.assertEqual(entries["w1"]["business_display_labels"], ["ID 合影", "答案之书"])
+        self.assertEqual(entries["r1"]["business_display_labels"], ["查水表"])
         self.assertEqual(entries["w1"]["selected_business"], "")
         self.assertEqual(entries["r1"]["business_status"], "done")
         self.assertEqual(len(data["business_redemptions"]), 2)
@@ -509,7 +510,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(redemption["scoring_method"], "鸡腿")
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         row = next(item for item in data["entries"] if item["id"] == "n1")
-        self.assertEqual(row["business_completion_labels"], ["点唱半首"])
+        self.assertEqual(row["business_display_labels"], ["点唱半首"])
         fan = next(item for item in data["fan_summary"] if item["fan_name"] == "南方有嘉木")
         self.assertEqual(fan["business_remaining_score"], 0.0)
 
@@ -535,7 +536,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(redemption["fan_name"], "再坏对你不好吗")
         self.assertEqual(redemption["scoring_method"], "鸡腿")
         row = next(item for item in data["entries"] if item["id"] == "n1")
-        self.assertEqual(row["business_completion_labels"], ["点唱半首", "方言盲盒"])
+        self.assertEqual(row["business_display_labels"], ["点唱半首", "方言盲盒"])
         self.assertEqual(row["selected_business"], "")
 
     def test_multi_fan_redemption_pools_entries_and_marks_only_one_business_owner(self):
@@ -576,6 +577,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         redemption = response.json()["result"]["redemption"]
         self.assertEqual(redemption["completion_entry_id"], "b1")
+        self.assertEqual(redemption["display_entry_id"], "e1")
         self.assertEqual(
             [(item["entry_id"], item["score"]) for item in redemption["allocations"]],
             [("e1", 5.0), ("e2", 3.0), ("b1", 1.0)],
@@ -587,11 +589,11 @@ class RedblueLedgerApiTests(unittest.TestCase):
 
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         by_id = {entry["id"]: entry for entry in data["entries"]}
-        labeled = [entry_id for entry_id, entry in by_id.items() if entry["business_completion_labels"]]
-        self.assertEqual(labeled, ["b1"])
-        self.assertEqual(by_id["b1"]["business_completion_labels"], ["歌词卡"])
-        self.assertEqual(_business_text(by_id["b1"]), "歌词卡")
-        self.assertEqual(_business_text(by_id["e1"]), "—")
+        labeled = [entry_id for entry_id, entry in by_id.items() if entry["business_display_labels"]]
+        self.assertEqual(labeled, ["e1"])
+        self.assertEqual(by_id["e1"]["business_display_labels"], ["歌词卡"])
+        self.assertEqual(_business_text(by_id["e1"]), "歌词卡")
+        self.assertEqual(_business_text(by_id["b1"]), "—")
 
         alice = next(item for item in data["fan_summary"] if item["fan_id"] == "1001")
         bob = next(item for item in data["fan_summary"] if item["fan_id"] == "1002")
@@ -1352,7 +1354,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(
             _business_text(
                 {
-                    "business_completion_labels": ["点唱整首", "查水表"],
+                    "business_display_labels": ["点唱整首", "查水表"],
                     "business_allocations": [{"entry_id": "e2", "score": 6}],
                 }
             ),
