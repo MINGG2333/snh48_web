@@ -1226,7 +1226,7 @@ _GIFT_PRICE_LOCK = threading.Lock()
 _GIFT_PRICE_CACHE: dict[str, Any] = {}
 
 
-def _gift_price_index() -> tuple[dict[str, tuple[float, str]], dict[str, tuple[float, str]]]:
+def _gift_price_index() -> tuple[dict[str, float], dict[str, float]]:
     path = Path(getattr(cfg, "REDBLUE_GIFT_AUTHORITY_PATH", "") or "")
     try:
         stat = path.stat()
@@ -1237,8 +1237,8 @@ def _gift_price_index() -> tuple[dict[str, tuple[float, str]], dict[str, tuple[f
         if _GIFT_PRICE_CACHE.get("signature") == signature:
             return _GIFT_PRICE_CACHE["by_id"], _GIFT_PRICE_CACHE["by_name"]
         data = _load_json(path)
-        by_id: dict[str, tuple[float, str]] = {}
-        by_name: dict[str, tuple[float, str]] = {}
+        by_id: dict[str, float] = {}
+        by_name: dict[str, float] = {}
         gifts = data.get("gifts") if isinstance(data, dict) else None
         for gift in gifts or []:
             if not isinstance(gift, dict):
@@ -1246,45 +1246,31 @@ def _gift_price_index() -> tuple[dict[str, tuple[float, str]], dict[str, tuple[f
             price = max(_to_float(gift.get("melee"), 0.0), _to_float(gift.get("money"), 0.0))
             if price <= 0:
                 continue
-            since = _clean(gift.get("money_since"), 32)
             gift_id = _clean(gift.get("gift_id"), 40)
             gift_name = _clean(gift.get("gift_name"), 160)
             if gift_id:
-                by_id[gift_id] = (price, since)
+                by_id[gift_id] = price
             if gift_name:
-                by_name[gift_name] = (price, since)
+                by_name[gift_name] = price
         _GIFT_PRICE_CACHE["signature"] = signature
         _GIFT_PRICE_CACHE["by_id"] = by_id
         _GIFT_PRICE_CACHE["by_name"] = by_name
         return by_id, by_name
 
 
-def _gift_price_meta(gift_name: str, gift_id: str) -> tuple[float, str]:
+def _gift_price(gift_name: str, gift_id: str) -> float:
     by_id, by_name = _gift_price_index()
     if gift_id and gift_id in by_id:
         return by_id[gift_id]
-    return by_name.get(_clean(gift_name, 160), (0.0, ""))
+    return by_name.get(_clean(gift_name, 160), 0.0)
 
 
-def _gift_price(gift_name: str, gift_id: str) -> float:
-    return _gift_price_meta(gift_name, gift_id)[0]
+def _is_chicken_gift(gift_name: str, gift_id: str = "") -> bool:
+    """判据：unit_score>0 的计分礼物中，礼物目录有鸡腿价（melee/money>0）即鸡腿。
 
-
-def _is_card_gift(gift_name: str, gift_id: str = "") -> bool:
-    """已确认的计分卡礼物：按 gift_id 排除，避免同名鸡腿礼物被名字误伤。"""
-    gift_id = _clean(gift_id, 40)
-    if gift_id and gift_id in _name_set(getattr(cfg, "REDBLUE_CARD_GIFT_IDS", "")):
-        return True
-    return False
-
-
-def _is_chicken_gift(gift_name: str, gift_id: str = "", source_time: str = "") -> bool:
-    price, money_since = _gift_price_meta(gift_name, gift_id)
-    # 旧计分卡 ID 如果后来出现在 gift.list 并带上鸡腿价，则以首次出现价格的时间为界：
-    # 之前算计分卡，之后算鸡腿。这样同名同 ID 也能按时间区分。
-    if _is_card_gift(gift_name, gift_id):
-        source_time = _clean(source_time, 32)
-        return bool(price > 0 and source_time and money_since and source_time >= money_since)
+    不按发送时间判断：计分卡和鸡腿礼物在 11/11–15 可以共存，价格本身是
+    礼物的属性；同一 gift_id 只要在 gift.list/目录里带鸡腿价，就是鸡腿礼物。
+    """
     gift_id = _clean(gift_id, 40)
     if gift_id and gift_id in _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_IDS", "")):
         return True
@@ -1296,16 +1282,11 @@ def _is_chicken_gift(gift_name: str, gift_id: str = "", source_time: str = "") -
     keywords = _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_KEYWORDS", "鸡腿"))
     if any(keyword in name for keyword in keywords):
         return True
-    return price > 0
+    return _gift_price(name, gift_id) > 0
 
 
-def _gift_scoring_method(
-    gift_name: str,
-    source: str,
-    gift_id: str = "",
-    source_time: str = "",
-) -> str:
-    if _is_chicken_gift(gift_name, gift_id, source_time):
+def _gift_scoring_method(gift_name: str, source: str, gift_id: str = "") -> str:
+    if _is_chicken_gift(gift_name, gift_id):
         return "鸡腿"
     return DEFAULT_SCORING_METHODS.get(_clean(source, 20), "计分卡")
 
@@ -2143,7 +2124,6 @@ def _mutator_upsert_room_live(doc: dict[str, Any], payload: dict[str, Any]):
                 _clean(item.get("gift_name"), 160),
                 source,
                 _clean(item.get("gift_id"), 40),
-                _clean(item.get("source_time") or item.get("event_time"), 32),
             )
         candidate = _new_entry(
             doc,
@@ -2323,12 +2303,7 @@ def _build_room_live_items() -> list[dict[str, Any]]:
                 "note": note,
                 "gift_name": gift_name,
                 "gift_id": gift_id,
-                "scoring_method": _gift_scoring_method(
-                    gift_name,
-                    source,
-                    gift_id,
-                    _clean(item.get("event_time"), 32),
-                ),
+                "scoring_method": _gift_scoring_method(gift_name, source, gift_id),
             }
         )
     return items

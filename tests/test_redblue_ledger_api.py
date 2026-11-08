@@ -1030,10 +1030,42 @@ class RedblueLedgerApiTests(unittest.TestCase):
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         methods = {item["source_id"]: item["scoring_method"] for item in data["entries"]}
         self.assertEqual(methods["room-price-leg"], "鸡腿")
-        self.assertEqual(methods["room-card"], "计分卡")
+        self.assertEqual(methods["room-card"], "鸡腿")
         self.assertEqual(methods["room-same-name-leg"], "鸡腿")
 
-    def test_same_gift_id_uses_money_since_cutoff(self):
+    def test_same_gift_id_price_controls_chicken(self):
+        # 同一 gift_id：礼物目录没有鸡腿价 → 计分卡；目录出现 350 鸡腿价 → 鸡腿。
+        # 不按发送时间判断，因为计分卡和鸡腿礼物在 11/11–15 可以共存。
+        (self.tmp / "authority.json").write_text(
+            json.dumps({"gifts": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (self.tmp / "score.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "same-id-card",
+                            "source": "room",
+                            "event_time": "2026-11-10 12:00:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_id": "1320115721784332288",
+                            "gift_name": "弦月回响",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        methods = {item["source_id"]: item["scoring_method"] for item in data["entries"]}
+        self.assertEqual(methods["same-id-card"], "计分卡")
+
         (self.tmp / "authority.json").write_text(
             json.dumps(
                 {
@@ -1043,7 +1075,6 @@ class RedblueLedgerApiTests(unittest.TestCase):
                             "gift_name": "弦月回响",
                             "melee": 350.0,
                             "money": 350.0,
-                            "money_since": "2026-11-11 00:00:00",
                         },
                     ]
                 },
@@ -1056,18 +1087,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
                 {
                     "items": [
                         {
-                            "id": "same-id-before",
-                            "source": "room",
-                            "event_time": "2026-11-10 12:00:00",
-                            "sender_name": "Alice",
-                            "sender_id": "1001",
-                            "gift_id": "1320115721784332288",
-                            "gift_name": "弦月回响",
-                            "gift_count": 1,
-                            "total_score": 1,
-                        },
-                        {
-                            "id": "same-id-after",
+                            "id": "same-id-chicken",
                             "source": "room",
                             "event_time": "2026-11-11 12:00:00",
                             "sender_name": "Alice",
@@ -1076,7 +1096,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
                             "gift_name": "弦月回响",
                             "gift_count": 1,
                             "total_score": 1,
-                        },
+                        }
                     ]
                 },
                 ensure_ascii=False,
@@ -1086,8 +1106,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.client.post("/api/redblue/sync/room-live", headers=self.headers)
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         methods = {item["source_id"]: item["scoring_method"] for item in data["entries"]}
-        self.assertEqual(methods["same-id-before"], "计分卡")
-        self.assertEqual(methods["same-id-after"], "鸡腿")
+        self.assertEqual(methods["same-id-chicken"], "鸡腿")
 
     def test_explicit_chicken_gift_name_is_supported(self):
         old = cfg.REDBLUE_CHICKEN_GIFT_NAMES
