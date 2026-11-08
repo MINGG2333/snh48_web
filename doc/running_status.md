@@ -5,7 +5,7 @@
 - 需求：`/business/redblue2026` 偶尔在右下弹窗显示 `ssh: connect to host ... port 22: Connection timed out`，不希望页面暴露内部信息；新增按分数多选筛选；“加载中/正在生成…”等状态统一到右下弹窗；“全选当前列表”移到时间列表头左侧且不显示文字。
 - 后端（web `40ecad8`）：`/api/redblue/data` 和两个导出接口新增 `scores` 多选参数（逗号分隔），`_filter_entries` 按四舍五入后的分数精确匹配；`/data` 新增 `score_options`（全部条目的去重分数，供前端生成多选菜单）。`SharedStatePeerError`/`SharedStateError`/基础设施类 `ValueError` 统一改写为“主节点暂时不可用”或“红蓝台账暂时不可用”，详细 SSH/路径/traceback 只写服务端日志；前端 `publicError()` 再做一层兜底。
 - 前端：筛选区新增“分数”多选下拉（复选框 + 清除，支持 1/2 个时显示具体分数、3 个以上显示数量）；`filterQuery` 把选中分数传给数据和导出接口。`setStatus()` 改为右下角 sticky toast，移除工具栏 `actionStatus` 内联提示；错误/成功 toast 仍自动隐藏。表头第一列改为 `selectAll` 复选框（`aria-label`/`title` 保留无障碍说明，不显示可见文字），移除工具栏“全选当前列表”。
-- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` PID `61951`（20:53:52 重启），阿里云 `snh48-aliyun.service` PID `669867`（20:53:53 重启）。
+- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` 最终 PID `65453`，阿里云 `snh48-aliyun.service` 最终 PID `673622`（均于 20:58 左右重启，含筛选请求防乱序修复）。
 - 验证：网站 `tests.test_redblue_ledger_api` 44 项双端通过；`scores=3,6` 直接调用返回 45 条且分数集合 `{3.0,6.0}`，`score_options` 11 个；两端页面 200；模板 JS `node --check` 通过。
 
 ## 2026-11-08 20:05 CST 红蓝微店自动补采与阿里云转发（双端已生效）
