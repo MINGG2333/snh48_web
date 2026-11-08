@@ -313,7 +313,11 @@ def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
 
 
 def _display_text(text: Any, font=None, fallback_font=None) -> str:
-    """去掉字体和备用字体都无法渲染的 emoji/装饰符号，避免导出图出现方框。"""
+    """去掉字体和备用字体都无法渲染的 emoji/装饰符号，避免导出图出现方框。
+
+    仅跳过制表线、方块、盲文这类纯装饰字符；常见符号和 emoji（如 ⛽、✅、⚡）
+    交由备用字体链判断，能渲染就保留。
+    """
     value = "" if text is None else str(text)
     fallbacks = _fallback_list(fallback_font)
     cleaned = []
@@ -323,7 +327,7 @@ def _display_text(text: Any, font=None, fallback_font=None) -> str:
             continue
         if 0x02B0 <= code <= 0x02FF or 0x1D00 <= code <= 0x1DBF:
             continue
-        if 0x2500 <= code <= 0x28FF:
+        if 0x2500 <= code <= 0x259F or 0x2800 <= code <= 0x28FF:
             continue
         if unicodedata.category(char) in {"Mn", "Me", "Cs", "Cn", "Co"}:
             continue

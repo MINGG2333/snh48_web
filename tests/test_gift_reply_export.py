@@ -136,7 +136,7 @@ class GiftReplyExportTests(unittest.TestCase):
     def test_display_text_preserves_symbol_and_emoji_with_fallback(self) -> None:
         font = _font(24)
         fallback = _fallback_for(font)
-        for name in ("JOJO⭐", "拾蹄悦(悦悦🌲)", "衡绥suí🌲🐒"):
+        for name in ("JOJO⭐", "拾蹄悦(悦悦🌲)", "衡绥suí🌲🐒", "挺吉⛽", "✅测试", "闪电⚡"):
             with self.subTest(name=name):
                 self.assertEqual(_display_text(name, font, fallback), name)
 
