@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import fcntl
-import hashlib
 import hmac
 import json
 import logging
@@ -24,7 +23,9 @@ from pydantic import BaseModel
 
 from website import config as cfg
 from website import identity_index
-from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website import password_session
+from website.rate_limiter import check_redblue_login_limit as _check_redblue_login_limit
+from website.rate_limiter import get_client_ip
 from website.shared_runtime_state import (
     SharedStateError,
     SharedStatePeerError,
@@ -122,31 +123,7 @@ JOB_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 POCKET_ID_RE = re.compile(r"(?<!\d)(\d{4,12})(?!\d)")
 MUTATION_HEADER = "X-Redblue-Operation-Id"
 AUTH_COOKIE = "redblue_ledger_auth"
-AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
-_COOKIE_SECRET_CACHE: bytes | None = None
-
-
-def _cookie_secret() -> bytes:
-    """持久化 Cookie 签名密钥，避免网站重启后所有登录 Cookie 失效。"""
-    global _COOKIE_SECRET_CACHE
-    if _COOKIE_SECRET_CACHE is not None:
-        return _COOKIE_SECRET_CACHE
-    path = Path(cfg.REDBLUE_COOKIE_SECRET_PATH)
-    secret = b""
-    try:
-        secret = path.read_bytes()
-    except OSError:
-        pass
-    if len(secret) < 16:
-        secret = os.urandom(32)
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(secret)
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
-    _COOKIE_SECRET_CACHE = secret
-    return secret
+AUTH_COOKIE_MAX_AGE = password_session.cookie_max_age()
 
 
 class LoginRequest(BaseModel):
@@ -154,7 +131,7 @@ class LoginRequest(BaseModel):
 
 
 def _cookie_token(password: str) -> str:
-    return hmac.new(_cookie_secret(), password.encode("utf-8"), hashlib.sha256).hexdigest()
+    return password_session.cookie_token(password, context="redblue")
 
 
 def _now() -> str:
@@ -548,15 +525,17 @@ def verify_redblue_password(
         return True
     if x_redblue_password and hmac.compare_digest(x_redblue_password, expected):
         return True
-    if not redblue_ledger_auth and not x_redblue_password:
-        check_redblue_login_limit(request)
+    if not password_session.password_was_submitted(x_redblue_password):
+        # 缺密码或旧 Cookie 一律视为“登录已过期”，不计入密码失败限流。
         raise HTTPException(status_code=401, detail="需要密码")
     check_redblue_login_limit(request)
     raise HTTPException(status_code=403, detail="密码错误")
 
 
 def check_redblue_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试")
+    _check_redblue_login_limit(
+        get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试"
+    )
 
 
 @router.post("/login")

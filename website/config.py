@@ -442,16 +442,6 @@ REDBLUE_WEIDIAN_ITEM_IDS = [
     if value.strip()
 ]
 REDBLUE_WEIDIAN_UNIT_PRICE = float(os.getenv("REDBLUE_WEIDIAN_UNIT_PRICE", "26.25"))
-REDBLUE_COOKIE_SECRET_PATH = os.getenv(
-    "REDBLUE_COOKIE_SECRET_PATH",
-    str(
-        PROJECT_ROOT.parent
-        / "snh48-fan-hub"
-        / "private_handover"
-        / "web_state"
-        / "redblue_ledger_cookie_secret"
-    ),
-)
 REDBLUE_WEIDIAN_ORDERS_PATH = os.getenv(
     "REDBLUE_WEIDIAN_ORDERS_PATH",
     str(

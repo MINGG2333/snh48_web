@@ -233,7 +233,7 @@ class FlipCardsTemplateTests(unittest.TestCase):
         self.assertIn('avatar.textContent = avatarText', template)
         self.assertIn('record.member_avatar_text', template)
         self.assertIn('String(member.name || "").includes("陈嘉仪")', template)
-        self.assertIn('createAudioTranscriptNode(record.audio_transcript)', template)
+        self.assertIn('createAudioTranscriptNode(record.audio_transcript, audio)', template)
         self.assertIn('appendText(box, "transcript-label", "转录参考")', template)
         self.assertIn('audio.preload = "none"', template)
         self.assertNotIn('audio.preload = "metadata"', template)
