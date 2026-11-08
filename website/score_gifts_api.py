@@ -87,7 +87,7 @@ async def verify_score_gifts_password(
 
 
 def check_score_gifts_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "计分礼物页密码尝试过于频繁，请稍后再试")
+    check_admin_login_limit(get_client_ip(request), "计分礼物页密码尝试过于频繁，请稍后再试", group="score-gifts")
 
 
 @router.get("/verify")

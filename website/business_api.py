@@ -143,7 +143,7 @@ async def verify_business_password(
 
 
 def check_business_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "业务管理页密码尝试过于频繁，请稍后再试")
+    check_admin_login_limit(get_client_ip(request), "业务管理页密码尝试过于频繁，请稍后再试", group="business-admin")
 
 
 def _bj_now() -> str:

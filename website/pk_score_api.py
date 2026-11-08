@@ -20,7 +20,7 @@ _cache_doc: dict[str, Any] = {}
 
 
 def check_pk_score_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "房间计分 PK 页面密码尝试过于频繁，请稍后再试")
+    check_admin_login_limit(get_client_ip(request), "房间计分 PK 页面密码尝试过于频繁，请稍后再试", group="pk-score")
 
 
 async def verify_pk_score_password(

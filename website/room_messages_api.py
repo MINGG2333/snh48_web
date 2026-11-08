@@ -128,7 +128,7 @@ async def verify_room_messages_password(
 
 
 def check_room_messages_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "房间消息页密码尝试过于频繁，请稍后再试")
+    check_admin_login_limit(get_client_ip(request), "房间消息页密码尝试过于频繁，请稍后再试", group="room-messages")
 
 
 class AsrCorrectionPayload(BaseModel):

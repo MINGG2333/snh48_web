@@ -25,7 +25,8 @@ from pydantic import BaseModel
 from website import config as cfg
 from website import identity_index
 from website import password_session
-from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website.rate_limiter import check_redblue_login_limit as _check_redblue_login_limit
+from website.rate_limiter import get_client_ip
 from website.shared_runtime_state import (
     SharedStateError,
     SharedStatePeerError,
@@ -533,7 +534,9 @@ def verify_redblue_password(
 
 
 def check_redblue_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试")
+    _check_redblue_login_limit(
+        get_client_ip(request), "红蓝台账密码尝试过于频繁，请稍后再试"
+    )
 
 
 @router.post("/login")

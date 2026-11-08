@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from website import config as cfg
 from website import password_session
-from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website.rate_limiter import check_room_voice_replays_login_limit, get_client_ip
 
 
 router = APIRouter(prefix="/api/room-voice-replays", tags=["房间上麦回放"])
@@ -109,7 +109,7 @@ async def verify_room_voice_replays_auth(
     ):
         # 缺密码或旧 Cookie 一律视为“登录已过期”，不计入密码失败限流。
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
-    check_admin_login_limit(
+    check_room_voice_replays_login_limit(
         get_client_ip(request), "房间上麦回放密码尝试过于频繁，请稍后再试"
     )
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
@@ -121,7 +121,7 @@ async def login(payload: LoginRequest, response: Response, request: Request):
     if not expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="房间上麦回放未启用")
     if not hmac.compare_digest(payload.password, expected):
-        check_admin_login_limit(
+        check_room_voice_replays_login_limit(
             get_client_ip(request), "房间上麦回放密码尝试过于频繁，请稍后再试"
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")

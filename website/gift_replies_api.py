@@ -64,7 +64,7 @@ async def verify_gift_replies_password(
 
 
 def check_gift_replies_login_limit(request: Request) -> None:
-    check_admin_login_limit(get_client_ip(request), "礼物回复页密码尝试过于频繁，请稍后再试")
+    check_admin_login_limit(get_client_ip(request), "礼物回复页密码尝试过于频繁，请稍后再试", group="gift-replies")
 
 
 @router.get("/verify")

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from website import config as cfg
 from website import password_session
-from website.rate_limiter import check_admin_login_limit, get_client_ip
+from website.rate_limiter import check_social_credentials_login_limit, get_client_ip
 
 
 router = APIRouter(prefix="/api/social-credentials", tags=["社交凭据管理"])
@@ -156,7 +156,7 @@ async def require_auth(request: Request, social_credentials_auth: str = Cookie(N
 async def login(payload: LoginRequest, request: Request, response: Response):
     _require_enabled()
     if not hmac.compare_digest(payload.password, cfg.SOCIAL_CREDENTIALS_ADMIN_PASSWORD):
-        check_admin_login_limit(get_client_ip(request), "社交凭据管理密码尝试过于频繁，请稍后再试")
+        check_social_credentials_login_limit(get_client_ip(request), "社交凭据管理密码尝试过于频繁，请稍后再试")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
     response.set_cookie(
         AUTH_COOKIE,

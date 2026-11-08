@@ -161,6 +161,20 @@ flip_login_limiter = SlidingWindowLimiter(
     window_seconds=cfg.FLIP_LOGIN_WINDOW_SECONDS,
 )
 
+# 各密码组独立预算：一个页面被暴力尝试不影响其他页面
+room_voice_replays_login_limiter = SlidingWindowLimiter(
+    max_requests=cfg.PASSWORD_LOGIN_MAX_PER_WINDOW,
+    window_seconds=cfg.PASSWORD_LOGIN_WINDOW_SECONDS,
+)
+social_credentials_login_limiter = SlidingWindowLimiter(
+    max_requests=cfg.PASSWORD_LOGIN_MAX_PER_WINDOW,
+    window_seconds=cfg.PASSWORD_LOGIN_WINDOW_SECONDS,
+)
+redblue_login_limiter = SlidingWindowLimiter(
+    max_requests=cfg.PASSWORD_LOGIN_MAX_PER_WINDOW,
+    window_seconds=cfg.PASSWORD_LOGIN_WINDOW_SECONDS,
+)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Per-User State (tracked by client_id)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -471,6 +485,12 @@ def get_rate_limiter_stats() -> dict:
         "balance_limiter": balance_limiter.stats,
         "ob_login_limiter": ob_login_limiter.stats,
         "flip_login_limiter": flip_login_limiter.stats,
+        "room_voice_replays_login_limiter": room_voice_replays_login_limiter.stats,
+        "social_credentials_login_limiter": social_credentials_login_limiter.stats,
+        "redblue_login_limiter": redblue_login_limiter.stats,
+        "password_group_limiters": {
+            name: limiter.stats for name, limiter in _password_login_limiters.items()
+        },
         "active_tasks": len(_active_tasks),
         "tracked_users": {
             "with_cooldown": len(_last_question_time),
@@ -564,9 +584,28 @@ def check_balance_limit(ip: str) -> None:
         )
 
 
-def check_admin_login_limit(ip: str, detail: str) -> None:
-    """Rate-limit failed admin password attempts using the shared OB limiter."""
-    allowed, count = ob_login_limiter.check(ip)
+_password_login_limiters: Dict[str, SlidingWindowLimiter] = {}
+
+
+def _password_login_limiter(group: str) -> SlidingWindowLimiter:
+    limiter = _password_login_limiters.get(group)
+    if limiter is None:
+        limiter = SlidingWindowLimiter(
+            max_requests=cfg.PASSWORD_LOGIN_MAX_PER_WINDOW,
+            window_seconds=cfg.PASSWORD_LOGIN_WINDOW_SECONDS,
+        )
+        _password_login_limiters[group] = limiter
+    return limiter
+
+
+def check_admin_login_limit(ip: str, detail: str, *, group: str | None = None) -> None:
+    """Rate-limit failed admin password attempts.
+
+    ``group=None`` keeps the historical shared OB budget. Pass a page group name
+    to get an independent budget so one page cannot lock out another.
+    """
+    limiter = ob_login_limiter if group is None else _password_login_limiter(group)
+    allowed, count = limiter.check(ip)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -582,6 +621,33 @@ def check_ob_login_limit(ip: str) -> None:
 def check_flip_login_limit(ip: str, detail: str) -> None:
     """Rate-limit failed flip-cards password attempts (separate budget)."""
     allowed, count = flip_login_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+        )
+
+
+def check_room_voice_replays_login_limit(ip: str, detail: str) -> None:
+    allowed, count = room_voice_replays_login_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+        )
+
+
+def check_social_credentials_login_limit(ip: str, detail: str) -> None:
+    allowed, count = social_credentials_login_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+        )
+
+
+def check_redblue_login_limit(ip: str, detail: str) -> None:
+    allowed, count = redblue_login_limiter.check(ip)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

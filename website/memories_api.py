@@ -443,10 +443,10 @@ def _verify_password_value(
     if not expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=disabled_detail)
     if not provided:
-        check_admin_login_limit(get_client_ip(request), missing_detail)
+        check_admin_login_limit(get_client_ip(request), missing_detail, group="memories")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=missing_detail)
     if not hmac.compare_digest(expected, provided):
-        check_admin_login_limit(get_client_ip(request), wrong_detail)
+        check_admin_login_limit(get_client_ip(request), wrong_detail, group="memories")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=wrong_detail)
 
 
