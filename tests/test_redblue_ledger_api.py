@@ -1414,6 +1414,21 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(state["status"], "ok")
         self.assertEqual(state["orders_count"], 1)
 
+    def test_pending_weidian_sync_job_is_reused_only_for_same_output(self):
+        pending = self.tmp / "wd" / "pending"
+        pending.mkdir(parents=True)
+        matching = "a" * 32
+        other = "b" * 32
+        (pending / f"{matching}.json").write_text(
+            json.dumps({"type": "sync", "output_path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH}),
+            encoding="utf-8",
+        )
+        (pending / f"{other}.json").write_text(
+            json.dumps({"type": "sync", "output_path": str(self.tmp / "other.json")}),
+            encoding="utf-8",
+        )
+        self.assertEqual(api._pending_weidian_sync_job(), matching)
+
     def test_non_primary_weidian_sync_job_forwards_to_tencent(self):
         cfg.SHARED_STATE_SYNC_ENABLED = True
         cfg.SHARED_STATE_IS_PRIMARY = False

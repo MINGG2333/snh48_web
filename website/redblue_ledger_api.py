@@ -312,6 +312,28 @@ def _peer_weidian(action: str, payload: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
+def _pending_weidian_sync_job() -> str:
+    """复用队列里尚未完成的 sync 任务，避免 worker 停摆时堆积重复任务。"""
+    try:
+        _, pending, _, _ = _queue_dirs("weidian")
+    except OSError:
+        return ""
+    target = Path(cfg.REDBLUE_WEIDIAN_ORDERS_PATH).resolve()
+    for path in sorted(pending.glob("*.json")):
+        data = _load_json(path)
+        if not isinstance(data, dict) or _clean(data.get("type"), 20) != "sync":
+            continue
+        output = _clean(data.get("output_path"), 500)
+        try:
+            output_path = Path(output).resolve() if output else target
+        except (OSError, ValueError):
+            output_path = target
+        if output_path != target:
+            continue
+        return path.stem
+    return ""
+
+
 def _apply_weidian_orders(orders: list[dict[str, Any]]) -> dict[str, Any]:
     try:
         doc = load_document(RESOURCE)
@@ -384,7 +406,7 @@ def run_weidian_sync_once(*, force: bool = False) -> dict[str, Any]:
             "item_ids": list(cfg.REDBLUE_WEIDIAN_ITEM_IDS),
             "output_path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
         }
-        job_id = _write_job("weidian", payload)
+        job_id = _pending_weidian_sync_job() or _write_job("weidian", payload)
         state.update(
             {
                 "status": "running",
