@@ -50,7 +50,7 @@
     .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
     .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .toolbar .spacer { flex: 1; }
-    .filters { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)) auto; gap: 8px; align-items: end; margin-top: 12px; }
+    .filters { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)) auto; gap: 8px; align-items: end; margin-top: 12px; }
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .field label { color: var(--faint); font-size: 12px; }
     .field input, .field select, .field textarea { width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); color: var(--text); padding: 0 9px; outline: none; }
@@ -58,6 +58,17 @@
     .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--teal); }
     .check { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; min-height: 34px; }
     .check input { width: 15px; height: 15px; accent-color: var(--teal); }
+    .multi-select { position: relative; }
+    .multi-select-toggle { width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--ink); color: var(--text); padding: 0 9px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .multi-select-toggle::after { content: "▾"; float: right; color: var(--faint); margin-left: 6px; }
+    .multi-select-menu { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 28px rgba(0,0,0,.35); padding: 6px; }
+    .multi-select-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; color: var(--faint); font-size: 12px; }
+    .multi-select-head button { border: 0; background: transparent; color: var(--teal); cursor: pointer; font-size: 12px; padding: 0; }
+    .multi-select-menu label { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
+    .multi-select-menu label:hover { background: rgba(255,255,255,.06); }
+    .multi-select-menu input { width: 15px; height: 15px; accent-color: var(--teal); }
+    .multi-select-empty { color: var(--faint); font-size: 12px; padding: 6px; }
+    th input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--teal); vertical-align: middle; }
     .analytics-grid { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.35fr); gap: 12px; margin-bottom: 14px; align-items: start; }
     .analytics-grid .panel { margin-bottom: 0; padding: 0; overflow: hidden; }
     .panel-head { min-height: 48px; padding: 13px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -221,11 +232,11 @@
         <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
         <button class="btn" id="duplicateSelectedBtn">标记重复</button>
         <div class="spacer"></div>
-        <span class="notice" id="actionStatus"></span>
       </div>
       <div class="filters">
         <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店</option><option value="room">房间</option><option value="live">直播</option></select></div>
         <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
+        <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
         <div class="field"><label>开始日期</label><input id="dateFrom" type="date"></div>
         <div class="field"><label>结束日期</label><input id="dateTo" type="date"></div>
@@ -273,10 +284,10 @@
     </section>
 
     <section class="panel">
-      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><div class="spacer"></div><label class="check"><input type="checkbox" id="selectAll"> 全选当前列表</label></div>
+      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th style="width:34px;"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务状态</th><th>兑换业务</th><th>备注</th><th>操作</th></tr></thead>
+          <thead><tr><th style="width:34px;"><input type="checkbox" id="selectAll" aria-label="全选当前列表" title="全选当前列表"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务状态</th><th>兑换业务</th><th>备注</th><th>操作</th></tr></thead>
           <tbody id="entryBody"></tbody>
         </table>
       </div>
@@ -411,6 +422,7 @@
   var LEGACY_PASSWORD_KEY = "redblue_ledger_password_2026";
   var data = null;
   var selected = new Set();
+  var selectedScores = new Set();
   var editingId = "";
   var aiJobId = "";
   var aiSuggestions = {};
@@ -433,15 +445,47 @@
     var n = Number(value || 0);
     return Math.abs(n - Math.round(n)) < 0.0001 ? String(Math.round(n)) : n.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
   }
-  function showToast(message, isError) {
+  var statusToastActive = false;
+  function showToast(message, isError, options) {
+    options = options || {};
     var el = $("toast");
-    el.textContent = message || "";
+    if (!message) {
+      el.classList.remove("show");
+      statusToastActive = false;
+      clearTimeout(showToast.timer);
+      return;
+    }
+    el.textContent = message;
     el.classList.toggle("error", Boolean(isError));
     el.classList.add("show");
     clearTimeout(showToast.timer);
-    showToast.timer = setTimeout(function () { el.classList.remove("show"); }, 4200);
+    statusToastActive = Boolean(options.sticky);
+    var duration = options.sticky ? 0 : (options.duration || 4200);
+    if (duration > 0) {
+      showToast.timer = setTimeout(function () {
+        el.classList.remove("show");
+        if (!isError) statusToastActive = false;
+      }, duration);
+    }
   }
-  function setStatus(message) { $("actionStatus").textContent = message || ""; }
+  function setStatus(message) {
+    if (!message) {
+      if (statusToastActive) {
+        $("toast").classList.remove("show");
+        statusToastActive = false;
+        clearTimeout(showToast.timer);
+      }
+      return;
+    }
+    showToast(message, false, {sticky: true});
+  }
+  function publicError(message, fallback) {
+    var text = String(message || "").trim();
+    if (!text || /ssh|connect to host|connection|timed out|timeout|traceback|shared-state peer|\/home\/|socket|subprocess|scp|rsync/i.test(text)) {
+      return fallback || "服务暂时不可用，请稍后重试";
+    }
+    return text;
+  }
 
   function showLogin(message) {
     page.classList.remove("ready");
@@ -470,9 +514,40 @@
     }
     if (!response.ok) {
       var body = await response.json().catch(function () { return {}; });
-      throw new Error(body.detail || ("HTTP " + response.status));
+      throw new Error(publicError(body.detail, "请求失败，请稍后重试"));
     }
     return response.json();
+  }
+
+  function renderScoreFilter() {
+    if (!data) return;
+    var options = (data.score_options || []).map(Number).filter(function (value) { return value > 0; });
+    var seen = new Set(options);
+    Array.from(selectedScores).forEach(function (value) { if (!seen.has(value)) selectedScores.delete(value); });
+    var menu = $("scoreFilterMenu");
+    var header = '<div class="multi-select-head"><span>按分数筛选</span><button type="button" data-score-clear>清除</button></div>';
+    if (!options.length) {
+      menu.innerHTML = header + '<div class="multi-select-empty">暂无可选分数</div>';
+    } else {
+      menu.innerHTML = header + options.map(function (value) {
+        var checked = selectedScores.has(value) ? " checked" : "";
+        return '<label><input type="checkbox" data-score-value="' + esc(String(value)) + '"' + checked + '> ' + esc(score(value)) + ' 分</label>';
+      }).join("");
+    }
+    updateScoreToggle();
+  }
+
+  function updateScoreToggle() {
+    var toggle = $("scoreFilterToggle");
+    if (!toggle) return;
+    var values = Array.from(selectedScores).sort(function (a, b) { return a - b; });
+    if (!values.length) {
+      toggle.textContent = "全部分数";
+    } else if (values.length <= 2) {
+      toggle.textContent = values.map(function (value) { return score(value) + " 分"; }).join("、");
+    } else {
+      toggle.textContent = "已选 " + values.length + " 个分数";
+    }
   }
 
   function filterQuery() {
@@ -484,6 +559,9 @@
     params.set("date_to", $("dateTo").value);
     params.set("sort", $("sortFilter").value);
     params.set("include_duplicate", $("includeDuplicate").checked ? "true" : "false");
+    if (selectedScores.size) {
+      params.set("scores", Array.from(selectedScores).sort(function (a, b) { return a - b; }).join(","));
+    }
     return params.toString();
   }
 
@@ -503,6 +581,7 @@
   function renderAll() {
     if (!data) return;
     businessOptions = data.business_options || [];
+    renderScoreFilter();
     renderKpis();
     renderScoringSummary();
     renderFanSummary();
@@ -1014,7 +1093,7 @@
     var entries = data.entries || [];
     $("entryHint").textContent = "共 " + entries.length + " 条";
     $("emptyState").classList.toggle("hidden", entries.length > 0);
-    if (!entries.length) { $("entryBody").innerHTML = ""; return; }
+    if (!entries.length) { $("entryBody").innerHTML = ""; $("selectAll").checked = false; return; }
     $("entryBody").innerHTML = entries.map(function (entry) {
       var name = entry.fan_name || entry.raw_name || "未登记";
       var rawId = entry.fan_id ? "ID " + entry.fan_id : (entry.raw_id ? "ID " + entry.raw_id : "");
@@ -1060,6 +1139,7 @@
         '</div></td>' +
       '</tr>';
     }).join("");
+    updateSelectAll();
   }
 
   function openEntryModal(entry) {
@@ -1510,8 +1590,9 @@
             resolve(result);
           } else if (result.status === "error") {
             clearInterval(timer);
-            if (!silent) { setStatus(""); showToast(result.error || "任务失败", true); }
-            reject(new Error(result.error || "任务失败"));
+            var message = publicError(result.error, "任务失败，请稍后重试");
+            if (!silent) { setStatus(""); showToast(message, true); }
+            reject(new Error(message));
           } else if (!silent) {
             setStatus("任务处理中…");
           }
@@ -1640,7 +1721,7 @@
       if (response.status === 401 || response.status === 403) { showLogin("登录已失效，请重新输入密码"); return; }
       if (!response.ok) {
         var body = await response.json().catch(function () { return {}; });
-        throw new Error(body.detail || ("HTTP " + response.status));
+        throw new Error(publicError(body.detail, "导出失败，请稍后重试"));
       }
       var blob = await response.blob();
       var url = URL.createObjectURL(blob);
@@ -2209,6 +2290,26 @@
     ["sourceFilter","statusFilter","sortFilter","includeDuplicate","dateFrom","dateTo"].forEach(function (id) {
       $(id).addEventListener("change", function () { loadData().catch(function () {}); });
     });
+    $("scoreFilterToggle").addEventListener("click", function (event) {
+      event.stopPropagation();
+      var menu = $("scoreFilterMenu");
+      var hidden = menu.classList.toggle("hidden");
+      $("scoreFilterToggle").setAttribute("aria-expanded", hidden ? "false" : "true");
+    });
+    $("scoreFilterMenu").addEventListener("change", function (event) {
+      var input = event.target.closest("[data-score-value]");
+      if (!input) return;
+      var value = Number(input.getAttribute("data-score-value"));
+      if (input.checked) selectedScores.add(value); else selectedScores.delete(value);
+      updateScoreToggle();
+      loadData().catch(function () {});
+    });
+    $("scoreFilterMenu").addEventListener("click", function (event) {
+      if (!event.target.closest("[data-score-clear]")) return;
+      selectedScores.clear();
+      renderScoreFilter();
+      loadData().catch(function () {});
+    });
     $("keywordInput").addEventListener("keydown", function (event) { if (event.key === "Enter") loadData().catch(function () {}); });
     window.addEventListener("resize", function () {
       clearTimeout(dailyTrendResizeTimer);
@@ -2237,6 +2338,10 @@
       if (action) action();
     });
     document.addEventListener("click", function (event) {
+      if (!event.target.closest("#scoreFilter")) {
+        $("scoreFilterMenu").classList.add("hidden");
+        $("scoreFilterToggle").setAttribute("aria-expanded", "false");
+      }
       var close = event.target.closest("[data-close]");
       if (close) { $(close.getAttribute("data-close")).classList.add("hidden"); return; }
       var select = event.target.closest("[data-select]");
@@ -2284,7 +2389,7 @@
       });
       if (!response.ok) {
         var body = await response.json().catch(function () { return {}; });
-        throw new Error(body.detail || "密码错误");
+        throw new Error(publicError(body.detail, "登录失败，请稍后重试"));
       }
       $("passwordInput").value = "";
       loginError.classList.remove("show");

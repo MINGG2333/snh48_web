@@ -301,13 +301,44 @@ def _weidian_sync_status() -> dict[str, Any]:
     return state
 
 
+_INTERNAL_ERROR_MARKERS = (
+    "ssh",
+    "connect to host",
+    "connection",
+    "timed out",
+    "timeout",
+    "socket",
+    "traceback",
+    "shared-state peer",
+    "peer_command",
+    "subprocess",
+    "/home/",
+    "scp",
+    "rsync",
+)
+
+
+def _public_detail(exc: Exception | str, fallback: str) -> str:
+    """Hide infrastructure details (SSH paths/hosts, tracebacks) from the page."""
+    text = str(exc or "").strip()
+    lowered = text.lower()
+    if not text or any(marker in lowered for marker in _INTERNAL_ERROR_MARKERS):
+        logger.warning("redblue internal error hidden from client: %s", text[:500])
+        return fallback
+    return text
+
+
 def _peer_weidian(action: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
         response = peer_command("weidian-admin", {"action": action, "payload": payload})
     except SharedStatePeerError as exc:
-        raise HTTPException(status_code=exc.status_code or 503, detail=str(exc)) from exc
+        logger.warning("redblue weidian peer failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="主节点暂时不可用，请稍后重试",
+        ) from exc
     if not isinstance(response, dict):
-        raise HTTPException(status_code=502, detail="对端返回格式无效")
+        raise HTTPException(status_code=502, detail="服务暂时不可用，请稍后重试")
     response.pop("ok", None)
     return response
 
@@ -1348,6 +1379,33 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
 # ── 筛选与汇总 ──────────────────────────────────────────────────────────
 
 
+def _format_score(value: float) -> str:
+    number = float(value)
+    if abs(number - round(number)) < 1e-9:
+        return str(int(round(number)))
+    return f"{number:.4f}".rstrip("0").rstrip(".")
+
+
+def _parse_scores(value: Any) -> set[float]:
+    """解析逗号分隔的分数筛选（多选），忽略非法值。"""
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item) for item in value]
+    else:
+        parts = str(value or "").split(",")
+    scores: set[float] = set()
+    for part in parts:
+        text = part.strip()
+        if not text:
+            continue
+        try:
+            number = float(text)
+        except ValueError:
+            continue
+        if number > 0:
+            scores.add(round(number, 4))
+    return scores
+
+
 def _filter_entries(
     entries: Iterable[dict[str, Any]],
     *,
@@ -1357,11 +1415,13 @@ def _filter_entries(
     date_from: str = "",
     date_to: str = "",
     include_duplicate: bool = True,
+    scores: set[float] | None = None,
     aliases: Iterable[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     source = _clean(source, 20).lower() or "all"
     status_filter = _clean(status_filter, 20).lower() or "all"
     keyword = _clean(keyword, 120).casefold()
+    wanted_scores = {round(value, 4) for value in (scores or set())}
     result: list[dict[str, Any]] = []
     for raw in entries:
         if not isinstance(raw, dict):
@@ -1370,6 +1430,8 @@ def _filter_entries(
         if source != "all" and item["source"] != source:
             continue
         if not include_duplicate and item["duplicate"]:
+            continue
+        if wanted_scores and round(_to_float(item.get("score"), 0.0), 4) not in wanted_scores:
             continue
         if status_filter == "settled" and not item["settled"]:
             continue
@@ -1585,11 +1647,13 @@ def _load_filtered(
     date_to: str,
     sort: str,
     include_duplicate: bool,
+    scores: set[float] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
         doc = load_document(RESOURCE)
     except SharedStateError as exc:
-        raise HTTPException(status_code=503, detail=f"红蓝台账读取失败：{exc}") from exc
+        logger.warning("redblue ledger load failed: %s", exc)
+        raise HTTPException(status_code=503, detail="红蓝台账暂时不可用，请稍后重试") from exc
     filtered = _filter_entries(
         doc.get("entries") or [],
         source=source,
@@ -1598,6 +1662,7 @@ def _load_filtered(
         date_from=date_from,
         date_to=date_to,
         include_duplicate=include_duplicate,
+        scores=scores,
         aliases=doc.get("aliases") or [],
     )
     return doc, _sort_entries(filtered, sort)
@@ -2240,11 +2305,13 @@ def get_redblue_data(
     date_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
+    scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
     response.headers["Cache-Control"] = "no-store"
     date_from = _norm_date(date_from)
     date_to = _norm_date(date_to)
+    parsed_scores = _parse_scores(scores)
     doc, entries = _load_filtered(
         source=source,
         status_filter=status_filter,
@@ -2253,6 +2320,7 @@ def get_redblue_data(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
+        scores=parsed_scores,
     )
     raw_entries = doc.get("entries") or []
     all_entries = [_normalise_entry(item, doc.get("aliases") or []) for item in raw_entries if isinstance(item, dict)]
@@ -2261,6 +2329,13 @@ def get_redblue_data(
     _attach_business_allocations(entries, redemptions)
     fan_summary = _fan_summary(entries)
     _attach_fan_business(fan_summary, redemptions)
+    score_options = sorted(
+        {
+            round(_to_float(item.get("score"), 0.0), 4)
+            for item in all_entries
+            if _to_float(item.get("score"), 0.0) > 0
+        }
+    )
     return {
         "generated_at": _clean(doc.get("updated_at"), 32),
         "summary": _summary(entries),
@@ -2268,6 +2343,7 @@ def get_redblue_data(
         "daily_scoring": _daily_scoring(all_entries),
         "fan_summary": fan_summary,
         "entries": entries,
+        "score_options": score_options,
         "business_options": BUSINESS_OPTIONS,
         "business_redemptions": redemptions,
         "weidian_sync": _weidian_sync_status(),
@@ -2280,6 +2356,7 @@ def get_redblue_data(
             "date_to": date_to,
             "sort": _clean(sort, 20),
             "include_duplicate": include_duplicate,
+            "scores": sorted(parsed_scores),
         },
     }
 
@@ -2293,9 +2370,11 @@ def _export_context(
     date_to: str,
     sort: str,
     include_duplicate: bool,
+    scores: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str]:
     date_from = _norm_date(date_from)
     date_to = _norm_date(date_to)
+    parsed_scores = _parse_scores(scores)
     doc, entries = _load_filtered(
         source=source,
         status_filter=status_filter,
@@ -2304,6 +2383,7 @@ def _export_context(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
+        scores=parsed_scores,
     )
     redemptions = _normalise_redemptions(doc.get("business_redemptions") or [], doc.get("entries") or [])
     _attach_business_allocations(entries, redemptions)
@@ -2326,6 +2406,8 @@ def _export_context(
         filters.append("状态：" + status_filter)
     if keyword:
         filters.append("关键词：" + keyword)
+    if parsed_scores:
+        filters.append("分数：" + "、".join(_format_score(value) for value in sorted(parsed_scores)))
     if not include_duplicate:
         filters.append("不含重复")
     updated = max((item.get("source_time") or item.get("created_at") or "" for item in entries), default="")[:16]
@@ -2352,6 +2434,7 @@ def export_redblue_summary(
     date_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
+    scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
     entries, summary, period, filter_text, updated = _export_context(
@@ -2362,6 +2445,7 @@ def export_redblue_summary(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
+        scores=scores,
     )
     from website.redblue_export import render_summary_png
 
@@ -2386,6 +2470,7 @@ def export_redblue_entries(
     date_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
+    scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
     entries, summary, period, filter_text, updated = _export_context(
@@ -2396,6 +2481,7 @@ def export_redblue_entries(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
+        scores=scores,
     )
     from website.redblue_export import render_entries_png
 
@@ -2417,8 +2503,14 @@ def _mutate(operation: str, payload: dict[str, Any], request: Request) -> dict[s
     operation_id = _clean(request.headers.get(MUTATION_HEADER), 80) or uuid.uuid4().hex
     try:
         result = execute_mutation(RESOURCE, operation, payload, operation_id=operation_id)
-    except (SharedStateError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SharedStatePeerError as exc:
+        logger.warning("redblue mutation peer failed: %s", exc)
+        raise HTTPException(status_code=503, detail="主节点暂时不可用，请稍后重试") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=_public_detail(exc, "操作失败，请检查输入")) from exc
+    except SharedStateError as exc:
+        logger.warning("redblue mutation failed: %s", exc)
+        raise HTTPException(status_code=503, detail="红蓝台账暂时不可用，请稍后重试") from exc
     return {"result": result.get("result"), "replicated": result.get("replicated", True)}
 
 
@@ -2472,8 +2564,14 @@ def migrate_legacy_business(request: Request, _=Depends(verify_redblue_password)
 def sync_room_live(request: Request, _=Depends(verify_redblue_password)):
     try:
         return {"result": _sync_room_live_now(request), "replicated": True}
-    except (SharedStateError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SharedStatePeerError as exc:
+        logger.warning("redblue room/live peer failed: %s", exc)
+        raise HTTPException(status_code=503, detail="主节点暂时不可用，请稍后重试") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=_public_detail(exc, "同步失败，请稍后重试")) from exc
+    except SharedStateError as exc:
+        logger.warning("redblue room/live sync failed: %s", exc)
+        raise HTTPException(status_code=503, detail="红蓝台账暂时不可用，请稍后重试") from exc
 
 
 # ── 队列 ────────────────────────────────────────────────────────────────
@@ -2743,7 +2841,11 @@ def create_weidian_ship_job(payload: dict[str, Any] = Body(default={}), _=Depend
     entry_ids = {_clean(value, 80) for value in (payload.get("entry_ids") or []) if _clean(value, 80)}
     if not entry_ids:
         raise HTTPException(status_code=422, detail="请选择要发货的微店条目")
-    doc = load_document(RESOURCE)
+    try:
+        doc = load_document(RESOURCE)
+    except SharedStateError as exc:
+        logger.warning("redblue ship load failed: %s", exc)
+        raise HTTPException(status_code=503, detail="红蓝台账暂时不可用，请稍后重试") from exc
     orders = []
     for entry in doc.get("entries") or []:
         if not isinstance(entry, dict) or entry.get("id") not in entry_ids:

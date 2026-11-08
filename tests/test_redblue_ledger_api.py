@@ -1414,6 +1414,28 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(state["status"], "ok")
         self.assertEqual(state["orders_count"], 1)
 
+    def test_score_filter_is_multi_select_and_exposes_options(self):
+        for name, value in (("Low", 1), ("Mid", 3), ("High", 6)):
+            self.client.post(
+                "/api/redblue/entries",
+                headers=self.headers,
+                json={"raw_name": name, "score": value},
+            )
+        response = self.client.get("/api/redblue/data?scores=3,6", headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual({entry["score"] for entry in payload["entries"]}, {3.0, 6.0})
+        self.assertEqual(payload["score_options"], [1.0, 3.0, 6.0])
+        self.assertEqual(payload["filters"]["scores"], [3.0, 6.0])
+
+        single = self.client.get("/api/redblue/data?scores=3", headers=self.headers).json()
+        self.assertEqual({entry["score"] for entry in single["entries"]}, {3.0})
+
+    def test_public_detail_hides_internal_ssh_errors(self):
+        internal = "ssh: connect to host 124.222.72.203 port 22: Connection timed out"
+        self.assertEqual(api._public_detail(internal, "服务暂时不可用"), "服务暂时不可用")
+        self.assertEqual(api._public_detail("请选择要发货的微店条目", "兜底"), "请选择要发货的微店条目")
+
     def test_pending_weidian_sync_job_is_reused_only_for_same_output(self):
         pending = self.tmp / "wd" / "pending"
         pending.mkdir(parents=True)
