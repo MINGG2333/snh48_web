@@ -423,6 +423,7 @@
   var data = null;
   var selected = new Set();
   var selectedScores = new Set();
+  var loadSeq = 0;
   var editingId = "";
   var aiJobId = "";
   var aiSuggestions = {};
@@ -566,13 +567,17 @@
   }
 
   async function loadData(silent) {
+    var seq = ++loadSeq;
     if (!silent) setStatus("加载中…");
     try {
-      data = await api("/api/redblue/data?" + filterQuery());
+      var payload = await api("/api/redblue/data?" + filterQuery());
+      if (seq !== loadSeq) return;
+      data = payload;
       selected.clear();
       renderAll();
       setStatus("");
     } catch (error) {
+      if (seq !== loadSeq) return;
       if (!silent) showToast(error.message || "加载失败", true);
       throw error;
     }
