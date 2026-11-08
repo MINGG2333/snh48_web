@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-09 红蓝导出业务名改挂首个分摊条目（双端已生效）
+
+- 需求：多人拼单导出时，业务名不再显示在“完成该笔业务”的条目，改为显示在该笔兑换最早的第 1 条分摊记录上。
+- 代码（web `1959694`）：兑换新增 `display_entry_id/display_entry_time`（取分摊按时间排序后的第一条），导出标签改由 `business_display_labels` 承载；`completion_entry_id` 仍保留用于页面“拼成点”标记。`redblue_export._business_text()` 改为优先读取展示标签，后续贡献条目仍显示 `—`。
+- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` 最终 PID `628265`，阿里云 `snh48-aliyun.service` 最终 PID `1230364`。
+- 验证：网站 `tests.test_redblue_ledger_api` 46 项双端通过；两端已登录数据接口 21 条兑换的 `display_entry_id` 均等于各自第一条分摊条目，无不一致；页面 200。
+
 ## 2026-11-09 多人拼单业务兑换（双端已生效）
 
 - 需求：`/business/redblue2026` 的业务兑换支持多人拼单，多个粉丝的条目可以合并兑换同一个业务；导出图只在一个人的条目上显示业务名。
