@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-09 红蓝导出保留昵称中的常见符号与 emoji（双端已生效）
+
+- 现象：`/business/redblue2026` 导出按条目图时，昵称 `挺吉⛽` 的 `⛽` 没有显示。
+- 根因：`gift_reply_export._display_text()` 把所有 `U+2500–U+28FF` 字符都当作装饰符号直接过滤，误伤了该区间内的常见符号/emoji（如 `⛽` U+26FD、`✅` U+2705、`⚡` U+26A1）。
+- 代码（web `b8edb17`）：过滤范围收窄为制表线/方块元素 `U+2500–U+259F` 与盲文 `U+2800–U+28FF`；Miscellaneous Symbols、Dingbats 等交给字体缺失检测和备用字体链处理，能渲染就保留。同步扩展礼物回复导出的符号测试用例。
+- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` 最终 PID `675703`，阿里云 `snh48-aliyun.service` 最终 PID `1273057`。
+- 验证：网站 `tests.test_gift_reply_export` + `tests.test_redblue_ledger_api` 55 项双端通过；腾讯云实际导出 `2026-11-09` 按条目图已显示 `挺吉⛽` 的加油机 emoji，业务名仍只在第一条 `01:34` 记录显示。
+
 ## 2026-11-09 红蓝台账悬浮回顶部/底部按钮（双端已生效）
 
 - 需求：`/business/redblue2026` 增加悬浮按钮，可在页面顶部和底部之间快速跳转。
