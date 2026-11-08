@@ -5,12 +5,15 @@
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,12 +27,16 @@ from website import identity_index
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 from website.shared_runtime_state import (
     SharedStateError,
+    SharedStatePeerError,
     execute_mutation,
     load_document,
+    peer_command,
     register_mutator,
 )
 
 router = APIRouter(prefix="/api/redblue", tags=["红蓝计分台账 2026"])
+
+logger = logging.getLogger(__name__)
 
 BJ_TZ = timezone(timedelta(hours=8))
 RESOURCE = "redblue_ledger"
@@ -214,6 +221,261 @@ def _valid_job_id(value: str) -> str:
     if not JOB_ID_RE.fullmatch(value):
         raise HTTPException(status_code=422, detail="无效的任务 ID")
     return value
+
+
+# ── 微店同步：主节点自动补采 / 副本节点转发 ─────────────────────────────
+
+_WEIDIAN_SYNC_LOCK = threading.Lock()
+_WEIDIAN_AUTO_SYNC_STARTED = False
+_WEIDIAN_AUTO_SYNC_LOCK_FILE: Any = None
+
+
+def _primary() -> bool:
+    return bool(cfg.SHARED_STATE_IS_PRIMARY or not cfg.SHARED_STATE_SYNC_ENABLED)
+
+
+def _parse_bj_time(value: Any) -> datetime | None:
+    text = _clean(value, 32)
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ_TZ)
+    except ValueError:
+        return None
+
+
+def _weidian_sync_state_path() -> Path:
+    return Path(cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH)
+
+
+def _load_weidian_sync_state() -> dict[str, Any]:
+    data = _load_json(_weidian_sync_state_path())
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault("version", 1)
+    data.setdefault("status", "unknown")
+    data.setdefault("last_success_at", "")
+    data.setdefault("last_attempt_at", "")
+    data.setdefault("last_job_id", "")
+    data.setdefault("last_error", "")
+    data.setdefault("generated_at", "")
+    data.setdefault("orders_count", 0)
+    data.setdefault("created", 0)
+    data.setdefault("updated", 0)
+    data.setdefault("skipped", False)
+    return data
+
+
+def _save_weidian_sync_state(data: dict[str, Any]) -> None:
+    path = _weidian_sync_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    try:
+        os.chmod(temporary, 0o664)
+    except OSError:
+        pass
+    os.replace(temporary, path)
+
+
+def _weidian_sync_status() -> dict[str, Any]:
+    state = _load_weidian_sync_state()
+    state["interval_seconds"] = int(cfg.REDBLUE_WEIDIAN_AUTO_SYNC_INTERVAL_SECONDS)
+    state["is_primary"] = _primary()
+    if not _primary():
+        state["status"] = "replica"
+        state["note"] = "微店同步由腾讯云主节点自动执行，阿里云使用共享台账副本"
+        state["stale"] = False
+        return state
+    last_success = _parse_bj_time(state.get("last_success_at"))
+    if last_success is None:
+        state["stale"] = True
+        state["stale_seconds"] = None
+    else:
+        stale_seconds = int((datetime.now(BJ_TZ) - last_success).total_seconds())
+        state["stale_seconds"] = max(0, stale_seconds)
+        state["stale"] = stale_seconds > max(60, int(cfg.REDBLUE_WEIDIAN_AUTO_SYNC_INTERVAL_SECONDS) * 2)
+    return state
+
+
+def _peer_weidian(action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        response = peer_command("weidian-admin", {"action": action, "payload": payload})
+    except SharedStatePeerError as exc:
+        raise HTTPException(status_code=exc.status_code or 503, detail=str(exc)) from exc
+    if not isinstance(response, dict):
+        raise HTTPException(status_code=502, detail="对端返回格式无效")
+    response.pop("ok", None)
+    return response
+
+
+def _apply_weidian_orders(orders: list[dict[str, Any]]) -> dict[str, Any]:
+    try:
+        doc = load_document(RESOURCE)
+    except SharedStateError:
+        doc = {}
+    if not _weidian_changed(doc, orders):
+        return {"created": 0, "updated": 0, "skipped": True}
+    result = execute_mutation(
+        RESOURCE,
+        "upsert_weidian",
+        {"orders": orders},
+        operation_id=uuid.uuid4().hex,
+    )
+    return result.get("result") or {}
+
+
+def _record_weidian_job_result(result: dict[str, Any], job_id: str) -> None:
+    """手动同步只更新“最近尝试”；成功入库仍以 apply 为准。"""
+    if not _primary():
+        return
+    state = _load_weidian_sync_state()
+    status = _clean(result.get("status"), 20)
+    if status == "error":
+        state["status"] = "error"
+        state["last_error"] = _clean(result.get("error"), 300) or "微店同步失败"
+        state["last_attempt_at"] = _now()
+        state["last_job_id"] = job_id
+        _save_weidian_sync_state(state)
+    elif status == "done":
+        state["status"] = "running"
+        state["last_attempt_at"] = state.get("last_attempt_at") or _now()
+        state["last_job_id"] = job_id
+        _save_weidian_sync_state(state)
+
+
+def _mark_weidian_sync_applied(data: dict[str, Any], applied: dict[str, Any]) -> None:
+    if not _primary():
+        return
+    state = _load_weidian_sync_state()
+    orders = data.get("orders") if isinstance(data.get("orders"), list) else []
+    state.update(
+        {
+            "status": "ok",
+            "last_success_at": _now(),
+            "last_error": "",
+            "generated_at": _clean(data.get("generated_at"), 32),
+            "orders_count": len(orders),
+            "created": int(applied.get("created", 0) or 0),
+            "updated": int(applied.get("updated", 0) or 0),
+            "skipped": bool(applied.get("skipped")),
+        }
+    )
+    _save_weidian_sync_state(state)
+
+
+def run_weidian_sync_once(*, force: bool = False) -> dict[str, Any]:
+    """执行一轮同步并入库；失败时保留状态供自动重试。"""
+    if not _WEIDIAN_SYNC_LOCK.acquire(timeout=5):
+        return {"status": "busy", "note": "已有微店同步在进行"}
+    try:
+        state = _load_weidian_sync_state()
+        last_success = _parse_bj_time(state.get("last_success_at"))
+        if not force and last_success is not None:
+            elapsed = (datetime.now(BJ_TZ) - last_success).total_seconds()
+            if elapsed < max(60, int(cfg.REDBLUE_WEIDIAN_AUTO_SYNC_INTERVAL_SECONDS)):
+                return {"status": "skipped", "reason": "fresh", "elapsed_seconds": int(elapsed)}
+        payload = {
+            "type": "sync",
+            "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
+            "item_ids": list(cfg.REDBLUE_WEIDIAN_ITEM_IDS),
+            "output_path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
+        }
+        job_id = _write_job("weidian", payload)
+        state.update(
+            {
+                "status": "running",
+                "last_attempt_at": _now(),
+                "last_job_id": job_id,
+                "last_error": "",
+            }
+        )
+        _save_weidian_sync_state(state)
+
+        deadline = time.time() + max(30, int(cfg.REDBLUE_WEIDIAN_SYNC_JOB_TIMEOUT_SECONDS))
+        result: dict[str, Any] = {"status": "pending"}
+        while time.time() < deadline:
+            result = _read_job_result("weidian", job_id)
+            if _clean(result.get("status"), 20) in {"done", "error", "missing"}:
+                break
+            time.sleep(2)
+
+        status = _clean(result.get("status"), 20)
+        if status == "done":
+            data = _load_json(Path(cfg.REDBLUE_WEIDIAN_ORDERS_PATH))
+            orders = data.get("orders") if isinstance(data, dict) and isinstance(data.get("orders"), list) else []
+            if not orders:
+                state.update({"status": "error", "last_error": "微店订单文件为空"})
+                _save_weidian_sync_state(state)
+                return {"status": "error", "error": "微店订单文件为空", "job_id": job_id}
+            applied = _apply_weidian_orders(orders)
+            _mark_weidian_sync_applied(data, applied)
+            return {"status": "ok", "job_id": job_id, "orders_count": len(orders), **applied}
+        error = _clean(result.get("error"), 300) or (
+            "微店同步任务超时" if status == "pending" else "微店同步任务结果缺失"
+        )
+        state.update({"status": "error", "last_error": error})
+        _save_weidian_sync_state(state)
+        return {"status": "error", "error": error, "job_id": job_id}
+    finally:
+        _WEIDIAN_SYNC_LOCK.release()
+
+
+def _weidian_auto_sync_loop() -> None:
+    time.sleep(15)
+    while True:
+        try:
+            state = _load_weidian_sync_state()
+            last_success = _parse_bj_time(state.get("last_success_at"))
+            last_attempt = _parse_bj_time(state.get("last_attempt_at"))
+            now = datetime.now(BJ_TZ)
+            retrying = _clean(state.get("status"), 20) == "error"
+            wait_seconds = int(
+                cfg.REDBLUE_WEIDIAN_AUTO_SYNC_RETRY_SECONDS
+                if retrying
+                else cfg.REDBLUE_WEIDIAN_AUTO_SYNC_INTERVAL_SECONDS
+            )
+            anchor = max(
+                [value for value in (last_success, last_attempt) if value is not None],
+                default=None,
+            )
+            if anchor is None or (now - anchor).total_seconds() >= max(30, wait_seconds):
+                result = run_weidian_sync_once(force=True)
+                logger.info(
+                    "weidian auto sync: %s%s",
+                    result.get("status"),
+                    f" ({result.get('error')})" if result.get("error") else "",
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("weidian auto sync loop failed")
+        time.sleep(30)
+
+
+def start_weidian_auto_sync() -> None:
+    """启动主节点的微店自动同步循环；只允许一个进程持有锁。"""
+    global _WEIDIAN_AUTO_SYNC_STARTED, _WEIDIAN_AUTO_SYNC_LOCK_FILE
+    if _WEIDIAN_AUTO_SYNC_STARTED:
+        return
+    if not cfg.REDBLUE_WEIDIAN_AUTO_SYNC_ENABLED or not _primary():
+        return
+    lock_path = _weidian_sync_state_path().with_suffix(".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return
+    _WEIDIAN_AUTO_SYNC_LOCK_FILE = handle
+    _WEIDIAN_AUTO_SYNC_STARTED = True
+    threading.Thread(
+        target=_weidian_auto_sync_loop,
+        name="redblue-weidian-auto-sync",
+        daemon=True,
+    ).start()
 
 
 # ── 鉴权 ────────────────────────────────────────────────────────────────
@@ -1986,6 +2248,7 @@ def get_redblue_data(
         "entries": entries,
         "business_options": BUSINESS_OPTIONS,
         "business_redemptions": redemptions,
+        "weidian_sync": _weidian_sync_status(),
         "total": len(entries),
         "filters": {
             "source": _clean(source, 20),
@@ -2397,34 +2660,43 @@ def ai_health(_=Depends(verify_redblue_password)):
 
 @router.post("/weidian/sync")
 def create_weidian_sync_job(_=Depends(verify_redblue_password)):
-    job_id = _write_job(
-        "weidian",
-        {
-            "type": "sync",
-            "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
-            "item_ids": cfg.REDBLUE_WEIDIAN_ITEM_IDS,
-            "output_path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
-        },
-    )
+    payload = {
+        "type": "sync",
+        "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
+        "item_ids": list(cfg.REDBLUE_WEIDIAN_ITEM_IDS),
+        "output_path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
+    }
+    if _primary():
+        job_id = _write_job("weidian", payload)
+    else:
+        job_id = _clean(_peer_weidian("job-submit", payload).get("job_id"), 64)
     return {"job_id": job_id}
 
 
 @router.get("/weidian/jobs/{job_id}")
 def get_weidian_job(job_id: str, _=Depends(verify_redblue_password)):
     job_id = _valid_job_id(job_id)
-    return _read_job_result("weidian", job_id)
+    if _primary():
+        result = _read_job_result("weidian", job_id)
+        _record_weidian_job_result(result, job_id)
+        return result
+    return _peer_weidian("job-result", {"job_id": job_id})
 
 
 @router.post("/weidian/sync/apply")
 def apply_weidian_sync(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
     job_id = _valid_job_id(_clean(payload.get("job_id"), 64))
-    result = _read_job_result("weidian", job_id)
+    if _primary():
+        result = _read_job_result("weidian", job_id)
+    else:
+        result = _peer_weidian("job-result", {"job_id": job_id})
     if result.get("status") != "done":
         raise HTTPException(status_code=409, detail="微店同步任务尚未完成")
-    path = Path(cfg.REDBLUE_WEIDIAN_ORDERS_PATH)
-    if not path.exists():
-        raise HTTPException(status_code=503, detail="微店订单文件未生成")
-    data = _load_json(path)
+    if _primary():
+        path = Path(cfg.REDBLUE_WEIDIAN_ORDERS_PATH)
+        data = _load_json(path) if path.exists() else {}
+    else:
+        data = _peer_weidian("redblue-cache", {"path": cfg.REDBLUE_WEIDIAN_ORDERS_PATH})
     orders = data.get("orders") if isinstance(data, dict) else None
     if not isinstance(orders, list):
         raise HTTPException(status_code=503, detail="微店订单文件格式无效")
@@ -2433,8 +2705,15 @@ def apply_weidian_sync(request: Request, payload: dict[str, Any] = Body(default=
     except SharedStateError:
         doc = {}
     if not _weidian_changed(doc, orders):
-        return {"result": {"created": 0, "updated": 0, "skipped": True}, "replicated": True}
-    return _mutate("upsert_weidian", {"orders": orders}, request)
+        applied = {"created": 0, "updated": 0, "skipped": True}
+        _mark_weidian_sync_applied(data if isinstance(data, dict) else {}, applied)
+        return {"result": applied, "replicated": True}
+    mutation = _mutate("upsert_weidian", {"orders": orders}, request)
+    _mark_weidian_sync_applied(
+        data if isinstance(data, dict) else {},
+        mutation.get("result") if isinstance(mutation.get("result"), dict) else {},
+    )
+    return mutation
 
 
 @router.post("/weidian/ship")
@@ -2459,21 +2738,25 @@ def create_weidian_ship_job(payload: dict[str, Any] = Body(default={}), _=Depend
     orders = sorted({(item["order_id"], item["item_id"]) for item in orders})[:200]
     if not orders:
         raise HTTPException(status_code=422, detail="所选条目没有待发货的微店订单")
-    job_id = _write_job(
-        "weidian",
-        {
-            "type": "ship",
-            "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
-            "orders": [{"order_id": order_id, "item_id": item_id} for order_id, item_id in orders],
-        },
-    )
+    payload = {
+        "type": "ship",
+        "item_id": cfg.REDBLUE_WEIDIAN_ITEM_ID,
+        "orders": [{"order_id": order_id, "item_id": item_id} for order_id, item_id in orders],
+    }
+    if _primary():
+        job_id = _write_job("weidian", payload)
+    else:
+        job_id = _clean(_peer_weidian("job-submit", payload).get("job_id"), 64)
     return {"job_id": job_id, "count": len(orders)}
 
 
 @router.post("/weidian/ship/apply")
 def apply_weidian_ship(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
     job_id = _valid_job_id(_clean(payload.get("job_id"), 64))
-    result = _read_job_result("weidian", job_id)
+    if _primary():
+        result = _read_job_result("weidian", job_id)
+    else:
+        result = _peer_weidian("job-result", {"job_id": job_id})
     if result.get("status") != "done":
         raise HTTPException(status_code=409, detail="微店发货任务尚未完成")
     shipped = result.get("shipped") if isinstance(result.get("shipped"), list) else []

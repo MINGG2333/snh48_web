@@ -507,7 +507,19 @@
     renderScoringSummary();
     renderFanSummary();
     renderEntries();
-    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 6 类计分来源（房间/直播 × 计分卡/鸡腿、应援会/暗票） · 按时间正序";
+    var ws = data.weidian_sync || {};
+    var weidianText = "";
+    if (ws.status === "replica") {
+      weidianText = " · 微店由主节点自动同步";
+    } else if (ws.last_success_at) {
+      weidianText = " · 微店同步 " + ws.last_success_at + (ws.status === "error" ? "（最近失败，自动重试中）" : "");
+    } else if (ws.status === "error") {
+      weidianText = " · 微店同步失败（自动重试中）";
+    } else if (ws.status === "running") {
+      weidianText = " · 微店同步进行中";
+    }
+    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 6 类计分来源（房间/直播 × 计分卡/鸡腿、应援会/暗票） · 按时间正序" + weidianText;
+    $("metaLine").title = ws.last_error || ws.note || "";
     hideDailyTooltip();
     if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
   }

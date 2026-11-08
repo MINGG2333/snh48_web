@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -100,6 +101,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "cookie_secret": cfg.REDBLUE_COOKIE_SECRET_PATH,
             "ai": cfg.REDBLUE_AI_QUEUE_DIR,
             "wd": cfg.REDBLUE_WEIDIAN_QUEUE_DIR,
+            "sync_state": cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH,
             "sync": cfg.SHARED_STATE_SYNC_ENABLED,
             "primary": cfg.SHARED_STATE_IS_PRIMARY,
         }
@@ -113,6 +115,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_COOKIE_SECRET_PATH = str(self.tmp / "cookie_secret")
         cfg.REDBLUE_AI_QUEUE_DIR = str(self.tmp / "ai")
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = str(self.tmp / "wd")
+        cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = str(self.tmp / "weidian_sync_state.json")
         cfg.SHARED_STATE_SYNC_ENABLED = False
         cfg.SHARED_STATE_IS_PRIMARY = True
         app = FastAPI()
@@ -131,6 +134,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_COOKIE_SECRET_PATH = self._old["cookie_secret"]
         cfg.REDBLUE_AI_QUEUE_DIR = self._old["ai"]
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = self._old["wd"]
+        cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = self._old["sync_state"]
         cfg.SHARED_STATE_SYNC_ENABLED = self._old["sync"]
         cfg.SHARED_STATE_IS_PRIMARY = self._old["primary"]
         api._COOKIE_SECRET_CACHE = None
@@ -1348,6 +1352,85 @@ class RedblueLedgerApiTests(unittest.TestCase):
             headers=self.headers,
         ).json()["result"]
         self.assertEqual(applied, {"applied": 1, "skipped": 0})
+
+    def test_weidian_sync_status_is_exposed(self):
+        (self.tmp / "weidian_sync_state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "status": "ok",
+                    "last_success_at": "2026-11-08 18:00:00",
+                    "last_attempt_at": "2026-11-08 18:00:00",
+                    "generated_at": "2026-11-08 17:59:00",
+                    "orders_count": 28,
+                }
+            ),
+            encoding="utf-8",
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        self.assertEqual(data["weidian_sync"]["status"], "ok")
+        self.assertEqual(data["weidian_sync"]["last_success_at"], "2026-11-08 18:00:00")
+        self.assertEqual(data["weidian_sync"]["orders_count"], 28)
+
+    def test_run_weidian_sync_once_applies_orders(self):
+        (self.tmp / "weidian.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-11-08 18:30:00",
+                    "orders": [
+                        {
+                            "order_id": "O2",
+                            "item_id": "7879362063",
+                            "item_name": "红蓝鸡腿",
+                            "add_time": "2026-11-08 18:00:00",
+                            "status": "待发货",
+                            "buyer_name": "Carol",
+                            "buyer_note": "",
+                            "seller_note": "",
+                            "quantity": 3,
+                            "score": 3.0,
+                            "amount": "78.75",
+                            "shipped": False,
+                            "shipped_at": "",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        with mock.patch.object(api, "_write_job", return_value="a" * 32), mock.patch.object(
+            api, "_read_job_result", return_value={"status": "done"}
+        ):
+            result = api.run_weidian_sync_once(force=True)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["created"], 1)
+        ledger = json.loads((self.tmp / "ledger.json").read_text(encoding="utf-8"))
+        entries = [entry for entry in ledger.get("entries") or [] if entry.get("source") == "weidian"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["source_id"], "O2")
+        state = json.loads((self.tmp / "weidian_sync_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "ok")
+        self.assertEqual(state["orders_count"], 1)
+
+    def test_non_primary_weidian_sync_job_forwards_to_tencent(self):
+        cfg.SHARED_STATE_SYNC_ENABLED = True
+        cfg.SHARED_STATE_IS_PRIMARY = False
+        calls = []
+
+        def fake_peer(command, payload):
+            calls.append((command, payload))
+            return {"ok": True, "job_id": "b" * 32}
+
+        with mock.patch.object(api, "peer_command", side_effect=fake_peer):
+            job = api.create_weidian_sync_job()
+
+        self.assertEqual(job["job_id"], "b" * 32)
+        self.assertEqual(calls[0][0], "weidian-admin")
+        self.assertEqual(calls[0][1]["action"], "job-submit")
+        self.assertEqual(calls[0][1]["payload"]["type"], "sync")
+        self.assertEqual(calls[0][1]["payload"]["item_ids"], list(cfg.REDBLUE_WEIDIAN_ITEM_IDS))
 
 
 if __name__ == "__main__":

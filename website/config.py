@@ -511,6 +511,28 @@ REDBLUE_WEIDIAN_QUEUE_DIR = os.getenv(
         / "redblue_weidian_jobs"
     ),
 )
+REDBLUE_WEIDIAN_SYNC_STATE_PATH = os.getenv(
+    "REDBLUE_WEIDIAN_SYNC_STATE_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_weidian_sync_state.json"
+    ),
+)
+REDBLUE_WEIDIAN_AUTO_SYNC_ENABLED = os.getenv(
+    "REDBLUE_WEIDIAN_AUTO_SYNC_ENABLED", "true"
+).lower() in ("1", "true", "yes", "on")
+REDBLUE_WEIDIAN_AUTO_SYNC_INTERVAL_SECONDS = int(
+    os.getenv("REDBLUE_WEIDIAN_AUTO_SYNC_INTERVAL_SECONDS", "600")
+)
+REDBLUE_WEIDIAN_AUTO_SYNC_RETRY_SECONDS = int(
+    os.getenv("REDBLUE_WEIDIAN_AUTO_SYNC_RETRY_SECONDS", "300")
+)
+REDBLUE_WEIDIAN_SYNC_JOB_TIMEOUT_SECONDS = int(
+    os.getenv("REDBLUE_WEIDIAN_SYNC_JOB_TIMEOUT_SECONDS", "180")
+)
 REDBLUE_AI_PROMPT_PATH = os.getenv(
     "REDBLUE_AI_PROMPT_PATH",
     str(PROJECT_ROOT.parent / "snh48-fan-hub" / "doc" / "redblue_ai_prompt.md"),

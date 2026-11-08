@@ -705,6 +705,10 @@ async def startup():
     start_replication_worker()
     print(f"✓ Shared runtime-state replication worker started as {cfg.SHARED_STATE_NODE_ID}.")
 
+    from website.redblue_ledger_api import start_weidian_auto_sync
+    start_weidian_auto_sync()
+    print(f"✓ Red-blue Weidian auto-sync checked (primary={cfg.SHARED_STATE_IS_PRIMARY}).")
+
     if not cfg.QA_ENABLED:
         print("  QA is disabled on this node; routes and warmup are not loaded.")
     elif cfg.QA_WARMUP_ON_STARTUP:
