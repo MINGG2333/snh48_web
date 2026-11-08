@@ -1,5 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-09 密码页统一 60 分钟会话并修正旧 Cookie 误报（双端已生效）
+
+- 背景：`/flip` 在部署重启后，浏览器里的旧 Cookie 被当成“密码错误”（403），页面反复请求后把翻牌页限流打到 429；同类问题也存在于上麦回放、社交凭据、红蓝台账、微店订单和背景词管理。
+- 代码（web `e97a53d`）：新增 `website/password_session.py`，统一 HttpOnly Cookie 有效期为 `PASSWORD_SESSION_MAX_AGE_SECONDS`（默认 60 分钟），签名密钥只放进程内存、不落盘；旧/未知 Cookie 一律返回 401“需要密码”，不计入密码失败限流；只有真正提交错误密码才计数。红蓝台账停用 `private_handover/web_state/redblue_ledger_cookie_secret` 持久密钥（文件保留但不再读取）。上麦回放、社交凭据、红蓝、微店、背景词和翻牌页均按此规则处理；翻牌页保持内存密码 + 媒体签名 URL 方案。scroller 成功登录不再消耗限流额度。
+- 文档：`doc/security/password_page_best_practices.md` 将“60 分钟 Cookie + 内存密钥 + 旧 Cookie 401 不计限流”定为新密码页默认最佳实践；存量纯请求头密码页无需改造。
+- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` PID `723939`，阿里云 `snh48-aliyun.service` PID `1323597`。
+- 验证：双端 83 项相关单测通过；腾讯云和阿里云实测上麦回放/红蓝/微店/背景词未登录 401、正确密码登录 200 且 `Max-Age=3600; HttpOnly`、带有效 Cookie 200、连续 12 次旧 Cookie 全部 401 且未触发 429；腾讯云社交凭据页同样通过。
+- 注意：本次重启前签发的红蓝/上麦回放/社交凭据/微店/背景词 Cookie 会全部失效一次，属预期；重新输入密码后，60 分钟内有效。
+
 ## 2026-11-09 红蓝导出保留昵称中的常见符号与 emoji（双端已生效）
 
 - 现象：`/business/redblue2026` 导出按条目图时，昵称 `挺吉⛽` 的 `⛽` 没有显示。
