@@ -1286,12 +1286,24 @@ def _gift_price(gift_name: str, gift_id: str) -> float:
     return by_name.get(_clean(gift_name, 160), 0.0)
 
 
+def _is_card_gift(gift_name: str, gift_id: str = "") -> bool:
+    """已确认的计分卡礼物：按 gift_id 排除，避免同名鸡腿礼物被名字误伤。"""
+    gift_id = _clean(gift_id, 40)
+    if gift_id and gift_id in _name_set(getattr(cfg, "REDBLUE_CARD_GIFT_IDS", "")):
+        return True
+    return False
+
+
 def _is_chicken_gift(gift_name: str, gift_id: str = "") -> bool:
+    # 先排除已知计分卡礼物（旧「弦月回响」1320115721784332288）。
+    # 2026-11-09 起不再按名字排除：同名但不同 gift_id 的鸡腿礼物必须能识别。
+    if _is_card_gift(gift_name, gift_id):
+        return False
     gift_id = _clean(gift_id, 40)
     if gift_id and gift_id in _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_IDS", "")):
         return True
     name = _clean(gift_name, 160)
-    if not name or name == "弦月回响":
+    if not name:
         return False
     if name in _name_set(getattr(cfg, "REDBLUE_CHICKEN_GIFT_NAMES", "")):
         return True

@@ -980,6 +980,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
                     "gifts": [
                         {"gift_id": "350001", "gift_name": "红蓝应援礼物", "melee": 350.0, "money": 350.0},
                         {"gift_id": "1320115721784332288", "gift_name": "弦月回响", "melee": 350.0, "money": 350.0},
+                        {"gift_id": "chicken-350", "gift_name": "弦月回响", "melee": 350.0, "money": 350.0},
                     ]
                 },
                 ensure_ascii=False,
@@ -1012,6 +1013,17 @@ class RedblueLedgerApiTests(unittest.TestCase):
                             "gift_count": 1,
                             "total_score": 1,
                         },
+                        {
+                            "id": "room-same-name-leg",
+                            "source": "room",
+                            "event_time": "2026-11-11 12:02:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_id": "chicken-350",
+                            "gift_name": "弦月回响",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        },
                     ]
                 },
                 ensure_ascii=False,
@@ -1023,6 +1035,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         methods = {item["source_id"]: item["scoring_method"] for item in data["entries"]}
         self.assertEqual(methods["room-price-leg"], "鸡腿")
         self.assertEqual(methods["room-card"], "计分卡")
+        self.assertEqual(methods["room-same-name-leg"], "鸡腿")
 
     def test_explicit_chicken_gift_name_is_supported(self):
         old = cfg.REDBLUE_CHICKEN_GIFT_NAMES

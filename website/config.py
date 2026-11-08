@@ -411,9 +411,14 @@ REDBLUE_SCORE_DATA_PATH = os.getenv(
 )
 # 红蓝歌会鸡腿计分礼物：11/11–11/15 上线的特定鸡腿礼物仍带计分属性。
 # 精确礼物名用逗号分隔放在 REDBLUE_CHICKEN_GIFT_NAMES；
-# 默认同时把名称含“鸡腿”的计分礼物视为鸡腿，弦月回响等计分卡礼物保持计分卡。
+# 已知的计分卡礼物 ID 放在 REDBLUE_CARD_GIFT_IDS，优先排除，避免“同名不同
+# gift_id”的鸡腿礼物被旧名字误伤。旧「弦月回响」(10/24 起) 是计分卡礼物。
 REDBLUE_CHICKEN_GIFT_NAMES = os.getenv("REDBLUE_CHICKEN_GIFT_NAMES", "")
 REDBLUE_CHICKEN_GIFT_IDS = os.getenv("REDBLUE_CHICKEN_GIFT_IDS", "")
+REDBLUE_CARD_GIFT_IDS = os.getenv(
+    "REDBLUE_CARD_GIFT_IDS",
+    "1320115721784332288",
+)
 REDBLUE_CHICKEN_GIFT_KEYWORDS = os.getenv("REDBLUE_CHICKEN_GIFT_KEYWORDS", "鸡腿")
 # 红蓝鸡腿计分礼物：官方礼物名可能不含“鸡腿”，按“口袋48鸡腿价格 > 0 且有计分属性”兜底识别。
 REDBLUE_GIFT_AUTHORITY_PATH = os.getenv(
