@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-09 多人拼单业务兑换（双端已生效）
+
+- 需求：`/business/redblue2026` 的业务兑换支持多人拼单，多个粉丝的条目可以合并兑换同一个业务；导出图只在一个人的条目上显示业务名。
+- 后端（web `6187055`）：`business_redemptions` 新增 `participants`（按分摊条目自动汇总每人的分数与条目数）；分摊校验不再限制单一粉丝，但仍要求所有条目同一种计分方式、同一条目不可重复使用、分摊合计必须等于业务分值。`fan_summary` 的 `business_allocated_score` 改为按各人实际分摊累计，`business_labels` 只给名义持有人（`fan_id/fan_name`），其他拼单参与者写入 `business_shared_labels`；导出仍只在 `completion_entry_id` 对应条目显示业务名。
+- 前端：兑换弹窗“粉丝”改为可多选列表（按住 Ctrl/⌘ 多选），分摊表新增“粉丝”列，跨粉丝按最早条目自动分摊/手动填写；“自动分摊”和汇总按所选粉丝合并计算。编辑多人兑换时回填全部参与者；“新建兑换”清空选择。
+- 部署：网站已推送并双端 pull；腾讯云 `snh48-web.service` 最终 PID `579193`，阿里云 `snh48-aliyun.service` 最终 PID `1188186`。
+- 验证：网站 `tests.test_redblue_ledger_api` 46 项双端通过（新增多人拼单分摊、导出仅一个完成条目带业务名、混用计分方式被拒）；两端 `/business/redblue2026` 200、未登录 `/api/redblue/data` 401、已登录返回 126 条条目/21 条兑换且旧兑换 `participants` 均为 1 人；生产页 Playwright 多选两名粉丝自动分摊成功（“参与 2 人”、两行分别来自不同粉丝），无 JS pageerror。
+
 ## 2026-11-08 20:54 CST 红蓝台账分数多选、统一右下提示与内部错误脱敏（双端已生效）
 
 - 需求：`/business/redblue2026` 偶尔在右下弹窗显示 `ssh: connect to host ... port 22: Connection timed out`，不希望页面暴露内部信息；新增按分数多选筛选；“加载中/正在生成…”等状态统一到右下弹窗；“全选当前列表”移到时间列表头左侧且不显示文字。
