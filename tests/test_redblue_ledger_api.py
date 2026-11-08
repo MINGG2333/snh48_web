@@ -98,7 +98,6 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "score": cfg.REDBLUE_SCORE_DATA_PATH,
             "authority": cfg.REDBLUE_GIFT_AUTHORITY_PATH,
             "weidian": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
-            "cookie_secret": cfg.REDBLUE_COOKIE_SECRET_PATH,
             "ai": cfg.REDBLUE_AI_QUEUE_DIR,
             "wd": cfg.REDBLUE_WEIDIAN_QUEUE_DIR,
             "sync_state": cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH,
@@ -112,7 +111,6 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_SCORE_DATA_PATH = str(self.tmp / "score.json")
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = str(self.tmp / "authority.json")
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = str(self.tmp / "weidian.json")
-        cfg.REDBLUE_COOKIE_SECRET_PATH = str(self.tmp / "cookie_secret")
         cfg.REDBLUE_AI_QUEUE_DIR = str(self.tmp / "ai")
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = str(self.tmp / "wd")
         cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = str(self.tmp / "weidian_sync_state.json")
@@ -131,13 +129,11 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_SCORE_DATA_PATH = self._old["score"]
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = self._old["authority"]
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = self._old["weidian"]
-        cfg.REDBLUE_COOKIE_SECRET_PATH = self._old["cookie_secret"]
         cfg.REDBLUE_AI_QUEUE_DIR = self._old["ai"]
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = self._old["wd"]
         cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = self._old["sync_state"]
         cfg.SHARED_STATE_SYNC_ENABLED = self._old["sync"]
         cfg.SHARED_STATE_IS_PRIMARY = self._old["primary"]
-        api._COOKIE_SECRET_CACHE = None
         identity_index.clear_cache()
 
     def _write_business_ledger(self) -> None:
@@ -1374,16 +1370,26 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "点唱整首+查水表",
         )
 
-    def test_cookie_secret_persists_across_reloads(self):
-        api._COOKIE_SECRET_CACHE = None
-        first = api._cookie_secret()
-        api._COOKIE_SECRET_CACHE = None
-        second = api._cookie_secret()
-        self.assertEqual(first, second)
-        self.assertGreaterEqual(len(first), 16)
-        path = Path(cfg.REDBLUE_COOKIE_SECRET_PATH)
-        self.assertTrue(path.exists())
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+    def test_stale_cookie_is_login_expired_not_wrong_password(self):
+        self.assertEqual(
+            self.client.get(
+                "/api/redblue/data",
+                headers={"Cookie": "redblue_ledger_auth=stale"},
+            ).status_code,
+            401,
+        )
+        for _ in range(12):
+            response = self.client.get(
+                "/api/redblue/data",
+                headers={"Cookie": "redblue_ledger_auth=stale"},
+            )
+            self.assertEqual(response.status_code, 401)
+
+    def test_wrong_password_header_still_counts_as_failure(self):
+        response = self.client.get(
+            "/api/redblue/data", headers={"X-Redblue-Password": "wrong"}
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_two_image_exports(self):
         import io

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
-import os
 import re
 from pathlib import Path
 from typing import AsyncIterator
@@ -17,14 +15,14 @@ from website.room_messages_api import normalise_message_row
 from pydantic import BaseModel
 
 from website import config as cfg
+from website import password_session
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 
 
 router = APIRouter(prefix="/api/room-voice-replays", tags=["房间上麦回放"])
 
 AUTH_COOKIE = "room_voice_replays_auth"
-AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
-_COOKIE_SECRET = os.urandom(32)
+AUTH_COOKIE_MAX_AGE = password_session.cookie_max_age()
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
 SEGMENT_NAME_RE = re.compile(r"^segment_[0-9]{6}(?:_original)?\.m4a$")
 RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
@@ -35,7 +33,7 @@ class LoginRequest(BaseModel):
 
 
 def _cookie_token(password: str) -> str:
-    return hashlib.sha256(_COOKIE_SECRET + password.encode("utf-8")).hexdigest()
+    return password_session.cookie_token(password, context="room-voice-replays")
 
 
 def _root() -> Path:
@@ -106,11 +104,10 @@ async def verify_room_voice_replays_auth(
         and hmac.compare_digest(x_room_voice_replays_monitor_token, monitor_token)
     ):
         return True
-    if (
-        not room_voice_replays_auth
-        and not x_room_voice_replays_password
-        and not x_room_voice_replays_monitor_token
+    if not password_session.password_was_submitted(
+        x_room_voice_replays_password, x_room_voice_replays_monitor_token
     ):
+        # 缺密码或旧 Cookie 一律视为“登录已过期”，不计入密码失败限流。
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
     check_admin_login_limit(
         get_client_ip(request), "房间上麦回放密码尝试过于频繁，请稍后再试"

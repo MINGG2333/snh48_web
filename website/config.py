@@ -186,6 +186,9 @@ OB_LOGIN_WINDOW_SECONDS = int(os.getenv("OB_LOGIN_WINDOW_SECONDS", "300"))
 FLIP_LOGIN_MAX_PER_WINDOW = int(os.getenv("FLIP_LOGIN_MAX_PER_WINDOW", "10"))
 FLIP_LOGIN_WINDOW_SECONDS = int(os.getenv("FLIP_LOGIN_WINDOW_SECONDS", "300"))
 
+# 密码页 Cookie 统一有效期（默认 60 分钟）。签名密钥只在进程内存中，重启即失效。
+PASSWORD_SESSION_MAX_AGE_SECONDS = int(os.getenv("PASSWORD_SESSION_MAX_AGE_SECONDS", "3600"))
+
 # 生产环境默认只通过 HTTPS 发送管理 Cookie；本地 HTTP 调试可设为 false
 SECURE_COOKIES = os.getenv("SECURE_COOKIES", "true").lower() not in ("0", "false", "no")
 
@@ -435,16 +438,6 @@ REDBLUE_WEIDIAN_ITEM_IDS = [
     if value.strip()
 ]
 REDBLUE_WEIDIAN_UNIT_PRICE = float(os.getenv("REDBLUE_WEIDIAN_UNIT_PRICE", "26.25"))
-REDBLUE_COOKIE_SECRET_PATH = os.getenv(
-    "REDBLUE_COOKIE_SECRET_PATH",
-    str(
-        PROJECT_ROOT.parent
-        / "snh48-fan-hub"
-        / "private_handover"
-        / "web_state"
-        / "redblue_ledger_cookie_secret"
-    ),
-)
 REDBLUE_WEIDIAN_ORDERS_PATH = os.getenv(
     "REDBLUE_WEIDIAN_ORDERS_PATH",
     str(

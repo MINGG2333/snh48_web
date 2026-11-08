@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import hmac
 import json
 import os
@@ -16,13 +15,13 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from website import config as cfg
+from website import password_session
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 
 
 router = APIRouter(prefix="/api/social-credentials", tags=["社交凭据管理"])
 AUTH_COOKIE = "social_credentials_auth"
-AUTH_COOKIE_MAX_AGE = 30 * 60
-_COOKIE_SECRET = os.urandom(32)
+AUTH_COOKIE_MAX_AGE = password_session.cookie_max_age()
 PLATFORMS = {"weibo", "douyin", "bilibili", "xianyu", "weidian", "shop48"}
 SLOTS = {"primary", "backup"}
 
@@ -59,7 +58,7 @@ class PocketCodeRequest(BaseModel):
 
 
 def _token(password: str) -> str:
-    return hashlib.sha256(_COOKIE_SECRET + password.encode("utf-8")).hexdigest()
+    return password_session.cookie_token(password, context="social-credentials")
 
 
 def _no_store(response: Response) -> None:
@@ -149,10 +148,8 @@ async def require_auth(request: Request, social_credentials_auth: str = Cookie(N
     expected = cfg.SOCIAL_CREDENTIALS_ADMIN_PASSWORD
     if social_credentials_auth and hmac.compare_digest(social_credentials_auth, _token(expected)):
         return True
-    if not social_credentials_auth:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
-    check_admin_login_limit(get_client_ip(request), "社交凭据管理认证失败次数过多，请稍后再试")
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="登录状态无效")
+    # 缺 Cookie、旧 Cookie 或未知 Cookie 都视为“登录已过期”，不计入密码失败限流。
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要密码")
 
 
 @router.post("/login")

@@ -9,11 +9,13 @@
 ## 1. 结论先行
 
 1. **密码只用于一次登录验证，浏览器持久层不保存明文密码。**
-2. **默认方案是服务端签发 HttpOnly Cookie**：前端 `POST /login` 提交密码，服务端校验后种下 `HttpOnly`、`Secure`、`SameSite=Strict`、路径限定的签名 Cookie；后续请求由浏览器自动携带。
-3. **禁止**把密码写入 `localStorage`、`sessionStorage`、IndexedDB、JS 可读 Cookie 或 URL。
-4. **禁止**在密码输入框使用 `autocomplete="current-password"`。本仓库统一使用 `autocomplete="new-password"`，避免浏览器密码管理器自动保存后台密码。
-5. **页面壳可以为公开 HTML，但每个数据/写入 API 必须独立鉴权。** 不能只靠前端隐藏页面。
-6. **`/verify` 只做轻量鉴权检查，不返回业务数据，并设置 `Cache-Control: no-store`。**
+2. **默认方案是服务端签发 HttpOnly Cookie**：前端 `POST /login` 提交密码，服务端校验后种下 `HttpOnly`、`Secure`、`SameSite=Strict`、路径限定、**60 分钟**（`PASSWORD_SESSION_MAX_AGE_SECONDS`，统一在 `website/password_session.py`）的签名 Cookie；签名密钥只在进程内存中，网站重启即全部失效。
+3. **旧/未知 Cookie 必须按“登录已过期”返回 401**，不能返回 403“密码错误”，也不得计入密码失败限流；只有真正提交了密码（`/login` 或密码请求头）才计一次失败。
+4. **禁止**把密码写入 `localStorage`、`sessionStorage`、IndexedDB、JS 可读 Cookie 或 URL。
+5. **禁止**在密码输入框使用 `autocomplete="current-password"`。本仓库统一使用 `autocomplete="new-password"`，避免浏览器密码管理器自动保存后台密码。
+6. **页面壳可以为公开 HTML，但每个数据/写入 API 必须独立鉴权。** 不能只靠前端隐藏页面。
+7. **`/verify` 只做轻量鉴权检查，不返回业务数据，并设置 `Cache-Control: no-store`。**
+8. **存量“纯请求头密码”页面**（房间消息、礼物回复、计分、业务管理、观察页等）密码只存在页面内存，本身不写浏览器持久层，安全程度不低于本策略，可以保持现状，不必为了统一而改成 Cookie。新页面按第 2 条默认 Cookie 策略开发。
 
 ## 2. 推荐登录流程
 
@@ -44,19 +46,21 @@ Cookie 的值必须是服务端生成的签名 token，不能是密码本身，�
 ### 3.1 常量与 token
 
 ```python
+from website import password_session
+
 AUTH_COOKIE = "xxx_auth"
-AUTH_COOKIE_MAX_AGE = 24 * 60 * 60
-_COOKIE_SECRET = os.urandom(32)
+AUTH_COOKIE_MAX_AGE = password_session.cookie_max_age()  # 默认 60 分钟
 
 
 def _cookie_token(password: str) -> str:
-    return hmac.new(_COOKIE_SECRET, password.encode("utf-8"), hashlib.sha256).hexdigest()
+    return password_session.cookie_token(password, context="xxx")
 ```
 
-- 用 `hmac.compare_digest` 比较密码和 Cookie token。
-- 不要把密码、token 或 `_COOKIE_SECRET` 写进日志、异常详情、分析事件或响应体。
-- 单进程实现可以直接使用 `os.urandom(32)`，服务重启后旧 Cookie 失效、页面回到登录页；但频繁重启或导出/部署较多时体验很差。2026-10-27 起红蓝台账已改为 600 权限的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`），重启后登录态保留；密钥文件不得进 Git、不得打印。
-- 如果未来改成多 worker，必须把 `_COOKIE_SECRET` 改为所有 worker 共享的持久密钥（环境变量或 600 权限密钥文件），否则不同 worker 签发的 Cookie 会互相失效。
+- 用 `hmac.compare_digest` 比较密码和 Cookie token；统一走 `website/password_session.py`，不要在页面里各写一套。
+- 不要把密码、token 或签名密钥写进日志、异常详情、分析事件或响应体。
+- **统一策略（2026-11-09 起）**：Cookie 有效期 60 分钟（`PASSWORD_SESSION_MAX_AGE_SECONDS`），签名密钥只在进程内存中（`password_session.COOKIE_SECRET`），网站重启后旧 Cookie 全部失效、页面回到登录页。这是有意为之：不落盘密钥，部署即重新验证。
+- 旧实现中红蓝台账的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`）已于 2026-11-09 停用；文件可以保留但不再读取，不得再把它接回代码。
+- 如果未来改成多 worker，必须把 `password_session.COOKIE_SECRET` 改为所有 worker 共享的密钥（环境变量），否则不同 worker 签发的 Cookie 会互相失效；这不改变“重启失效”的策略。
 
 ### 3.2 鉴权依赖
 
@@ -69,20 +73,21 @@ def verify_xxx_password(
     expected = cfg.XXX_PASSWORD
     if not expected:
         raise HTTPException(status_code=403, detail="功能未启用")
-    if xxx_auth and hmac.compare_digest(xxx_auth, _cookie_token(expected)):
+    if password_session.cookie_matches(xxx_auth, expected, context="xxx"):
         return True
     if x_xxx_password and hmac.compare_digest(x_xxx_password, expected):
         return True
-    if not xxx_auth and not x_xxx_password:
-        check_login_limit(request)  # 只对失败尝试计数
+    if not password_session.password_was_submitted(x_xxx_password):
+        # 缺密码或旧/未知 Cookie：登录已过期，不计数
         raise HTTPException(status_code=401, detail="需要密码")
-    check_login_limit(request)
+    check_login_limit(request)  # 只有真正提交了错误密码才计数
     raise HTTPException(status_code=403, detail="密码错误")
 ```
 
 - Cookie 优先，请求头密码只作为旧客户端/测试兼容入口；新前端不得再发送密码请求头。
 - 未配置密码时返回 403，不能降级为公开访问。
-- 失败尝试必须限速；成功登录不应消耗失败额度。
+- 失败尝试必须限速；成功登录和旧 Cookie 不应消耗失败额度。
+- 每个密码组使用独立限流预算，不要和观察页等无关页面共用。
 
 ### 3.3 登录与登出
 
@@ -97,8 +102,8 @@ def login(payload: LoginRequest, response: Response, request: Request):
         raise HTTPException(status_code=403, detail="密码错误")
     response.set_cookie(
         key=AUTH_COOKIE,
-        value=_cookie_token(expected),
-        max_age=AUTH_COOKIE_MAX_AGE,
+        value=password_session.cookie_token(expected, context="xxx"),
+        max_age=password_session.cookie_max_age(),
         httponly=True,
         secure=cfg.SECURE_COOKIES,
         samesite="strict",
@@ -281,10 +286,11 @@ assert s.get("https://example.com/api/xxx/data", timeout=15).status_code == 401
 - [ ] 浏览器持久层没有密码；旧 key 已清理。
 - [ ] 密码框使用 `autocomplete="new-password"`。
 - [ ] 登录接口只接收 POST JSON，密码不进 URL。
-- [ ] Cookie 为 `HttpOnly; Secure; SameSite=Strict; Path=/api/xxx`。
-- [ ] Cookie 值是服务端 HMAC token，不是密码。
+- [ ] Cookie 为 `HttpOnly; Secure; SameSite=Strict; Path=/api/xxx`，`max_age` 使用 `password_session.cookie_max_age()`（默认 60 分钟）。
+- [ ] Cookie 值是服务端 HMAC token，不是密码；签名密钥不落盘。
+- [ ] 旧/未知 Cookie 返回 401“需要密码”，且不消耗密码失败限流。
 - [ ] `/verify`、业务数据、导出、轮询全部鉴权。
-- [ ] 登录失败有限速，错误信息不区分“用户不存在/密码错误”。
+- [ ] 登录失败有限速，错误信息不区分“用户不存在/密码错误”；每个密码组使用独立限流预算。
 - [ ] 登出调用服务端接口并删除 Cookie。
 - [ ] 401/403 统一回登录；其他错误允许重试。
 - [ ] 单元测试、静态护栏测试、前端语法检查通过。
@@ -309,4 +315,4 @@ assert s.get("https://example.com/api/xxx/data", timeout=15).status_code == 401
 - 旧 `flip_cards_auth` Cookie 不再识别；带了旧 Cookie 的请求按“未登录”返回 401，不计入密码失败限流，避免误报“密码错误”并把用户刷进限流。
 - 翻牌页密码失败使用独立的 `FLIP_LOGIN_MAX_PER_WINDOW`/`FLIP_LOGIN_WINDOW_SECONDS`，不与观察页共用预算。
 - 仍然禁止把密码写入 `localStorage`/`sessionStorage`/IndexedDB/URL；密码变量不得挂到 `window`。
-- 该例外的安全权衡：本机已解锁浏览器上的攻击者仍可直接读取已打开页面的 DOM，刷新重输只降低“离开后被重新打开”的风险；如果未来改回 Cookie，应同时实现持久密钥和“无效 Cookie 返回 401 不计限流”。
+- 该例外的安全权衡：本机已解锁浏览器上的攻击者仍可直接读取已打开页面的 DOM，刷新重输只降低“离开后被重新打开”的风险；如果未来改回 Cookie，仍按第 1 节的统一策略（60 分钟、内存密钥、无效 Cookie 返回 401 不计限流），不要恢复持久密钥。

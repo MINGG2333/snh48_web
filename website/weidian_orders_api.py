@@ -21,6 +21,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Cookie, Depends, Header, HTTPException, Request, Response
 
 from website import config as cfg
+from website import password_session
 from website import redblue_ledger_api
 from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, peer_command
 
@@ -53,7 +54,7 @@ def _expected_password() -> str:
 
 
 def _cookie_token(password: str) -> str:
-    return redblue_ledger_api._cookie_token(password)
+    return password_session.cookie_token(password, context="weidian-orders")
 
 
 def verify_weidian_orders_password(
@@ -71,8 +72,8 @@ def verify_weidian_orders_password(
     for supplied in (x_redblue_password, x_weidian_password):
         if supplied and hmac.compare_digest(supplied, expected):
             return True
-    if not weidian_orders_auth and not x_redblue_password and not x_weidian_password:
-        redblue_ledger_api.check_redblue_login_limit(request)
+    if not password_session.password_was_submitted(x_redblue_password, x_weidian_password):
+        # 缺密码或旧 Cookie 一律视为“登录已过期”，不计入密码失败限流。
         raise HTTPException(status_code=401, detail="需要密码")
     redblue_ledger_api.check_redblue_login_limit(request)
     raise HTTPException(status_code=403, detail="密码错误")
@@ -90,7 +91,7 @@ def login(payload: dict[str, Any], response: Response, request: Request):
     response.set_cookie(
         key=AUTH_COOKIE,
         value=_cookie_token(expected),
-        max_age=redblue_ledger_api.AUTH_COOKIE_MAX_AGE,
+        max_age=password_session.cookie_max_age(),
         path=AUTH_COOKIE_PATH,
         httponly=True,
         secure=cfg.SECURE_COOKIES,

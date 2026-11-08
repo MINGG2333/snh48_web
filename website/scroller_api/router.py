@@ -15,15 +15,14 @@ Auth uses HttpOnly cookie (not sessionStorage) to prevent JS-based theft.
 """
 from __future__ import annotations
 
-import hashlib
 import hmac
-import os
 from typing import Any, List
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Request, Response, status
 from pydantic import BaseModel
 
 from website import config as cfg
+from website import password_session
 from website.maintenance import ensure_writable
 from website.rate_limiter import check_scroller_login_limit, get_client_ip
 from website.shared_runtime_state import (
@@ -36,16 +35,12 @@ from website.shared_runtime_state import (
 
 # ── Cookie name for scroller auth ────────────────────────────────────────
 SCROLLER_COOKIE = "scroller_auth"
-SCROLLER_COOKIE_MAX_AGE = 3600 * 24  # 24 hours
-
-# Server-side secret for HMAC-based cookie token (changes on restart).
-# Cookie stores hash, never the raw password.
-_COOKIE_SECRET = os.urandom(32)
+SCROLLER_COOKIE_MAX_AGE = password_session.cookie_max_age()
 
 
 def _make_cookie_token(password: str) -> str:
-    """Create a hashed token from password + server secret for cookie storage."""
-    return hashlib.sha256(_COOKIE_SECRET + password.encode()).hexdigest()
+    """Create an HMAC token (process-local secret, rotates on restart)."""
+    return password_session.cookie_token(password, context="scroller")
 
 
 def _verify_cookie_token(token: str, password: str) -> bool:
@@ -134,7 +129,8 @@ async def verify_scroller_auth(
     if x_scroller_password and hmac.compare_digest(expected, x_scroller_password):
         return True
 
-    if not scroller_auth and not x_scroller_password:
+    if not password_session.password_was_submitted(x_scroller_password):
+        # 缺 Cookie、旧 Cookie 都视为“登录已过期”，不计入密码失败限流。
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="需要背景词管理密码才能访问。请先登录。",
@@ -159,10 +155,6 @@ def scroller_login(req: LoginRequest, response: Response, request: Request):
     Verify scroller admin password and set an HttpOnly cookie.
     The cookie cannot be read by JavaScript, preventing XSS-based theft.
     """
-    # Rate-limit login attempts to prevent brute-force
-    ip = get_client_ip(request)
-    check_scroller_login_limit(ip)
-
     expected = cfg.SCROLLER_PASSWORD
     if not expected:
         raise HTTPException(
@@ -171,6 +163,8 @@ def scroller_login(req: LoginRequest, response: Response, request: Request):
         )
 
     if not hmac.compare_digest(expected, req.password):
+        # 只有失败尝试消耗限流预算，成功登录不受影响。
+        check_scroller_login_limit(get_client_ip(request))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="密码错误",

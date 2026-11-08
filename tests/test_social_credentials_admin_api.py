@@ -36,6 +36,19 @@ class SocialCredentialsAdminApiTests(unittest.TestCase):
             self.assertNotIn("secret-cookie", response.text)
 
 
+    def test_stale_cookie_is_login_expired_not_rate_limited(self) -> None:
+        with (
+            patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", True),
+            patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_PASSWORD", "correct-password"),
+        ):
+            web = client()
+            for _ in range(12):
+                response = web.get(
+                    "/api/social-credentials/status",
+                    headers={"Cookie": "social_credentials_auth=stale"},
+                )
+                self.assertEqual(response.status_code, 401)
+
     def test_xianyu_primary_updates_and_backup_is_rejected(self) -> None:
         with (
             patch.object(social_credentials_admin_api.cfg, "SOCIAL_CREDENTIALS_ADMIN_ENABLED", True),

@@ -112,6 +112,24 @@ class PasswordVerifyEndpointTests(unittest.TestCase):
         route = next(route for route in ob_router.routes if route.path == "/api/ob/summary")
         self.assertTrue(route.dependant.dependencies)
 
+    def test_scroller_stale_cookie_is_login_expired(self) -> None:
+        import asyncio
+
+        from website.scroller_api.router import verify_scroller_auth
+
+        with mock.patch("website.scroller_api.router.cfg.SCROLLER_PASSWORD", "secret"):
+            with self.assertRaises(HTTPException) as stale:
+                asyncio.run(
+                    verify_scroller_auth(x_scroller_password=None, scroller_auth="stale")
+                )
+            self.assertEqual(stale.exception.status_code, 401)
+
+            with self.assertRaises(HTTPException) as wrong:
+                asyncio.run(
+                    verify_scroller_auth(x_scroller_password="wrong", scroller_auth=None)
+                )
+            self.assertEqual(wrong.exception.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

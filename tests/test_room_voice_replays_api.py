@@ -87,6 +87,14 @@ class RoomVoiceReplaysApiTests(unittest.IsolatedAsyncioTestCase):
             patcher.stop()
         self.tmp.cleanup()
 
+    async def test_stale_cookie_is_login_expired_not_wrong_password(self) -> None:
+        for _ in range(12):
+            response = await self.client.get(
+                "/api/room-voice-replays/sessions",
+                headers={"Cookie": "room_voice_replays_auth=stale"},
+            )
+            self.assertEqual(response.status_code, 401)
+
     async def test_requires_login_and_cookie_unlocks_metadata(self) -> None:
         self.assertEqual((await self.client.get("/api/room-voice-replays/sessions")).status_code, 401)
         login = await self.client.post(
