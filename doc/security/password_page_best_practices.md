@@ -59,7 +59,7 @@ def _cookie_token(password: str) -> str:
 - 用 `hmac.compare_digest` 比较密码和 Cookie token；统一走 `website/password_session.py`，不要在页面里各写一套。
 - 不要把密码、token 或签名密钥写进日志、异常详情、分析事件或响应体。
 - **统一策略（2026-11-09 起）**：Cookie 有效期 60 分钟（`PASSWORD_SESSION_MAX_AGE_SECONDS`），签名密钥只在进程内存中（`password_session.COOKIE_SECRET`），网站重启后旧 Cookie 全部失效、页面回到登录页。这是有意为之：不落盘密钥，部署即重新验证。
-- 旧实现中红蓝台账的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`）已于 2026-11-09 停用；文件可以保留但不再读取，不得再把它接回代码。
+- 旧实现中红蓝台账的持久密钥文件（`private_handover/web_state/redblue_ledger_cookie_secret`）已于 2026-11-09 停用，并移入 `private_handover/存档/停用密钥/`（附 README 说明）；`private_handover/web_state/` 下不应再出现该文件，不得再把它接回代码或 `.env`。
 - 如果未来改成多 worker，必须把 `password_session.COOKIE_SECRET` 改为所有 worker 共享的密钥（环境变量），否则不同 worker 签发的 Cookie 会互相失效；这不改变“重启失效”的策略。
 
 ### 3.2 鉴权依赖
