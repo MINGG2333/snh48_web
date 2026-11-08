@@ -161,6 +161,8 @@
     .redemption-table { min-width: 0; }
     .redemption-table th, .redemption-table td { font-size: 12px; padding: 6px; white-space: nowrap; }
     .redemption-table input { width: 72px; min-height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); color: var(--text); padding: 0 6px; }
+    #redemptionFan[multiple] { min-height: 118px; }
+    .redemption-participant { color: var(--muted); font-size: 12px; }
     .redemption-summary { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 8px; }
     .redemption-summary strong { color: var(--text); }
     .redemption-list { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -338,9 +340,9 @@
   <div class="modal-backdrop" data-close="redemptionModal"></div>
   <div class="modal-card wide">
     <h2 id="redemptionModalTitle">业务兑换</h2>
-    <div class="sub" id="redemptionModalSub">选择粉丝和业务，按最早条目自动分摊；可手动调整每条使用分数。</div>
+    <div class="sub" id="redemptionModalSub">选择业务和参与拼单的粉丝（按住 Ctrl/⌘ 可多选），按最早条目自动分摊；可手动调整每条使用分数。拼单只能使用同一种计分方式。</div>
     <div class="form-grid">
-      <div class="field"><label>粉丝</label><select id="redemptionFan"></select></div>
+      <div class="field"><label>粉丝（可多选拼单）</label><select id="redemptionFan" multiple size="7" title="按住 Ctrl/⌘ 可多选；拼单时选择多个粉丝，列表第一项作为业务名义持有人"></select></div>
       <div class="field"><label>计分方式</label><select id="redemptionMethod"><option value="计分卡">计分卡</option><option value="鸡腿">鸡腿</option></select></div>
       <div class="field"><label>业务</label><select id="redemptionBusiness"></select></div>
       <div class="field"><label>加赠业务（仅微店）</label><select id="redemptionBonus"></select></div>
@@ -350,7 +352,7 @@
     <div class="redemption-summary" id="redemptionSummary"></div>
     <div class="table-wrap">
       <table class="redemption-table">
-        <thead><tr><th>条目时间</th><th>来源</th><th>条目分数</th><th>可用</th><th>本次使用</th></tr></thead>
+        <thead><tr><th>粉丝</th><th>条目时间</th><th>来源</th><th>条目分数</th><th>可用</th><th>本次使用</th></tr></thead>
         <tbody id="redemptionAllocBody"></tbody>
       </table>
     </div>
@@ -927,7 +929,12 @@
         parts.push("记录 " + (item.entry_count || 0));
         parts.push("已投 " + score(item.settled_score) + " · 待投 " + score(item.pending_score));
         if (Number(item.business_allocated_score || 0) > 0) {
-          parts.push("已兑换 " + score(item.business_allocated_score) + " 分" + ((item.business_labels || []).length ? "（" + item.business_labels.join("+") + "）" : ""));
+          var businessLabels = item.business_labels || [];
+          var sharedLabels = item.business_shared_labels || [];
+          var labelText = businessLabels.length
+            ? "（" + businessLabels.join("+") + "）"
+            : (sharedLabels.length ? "（拼单 " + sharedLabels.join("+") + "）" : "");
+          parts.push("已兑换 " + score(item.business_allocated_score) + " 分" + labelText);
           if ((item.business_bonus_labels || []).length) parts.push("加赠 " + item.business_bonus_labels.join("+"));
           parts.push("剩余 " + score(item.business_remaining_score) + " 分");
         }
@@ -1236,10 +1243,40 @@
     return (redemptionData.fan_summary || []).find(function (item) { return fanKeyOf(item) === key; }) || null;
   }
 
-  function fanEntries(key, method) {
+  function selectedFanKeys() {
+    var select = $("redemptionFan");
+    return Array.prototype.map.call(select.selectedOptions || [], function (option) { return option.value; })
+      .filter(function (value) { return Boolean(value); });
+  }
+
+  function setSelectedFanKeys(keys) {
+    var wanted = {};
+    (keys || []).forEach(function (key) { if (key) wanted[key] = true; });
+    Array.prototype.forEach.call($("redemptionFan").options, function (option) {
+      option.selected = Boolean(wanted[option.value]);
+    });
+  }
+
+  function redemptionParticipantKeys(redemption) {
+    var keys = [];
+    ((redemption && redemption.participants) || []).forEach(function (participant) {
+      var key = participant.fan_id ? "id:" + participant.fan_id : (participant.fan_name ? "name:" + participant.fan_name : "");
+      if (key && keys.indexOf(key) < 0) keys.push(key);
+    });
+    var owner = redemptionFanKey(redemption);
+    if (owner) {
+      keys = keys.filter(function (key) { return key !== owner; });
+      keys.unshift(owner);
+    }
+    return keys;
+  }
+
+  function fanEntries(keys, method) {
     if (!redemptionData) return [];
+    var wanted = {};
+    (keys || []).forEach(function (key) { wanted[key] = true; });
     return (redemptionData.entries || []).filter(function (entry) {
-      return entryFanKey(entry) === key && !entry.duplicate && (!method || entry.scoring_method === method);
+      return wanted[entryFanKey(entry)] && !entry.duplicate && (!method || entry.scoring_method === method);
     }).sort(function (left, right) {
       return String(left.source_time || left.created_at || "").localeCompare(String(right.source_time || right.created_at || ""));
     });
@@ -1257,8 +1294,8 @@
     return Math.max(0, Number(entry.score || 0) - Math.max(0, Number(entry.business_allocated_score || 0) - editingEntryScore(entry.id)));
   }
 
-  function methodRemaining(key, method) {
-    return fanEntries(key, method).reduce(function (total, entry) {
+  function methodRemaining(keys, method) {
+    return fanEntries(keys, method).reduce(function (total, entry) {
       return total + entryAvailable(entry);
     }, 0);
   }
@@ -1270,56 +1307,65 @@
     return match ? Number(match[1]) : 0;
   }
 
-  function fanHasWeidian(key, method) {
-    return method === "鸡腿" && fanEntries(key, "鸡腿").some(function (entry) { return entry.source === "weidian"; });
+  function fanHasWeidian(keys, method) {
+    return method === "鸡腿" && fanEntries(keys, "鸡腿").some(function (entry) { return entry.source === "weidian"; });
   }
 
   function updateBonusAvailability() {
-    var enabled = Boolean($("redemptionFan").value && fanHasWeidian($("redemptionFan").value, $("redemptionMethod").value));
+    var keys = selectedFanKeys();
+    var enabled = Boolean(keys.length && fanHasWeidian(keys, $("redemptionMethod").value));
     $("redemptionBonus").disabled = !enabled;
     if (!enabled) $("redemptionBonus").value = "";
   }
 
-  function chooseDefaultMethod(key) {
-    var card = methodRemaining(key, "计分卡");
-    var chicken = methodRemaining(key, "鸡腿");
+  function chooseDefaultMethod(keys) {
+    var card = methodRemaining(keys, "计分卡");
+    var chicken = methodRemaining(keys, "鸡腿");
     $("redemptionMethod").value = chicken >= card ? "鸡腿" : "计分卡";
   }
 
-  function populateRedemptionFans(selected) {
+  function populateRedemptionFans(selectedKeys) {
     var fans = ((redemptionData && redemptionData.fan_summary) || []).filter(function (fan) { return fanKeyOf(fan); });
-    var html = '<option value="">请选择粉丝</option>';
+    var html = '<option value="" disabled>请选择粉丝（可多选拼单）</option>';
     fans.forEach(function (fan) {
       var key = fanKeyOf(fan);
-      var card = methodRemaining(key, "计分卡");
-      var chicken = methodRemaining(key, "鸡腿");
+      var card = methodRemaining([key], "计分卡");
+      var chicken = methodRemaining([key], "鸡腿");
       html += '<option value="' + esc(key) + '">' + esc(fan.fan_name || "未登记") +
         ' · ' + (fan.fan_id ? 'ID ' + esc(fan.fan_id) : '按昵称') +
         ' · 鸡腿 ' + score(chicken) + ' / 计分卡 ' + score(card) + '</option>';
     });
     $("redemptionFan").innerHTML = html;
-    $("redemptionFan").value = selected || "";
+    setSelectedFanKeys(selectedKeys || []);
   }
 
-  function renderRedemptionList(key) {
+  function renderRedemptionList(keys) {
     var target = $("redemptionList");
+    var wanted = {};
+    (keys || []).forEach(function (key) { wanted[key] = true; });
     var redemptions = ((redemptionData && redemptionData.business_redemptions) || []).filter(function (item) {
-      return redemptionFanKey(item) === key;
+      if (!keys || !keys.length) return false;
+      return redemptionParticipantKeys(item).some(function (key) { return wanted[key]; });
     });
     if (!redemptions.length) {
-      target.innerHTML = '<div class="notice">该粉丝暂无兑换记录</div>';
+      target.innerHTML = '<div class="notice">所选粉丝暂无兑换记录</div>';
       return;
     }
     target.innerHTML = '<div class="notice" style="font-weight:700;color:var(--text);">已登记兑换</div>' +
       redemptions.map(function (item) {
         var done = item.status === "done";
+        var multi = ((item.participants) || []).length > 1;
         var allocations = (item.allocations || []).map(function (row) {
-          return (row.entry_time || "-").slice(0, 10) + " " + score(row.score) + "分";
+          return ((multi && row.fan_name) ? row.fan_name + " " : "") + (row.entry_time || "-").slice(0, 10) + " " + score(row.score) + "分";
+        }).join(" + ");
+        var participants = (item.participants || []).map(function (person) {
+          return person.fan_name || "未登记";
         }).join(" + ");
         return '<div class="redemption-item"><div><strong>' + esc(item.business) + '</strong> ' +
           '<span class="pill ' + (item.scoring_method === "鸡腿" ? "leg" : "card") + '">' + esc(item.scoring_method || "-") + '</span> ' +
           '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成" : "兑换中") + '</span>' +
           (item.bonus_business_name ? ' <span class="notice">加赠 ' + esc(item.bonus_business_name) + '</span>' : '') +
+          (multi ? '<div class="notice">拼单：' + esc(participants) + '</div>' : '') +
           '<div class="notice">分摊：' + esc(allocations || "-") + '</div>' +
           (item.note ? '<div class="notice">备注：' + esc(item.note) + '</div>' : '') +
           '</div><div class="actions">' +
@@ -1331,7 +1377,7 @@
   }
 
   function updateRedemptionSummary() {
-    var key = $("redemptionFan").value;
+    var keys = selectedFanKeys();
     var method = $("redemptionMethod").value;
     var business = $("redemptionBusiness").value;
     var cost = businessCost(business);
@@ -1339,12 +1385,13 @@
     Array.prototype.forEach.call($("redemptionAllocBody").querySelectorAll("input[data-entry-id]"), function (input) {
       total += Number(input.value || 0);
     });
-    if (!key) {
+    if (!keys.length) {
       $("redemptionSummary").textContent = "请选择粉丝。";
       return;
     }
-    var available = methodRemaining(key, method);
+    var available = methodRemaining(keys, method);
     var parts = [
+      "参与 " + keys.length + " 人",
       "计分方式 " + method,
       "可用 " + score(available) + " 分",
       business ? "业务需要 " + score(cost) + " 分" : "请选择业务",
@@ -1355,23 +1402,24 @@
   }
 
   function renderRedemptionAllocations() {
-    var key = $("redemptionFan").value;
+    var keys = selectedFanKeys();
     var method = $("redemptionMethod").value;
     var body = $("redemptionAllocBody");
-    if (!key) {
-      body.innerHTML = '<tr><td colspan="5" class="empty">请选择粉丝</td></tr>';
+    if (!keys.length) {
+      body.innerHTML = '<tr><td colspan="6" class="empty">请选择粉丝</td></tr>';
       $("redemptionSummary").textContent = "请选择粉丝。";
-      renderRedemptionList("");
+      renderRedemptionList([]);
       return;
     }
-    var entries = fanEntries(key, method);
+    var entries = fanEntries(keys, method);
     if (!entries.length) {
-      body.innerHTML = '<tr><td colspan="5" class="empty">该计分方式没有可兑换条目</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="empty">该计分方式没有可兑换条目</td></tr>';
     } else {
       body.innerHTML = entries.map(function (entry) {
         var available = entryAvailable(entry);
         var current = editingEntryScore(entry.id);
         return '<tr data-entry-id="' + esc(entry.id) + '" data-available="' + esc(available) + '">' +
+          '<td class="redemption-participant">' + esc(entry.fan_name || entry.raw_name || "未登记") + '</td>' +
           '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0, 16)) + '</td>' +
           '<td>' + esc(entry.source_label || entry.source || "-") + '</td>' +
           '<td>' + score(entry.score) + '</td>' +
@@ -1380,7 +1428,7 @@
           '</tr>';
       }).join("");
     }
-    renderRedemptionList(key);
+    renderRedemptionList(keys);
     updateBonusAvailability();
     updateRedemptionSummary();
   }
@@ -1388,6 +1436,7 @@
   function resetRedemptionForm() {
     editingRedemptionId = "";
     $("redemptionFan").disabled = false;
+    setSelectedFanKeys([]);
     $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
     $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
     $("redemptionStatus").value = "pending";
@@ -1399,10 +1448,11 @@
     editingRedemptionId = redemptionId || "";
     try {
       redemptionData = await api(redemptionFullQuery());
-      populateRedemptionFans(fanKey || "");
+      populateRedemptionFans(fanKey ? [fanKey] : []);
+      $("redemptionFan").disabled = false;
       var redemption = editingRedemption();
       if (redemption) {
-        $("redemptionFan").value = redemptionFanKey(redemption);
+        setSelectedFanKeys(redemptionParticipantKeys(redemption));
         $("redemptionFan").disabled = true;
         $("redemptionMethod").value = redemption.scoring_method || "计分卡";
         $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
@@ -1410,7 +1460,8 @@
         $("redemptionStatus").value = redemption.status;
         $("redemptionNote").value = redemption.note || "";
       } else {
-        if ($("redemptionFan").value) chooseDefaultMethod($("redemptionFan").value);
+        var keys = selectedFanKeys();
+        if (keys.length) chooseDefaultMethod(keys);
         $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
         $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
         $("redemptionStatus").value = "pending";
@@ -1439,12 +1490,18 @@
   }
 
   async function saveRedemption() {
-    var key = $("redemptionFan").value;
-    var identity = parseFanKey(key);
+    var keys = selectedFanKeys();
     var method = $("redemptionMethod").value;
     var business = $("redemptionBusiness").value;
-    if (!key) { showToast("请选择粉丝", true); return; }
+    if (!keys.length) { showToast("请选择粉丝", true); return; }
     if (!business) { showToast("请选择业务", true); return; }
+    var ownerKey = keys[0];
+    var identity = parseFanKey(ownerKey);
+    var participants = keys.map(function (key) {
+      var parsed = parseFanKey(key);
+      var fan = fanSummary(key) || {};
+      return {fan_id: parsed.fan_id, fan_name: parsed.fan_name || fan.fan_name || ""};
+    });
     var cost = businessCost(business);
     var allocations = [];
     var total = 0;
@@ -1461,7 +1518,8 @@
     }
     var payload = {
       fan_id: identity.fan_id,
-      fan_name: identity.fan_name || (fanSummary(key) || {}).fan_name || "",
+      fan_name: identity.fan_name || (fanSummary(ownerKey) || {}).fan_name || "",
+      participants: participants,
       scoring_method: method,
       business: business,
       bonus_business: $("redemptionBonus").value,
@@ -1499,7 +1557,7 @@
     var redemption = redemptionById(id);
     if (!redemption) return;
     editingRedemptionId = id;
-    $("redemptionFan").value = redemptionFanKey(redemption);
+    setSelectedFanKeys(redemptionParticipantKeys(redemption));
     $("redemptionFan").disabled = true;
     $("redemptionMethod").value = redemption.scoring_method || "计分卡";
     $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
@@ -1512,7 +1570,7 @@
   function deleteRedemption(id) {
     openConfirm("删除业务兑换", "删除后会释放对应分摊分数，确定删除？", async function () {
       try {
-        var fanKey = redemptionFanKey(redemptionById(id)) || $("redemptionFan").value;
+        var fanKey = redemptionFanKey(redemptionById(id)) || selectedFanKeys()[0] || "";
         await api("/api/redblue/redemptions/" + encodeURIComponent(id), {method: "DELETE"});
         await loadData(true);
         await openRedemptionModal(fanKey, "");
@@ -1523,7 +1581,7 @@
 
   async function toggleRedemptionStatus(id, status) {
     try {
-      var fanKey = redemptionFanKey(redemptionById(id)) || $("redemptionFan").value;
+      var fanKey = redemptionFanKey(redemptionById(id)) || selectedFanKeys()[0] || "";
       await api("/api/redblue/redemptions/" + encodeURIComponent(id), {
         method: "PATCH",
         headers: {"Content-Type": "application/json"},
@@ -2262,7 +2320,7 @@
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
     $("redemptionFan").addEventListener("change", function () {
-      if (!editingRedemptionId) chooseDefaultMethod($("redemptionFan").value);
+      if (!editingRedemptionId) chooseDefaultMethod(selectedFanKeys());
       renderRedemptionAllocations();
     });
     $("redemptionMethod").addEventListener("change", renderRedemptionAllocations);

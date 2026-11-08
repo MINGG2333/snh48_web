@@ -847,6 +847,48 @@ def _business_name(value: Any) -> str:
     return re.sub(r"^\d+(?:\.\d+)?-", "", text)
 
 
+def _entry_fan_key(entry: dict[str, Any]) -> str:
+    return _fan_business_key(entry.get("fan_id"), entry.get("fan_name") or entry.get("raw_name"))
+
+
+def _entry_fan_name(entry: dict[str, Any]) -> str:
+    return _clean(entry.get("fan_name") or entry.get("raw_name"), 120)
+
+
+def _redemption_participants(
+    allocations: Iterable[dict[str, Any]],
+    entries_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for row in allocations:
+        entry = entries_by_id.get(_clean(row.get("entry_id"), 80)) or {}
+        key = _entry_fan_key(entry)
+        if not key:
+            continue
+        participant = rows.setdefault(
+            key,
+            {
+                "fan_id": _clean(entry.get("fan_id"), 32),
+                "fan_name": _entry_fan_name(entry),
+                "score": 0.0,
+                "entry_count": 0,
+                "_first_time": str(row.get("entry_time") or ""),
+            },
+        )
+        participant["score"] = round(participant["score"] + _to_float(row.get("score"), 0.0), 4)
+        participant["entry_count"] += 1
+        row_time = str(row.get("entry_time") or "")
+        if row_time and (not participant["_first_time"] or row_time < participant["_first_time"]):
+            participant["_first_time"] = row_time
+    result = sorted(
+        rows.values(),
+        key=lambda item: (str(item.get("_first_time") or ""), item["fan_id"], item["fan_name"]),
+    )
+    for item in result:
+        item.pop("_first_time", None)
+    return result
+
+
 def _redemption_status(value: Any) -> str:
     return "done" if _clean(value, 20).lower() in {"done", "complete", "completed", "finished", "已完成"} else "pending"
 
@@ -916,7 +958,7 @@ def _auto_allocate_redemption(
         if remaining <= 0.0001:
             break
     if remaining > 0.0001:
-        raise ValueError("该粉丝剩余可兑换分数不足")
+        raise ValueError("所选粉丝剩余可兑换分数不足")
     return allocations
 
 
@@ -957,6 +999,8 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
             "score": round(amount, 4),
             "entry_time": _entry_time(entry),
             "entry_source": _clean(entry.get("source"), 20),
+            "fan_id": _clean(entry.get("fan_id"), 32),
+            "fan_name": _entry_fan_name(entry),
         })
     allocations.sort(key=lambda item: (item.get("entry_time") or "", item["entry_id"]))
     cost = round(_to_float(raw.get("cost"), _to_float(option["score"] if option else 0.0, 0.0)), 4)
@@ -974,16 +1018,25 @@ def _normalise_redemption(raw: dict[str, Any], entries_by_id: dict[str, dict[str
         bonus_business = ""
     completion_entry_id = _completion_entry_id(allocations, entries_by_id, cost)
     completion_entry = entries_by_id.get(completion_entry_id) or {}
+    participants = _redemption_participants(allocations, entries_by_id)
     fan_id = _clean(raw.get("fan_id"), 32)
     fan_name = _clean(raw.get("fan_name"), 120)
+    if not fan_id and not fan_name:
+        fan_id = _clean(completion_entry.get("fan_id"), 32)
+        fan_name = _entry_fan_name(completion_entry)
     if not fan_name and allocations:
         first = entries_by_id.get(allocations[0]["entry_id"]) or {}
-        fan_name = _clean(first.get("fan_name") or first.get("raw_name"), 120)
+        fan_id = fan_id or _clean(first.get("fan_id"), 32)
+        fan_name = _entry_fan_name(first)
+    if not fan_name and participants:
+        fan_id = fan_id or participants[0]["fan_id"]
+        fan_name = participants[0]["fan_name"]
     status = _redemption_status(raw.get("status"))
     return {
         "id": _clean(raw.get("id"), 80),
         "fan_id": fan_id,
         "fan_name": fan_name,
+        "participants": participants,
         "business": business,
         "business_name": str(option["name"]) if option else _business_name(business),
         "bonus_business": bonus_business,
@@ -1034,8 +1087,11 @@ def _attach_business_allocations(entries: Iterable[dict[str, Any]], redemptions:
                 "group": redemption["group"],
                 "cost": redemption["cost"],
                 "score": row["score"],
+                "fan_id": row.get("fan_id") or "",
+                "fan_name": row.get("fan_name") or "",
                 "status": redemption["status"],
                 "completion": entry_id == completion_id,
+                "participants": redemption.get("participants") or [],
             })
         if completion_id:
             completion_labels_by_entry.setdefault(completion_id, []).append(redemption["business_name"])
@@ -1067,41 +1123,61 @@ def _fan_business_key(fan_id: Any, fan_name: Any) -> str:
 def _attach_fan_business(fan_summary: Iterable[dict[str, Any]], redemptions: list[dict[str, Any]]) -> None:
     by_fan: dict[str, list[dict[str, Any]]] = {}
     for redemption in redemptions:
-        key = _fan_business_key(redemption.get("fan_id"), redemption.get("fan_name"))
-        if key:
-            by_fan.setdefault(key, []).append(redemption)
+        owner_key = _fan_business_key(redemption.get("fan_id"), redemption.get("fan_name"))
+        shares: dict[str, dict[str, Any]] = {}
+        for row in redemption.get("allocations") or []:
+            key = _fan_business_key(row.get("fan_id"), row.get("fan_name"))
+            if not key:
+                continue
+            share = shares.setdefault(key, {"score": 0.0, "entry_count": 0})
+            share["score"] = round(share["score"] + _to_float(row.get("score"), 0.0), 4)
+            share["entry_count"] += 1
+        if not shares and owner_key:
+            shares[owner_key] = {"score": round(_to_float(redemption.get("cost"), 0.0), 4), "entry_count": 1}
+        for key, share in shares.items():
+            by_fan.setdefault(key, []).append(
+                {"redemption": redemption, "share": share["score"], "is_owner": key == owner_key}
+            )
     for fan in fan_summary:
         key = _fan_business_key(fan.get("fan_id"), fan.get("fan_name"))
-        items = by_fan.get(key, [])
-        allocated = round(sum(_to_float(item.get("cost"), 0.0) for item in items), 4)
+        rows = by_fan.get(key, [])
+        allocated = round(sum(_to_float(item.get("share"), 0.0) for item in rows), 4)
         names: list[str] = []
         bonus_names: list[str] = []
-        for item in items:
-            name = _clean(item.get("business_name"), 80)
-            if name and name not in names:
-                names.append(name)
-            bonus_name = _clean(item.get("bonus_business_name"), 80)
-            if bonus_name and bonus_name not in bonus_names:
-                bonus_names.append(bonus_name)
+        shared_names: list[str] = []
+        for item in rows:
+            redemption = item["redemption"]
+            name = _clean(redemption.get("business_name"), 80)
+            bonus_name = _clean(redemption.get("bonus_business_name"), 80)
+            if item["is_owner"]:
+                if name and name not in names:
+                    names.append(name)
+                if bonus_name and bonus_name not in bonus_names:
+                    bonus_names.append(bonus_name)
+            elif name and name not in shared_names:
+                shared_names.append(name)
         fan["business_redemptions"] = [
             {
-                "id": item["id"],
-                "business": item["business"],
-                "business_name": item["business_name"],
-                "bonus_business": item.get("bonus_business") or "",
-                "bonus_business_name": item.get("bonus_business_name") or "",
-                "cost": item["cost"],
-                "status": item["status"],
+                "id": item["redemption"]["id"],
+                "business": item["redemption"]["business"],
+                "business_name": item["redemption"]["business_name"],
+                "bonus_business": item["redemption"].get("bonus_business") or "",
+                "bonus_business_name": item["redemption"].get("bonus_business_name") or "",
+                "cost": item["redemption"]["cost"],
+                "share_score": item["share"],
+                "is_owner": item["is_owner"],
+                "status": item["redemption"]["status"],
             }
-            for item in items
+            for item in rows
         ]
         fan["business_allocated_score"] = allocated
         fan["business_remaining_score"] = round(max(0.0, _to_float(fan.get("total_score"), 0.0) - allocated), 4)
         fan["business_labels"] = names
         fan["business_bonus_labels"] = bonus_names
+        fan["business_shared_labels"] = shared_names
         fan["business_status"] = (
-            "done" if items and all(item.get("status") == "done" for item in items) else
-            "pending" if items else ""
+            "done" if rows and all(item["redemption"].get("status") == "done" for item in rows) else
+            "pending" if rows else ""
         )
 
 
@@ -1738,6 +1814,19 @@ def _mutator_delete(doc: dict[str, Any], payload: dict[str, Any]):
     return doc, {"deleted": before - len(doc["entries"])}
 
 
+def _participant_keys_from_payload(payload: dict[str, Any]) -> list[str]:
+    keys: list[str] = []
+    rows = payload.get("participants")
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = _fan_business_key(row.get("fan_id"), row.get("fan_name"))
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
 def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
     redemptions = doc.setdefault("business_redemptions", [])
     if not isinstance(redemptions, list):
@@ -1751,28 +1840,21 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
     if existing is None:
         redemption_id = redemption_id or f"rbr-{uuid.uuid4().hex}"
     source = existing or {}
-    fan_id = _clean(payload.get("fan_id") or source.get("fan_id"), 32)
-    fan_name = _clean(payload.get("fan_name") or source.get("fan_name"), 120)
     entries = [item for item in doc.get("entries") or [] if isinstance(item, dict)]
-    if fan_id:
-        fan_entries = [
-            item
-            for item in entries
-            if _clean(item.get("fan_id"), 32) == fan_id and not item.get("duplicate")
-        ]
-    elif fan_name:
-        fan_entries = [
-            item
-            for item in entries
-            if not item.get("duplicate")
-            and not _clean(item.get("fan_id"), 32)
-            and _clean(item.get("fan_name") or item.get("raw_name"), 120) == fan_name
-        ]
-    else:
-        raise ValueError("请选择粉丝")
-    if not fan_entries:
-        raise ValueError("该粉丝没有可兑换的计分条目")
-    entry_map = {_clean(item.get("id"), 80): item for item in fan_entries}
+    entry_map = {_clean(item.get("id"), 80): item for item in entries if _clean(item.get("id"), 80)}
+    participant_keys = _participant_keys_from_payload(payload)
+    if not participant_keys:
+        key = _fan_business_key(
+            _clean(payload.get("fan_id") or source.get("fan_id"), 32),
+            _clean(payload.get("fan_name") or source.get("fan_name"), 120),
+        )
+        if key:
+            participant_keys = [key]
+    participant_entries = [
+        item
+        for item in entries
+        if not item.get("duplicate") and _entry_fan_key(item) in participant_keys
+    ]
     scoring_method = _clean(
         payload.get("scoring_method") if "scoring_method" in payload else source.get("scoring_method"),
         10,
@@ -1787,7 +1869,7 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         if len(methods) == 1:
             scoring_method = next(iter(methods))
         else:
-            fan_methods = {_entry_scoring_method(item) for item in fan_entries}
+            fan_methods = {_entry_scoring_method(item) for item in participant_entries}
             scoring_method = next(iter(fan_methods)) if len(fan_methods) == 1 else ""
     if scoring_method not in SCORING_METHODS:
         raise ValueError("请选择计分方式；拼单只能使用同一种计分方式")
@@ -1807,14 +1889,18 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         allocations = []
     used = _entry_used_scores(redemptions, exclude_id=redemption_id)
     if not allocations:
-        allocations = _auto_allocate_redemption(fan_entries, used, cost, scoring_method)
+        if not participant_keys:
+            raise ValueError("请选择粉丝")
+        if not participant_entries:
+            raise ValueError("所选粉丝没有可兑换的计分条目")
+        allocations = _auto_allocate_redemption(participant_entries, used, cost, scoring_method)
     seen: set[str] = set()
     total = 0.0
     for row in allocations:
         entry_id = row["entry_id"]
         entry = entry_map.get(entry_id)
-        if entry is None:
-            raise ValueError("分摊条目不属于该粉丝或已被标记重复")
+        if entry is None or entry.get("duplicate"):
+            raise ValueError("分摊条目不存在或已被标记重复")
         if _entry_scoring_method(entry) != scoring_method:
             raise ValueError("拼单只能使用同一种计分方式（当前为" + scoring_method + "）")
         if entry_id in seen:
@@ -1838,12 +1924,34 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
         if not any(_clean(entry_map[entry_id].get("source"), 20) == "weidian" for entry_id in seen):
             raise ValueError("只有微店条目可以叠加加赠业务")
     now = _now()
-    if not fan_name:
-        fan_name = _clean(fan_entries[0].get("fan_name") or fan_entries[0].get("raw_name"), 120)
+    completion_entry_id = _completion_entry_id(allocations, entry_map, cost)
+    fan_id = _clean(payload.get("fan_id") or source.get("fan_id"), 32)
+    fan_name = _clean(payload.get("fan_name") or source.get("fan_name"), 120)
+    if not fan_id and not fan_name:
+        owner_entry = entry_map.get(completion_entry_id) or {}
+        fan_id = _clean(owner_entry.get("fan_id"), 32)
+        fan_name = _entry_fan_name(owner_entry)
+    if not fan_name and allocations:
+        first_entry = entry_map.get(allocations[0]["entry_id"]) or {}
+        fan_id = fan_id or _clean(first_entry.get("fan_id"), 32)
+        fan_name = _entry_fan_name(first_entry)
+    participants: list[dict[str, Any]] = []
+    participant_seen: set[str] = set()
+    for row in allocations:
+        entry = entry_map.get(row["entry_id"]) or {}
+        key = _entry_fan_key(entry)
+        if not key or key in participant_seen:
+            continue
+        participant_seen.add(key)
+        participants.append({
+            "fan_id": _clean(entry.get("fan_id"), 32),
+            "fan_name": _entry_fan_name(entry),
+        })
     record = {
         "id": redemption_id,
         "fan_id": fan_id,
         "fan_name": fan_name,
+        "participants": participants,
         "business": business,
         "bonus_business": bonus_option["value"] if bonus_option else "",
         "bonus_business_name": str(bonus_option["name"]) if bonus_option else "",
