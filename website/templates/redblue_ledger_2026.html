@@ -173,6 +173,10 @@
     .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 360px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: none; }
     .toast.show { display: block; }
     .toast.error { border-left-color: var(--red); }
+    .floating-scroll-btn { position: fixed; right: 20px; bottom: 84px; z-index: 30; display: inline-flex; align-items: center; gap: 5px; min-height: 40px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--text); box-shadow: 0 10px 28px rgba(0,0,0,.35); font-size: 13px; font-weight: 700; }
+    .floating-scroll-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .floating-scroll-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+    @media (max-width: 720px) { .floating-scroll-btn { right: 12px; bottom: 78px; } }
     .modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 18px; }
     .modal.hidden { display: none; }
     .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.62); }
@@ -301,6 +305,7 @@
       <div class="suggest-list" id="aiSuggestList"></div>
     </section>
   </main>
+  <button class="floating-scroll-btn" id="floatingScrollBtn" type="button" aria-label="回到底部" title="回到底部">↓ 底部</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -504,6 +509,24 @@
   function showApp() {
     loginOverlay.classList.add("hidden");
     page.classList.add("ready");
+    updateFloatingScrollBtn();
+  }
+
+  function updateFloatingScrollBtn() {
+    var button = $("floatingScrollBtn");
+    if (!button) return;
+    var scrolled = window.scrollY || document.documentElement.scrollTop || 0;
+    var toTop = scrolled > 200;
+    button.dataset.direction = toTop ? "top" : "bottom";
+    button.textContent = toTop ? "↑ 顶部" : "↓ 底部";
+    button.setAttribute("aria-label", toTop ? "回到顶部" : "回到底部");
+    button.title = button.getAttribute("aria-label");
+  }
+
+  function scrollPageFloating() {
+    var button = $("floatingScrollBtn");
+    var toTop = button && button.dataset.direction === "top";
+    window.scrollTo({top: toTop ? 0 : document.documentElement.scrollHeight, behavior: "smooth"});
   }
 
   async function api(path, options) {
@@ -2374,6 +2397,8 @@
       loadData().catch(function () {});
     });
     $("keywordInput").addEventListener("keydown", function (event) { if (event.key === "Enter") loadData().catch(function () {}); });
+    $("floatingScrollBtn").addEventListener("click", scrollPageFloating);
+    window.addEventListener("scroll", updateFloatingScrollBtn, {passive: true});
     window.addEventListener("resize", function () {
       clearTimeout(dailyTrendResizeTimer);
       dailyTrendResizeTimer = setTimeout(function () {
