@@ -44,6 +44,7 @@ MAX_TEXT_LENGTH = 1000
 MAX_CATALOG_PAGE = 100
 MAX_RECENT_CHANNELS = 30
 MAX_JOB_HISTORY = 100
+MAX_JOB_MESSAGES_HARD = 5000
 SENT_LOG_MAX_BYTES = 20 * 1024 * 1024
 BRIDGE_TIMEOUT_SECONDS = 400
 ACCOUNT_ID_RE = re.compile(r"^\d{1,32}$")
@@ -287,14 +288,14 @@ async def verify(response: Response, _=Depends(require_auth)):
 
 def _limits_payload() -> dict[str, Any]:
     return {
-        "min_interval": max(5, int(getattr(cfg, "ROOM_MESSENGER_MIN_INTERVAL_SECONDS", 15))),
+        "min_interval": max(1, int(getattr(cfg, "ROOM_MESSENGER_MIN_INTERVAL_SECONDS", 1))),
         "default_interval": max(
-            int(getattr(cfg, "ROOM_MESSENGER_MIN_INTERVAL_SECONDS", 15)),
+            int(getattr(cfg, "ROOM_MESSENGER_MIN_INTERVAL_SECONDS", 1)),
             int(getattr(cfg, "ROOM_MESSENGER_DEFAULT_INTERVAL_SECONDS", 60)),
         ),
-        "max_jitter": max(0, int(getattr(cfg, "ROOM_MESSENGER_MAX_JITTER_SECONDS", 120))),
-        "max_batch": max(1, int(getattr(cfg, "ROOM_MESSENGER_MAX_BATCH_MESSAGES", 30))),
-        "daily_cap": max(1, int(getattr(cfg, "ROOM_MESSENGER_DAILY_SEND_CAP", 100))),
+        "max_jitter": max(0, int(getattr(cfg, "ROOM_MESSENGER_MAX_JITTER_SECONDS", 0))),
+        "max_batch": max(0, int(getattr(cfg, "ROOM_MESSENGER_MAX_BATCH_MESSAGES", 0))),
+        "daily_cap": max(0, int(getattr(cfg, "ROOM_MESSENGER_DAILY_SEND_CAP", 0))),
         "history_poll": max(5, int(getattr(cfg, "ROOM_MESSENGER_HISTORY_POLL_SECONDS", 20))),
         "max_text_length": MAX_TEXT_LENGTH,
         "timezone": "Asia/Shanghai",
@@ -1031,7 +1032,7 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
     if not text or len(text) > MAX_TEXT_LENGTH:
         raise HTTPException(status_code=422, detail=f"消息长度必须在 1-{MAX_TEXT_LENGTH} 字之间")
     cap = _limits_payload()["daily_cap"]
-    if _daily_sent(account_id) >= cap:
+    if cap > 0 and _daily_sent(account_id) >= cap:
         raise HTTPException(status_code=429, detail=f"已达到今日发送上限（{cap} 条）")
     msg_id = os.urandom(16).hex()
     try:
@@ -1336,12 +1337,16 @@ async def create_job(payload: JobRequest, request: Request, response: Response, 
     messages = [str(item).strip() for item in payload.messages if str(item or "").strip()]
     if not messages:
         raise HTTPException(status_code=422, detail="请填写至少一条消息")
-    if len(messages) > limits["max_batch"]:
+    if len(messages) > MAX_JOB_MESSAGES_HARD:
+        raise HTTPException(status_code=422, detail=f"单次最多 {MAX_JOB_MESSAGES_HARD} 条消息（技术上限）")
+    if limits["max_batch"] > 0 and len(messages) > limits["max_batch"]:
         raise HTTPException(status_code=422, detail=f"单次最多 {limits['max_batch']} 条消息")
     if any(len(item) > MAX_TEXT_LENGTH for item in messages):
         raise HTTPException(status_code=422, detail=f"单条消息不能超过 {MAX_TEXT_LENGTH} 字")
     interval = max(limits["min_interval"], int(payload.interval_seconds or limits["default_interval"]))
-    jitter = max(0, min(limits["max_jitter"], int(payload.jitter_seconds or 0)))
+    jitter = max(0, int(payload.jitter_seconds or 0))
+    if limits["max_jitter"] > 0:
+        jitter = min(jitter, limits["max_jitter"])
     # 浮动只能把间隔拉长/缩短，但不得低于页面的最小发送间隔。
     jitter = min(jitter, max(0, interval - limits["min_interval"]))
     start_at = _parse_start_at(payload.start_at)
@@ -1506,10 +1511,12 @@ def _chunk_size(job: dict[str, Any], pending_count: int, account_id: str) -> int
     interval = max(1, int(job.get("interval_seconds") or limits["default_interval"]))
     chunk_seconds = max(30, int(getattr(cfg, "ROOM_MESSENGER_CHUNK_SECONDS", 300)))
     by_time = max(1, chunk_seconds // interval)
-    remaining = max(0, limits["daily_cap"] - _daily_sent(account_id))
+    cap = limits["daily_cap"]
+    remaining = pending_count if cap <= 0 else max(0, cap - _daily_sent(account_id))
     if remaining <= 0:
         return 0
-    return min(10, limits["max_batch"], pending_count, by_time, remaining)
+    max_batch = limits["max_batch"] if limits["max_batch"] > 0 else pending_count
+    return min(10, max_batch, pending_count, by_time, remaining)
 
 
 def _run_job(job_id: str) -> None:

@@ -77,11 +77,11 @@ scripts/web/room_messenger_qchat.js
 `room-messenger-scheduler` 守护线程执行：
 
 - 单次定时：一条消息，指定开始时间。
-- 批量：多行消息，间隔 ≥ `ROOM_MESSENGER_MIN_INTERVAL_SECONDS`（默认 15 秒），
-  浮动 ±`jitter` 秒；单批最多 `ROOM_MESSENGER_MAX_BATCH_MESSAGES`（默认 30）。
+- 批量：多行消息，间隔 ≥ `ROOM_MESSENGER_MIN_INTERVAL_SECONDS`（默认 1 秒），
+  浮动 ±`jitter` 秒；默认不设业务批量上限（`ROOM_MESSENGER_MAX_BATCH_MESSAGES=0`），代码保留 5000 条技术请求上限。
 - 每日批量：同一批消息每天在同一开始时间重复，直到取消。
 - 跨批间隔：上一批最后一条发送后至少等待一个间隔再发下一批。
-- 每日上限：`ROOM_MESSENGER_DAILY_SEND_CAP`（默认 100），即时与任务共用。
+- 每日上限：默认不设（`ROOM_MESSENGER_DAILY_SEND_CAP=0`）；需要时再配置。
 - 暂停/取消：
   - 暂停在当前一批发送结束后生效；
   - 取消把未发送项标记为 `cancelled`，已发送不撤回；
@@ -118,8 +118,10 @@ scripts/web/room_messenger_qchat.js
 | `ROOM_MESSENGER_CATALOG_PATH` | fan-hub `member_catalog.json` | 成员/频道目录 |
 | `ROOM_MESSENGER_ROOM_CONFIG_PATH` | fan-hub `config/room_monitor.json` | 补入目录中缺失的已监控成员（如陈嘉仪） |
 | `ROOM_MESSENGER_COMMAND` | 回退 `FLIP_CARDS_ACCOUNT_ADMIN_COMMAND` | 特权桥客户端 |
-| `ROOM_MESSENGER_MIN_INTERVAL_SECONDS` | `15` | 批量最小间隔 |
-| `ROOM_MESSENGER_DAILY_SEND_CAP` | `100` | 每日发送上限 |
+| `ROOM_MESSENGER_MIN_INTERVAL_SECONDS` | `1` | 批量最小间隔（技术下限） |
+| `ROOM_MESSENGER_MAX_BATCH_MESSAGES` | `0` | 0 表示不设业务批量上限 |
+| `ROOM_MESSENGER_DAILY_SEND_CAP` | `0` | 0 表示不设每日发送上限 |
+| `ROOM_MESSENGER_MAX_JITTER_SECONDS` | `0` | 0 表示不额外限制浮动；仍不得低于最小间隔 |
 | `ROOM_MESSENGER_CHUNK_SECONDS` | `300` | 单次桥调用/连接复用窗口 |
 
 ## 8. 部署与验收（禁止真实发送）

@@ -13,11 +13,11 @@
         enabled: Boolean(BOOT.enabled),
         node: BOOT.node || "",
         limits: {
-            min_interval: 15,
+            min_interval: 1,
             default_interval: 60,
-            max_jitter: 120,
-            max_batch: 30,
-            daily_cap: 100,
+            max_jitter: 0,
+            max_batch: 0,
+            daily_cap: 0,
             history_poll: 20,
             max_text_length: 1000,
             timezone: "Asia/Shanghai",
@@ -543,8 +543,8 @@
     }
 
     function renderDailyMeter() {
-        var cap = (S.limits && S.limits.daily_cap) || 100;
-        $("dailyMeter").textContent = "今日发送 " + (S.dailySent || 0) + " / " + cap;
+        var cap = (S.limits && S.limits.daily_cap) || 0;
+        $("dailyMeter").textContent = "今日发送 " + (S.dailySent || 0) + " / " + (cap > 0 ? cap : "不限");
     }
 
     // ── Sidebar tabs / recent / catalog ────────────────────────────────────
@@ -1090,9 +1090,12 @@
 
     // ── Schedule modal ─────────────────────────────────────────────────────
     function syncJitterLimit() {
-        var minInterval = S.limits.min_interval || 15;
+        var minInterval = S.limits.min_interval || 1;
         var interval = Number($("jobInterval").value) || (S.limits.default_interval || 60);
-        var maxJitter = Math.min(S.limits.max_jitter || 0, Math.max(0, interval - minInterval));
+        var maxJitter = Math.max(0, interval - minInterval);
+        if ((S.limits.max_jitter || 0) > 0) {
+            maxJitter = Math.min(maxJitter, S.limits.max_jitter);
+        }
         $("jobJitter").max = String(maxJitter);
         if (Number($("jobJitter").value) > maxJitter) {
             $("jobJitter").value = String(maxJitter);
@@ -1103,7 +1106,10 @@
             return;
         }
         hint.hidden = false;
-        hint.innerHTML = "单批最多 " + (S.limits.max_batch || 30) + " 条消息；最小间隔 " + minInterval +
+        var batchText = (S.limits.max_batch || 0) > 0
+            ? ("单批最多 " + S.limits.max_batch + " 条消息；")
+            : "批量条数不设业务上限；";
+        hint.innerHTML = batchText + "最小间隔 " + minInterval +
             " 秒。随机浮动不会让实际间隔低于 " + minInterval + " 秒（当前 ±" + maxJitter + " 秒）。";
     }
 
@@ -1133,9 +1139,9 @@
         var start = new Date(Date.now() + 5 * 60 * 1000);
         $("jobStartAt").value = localInputValue(start);
         $("jobInterval").value = S.limits.default_interval || 60;
-        $("jobInterval").min = String(S.limits.min_interval || 15);
-        $("jobJitter").value = Math.min(10, S.limits.max_jitter || 0);
-        $("jobJitter").max = String(S.limits.max_jitter || 0);
+        $("jobInterval").min = String(S.limits.min_interval || 1);
+        $("jobJitter").value = "10";
+        $("jobJitter").max = "";
         syncJitterLimit();
         $("jobMessages").value = $("messageInput").value || "";
         $("jobConfirm").checked = false;
@@ -1164,13 +1170,13 @@
         if (isNaN(start.getTime())) return { error: "开始时间无效" };
         var interval = withDefault(Number($("jobInterval").value), S.limits.default_interval || 60);
         var jitter = withDefault(Number($("jobJitter").value), 0);
-        var minInterval = S.limits.min_interval || 15;
+        var minInterval = S.limits.min_interval || 1;
         jitter = Math.min(jitter, Math.max(0, interval - minInterval));
-        if (messages.length > (S.limits.max_batch || 30)) {
-            return { error: "最多 " + (S.limits.max_batch || 30) + " 条消息" };
+        if ((S.limits.max_batch || 0) > 0 && messages.length > S.limits.max_batch) {
+            return { error: "最多 " + S.limits.max_batch + " 条消息" };
         }
-        if (S.scheduleMode !== "once" && interval < (S.limits.min_interval || 15)) {
-            return { error: "发送间隔不能小于 " + (S.limits.min_interval || 15) + " 秒" };
+        if (S.scheduleMode !== "once" && interval < minInterval) {
+            return { error: "发送间隔不能小于 " + minInterval + " 秒" };
         }
         var lines = [];
         messages.slice(0, 12).forEach(function (text, index) {

@@ -428,6 +428,47 @@ class RoomMessengerApiTests(unittest.TestCase):
                 self.assertEqual(response.json()["job"]["jitter_seconds"], expected)
 
 
+
+    def test_zero_daily_cap_means_unlimited(self) -> None:
+        self._login()
+        self._bind()
+        with (
+            patch.object(api.cfg, "ROOM_MESSENGER_DAILY_SEND_CAP", 0),
+            patch.object(api, "_daily_sent", return_value=9999),
+            patch.object(api, "_run_bridge", return_value={"ok": True, "results": [{"ok": True}]}),
+        ):
+            response = self.client.post(
+                "/api/room-messenger/send",
+                headers={"Origin": "http://testserver"},
+                json={
+                    "channel_id": "1001",
+                    "server_id": "2001",
+                    "text": "hello",
+                    "confirm": api.SEND_CONFIRM_WORD,
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def test_zero_batch_limit_allows_more_than_thirty(self) -> None:
+        self._login()
+        self._bind()
+        with patch.object(api.cfg, "ROOM_MESSENGER_MAX_BATCH_MESSAGES", 0):
+            response = self.client.post(
+                "/api/room-messenger/jobs",
+                headers={"Origin": "http://testserver"},
+                json={
+                    "channel": {"channel_id": "1001", "server_id": "2001"},
+                    "messages": [str(index) for index in range(31)],
+                    "interval_seconds": 1,
+                    "jitter_seconds": 0,
+                    "start_at": "2099-01-01T20:00:00+08:00",
+                    "confirm": True,
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["job"]["total"], 31)
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}

@@ -350,19 +350,22 @@ ROOM_MESSENGER_BRIDGE_SCRIPT = os.getenv("ROOM_MESSENGER_BRIDGE_SCRIPT") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "flip_account_admin.py"
 )
 ROOM_MESSENGER_MIN_INTERVAL_SECONDS = int(
-    os.getenv("ROOM_MESSENGER_MIN_INTERVAL_SECONDS", "15")
+    os.getenv("ROOM_MESSENGER_MIN_INTERVAL_SECONDS", "1")
 )
 ROOM_MESSENGER_DEFAULT_INTERVAL_SECONDS = int(
     os.getenv("ROOM_MESSENGER_DEFAULT_INTERVAL_SECONDS", "60")
 )
+# 0 表示不额外限制浮动；实际浮动仍由“间隔 - 最小间隔”约束。
 ROOM_MESSENGER_MAX_JITTER_SECONDS = int(
-    os.getenv("ROOM_MESSENGER_MAX_JITTER_SECONDS", "120")
+    os.getenv("ROOM_MESSENGER_MAX_JITTER_SECONDS", "0")
 )
+# 0 表示不设业务批量上限（代码保留技术请求上限）。
 ROOM_MESSENGER_MAX_BATCH_MESSAGES = int(
-    os.getenv("ROOM_MESSENGER_MAX_BATCH_MESSAGES", "30")
+    os.getenv("ROOM_MESSENGER_MAX_BATCH_MESSAGES", "0")
 )
+# 0 表示不设每日发送上限。
 ROOM_MESSENGER_DAILY_SEND_CAP = int(
-    os.getenv("ROOM_MESSENGER_DAILY_SEND_CAP", "100")
+    os.getenv("ROOM_MESSENGER_DAILY_SEND_CAP", "0")
 )
 ROOM_MESSENGER_CHUNK_SECONDS = int(
     os.getenv("ROOM_MESSENGER_CHUNK_SECONDS", "300")

@@ -97,7 +97,7 @@ ROOM_MESSENGER_STATE_DIR=/var/lib/snh48-web/room_messenger
 ROOM_MESSENGER_CATALOG_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/cross_room/metadata/member_catalog.json
 ROOM_MESSENGER_ROOM_CONFIG_PATH=/home/snh48-fan-hub/config/room_monitor.json
 ROOM_MESSENGER_COMMAND=留空回退 FLIP_CARDS_ACCOUNT_ADMIN_COMMAND（flip 桥）
-ROOM_MESSENGER_DAILY_SEND_CAP=100
+ROOM_MESSENGER_DAILY_SEND_CAP=0（0 为不限）
 ```
 
 云安全组只应公网放行 `80/443`，以及必要的 SSH `22` 管理入口；`22` 建议限制来源 IP 或配套强认证。不应公网放行后端 `8000` 或图片代理 `8899`。如果备案前或故障排查需要临时暴露 `8000`/`8899`，完成后必须撤销。
