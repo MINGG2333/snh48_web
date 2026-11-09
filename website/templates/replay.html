@@ -486,6 +486,44 @@
   .player-container { border-radius: 0; border-left: none; border-right: none; }
   .replay-shortcuts { display: none; }
 }
+
+.radio-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 12px;
+  width: min(100%, 860px);
+  margin: 14px auto 0;
+}
+.radio-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  height: 250px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.radio-panel h3 {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  color: var(--primary);
+  font-weight: 700;
+  position: sticky;
+  top: -10px;
+  background: rgba(20, 18, 28, 0.92);
+  padding: 4px 0;
+}
+.radio-transcript-text { font-size: 0.84rem; line-height: 1.7; color: #e8e6f0; }
+.radio-transcript-text .karaoke-char { transition: color 0.12s ease; }
+.radio-transcript-text .karaoke-sung { color: #ff8fb8; }
+.radio-transcript-text .karaoke-active { color: #fff; font-weight: 700; }
+.radio-message { font-size: 0.8rem; line-height: 1.5; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.radio-message .name { color: #9ecbff; margin-right: 6px; }
+@media (max-width: 768px) {
+  .radio-panels { grid-template-columns: 1fr; padding: 0 10px; }
+  .radio-panel { height: 180px; }
+}
+
 </style>
 {% endblock %}
 
@@ -564,6 +602,19 @@
         </div>
     </div>
 
+        {% if is_radio %}
+        <div class="radio-panels" id="radioPanels">
+            <section class="radio-panel">
+                <h3><i class="fas fa-align-left"></i> 实时转录</h3>
+                <div class="radio-transcript-text" id="radioTranscript">暂无转录</div>
+            </section>
+            <section class="radio-panel" id="radioMessagesPanel">
+                <h3><i class="fas fa-comments"></i> 房间消息</h3>
+                <div id="radioMessages"></div>
+            </section>
+        </div>
+        {% endif %}
+
     <div class="replay-info">
         <div class="replay-info-card">
             <h3><i class="fas fa-info-circle"></i> {{ '电台信息' if is_radio else '直播信息' }}</h3>
@@ -605,6 +656,89 @@ document.addEventListener('DOMContentLoaded', () => {
       replaySubtitleTrack.src = `/api/replay/${encodeURIComponent(liveId)}/subtitles.vtt`;
       replaySubtitleTrack.addEventListener("error", function () { replaySubtitleTrack.remove(); });
     }
+
+    const radioTranscript = document.getElementById("radioTranscript");
+    const radioMessages = document.getElementById("radioMessages");
+    const radioMessagesPanel = document.getElementById("radioMessagesPanel");
+    let radioSpans = [];
+    let radioSegments = [];
+    let radioActiveSegment = -1;
+
+    function appendRadioMessage(item) {
+      if (!radioMessages || !item) return;
+      const row = document.createElement("div");
+      row.className = "radio-message";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = String(item.name || "");
+      row.appendChild(name);
+      row.appendChild(document.createTextNode(String(item.text || "")));
+      radioMessages.appendChild(row);
+      while (radioMessages.children.length > 120) radioMessages.removeChild(radioMessages.firstChild);
+      if (radioMessagesPanel) {
+        const nearBottom = radioMessagesPanel.scrollTop + radioMessagesPanel.clientHeight >= radioMessagesPanel.scrollHeight - 40;
+        if (nearBottom) radioMessagesPanel.scrollTop = radioMessagesPanel.scrollHeight;
+      }
+    }
+
+    async function loadRadioTranscript() {
+      if (!radioTranscript || !liveId) return;
+      try {
+        const response = await fetch(`/api/replay/${encodeURIComponent(liveId)}/transcript.json`);
+        if (!response.ok) { radioTranscript.textContent = "本场暂无转录"; return; }
+        const data = await response.json();
+        radioSegments = Array.isArray(data.segments) ? data.segments : [];
+        if (!radioSegments.length) { radioTranscript.textContent = "本场暂无转录"; return; }
+        radioTranscript.textContent = "";
+        radioSegments.forEach((seg, segIndex) => {
+          const text = String(seg.text || "");
+          const start = Number(seg.start_ms || 0);
+          const end = Number(seg.end_ms || start + 1000);
+          Array.from(text).forEach((ch, idx) => {
+            const span = document.createElement("span");
+            span.className = "karaoke-char";
+            span.textContent = ch;
+            span.dataset.start = String(start + (end - start) * idx / text.length);
+            span.dataset.end = String(start + (end - start) * (idx + 1) / text.length);
+            span.dataset.seg = String(segIndex);
+            radioTranscript.appendChild(span);
+            radioSpans.push(span);
+          });
+        });
+        video.addEventListener("timeupdate", updateRadioTranscript);
+        video.addEventListener("seeked", updateRadioTranscript);
+        updateRadioTranscript();
+      } catch (_) {
+        radioTranscript.textContent = "转录加载失败";
+      }
+    }
+
+    function updateRadioTranscript() {
+      if (!radioSpans.length) return;
+      const now = video.currentTime * 1000;
+      let activeSeg = -1;
+      radioSpans.forEach((span) => {
+        const start = Number(span.dataset.start || 0);
+        const end = Number(span.dataset.end || 0);
+        const sung = now >= start;
+        span.classList.toggle("karaoke-sung", sung);
+        const active = now >= start && now < end;
+        span.classList.toggle("karaoke-active", active);
+        if (active) activeSeg = Number(span.dataset.seg || -1);
+      });
+      if (activeSeg >= 0 && activeSeg !== radioActiveSegment) {
+        radioActiveSegment = activeSeg;
+        const panel = radioTranscript.parentElement;
+        const target = radioSpans.find((span) => Number(span.dataset.seg) === activeSeg);
+        if (target && panel) {
+          const top = target.offsetTop;
+          const visible = top >= panel.scrollTop && top <= panel.scrollTop + panel.clientHeight - 40;
+          if (!visible) panel.scrollTop = top - panel.clientHeight / 2;
+        }
+      }
+    }
+
+    loadRadioTranscript();
     let isPlaying = false;
     let isDraggingProgress = false;
     let danmuItems = [];
@@ -894,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastDanmuSyncTime = current;
 
         while (nextDanmuIndex < danmuItems.length && danmuItems[nextDanmuIndex].time <= current + 0.4) {
+            appendRadioMessage(danmuItems[nextDanmuIndex]);
             createDanmuBubble(danmuItems[nextDanmuIndex]);
             nextDanmuIndex += 1;
         }

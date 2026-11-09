@@ -261,6 +261,33 @@ async def timeline_page(request: Request):
     )
 
 
+@app.get("/api/replay/{live_id}/transcript.json")
+async def replay_transcript(live_id: str):
+    """返回该场逐句转录（segments），供电台页 KTV 面板使用。"""
+    import glob
+
+    if not live_id.isdigit():
+        raise HTTPException(status_code=404, detail="invalid live id")
+    root = Path(cfg.PROJECT_ROOT).parent / "snh48-fan-hub" / "live_archive"
+    matches = glob.glob(str(root / "*" / "archive" / "sessions" / f"*_{live_id}" / "transcripts" / "segments.jsonl"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="transcript not found")
+    segments = []
+    try:
+        with open(matches[0], encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    segments.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"live_id": live_id, "segments": segments}
+
+
 @app.get("/api/replay/{live_id}/subtitles.vtt")
 async def replay_subtitles(live_id: str):
     """返回该场已转录的 VTT 字幕；没有转录时 404，页面会忽略。"""
