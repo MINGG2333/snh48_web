@@ -795,6 +795,91 @@ async def delete_recent(
 # ── History ───────────────────────────────────────────────────────────────
 
 
+def _deleted_path() -> Path:
+    return _state_path("deleted.json")
+
+
+def _deleted_rows(account_id: str, channel_id: str) -> dict[str, dict[str, Any]]:
+    payload = _read_json(_deleted_path(), {})
+    accounts = payload.get("accounts") if isinstance(payload.get("accounts"), dict) else {}
+    channels = accounts.get(account_id) if isinstance(accounts.get(account_id), dict) else {}
+    rows = channels.get(channel_id) if isinstance(channels.get(channel_id), dict) else {}
+    return {str(key): value for key, value in rows.items() if isinstance(value, dict)}
+
+
+def _record_deleted(account_id: str, channel_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    msg_id = str(item.get("msg_id_client") or "")
+    tombstone = {
+        "msg_id_client": msg_id,
+        "msg_time": int(item.get("msg_time") or 0),
+        "deleted_at": _now_iso(),
+        "text": str(item.get("text") or "")[:MAX_TEXT_LENGTH],
+        "sender_id": str(item.get("sender_id") or account_id),
+        "sender_name": str(item.get("sender_name") or ""),
+    }
+    with _state_lock:
+        payload = _read_json(_deleted_path(), {})
+        accounts = payload.get("accounts") if isinstance(payload.get("accounts"), dict) else {}
+        channels = accounts.get(account_id) if isinstance(accounts.get(account_id), dict) else {}
+        rows = channels.get(channel_id) if isinstance(channels.get(channel_id), dict) else {}
+        if not isinstance(rows, dict):
+            rows = {}
+        rows[msg_id] = tombstone
+        if len(rows) > 200:
+            ordered = sorted(rows.items(), key=lambda pair: int(pair[1].get("msg_time") or 0))
+            rows = dict(ordered[-200:])
+        channels[channel_id] = rows
+        accounts[account_id] = channels
+        _write_json(_deleted_path(), {"accounts": accounts, "updated_at": _now_iso()})
+    return tombstone
+
+
+def _merge_deleted(messages: list[dict[str, Any]], account_id: str, channel_id: str) -> list[dict[str, Any]]:
+    tombstones = _deleted_rows(account_id, channel_id)
+    if not tombstones:
+        return messages
+    by_id = {}
+    for row in messages:
+        key = str(row.get("msg_id_client") or row.get("id") or "")
+        if key:
+            by_id[key] = row
+    oldest = min((int(row.get("time") or 0) for row in messages), default=0)
+    for msg_id, tombstone in tombstones.items():
+        msg_time = int(tombstone.get("msg_time") or 0)
+        if oldest and msg_time < oldest:
+            continue
+        if msg_id in by_id:
+            by_id[msg_id]["deleted"] = True
+            by_id[msg_id]["deleted_at"] = tombstone.get("deleted_at", "")
+            if not by_id[msg_id].get("text"):
+                by_id[msg_id]["text"] = tombstone.get("text", "")
+            continue
+        messages.append(
+            {
+                "id": msg_id,
+                "msg_id_client": msg_id,
+                "msg_id_server": "",
+                "server_id": "",
+                "time": msg_time,
+                "type": "DELETED",
+                "inner_type": "",
+                "sender_id": str(tombstone.get("sender_id") or ""),
+                "sender_name": str(tombstone.get("sender_name") or ""),
+                "text": str(tombstone.get("text") or ""),
+                "reply_text": "",
+                "gift_name": "",
+                "gift_count": "",
+                "media_url": "",
+                "channel_id": channel_id,
+                "server_id_room": "",
+                "deleted": True,
+                "deleted_at": tombstone.get("deleted_at", ""),
+            }
+        )
+    messages.sort(key=lambda row: int(row.get("time") or 0))
+    return messages
+
+
 @router.get("/messages")
 def messages(
     response: Response,
@@ -824,6 +909,8 @@ def messages(
         raise HTTPException(status_code=503, detail=str(exc))
     except BridgeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+    data["messages"] = _merge_deleted(messages, resolved, channel_id)
     return data
 
 
@@ -979,6 +1066,8 @@ class DeleteRequest(BaseModel):
     msg_id_client: str
     msg_time: int
     sender_id: str = ""
+    sender_name: str = ""
+    text: str = ""
     confirm: str
 
 
@@ -1012,6 +1101,17 @@ def delete_message(payload: DeleteRequest, request: Request, response: Response,
         raise HTTPException(status_code=503, detail=str(exc))
     except BridgeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    deleted = _record_deleted(
+        account_id,
+        payload.channel_id,
+        {
+            "msg_id_client": payload.msg_id_client,
+            "msg_time": payload.msg_time,
+            "sender_id": payload.sender_id or account_id,
+            "sender_name": payload.sender_name,
+            "text": payload.text,
+        },
+    )
     _append_audit(
         {
             "at": _now_iso(),
@@ -1020,9 +1120,12 @@ def delete_message(payload: DeleteRequest, request: Request, response: Response,
             "channel_id": payload.channel_id,
             "msg_id_client": payload.msg_id_client,
             "ok": True,
+            "text_length": len(payload.text),
+            "text_sha256": hashlib.sha256(payload.text.encode("utf-8")).hexdigest()[:16],
+            "preview": _message_preview(payload.text, 40),
         }
     )
-    return {"ok": True, "message": _safe_error(data.get("message"), "删除成功")}
+    return {"ok": True, "message": _safe_error(data.get("message"), "删除成功"), "deleted": deleted}
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────

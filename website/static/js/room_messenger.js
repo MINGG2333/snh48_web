@@ -845,7 +845,7 @@
         time.textContent = formatTime(item.time);
         meta.appendChild(sender);
         meta.appendChild(time);
-        if (self && item.msg_id_client && item.time) {
+        if (self && item.msg_id_client && item.time && !item.deleted) {
             var deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.className = "rm-msg-delete";
@@ -858,6 +858,22 @@
 
         var bubble = document.createElement("div");
         bubble.className = "rm-bubble";
+        if (item.deleted) {
+            wrapper.classList.add("is-deleted");
+            var deletedLabel = document.createElement("span");
+            deletedLabel.className = "rm-deleted-label";
+            deletedLabel.innerHTML = '<i class="fas fa-ban"></i> 此消息已删除';
+            bubble.appendChild(deletedLabel);
+            if (item.text) {
+                var original = document.createElement("div");
+                original.className = "rm-deleted-original";
+                original.textContent = item.text;
+                bubble.appendChild(original);
+            }
+            body.appendChild(bubble);
+            wrapper.appendChild(body);
+            return wrapper;
+        }
         if (item.reply_text) {
             var quote = document.createElement("div");
             quote.className = "rm-reply-quote";
@@ -1026,15 +1042,17 @@
                 msg_id_client: item.msg_id_client,
                 msg_time: item.time,
                 sender_id: item.sender_id || "",
+                sender_name: item.sender_name || "",
+                text: item.text || "",
                 confirm: expected
             }
-        }).then(function () {
-            var key = messageKey(item);
-            S.messages = S.messages.filter(function (row) { return messageKey(row) !== key; });
+        }).then(function (data) {
+            item.deleted = true;
+            item.deleted_at = (data.deleted && data.deleted.deleted_at) || new Date().toISOString();
             renderMessages();
             closeModal("deleteModal");
             S.deleteTarget = null;
-            toast("消息已删除", "success");
+            toast("消息已删除，页面保留已删除标记", "success");
             track("admin_update", { page: "room_messenger", action: "delete_message" });
         }).catch(function (error) {
             if (looksLikeTokenError(error.message)) markTokenInvalid(error.message);

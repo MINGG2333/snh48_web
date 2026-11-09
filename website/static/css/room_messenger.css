@@ -502,6 +502,28 @@
 .rm-msg.is-gift .rm-bubble { background: rgba(255, 193, 7, 0.12); border-color: rgba(255, 193, 7, 0.22); }
 .rm-msg.is-voice .rm-bubble,
 .rm-msg.is-media .rm-bubble { font-style: italic; color: var(--text-dim); }
+.rm-msg.is-deleted .rm-msg-avatar { opacity: 0.35; }
+.rm-msg.is-deleted .rm-bubble {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    color: var(--text-dim);
+}
+.rm-deleted-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.74rem;
+    color: #fca5a5;
+    font-style: normal;
+}
+.rm-deleted-original {
+    margin-top: 5px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: line-through;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
 .rm-msg.is-self .rm-bubble a { color: #fff; text-decoration: underline; }
 .rm-reply-quote {
     margin-bottom: 6px;

@@ -291,6 +291,55 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertEqual(result.json()["binding"]["account_id"], "174063630")
         self.assertEqual(bridge.call_args.args[0], "messenger-switch")
 
+
+    def test_deleted_message_is_kept_as_tombstone_in_history(self) -> None:
+        self._login()
+        self._bind()
+        api._record_deleted(
+            "3001",
+            "1001",
+            {
+                "msg_id_client": "abc",
+                "msg_time": 1700000000000,
+                "sender_id": "3001",
+                "sender_name": "陈嘉仪",
+                "text": "原始内容",
+            },
+        )
+        with patch.object(api, "_run_bridge", return_value={"ok": True, "messages": [], "next_time": 0}):
+            data = self.client.get(
+                "/api/room-messenger/messages",
+                params={"channel_id": "1001", "server_id": "2001", "next_time": 0},
+            ).json()
+        self.assertEqual(len(data["messages"]), 1)
+        self.assertTrue(data["messages"][0]["deleted"])
+        self.assertEqual(data["messages"][0]["text"], "原始内容")
+
+    def test_delete_endpoint_records_tombstone_and_audit(self) -> None:
+        self._login()
+        self._bind()
+        with patch.object(api, "_run_bridge", return_value={"ok": True, "message": "OK"}):
+            response = self.client.post(
+                "/api/room-messenger/delete",
+                headers={"Origin": "http://testserver"},
+                json={
+                    "channel_id": "1001",
+                    "msg_id_client": "abc",
+                    "msg_time": 1700000000000,
+                    "sender_id": "3001",
+                    "sender_name": "陈嘉仪",
+                    "text": "原始内容",
+                    "confirm": api.DELETE_CONFIRM_WORD,
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        rows = api._deleted_rows("3001", "1001")
+        self.assertEqual(rows["abc"]["text"], "原始内容")
+        audit = (Path(self.root / "state") / "audit.jsonl").read_text(encoding="utf-8")
+        self.assertIn('"kind":"delete"', audit)
+        self.assertIn("原始内容", audit)
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}
