@@ -18,7 +18,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from fastapi import APIRouter, Body, Cookie, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Body, Cookie, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from website import config as cfg
@@ -46,6 +47,26 @@ SOURCE_LABELS = {"manual": "暗票", "weidian": "微店", "room": "房间", "liv
 DEFAULT_SCORING_METHODS = {"manual": "计分卡", "weidian": "鸡腿", "room": "计分卡", "live": "计分卡"}
 SCORING_SOURCE_LABELS = {"manual": "暗票", "weidian": "应援会", "room": "房间", "live": "直播"}
 SCORING_METHODS = ("计分卡", "鸡腿")
+EVIDENCE_DIR = Path(
+    getattr(
+        cfg,
+        "REDBLUE_SCORING_EVIDENCE_DIR",
+        Path(cfg.PROJECT_ROOT).parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_scoring_evidence",
+    )
+)
+EVIDENCE_MAX_BYTES = 8 * 1024 * 1024
+EVIDENCE_MIME_EXT = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+EVIDENCE_NAME_RE = re.compile(r"^[a-f0-9]{32}\.(?:jpg|png|gif|webp)$")
 DAILY_SCORING_CATEGORIES = (
     {"key": "room|计分卡", "label": "房间·计分卡", "source": "room", "method": "计分卡"},
     {"key": "room|鸡腿", "label": "房间·鸡腿", "source": "room", "method": "鸡腿"},
@@ -1419,6 +1440,11 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "scoring_method": scoring_method,
         "scoring_method_note": _clean(entry.get("scoring_method_note")),
         "scoring_method_overridden_at": _clean(entry.get("scoring_method_overridden_at"), 32),
+        "scoring_evidence": [
+            _clean(item, 80)
+            for item in (entry.get("scoring_evidence") if isinstance(entry.get("scoring_evidence"), list) else [])
+            if EVIDENCE_NAME_RE.fullmatch(_clean(item, 80))
+        ],
         "source_scoring_label": (
             f"{SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source))}·{scoring_method}"
             if scoring_method
@@ -1813,6 +1839,50 @@ def _mutator_override_scoring(doc: dict[str, Any], payload: dict[str, Any]):
         "method": method,
         "total_score": round(sum(_to_float(entry.get("score"), 0.0) for entry in matches), 4),
         "entry_ids": [_clean(entry.get("id"), 80) for entry in matches],
+    }
+
+
+def _mutator_set_scoring_method(doc: dict[str, Any], payload: dict[str, Any]):
+    raw_ids = payload.get("entry_ids")
+    if not isinstance(raw_ids, list):
+        raise ValueError("请选择要改判的条目")
+    entry_ids = {_clean(value, 80) for value in raw_ids if _clean(value, 80)}
+    if not entry_ids:
+        raise ValueError("请选择要改判的条目")
+    method = _clean(payload.get("method"), 10)
+    if method not in {"toggle", *SCORING_METHODS}:
+        raise ValueError("计分方式无效")
+    evidence = [
+        _clean(item, 80)
+        for item in (payload.get("evidence") if isinstance(payload.get("evidence"), list) else [])
+        if EVIDENCE_NAME_RE.fullmatch(_clean(item, 80))
+    ]
+    note = _clean(payload.get("note"), 200)
+    now = _now()
+    updated = 0
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict) or _clean(entry.get("id"), 80) not in entry_ids:
+            continue
+        current = _entry_scoring_method(entry)
+        target = ("鸡腿" if current == "计分卡" else "计分卡") if method == "toggle" else method
+        entry["scoring_method"] = target
+        if note:
+            entry["scoring_method_note"] = note
+        entry["scoring_method_overridden_at"] = now
+        existing = entry.get("scoring_evidence") if isinstance(entry.get("scoring_evidence"), list) else []
+        merged = [_clean(item, 80) for item in existing if EVIDENCE_NAME_RE.fullmatch(_clean(item, 80))]
+        for name in evidence:
+            if name not in merged:
+                merged.append(name)
+        entry["scoring_evidence"] = merged
+        entry["updated_at"] = now
+        updated += 1
+    if not updated:
+        raise ValueError("未找到条目")
+    return doc, {
+        "updated": updated,
+        "method": method,
+        "evidence": evidence,
     }
 
 
@@ -2342,6 +2412,7 @@ register_mutator(RESOURCE, "upsert_redemption", _mutator_upsert_redemption)
 register_mutator(RESOURCE, "delete_redemption", _mutator_delete_redemption)
 register_mutator(RESOURCE, "migrate_legacy_business", _mutator_migrate_legacy_business)
 register_mutator(RESOURCE, "override_scoring", _mutator_override_scoring)
+register_mutator(RESOURCE, "set_scoring_method", _mutator_set_scoring_method)
 
 
 def _build_room_live_items() -> list[dict[str, Any]]:
@@ -2745,6 +2816,46 @@ def preview_scoring_override(payload: dict[str, Any] = Body(...), _=Depends(veri
 @router.post("/scoring-overrides")
 def apply_scoring_override(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
     return _mutate("override_scoring", payload, request)
+
+
+@router.post("/entries/scoring-method")
+def set_entry_scoring_method(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    return _mutate("set_scoring_method", payload, request)
+
+
+@router.post("/scoring-evidence/upload")
+async def upload_scoring_evidence(
+    file: UploadFile = File(...),
+    _=Depends(verify_redblue_password),
+):
+    ext = EVIDENCE_MIME_EXT.get((file.content_type or "").lower())
+    if not ext:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="仅支持 JPG/PNG/GIF/WebP 图片")
+    content = await file.read(EVIDENCE_MAX_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="空文件")
+    if len(content) > EVIDENCE_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="图片不能超过 8MB")
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}{ext}"
+    (EVIDENCE_DIR / name).write_bytes(content)
+    return {"ok": True, "name": name}
+
+
+@router.get("/scoring-evidence/{filename}")
+def get_scoring_evidence(filename: str, _=Depends(verify_redblue_password)):
+    if not EVIDENCE_NAME_RE.fullmatch(filename):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="凭证不存在")
+    path = EVIDENCE_DIR / filename
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="凭证不存在")
+    media_type = {
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type)
 
 
 @router.post("/redemptions")

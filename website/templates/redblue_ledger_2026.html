@@ -235,6 +235,7 @@
         <button class="btn gold" id="aiResolveBtn">AI 识别未登记</button>
         <button class="btn" id="businessRedeemBtn">业务兑换</button>
         <button class="btn gold" id="scoringOverrideBtn">计分方式更正</button>
+        <button class="btn gold" id="batchScoringBtn">批量改判/凭证</button>
         <button class="btn" id="applySelectedAiBtn">应用选中 AI 建议</button>
         <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
         <button class="btn" id="duplicateSelectedBtn">标记重复</button>
@@ -336,8 +337,9 @@
   <div class="modal-backdrop" data-close="scoringOverrideModal"></div>
   <div class="modal-card wide">
     <h2>计分方式更正（鸡腿凭证）</h2>
-    <div class="sub">「弦月回响」默认按计分卡。管理员核对鸡腿消耗截图后，按昵称/ID + 时间窗（北京时间）把对应房间/直播条目改为鸡腿；请先预览匹配结果再提交。</div>
+    <div class="sub">「弦月回响」默认按计分卡。管理员核对鸡腿消耗截图后，按昵称/ID + 时间窗（北京时间）把对应房间/直播条目改为鸡腿；也可以直接多选条目批量改判。请先预览匹配结果再提交。</div>
     <div class="form-grid">
+      <div class="field" id="overrideSelectedWrap" style="display:none;"><label>已选条目</label><div class="notice" id="overrideSelectedHint"></div></div>
       <div class="field"><label>口袋48昵称</label><input id="overrideName" placeholder="粉丝昵称"></div>
       <div class="field"><label>口袋48 ID</label><input id="overrideId" placeholder="可选；填了会同时校验"></div>
       <div class="field"><label>礼物名</label><input id="overrideGiftName" value="弦月回响"></div>
@@ -345,6 +347,7 @@
       <div class="field"><label>结束时间</label><input id="overrideEnd" type="datetime-local"></div>
       <div class="field"><label>改为</label><select id="overrideMethod"><option value="鸡腿">鸡腿</option><option value="计分卡">计分卡</option></select></div>
       <div class="field full"><label>凭证/备注</label><textarea id="overrideNote" placeholder="例如：群管理已核对鸡腿消耗截图，350 鸡腿 × 3"></textarea></div>
+      <div class="field full"><label>凭证截图（可多选）</label><input id="overrideFiles" type="file" multiple accept="image/*"><div class="notice" id="overrideFileHint">支持 JPG/PNG/GIF/WebP，单张不超过 8MB；可一次选多张。</div></div>
     </div>
     <div class="notice" id="overridePreviewHint">填写昵称/ID 和时间窗后点“预览匹配”。</div>
     <div class="table-wrap" id="overridePreviewWrap" style="display:none; max-height:260px; overflow:auto;">
@@ -358,6 +361,16 @@
       <button class="btn" id="previewOverrideBtn">预览匹配</button>
       <button class="btn primary" id="submitOverrideBtn" disabled>提交改判</button>
     </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="evidenceModal">
+  <div class="modal-backdrop" data-close="evidenceModal"></div>
+  <div class="modal-card wide">
+    <h2>凭证截图</h2>
+    <div class="sub" id="evidenceModalSub"></div>
+    <div id="evidenceGallery" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+    <div class="modal-actions"><button class="btn" data-close="evidenceModal">关闭</button></div>
   </div>
 </div>
 
@@ -1184,6 +1197,9 @@
       var aiBtn = ai ? '<button class="btn mini gold" data-ai-apply="' + esc(entry.id) + '">应用AI</button>' : "";
       var shipBtn = (entry.source === "weidian" && !entry.settled && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
       var overrideBtn = (entry.source === "room" || entry.source === "live") ? '<button class="btn mini gold" data-override="' + esc(entry.id) + '">改判</button>' : "";
+      var toggleScoringBtn = (entry.source === "room" || entry.source === "live") ? '<button class="btn mini" data-toggle-scoring="' + esc(entry.id) + '">' + (entry.scoring_method === "鸡腿" ? "切计分卡" : "切鸡腿") + '</button>' : "";
+      var evidenceCount = (entry.scoring_evidence || []).length;
+      var evidenceBtn = evidenceCount ? '<button class="btn mini" data-evidence="' + esc(entry.id) + '">凭证 ' + evidenceCount + '</button>' : "";
       var scoring = entry.scoring_method || "";
       var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
       var scoringNote = entry.scoring_method_note ? '<div class="notice">改判：' + esc(entry.scoring_method_note) + '</div>' : "";
@@ -1200,7 +1216,7 @@
         '<td>' + businessCell + '</td>' +
         '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
         '<td><div class="actions">' +
-          '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + overrideBtn + aiBtn + shipBtn +
+          '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + overrideBtn + toggleScoringBtn + evidenceBtn + aiBtn + shipBtn +
           '<button class="btn mini" data-dup="' + esc(entry.id) + '">' + (entry.duplicate ? "取消重复" : "重复") + '</button>' +
           '<button class="btn mini danger" data-delete="' + esc(entry.id) + '">删除</button>' +
         '</div></td>' +
@@ -1210,6 +1226,7 @@
   }
 
   var scoringOverridePreview = null;
+  var scoringOverrideSelected = null;
 
   function overrideDateTime(id) {
     var value = $(id).value || "";
@@ -1233,6 +1250,7 @@
 
   function resetScoringOverride() {
     scoringOverridePreview = null;
+    scoringOverrideSelected = null;
     $("overrideName").value = "";
     $("overrideId").value = "";
     $("overrideGiftName").value = "弦月回响";
@@ -1240,10 +1258,70 @@
     $("overrideEnd").value = "";
     $("overrideMethod").value = "鸡腿";
     $("overrideNote").value = "";
+    $("overrideFiles").value = "";
+    $("overrideFileHint").textContent = "支持 JPG/PNG/GIF/WebP，单张不超过 8MB；可一次选多张。";
+    $("overrideSelectedWrap").style.display = "none";
+    $("overrideSelectedHint").textContent = "";
+    ["overrideName", "overrideId", "overrideGiftName", "overrideStart", "overrideEnd"].forEach(function (id) {
+      var field = $(id).closest(".field");
+      if (field) field.style.display = "";
+    });
+    $("previewOverrideBtn").style.display = "";
     $("overridePreviewHint").textContent = "填写昵称/ID 和时间窗后点“预览匹配”。";
     $("overridePreviewWrap").style.display = "none";
     $("overridePreviewBody").innerHTML = "";
     $("submitOverrideBtn").disabled = true;
+  }
+
+  function openBatchScoringModal() {
+    var ids = Array.from(selected);
+    if (!ids.length) { showToast("请先勾选要改判的条目", true); return; }
+    resetScoringOverride();
+    scoringOverrideSelected = ids;
+    ["overrideName", "overrideId", "overrideGiftName", "overrideStart", "overrideEnd"].forEach(function (id) {
+      var field = $(id).closest(".field");
+      if (field) field.style.display = "none";
+    });
+    $("overrideSelectedWrap").style.display = "";
+    $("overrideSelectedHint").textContent = "已选 " + ids.length + " 条；提交后直接按下方计分方式改判。";
+    $("previewOverrideBtn").style.display = "none";
+    $("overridePreviewHint").textContent = "批量模式：已选 " + ids.length + " 条，选择目标计分方式并上传凭证后提交。";
+    $("submitOverrideBtn").disabled = false;
+    $("scoringOverrideModal").classList.remove("hidden");
+  }
+
+  function openEvidenceModal(entry) {
+    var names = entry.scoring_evidence || [];
+    $("evidenceModalSub").textContent = (entry.raw_name || entry.fan_name || "未登记") + " · " + (entry.source_time || "");
+    $("evidenceGallery").innerHTML = names.length ? names.map(function (name) {
+      var url = "/api/redblue/scoring-evidence/" + encodeURIComponent(name);
+      return '<a href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="凭证" style="max-width:260px;max-height:260px;border-radius:8px;border:1px solid #ddd;"></a>';
+    }).join("") : '<div class="notice">暂无凭证</div>';
+    $("evidenceModal").classList.remove("hidden");
+  }
+
+  async function uploadOverrideFiles() {
+    var input = $("overrideFiles");
+    var files = input.files || [];
+    var names = [];
+    for (var index = 0; index < files.length; index += 1) {
+      var form = new FormData();
+      form.append("file", files[index]);
+      var result = await api("/api/redblue/scoring-evidence/upload", {method: "POST", body: form});
+      if (result.name) names.push(result.name);
+    }
+    return names;
+  }
+
+  async function toggleScoringMethod(entryId) {
+    try {
+      await api("/api/redblue/entries/scoring-method", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({entry_ids: [entryId], method: "toggle"})
+      });
+      await loadData(true);
+    } catch (error) { showToast(error.message || "切换失败", true); }
   }
 
   function openScoringOverrideModal(entry) {
@@ -1305,24 +1383,38 @@
   }
 
   function submitScoringOverride() {
-    if (!scoringOverridePreview || !scoringOverridePreview.matched) {
-      showToast("请先预览匹配条目", true);
-      return;
+    var ids = [];
+    var totalScore = 0;
+    if (scoringOverrideSelected) {
+      ids = scoringOverrideSelected.slice();
+      (data.entries || []).forEach(function (entry) {
+        if (ids.indexOf(entry.id) >= 0) totalScore += Number(entry.score || 0);
+      });
+    } else {
+      if (!scoringOverridePreview || !scoringOverridePreview.matched) {
+        showToast("请先预览匹配条目", true);
+        return;
+      }
+      ids = (scoringOverridePreview.entries || []).map(function (item) { return item.id; });
+      totalScore = Number(scoringOverridePreview.total_score || 0);
     }
-    var payload = scoringOverridePayload();
+    if (!ids.length) { showToast("没有可改判的条目", true); return; }
+    var method = $("overrideMethod").value;
+    var note = $("overrideNote").value.trim();
     openConfirm(
       "提交计分方式改判",
-      "将匹配的 " + scoringOverridePreview.matched + " 条（共 " + score(scoringOverridePreview.total_score) + " 分）改为「" + payload.method + "」，确认？",
+      "将 " + ids.length + " 条" + (totalScore ? "（共 " + score(totalScore) + " 分）" : "") + "改为「" + method + "」，确认？",
       async function () {
         try {
-          var result = await api("/api/redblue/scoring-overrides", {
+          var evidence = await uploadOverrideFiles();
+          var result = await api("/api/redblue/entries/scoring-method", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(payload)
+            body: JSON.stringify({entry_ids: ids, method: method, note: note, evidence: evidence})
           });
           var r = result.result || {};
           $("scoringOverrideModal").classList.add("hidden");
-          showToast("已改判 " + (r.updated || 0) + " 条为「" + (r.method || payload.method) + "」");
+          showToast("已改判 " + (r.updated || 0) + " 条为「" + method + "」" + (evidence.length ? "，凭证 " + evidence.length + " 张" : ""));
           await loadData(true);
         } catch (error) {
           showToast(error.message || "改判失败", true);
@@ -2497,6 +2589,7 @@
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
     $("scoringOverrideBtn").addEventListener("click", function () { openScoringOverrideModal(null); });
+    $("batchScoringBtn").addEventListener("click", openBatchScoringModal);
     $("previewOverrideBtn").addEventListener("click", previewScoringOverride);
     $("submitOverrideBtn").addEventListener("click", submitScoringOverride);
     $("redemptionFan").addEventListener("change", function () {
@@ -2602,6 +2695,14 @@
       if (override) {
         var overrideEntry = (data.entries || []).find(function (row) { return row.id === override.getAttribute("data-override"); });
         if (overrideEntry) openScoringOverrideModal(overrideEntry);
+        return;
+      }
+      var toggleScoring = event.target.closest("[data-toggle-scoring]");
+      if (toggleScoring) { toggleScoringMethod(toggleScoring.getAttribute("data-toggle-scoring")); return; }
+      var evidence = event.target.closest("[data-evidence]");
+      if (evidence) {
+        var evidenceEntry = (data.entries || []).find(function (row) { return row.id === evidence.getAttribute("data-evidence"); });
+        if (evidenceEntry) openEvidenceModal(evidenceEntry);
         return;
       }
       var edit = event.target.closest("[data-edit]");

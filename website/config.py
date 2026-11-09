@@ -730,3 +730,8 @@ if not SITE_POLICE_ICP_CODE and SITE_POLICE_ICP:
     match = re.search(r"(\d+)", SITE_POLICE_ICP)
     if match:
         SITE_POLICE_ICP_CODE = match.group(1)
+
+REDBLUE_SCORING_EVIDENCE_DIR = os.getenv(
+    "REDBLUE_SCORING_EVIDENCE_DIR",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "private_handover" / "web_state" / "redblue_scoring_evidence"),
+)

@@ -1033,6 +1033,49 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(methods["room-card"], "鸡腿")
         self.assertEqual(methods["room-same-name-leg"], "鸡腿")
 
+    def test_set_scoring_method_toggle_and_evidence(self):
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        room_id = next(entry["id"] for entry in data["entries"] if entry["source"] == "room")
+
+        toggled = self.client.post(
+            "/api/redblue/entries/scoring-method",
+            headers=self.headers,
+            json={"entry_ids": [room_id], "method": "toggle"},
+        )
+        self.assertEqual(toggled.status_code, 200, toggled.text)
+        self.assertEqual(toggled.json()["result"]["updated"], 1)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        room = next(entry for entry in data["entries"] if entry["id"] == room_id)
+        self.assertEqual(room["scoring_method"], "鸡腿")
+
+        with mock.patch.object(api, "EVIDENCE_DIR", self.tmp / "evidence"):
+            upload = self.client.post(
+                "/api/redblue/scoring-evidence/upload",
+                headers=self.headers,
+                files={"file": ("proof.png", b"\x89PNG\r\n\x1a\nproof", "image/png")},
+            )
+            self.assertEqual(upload.status_code, 200, upload.text)
+            name = upload.json()["name"]
+            attached = self.client.post(
+                "/api/redblue/entries/scoring-method",
+                headers=self.headers,
+                json={
+                    "entry_ids": [room_id],
+                    "method": "鸡腿",
+                    "note": "群管理已核对鸡腿消耗截图",
+                    "evidence": [name],
+                },
+            )
+            self.assertEqual(attached.status_code, 200, attached.text)
+            data = self.client.get("/api/redblue/data", headers=self.headers).json()
+            room = next(entry for entry in data["entries"] if entry["id"] == room_id)
+            self.assertEqual(room["scoring_method_note"], "群管理已核对鸡腿消耗截图")
+            self.assertEqual(room["scoring_evidence"], [name])
+            image = self.client.get(f"/api/redblue/scoring-evidence/{name}", headers=self.headers)
+            self.assertEqual(image.status_code, 200)
+            self.assertEqual(image.headers["content-type"], "image/png")
+
     def test_scoring_override_preview_and_apply(self):
         (self.tmp / "score.json").write_text(
             json.dumps(
