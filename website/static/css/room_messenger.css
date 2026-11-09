@@ -377,6 +377,8 @@
     overflow-y: auto;
     padding: 20px clamp(14px, 4vw, 52px) 16px;
     scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
 }
 .rm-chat::-webkit-scrollbar { width: 6px; }
 .rm-chat::-webkit-scrollbar-thumb { background: rgba(255, 107, 157, 0.5); border-radius: 3px; }
@@ -405,7 +407,7 @@
 .rm-chat-empty h3 { color: var(--text); font-size: 1.05rem; }
 .rm-chat-empty p { font-size: 0.82rem; max-width: 420px; }
 
-.rm-messages { display: flex; flex-direction: column; gap: 4px; }
+.rm-messages { display: flex; flex-direction: column; gap: 4px; margin-top: auto; flex-shrink: 0; }
 
 .rm-day-separator {
     display: flex;

@@ -923,6 +923,9 @@
         $("intervalField").hidden = !batch;
         $("jitterField").hidden = !batch;
         $("dailyHint").hidden = mode !== "daily";
+        $("jobConfirmText").textContent = batch
+            ? "我已确认目标频道、消息内容和发送间隔"
+            : "我已确认目标频道和消息内容";
         $("schedulePreview").textContent = "";
     }
 
