@@ -1405,12 +1405,15 @@ class JobRequest(BaseModel):
 async def list_jobs(response: Response, account_id: str = "", _=Depends(require_auth)):
     _no_store(response)
     jobs = _load_jobs()
-    rows = list(jobs.values())
-    if account_id:
-        rows = [row for row in rows if str(row.get("account_id")) == account_id]
-    rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
     binding = _binding()
     binding_id = str(binding.get("account_id") or "")
+    # 发送计划只展示当前绑定账号；显式 account_id 仅供页面筛选使用。
+    target_account = str(account_id or binding_id or "")
+    rows = [
+        row for row in jobs.values()
+        if target_account and str(row.get("account_id")) == target_account
+    ]
+    rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
     return {
         "jobs": [_job_public(row) for row in rows],
         "limits": _limits_payload(),

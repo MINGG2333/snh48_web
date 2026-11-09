@@ -251,7 +251,6 @@
         updateComposerState();
         loadAccount();
         loadRecent();
-        loadJobs();
         if (S.tab === "catalog") loadCatalog(true);
         startJobsPolling();
     }
@@ -269,6 +268,8 @@
             renderAccountList();
             renderSwitchAccounts();
             updateComposerState();
+            renderQueueAccount();
+            loadJobs();
             if (S.binding.account_id) probeAccount(true);
             if (S.channel && !S.messages.length) {
                 initialLoad();
@@ -546,6 +547,8 @@
             S.binding = {};
             renderAccount();
             updateComposerState();
+            renderQueueAccount();
+            loadJobs();
             toast("已解除页面绑定，账号仍保留在账号库", "success");
             track("admin_update", { page: "room_messenger", action: "unbind_account" });
         }).catch(function (error) { toast(error.message, "error"); });
@@ -1520,7 +1523,16 @@
     }
 
     function loadJobs() {
-        return api("/jobs").then(function (data) {
+        var accountId = (S.binding || {}).account_id || "";
+        if (!accountId) {
+            S.jobs = [];
+            renderJobs();
+            updateQueueBadge();
+            renderQueueAccount();
+            checkJobAlerts();
+            return Promise.resolve();
+        }
+        return api("/jobs?account_id=" + encodeURIComponent(accountId)).then(function (data) {
             S.jobs = Array.isArray(data.jobs) ? data.jobs : [];
             if (data.limits) S.limits = data.limits;
             if (typeof data.daily_sent === "number") {
@@ -1531,6 +1543,15 @@
             updateQueueBadge();
             checkJobAlerts();
         }).catch(function () { /* quiet */ });
+    }
+
+    function renderQueueAccount() {
+        var binding = S.binding || {};
+        var accountId = binding.account_id || "";
+        var name = binding.nickname || accountId;
+        $("queueAccountLabel").textContent = accountId
+            ? ("当前账号：" + name + "（" + accountId + "）")
+            : "当前账号：未绑定";
     }
 
     function updateQueueBadge() {

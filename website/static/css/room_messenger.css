@@ -851,6 +851,14 @@ a { color: var(--primary); }
 }
 .rm-queue-head h3 { font-size: 0.95rem; }
 .rm-queue-head i { color: var(--primary); margin-right: 4px; }
+.rm-queue-account {
+    padding: 8px 16px 0;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .rm-queue-tabs {
     display: flex;
     gap: 6px;

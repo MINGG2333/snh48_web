@@ -656,6 +656,33 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertFalse(api._looks_rate_limited("订阅频道失败"))
 
 
+
+    def test_jobs_list_only_current_bound_account(self) -> None:
+        self._login()
+        self._bind()
+        base_job = {
+            "channel": {"channel_id": "1001", "server_id": "2001"},
+            "mode": "once",
+            "repeat_daily": False,
+            "messages": [{"text": "x", "status": "pending", "sent_at": "", "error": ""}],
+            "interval_seconds": 60,
+            "jitter_seconds": 0,
+            "next_run_at": 0,
+            "created_at": "2026-01-01T00:00:00+08:00",
+            "updated_at": "2026-01-01T00:00:00+08:00",
+            "status": "scheduled",
+            "last_error": "",
+        }
+        api._save_jobs(
+            {
+                "a" * 32: {**base_job, "id": "a" * 32, "account_id": "3001"},
+                "b" * 32: {**base_job, "id": "b" * 32, "account_id": "9999"},
+            }
+        )
+        rows = self.client.get("/api/room-messenger/jobs").json()["jobs"]
+        self.assertEqual([row["account_id"] for row in rows], ["3001"])
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}
