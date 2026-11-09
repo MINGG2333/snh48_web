@@ -40,6 +40,8 @@
         openMemberId: "",
         jobs: [],
         jobsOpen: false,
+        queueTab: "jobs",
+        sentLog: [],
         scheduleMode: "once",
         pollTimer: null,
         jobsTimer: null,
@@ -116,6 +118,14 @@
         if (isNaN(date.getTime())) return "";
         return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0") +
             " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
+    }
+
+    function formatIso(value) {
+        if (!value) return "";
+        var date = new Date(value);
+        if (isNaN(date.getTime())) return String(value);
+        return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0") +
+            " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0") + ":" + String(date.getSeconds()).padStart(2, "0");
     }
 
     function localInputValue(date) {
@@ -998,6 +1008,7 @@
             closeModal("sendModal");
             toast("消息已发送", "success");
             track("admin_update", { page: "room_messenger", action: "send_now", result: "success" });
+            loadSentLog();
             setTimeout(pollMessages, 900);
         }).catch(function (error) {
             if (looksLikeTokenError(error.message)) markTokenInvalid(error.message);
@@ -1227,6 +1238,48 @@
         cancelled: "已取消"
     };
 
+    function setQueueTab(tab) {
+        S.queueTab = tab;
+        Array.prototype.forEach.call(document.querySelectorAll(".rm-queue-tab"), function (button) {
+            button.classList.toggle("is-active", button.dataset.qtab === tab);
+        });
+        $("jobList").hidden = tab !== "jobs";
+        $("sentLogList").hidden = tab !== "log";
+        if (tab === "log") loadSentLog();
+    }
+
+    function loadSentLog() {
+        return api("/sent-log?limit=80").then(function (data) {
+            S.sentLog = Array.isArray(data.entries) ? data.entries : [];
+            renderSentLog();
+        }).catch(function (error) {
+            if (S.verified) toast(error.message || "读取发送记录失败", "error");
+        });
+    }
+
+    function renderSentLog() {
+        var wrap = $("sentLogList");
+        if (!S.sentLog.length) {
+            wrap.innerHTML = '<div class="rm-empty-small">暂无发送记录</div>';
+            return;
+        }
+        wrap.innerHTML = "";
+        S.sentLog.forEach(function (entry) {
+            var card = document.createElement("div");
+            card.className = "rm-sent-card" + (entry.status === "failed" ? " is-failed" : "");
+            var channel = [entry.member_name, entry.room_label].filter(Boolean).join(" · ") || ("频道 " + (entry.channel_id || ""));
+            var source = entry.source === "job" ? "定时/批量" : "即时";
+            var status = entry.status === "sent" ? "已发送" : "发送失败";
+            card.innerHTML =
+                '<div class="rm-sent-top"><span class="rm-sent-channel">' + escapeHtml(channel) + '</span>' +
+                '<span class="rm-sent-time">' + escapeHtml(formatIso(entry.at)) + '</span></div>' +
+                '<div class="rm-sent-meta"><span>' + escapeHtml(source) + '</span><span>·</span><span>' +
+                escapeHtml(status) + '</span>' + (entry.error ? '<span>·</span><span>' + escapeHtml(entry.error) + '</span>' : "") + '</div>' +
+                '<div class="rm-sent-text">' + escapeHtml(entry.text || "") + '</div>';
+            wrap.appendChild(card);
+        });
+    }
+
     function loadJobs() {
         return api("/jobs").then(function (data) {
             S.jobs = Array.isArray(data.jobs) ? data.jobs : [];
@@ -1362,6 +1415,7 @@
         S.jobsOpen = true;
         $("queuePanel").hidden = false;
         loadJobs();
+        setQueueTab(S.queueTab || "jobs");
     }
 
     function closeQueue() {
@@ -1415,6 +1469,9 @@
         });
         $("queueBtn").addEventListener("click", openQueue);
         $("queueClose").addEventListener("click", closeQueue);
+        Array.prototype.forEach.call(document.querySelectorAll(".rm-queue-tab"), function (button) {
+            button.addEventListener("click", function () { setQueueTab(button.dataset.qtab); });
+        });
         $("jumpLatest").addEventListener("click", function () { scrollToBottom(true); });
 
         $("chat").addEventListener("scroll", function () {

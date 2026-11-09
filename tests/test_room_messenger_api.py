@@ -340,6 +340,72 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertIn("原始内容", audit)
 
 
+
+    def test_manual_send_logs_full_text_and_returns_it(self) -> None:
+        self._login()
+        self._bind()
+        text = "这是一条超过四十个字符的完整测试消息，用来确认发送日志保存的是完整文本而不是预览。" * 2
+        with patch.object(
+            api,
+            "_run_bridge",
+            return_value={"ok": True, "results": [{"ok": True, "msg_id_server": "9"}]},
+        ):
+            response = self.client.post(
+                "/api/room-messenger/send",
+                headers={"Origin": "http://testserver"},
+                json={
+                    "channel_id": "1001",
+                    "server_id": "2001",
+                    "text": text,
+                    "confirm": api.SEND_CONFIRM_WORD,
+                    "channel": {"member_name": "陈嘉仪", "room_label": "公开房间"},
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        log = self.client.get("/api/room-messenger/sent-log").json()["entries"]
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["text"], text)
+        self.assertEqual(log[0]["status"], "sent")
+        self.assertEqual(log[0]["member_name"], "陈嘉仪")
+
+    def test_job_send_logs_full_text(self) -> None:
+        self._bind()
+        job_id = "b" * 32
+        text = "批量任务里的完整消息文本"
+        api._save_jobs(
+            {
+                job_id: {
+                    "id": job_id,
+                    "account_id": "3001",
+                    "channel": {
+                        "channel_id": "1001",
+                        "server_id": "2001",
+                        "member_name": "陈嘉仪",
+                        "room_label": "公开房间",
+                    },
+                    "mode": "once",
+                    "repeat_daily": False,
+                    "messages": [{"text": text, "status": "pending", "sent_at": "", "error": ""}],
+                    "interval_seconds": 15,
+                    "jitter_seconds": 0,
+                    "next_run_at": 0,
+                    "created_at": "2026-01-01T00:00:00+08:00",
+                    "updated_at": "2026-01-01T00:00:00+08:00",
+                    "status": "running",
+                    "last_error": "",
+                    "last_sent_at": 0,
+                }
+            }
+        )
+        with patch.object(api, "_run_bridge", return_value={"ok": True, "results": [{"ok": True}]}):
+            api._run_job(job_id)
+        entries = api._read_sent_log(10, "3001")
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["text"], text)
+        self.assertEqual(entries[0]["source"], "job")
+        self.assertEqual(entries[0]["status"], "sent")
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}

@@ -9,6 +9,7 @@ account database.  Scheduled jobs and audit state live in
 
 from __future__ import annotations
 
+import collections
 import hashlib
 import hmac
 import json
@@ -43,6 +44,7 @@ MAX_TEXT_LENGTH = 1000
 MAX_CATALOG_PAGE = 100
 MAX_RECENT_CHANNELS = 30
 MAX_JOB_HISTORY = 100
+SENT_LOG_MAX_BYTES = 20 * 1024 * 1024
 BRIDGE_TIMEOUT_SECONDS = 400
 ACCOUNT_ID_RE = re.compile(r"^\d{1,32}$")
 CHANNEL_ID_RE = re.compile(r"^\d{1,32}$")
@@ -972,6 +974,50 @@ def _append_audit(entry: dict[str, Any]) -> None:
         logger.warning("room messenger audit write failed", exc_info=False)
 
 
+def _sent_log_path() -> Path:
+    return _state_path("sent.jsonl")
+
+
+def _append_sent(entry: dict[str, Any]) -> None:
+    path = _sent_log_path()
+    try:
+        if path.exists() and path.stat().st_size > SENT_LOG_MAX_BYTES:
+            backup = path.with_suffix(path.suffix + ".1")
+            os.replace(path, backup)
+            os.chmod(backup, 0o600)
+        line = json.dumps(entry, ensure_ascii=False, separators=(",", ":"))
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(path, 0o600)
+    except OSError:
+        logger.warning("room messenger sent-log write failed", exc_info=False)
+
+
+def _read_sent_log(limit: int = 50, account_id: str = "") -> list[dict[str, Any]]:
+    path = _sent_log_path()
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            rows = collections.deque(handle, maxlen=max(50, limit * 4))
+    except OSError:
+        return []
+    result = []
+    for line in reversed(rows):
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(item, dict):
+            continue
+        if account_id and str(item.get("account_id")) != account_id:
+            continue
+        result.append(item)
+        if len(result) >= limit:
+            break
+    return result
+
+
 @router.post("/send")
 def send_now(payload: SendRequest, request: Request, response: Response, _=Depends(require_auth)):
     _same_origin(request)
@@ -1040,6 +1086,23 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
             "text_length": len(text),
             "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16],
             "preview": _message_preview(text, 40),
+        }
+    )
+    channel_meta = payload.channel if isinstance(payload.channel, dict) else {}
+    _append_sent(
+        {
+            "at": _now_iso(),
+            "source": "manual",
+            "account_id": account_id,
+            "channel_id": payload.channel_id,
+            "member_name": str(channel_meta.get("member_name") or ""),
+            "room_label": str(channel_meta.get("room_label") or ""),
+            "msg_id_client": msg_id,
+            "msg_id_server": str(result.get("msg_id_server") or ""),
+            "text": text,
+            "text_length": len(text),
+            "status": "sent" if ok else "failed",
+            "error": error,
         }
     )
     if ok and payload.channel:
@@ -1237,6 +1300,21 @@ async def list_jobs(response: Response, account_id: str = "", _=Depends(require_
         "jobs": [_job_public(row) for row in rows],
         "limits": _limits_payload(),
         "daily_sent": _daily_sent(binding_id) if binding_id else 0,
+    }
+
+
+@router.get("/sent-log")
+async def sent_log(
+    response: Response,
+    limit: int = Query(50, ge=1, le=200),
+    account_id: str = "",
+    _=Depends(require_auth),
+):
+    _no_store(response)
+    resolved = _resolve_account_id(account_id)
+    return {
+        "account_id": resolved,
+        "entries": _read_sent_log(limit, resolved),
     }
 
 
@@ -1551,6 +1629,40 @@ def _run_job(job_id: str) -> None:
             job["status"] = job.get("status") or "running"
             jobs[job_id] = job
             _save_jobs(jobs)
+            for offset, (index, _item) in enumerate(chunk):
+                result = results[offset] if 0 <= offset < len(results) else {}
+                target = current[index] if 0 <= index < len(current) and isinstance(current[index], dict) else {}
+                _append_sent(
+                    {
+                        "at": _now_iso(),
+                        "source": "job",
+                        "job_id": job_id,
+                        "account_id": account_id,
+                        "channel_id": str(channel.get("channel_id") or ""),
+                        "member_name": str(channel.get("member_name") or ""),
+                        "room_label": str(channel.get("room_label") or ""),
+                        "msg_id_client": str(
+                            target.get("msg_id_client")
+                            or (chunk_payload[offset].get("msg_id_client") if offset < len(chunk_payload) else "")
+                            or ""
+                        ),
+                        "msg_id_server": str(result.get("msg_id_server") or ""),
+                        "text": str(
+                            target.get("text")
+                            or (chunk_payload[offset].get("text") if offset < len(chunk_payload) else "")
+                            or ""
+                        ),
+                        "text_length": len(
+                            str(
+                                target.get("text")
+                                or (chunk_payload[offset].get("text") if offset < len(chunk_payload) else "")
+                                or ""
+                            )
+                        ),
+                        "status": "sent" if bool(result.get("ok")) else "failed",
+                        "error": "" if bool(result.get("ok")) else _safe_error(result.get("error"), "发送失败"),
+                    }
+                )
             if sent_count:
                 _add_daily_sent(account_id, sent_count)
                 _append_audit(

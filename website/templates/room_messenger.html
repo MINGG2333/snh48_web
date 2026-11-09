@@ -118,8 +118,13 @@
             <h3><i class="fas fa-list-check"></i> 发送计划</h3>
             <button id="queueClose" class="rm-icon-btn" type="button" aria-label="关闭"><i class="fas fa-xmark"></i></button>
         </div>
+        <div class="rm-queue-tabs">
+            <button class="rm-queue-tab is-active" data-qtab="jobs" type="button">发送计划</button>
+            <button class="rm-queue-tab" data-qtab="log" type="button">发送记录</button>
+        </div>
         <div class="rm-queue-hint">定时、批量与每日任务都在服务器执行；关闭页面不会中断。暂停在当前一批发送结束后生效。</div>
         <div id="jobList" class="rm-job-list"><div class="rm-empty-small">暂无发送计划</div></div>
+        <div id="sentLogList" class="rm-job-list" hidden><div class="rm-empty-small">暂无发送记录</div></div>
     </aside>
 </div>
 

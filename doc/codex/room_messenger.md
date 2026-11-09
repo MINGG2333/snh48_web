@@ -100,8 +100,9 @@ scripts/web/room_messenger_qchat.js
 - 页面不保存密码到 `localStorage`/`sessionStorage`；密码不进 URL。
 - 登录短信沿用 fan-hub 的每手机号/全局小时限速；页面密码失败使用独立限速组。
 - 发送文本长度 1–1000 字；桥与网页双重校验。
-- 审核日志：`/var/lib/snh48-web/room_messenger/audit.jsonl`（0600），只记账号、频道、
-  长度、短摘要、SHA256 前缀和结果，不记完整消息正文以外的敏感信息。
+- 审核日志：`/var/lib/snh48-web/room_messenger/audit.jsonl`（0600），记录账号、频道、长度、短摘要、SHA256 前缀和结果。
+- 完整发送记录：`/var/lib/snh48-web/room_messenger/sent.jsonl`（0600，超过 20MB 轮转为 `.1`），每条记录包含完整 `text`、来源 `manual/job`、账号、频道、消息 ID、状态和错误；页面“发送计划 → 发送记录”可查看最近 80 条。
+- 删除墓碑：`/var/lib/snh48-web/room_messenger/deleted.json`（0600），保存被删除消息的完整原文、消息 ID、时间和删除时间；历史接口会把墓碑合并为“此消息已删除”。
 - 个人号 Token 会随 `config/accounts.json` 的 `hub` 组同步到阿里云（既有策略）；
   阿里云页面禁用，不会使用该 Token 发送。
 
