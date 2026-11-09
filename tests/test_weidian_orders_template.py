@@ -46,6 +46,7 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
             'id="shipSelectedBtn"',
             'data-select=',
             "selectedOrders",
+            "reloadQueued",
             "WEIDIAN_BULK_SHIP_PURE_START",
             "WEIDIAN_BULK_SHIP_PURE_END",
             "function isSelectable",

@@ -153,6 +153,7 @@
     { label: "退款/售后", items: [["refunding", "退款中（退款处理中）"], ["refunded_only", "已退款（钱已退回买家）"]] }
   ];
   var loading = false;
+  var reloadQueued = false;
 
   function $(id) { return document.getElementById(id); }
   var page = $("page"), loginOverlay = $("loginOverlay"), loginError = $("loginError");
@@ -228,7 +229,7 @@
   }
 
   async function loadData() {
-    if (loading) return;
+    if (loading) { reloadQueued = true; return false; }
     loading = true;
     setStatus("加载中…");
     try {
@@ -252,6 +253,10 @@
       return false;
     } finally {
       loading = false;
+      if (reloadQueued) {
+        reloadQueued = false;
+        setTimeout(function () { loadData(); }, 0);
+      }
     }
   }
 
