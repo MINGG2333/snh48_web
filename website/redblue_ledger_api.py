@@ -1417,6 +1417,8 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "source": source,
         "source_label": SOURCE_LABELS.get(source, source),
         "scoring_method": scoring_method,
+        "scoring_method_note": _clean(entry.get("scoring_method_note")),
+        "scoring_method_overridden_at": _clean(entry.get("scoring_method_overridden_at"), 32),
         "source_scoring_label": (
             f"{SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source))}·{scoring_method}"
             if scoring_method
@@ -1737,6 +1739,81 @@ def _load_filtered(
 
 
 # ── Mutators ────────────────────────────────────────────────────────────
+
+
+def _norm_override_time(value: Any) -> str:
+    text = _clean(value, 32).replace("T", " ")
+    if len(text) == 16:
+        text += ":00"
+    return text
+
+
+def _scoring_override_matches(
+    doc: dict[str, Any],
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """按昵称/ID + 时间窗 + 礼物名找房间/直播条目，用于鸡腿凭证改判。"""
+    name = _clean(payload.get("name"), 120)
+    fan_id = _clean(payload.get("fan_id") or payload.get("id"), 32)
+    gift_name = _clean(payload.get("gift_name"), 160) or "弦月回响"
+    start = _norm_override_time(payload.get("start"))
+    end = _norm_override_time(payload.get("end"))
+    method = _clean(payload.get("method"), 10)
+    if not name and not fan_id:
+        raise ValueError("请填写口袋48昵称或 ID")
+    if method not in SCORING_METHODS:
+        raise ValueError("计分方式无效")
+    matches: list[dict[str, Any]] = []
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        if _clean(entry.get("source"), 20) not in {"room", "live"}:
+            continue
+        note = _clean(entry.get("note"))
+        if gift_name and gift_name not in note:
+            continue
+        names = {
+            _clean(entry.get("raw_name"), 120),
+            _clean(entry.get("fan_name"), 120),
+        }
+        ids = {
+            _clean(entry.get("raw_id"), 32),
+            _clean(entry.get("fan_id"), 32),
+        }
+        if name and name not in names:
+            continue
+        if fan_id and fan_id not in ids:
+            continue
+        source_time = _clean(entry.get("source_time"), 32)
+        if start and source_time < start:
+            continue
+        if end and source_time > end:
+            continue
+        matches.append(entry)
+    return matches
+
+
+def _mutator_override_scoring(doc: dict[str, Any], payload: dict[str, Any]):
+    method = _clean(payload.get("method"), 10)
+    if method not in SCORING_METHODS:
+        raise ValueError("计分方式无效")
+    matches = _scoring_override_matches(doc, payload)
+    if not matches:
+        raise ValueError("没有匹配的条目，请检查昵称/ID、礼物名和时间窗")
+    note = _clean(payload.get("note"), 200)
+    now = _now()
+    for entry in matches:
+        entry["scoring_method"] = method
+        entry["scoring_method_note"] = note
+        entry["scoring_method_overridden_at"] = now
+        entry["updated_at"] = now
+    return doc, {
+        "matched": len(matches),
+        "updated": len(matches),
+        "method": method,
+        "total_score": round(sum(_to_float(entry.get("score"), 0.0) for entry in matches), 4),
+        "entry_ids": [_clean(entry.get("id"), 80) for entry in matches],
+    }
 
 
 def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
@@ -2264,6 +2341,7 @@ register_mutator(RESOURCE, "mark_shipped", _mutator_mark_shipped)
 register_mutator(RESOURCE, "upsert_redemption", _mutator_upsert_redemption)
 register_mutator(RESOURCE, "delete_redemption", _mutator_delete_redemption)
 register_mutator(RESOURCE, "migrate_legacy_business", _mutator_migrate_legacy_business)
+register_mutator(RESOURCE, "override_scoring", _mutator_override_scoring)
 
 
 def _build_room_live_items() -> list[dict[str, Any]]:
@@ -2636,6 +2714,37 @@ def mark_duplicate(entry_id: str, request: Request, payload: dict[str, Any] = Bo
     data = dict(payload or {})
     data["id"] = entry_id
     return _mutate("duplicate", data, request)
+
+
+@router.post("/scoring-overrides/preview")
+def preview_scoring_override(payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    doc = load_document(RESOURCE)
+    matches = _scoring_override_matches(doc, payload)
+    method = _clean(payload.get("method"), 10)
+    return {
+        "matched": len(matches),
+        "total_score": round(sum(_to_float(entry.get("score"), 0.0) for entry in matches), 4),
+        "method": method if method in SCORING_METHODS else "",
+        "entries": [
+            {
+                "id": _clean(entry.get("id"), 80),
+                "source": _clean(entry.get("source"), 20),
+                "source_label": SOURCE_LABELS.get(_clean(entry.get("source"), 20), ""),
+                "source_time": _clean(entry.get("source_time"), 32),
+                "fan_name": _clean(entry.get("raw_name")) or _clean(entry.get("fan_name")),
+                "fan_id": _clean(entry.get("raw_id")) or _clean(entry.get("fan_id")),
+                "score": round(_to_float(entry.get("score"), 0.0), 4),
+                "scoring_method": _entry_scoring_method(entry),
+                "note": _clean(entry.get("note")),
+            }
+            for entry in matches
+        ],
+    }
+
+
+@router.post("/scoring-overrides")
+def apply_scoring_override(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    return _mutate("override_scoring", payload, request)
 
 
 @router.post("/redemptions")

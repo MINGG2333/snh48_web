@@ -1033,6 +1033,81 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(methods["room-card"], "鸡腿")
         self.assertEqual(methods["room-same-name-leg"], "鸡腿")
 
+    def test_scoring_override_preview_and_apply(self):
+        (self.tmp / "score.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "room-card",
+                            "source": "room",
+                            "event_time": "2026-11-10 12:00:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_id": "1320115721784332288",
+                            "gift_name": "弦月回响",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        },
+                        {
+                            "id": "room-chicken",
+                            "source": "room",
+                            "event_time": "2026-11-11 12:00:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_id": "1320115721784332288",
+                            "gift_name": "弦月回响",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        },
+                        {
+                            "id": "room-other",
+                            "source": "room",
+                            "event_time": "2026-11-11 12:05:00",
+                            "sender_name": "Alice",
+                            "sender_id": "1001",
+                            "gift_name": "其他礼物",
+                            "gift_count": 1,
+                            "total_score": 1,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        payload = {
+            "name": "Alice",
+            "gift_name": "弦月回响",
+            "start": "2026-11-11 00:00:00",
+            "end": "2026-11-11 23:59:59",
+            "method": "鸡腿",
+            "note": "群管理已核对鸡腿消耗截图",
+        }
+        preview = self.client.post(
+            "/api/redblue/scoring-overrides/preview",
+            headers=self.headers,
+            json=payload,
+        ).json()
+        self.assertEqual(preview["matched"], 1)
+        self.assertEqual(preview["total_score"], 1.0)
+        self.assertEqual(preview["entries"][0]["score"], 1.0)
+
+        applied = self.client.post(
+            "/api/redblue/scoring-overrides",
+            headers=self.headers,
+            json=payload,
+        )
+        self.assertEqual(applied.status_code, 200, applied.text)
+        self.assertEqual(applied.json()["result"]["updated"], 1)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entries = {entry["source_id"]: entry for entry in data["entries"]}
+        self.assertEqual(entries["room-card"]["scoring_method"], "计分卡")
+        self.assertEqual(entries["room-chicken"]["scoring_method"], "鸡腿")
+        self.assertEqual(entries["room-chicken"]["scoring_method_note"], payload["note"])
+        self.assertEqual(entries["room-other"]["scoring_method"], "计分卡")
+
     def test_same_gift_id_price_controls_chicken(self):
         # 同一 gift_id：礼物目录没有鸡腿价 → 计分卡；目录出现 350 鸡腿价 → 鸡腿。
         # 不按发送时间判断，因为计分卡和鸡腿礼物在 11/11–15 可以共存。

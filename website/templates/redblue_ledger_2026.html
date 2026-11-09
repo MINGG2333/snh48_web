@@ -234,6 +234,7 @@
         <button class="btn pink" id="syncWeidianBtn">立即同步微店</button>
         <button class="btn gold" id="aiResolveBtn">AI 识别未登记</button>
         <button class="btn" id="businessRedeemBtn">业务兑换</button>
+        <button class="btn gold" id="scoringOverrideBtn">计分方式更正</button>
         <button class="btn" id="applySelectedAiBtn">应用选中 AI 建议</button>
         <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
         <button class="btn" id="duplicateSelectedBtn">标记重复</button>
@@ -290,7 +291,7 @@
     </section>
 
     <section class="panel">
-      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span></div>
+      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><span class="notice">「弦月回响」默认计分卡；凭鸡腿消耗截图可改判鸡腿。</span></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th style="width:34px;"><input type="checkbox" id="selectAll" aria-label="全选当前列表" title="全选当前列表"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务状态</th><th>兑换业务</th><th>备注</th><th>操作</th></tr></thead>
@@ -327,6 +328,35 @@
     <div class="modal-actions">
       <button class="btn" data-close="entryModal">取消</button>
       <button class="btn primary" id="saveEntryBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="scoringOverrideModal">
+  <div class="modal-backdrop" data-close="scoringOverrideModal"></div>
+  <div class="modal-card wide">
+    <h2>计分方式更正（鸡腿凭证）</h2>
+    <div class="sub">「弦月回响」默认按计分卡。管理员核对鸡腿消耗截图后，按昵称/ID + 时间窗把对应房间/直播条目改为鸡腿；请先预览匹配结果再提交。</div>
+    <div class="form-grid">
+      <div class="field"><label>口袋48昵称</label><input id="overrideName" placeholder="粉丝昵称"></div>
+      <div class="field"><label>口袋48 ID</label><input id="overrideId" placeholder="可选；填了会同时校验"></div>
+      <div class="field"><label>礼物名</label><input id="overrideGiftName" value="弦月回响"></div>
+      <div class="field"><label>开始时间</label><input id="overrideStart" type="datetime-local"></div>
+      <div class="field"><label>结束时间</label><input id="overrideEnd" type="datetime-local"></div>
+      <div class="field"><label>改为</label><select id="overrideMethod"><option value="鸡腿">鸡腿</option><option value="计分卡">计分卡</option></select></div>
+      <div class="field full"><label>凭证/备注</label><textarea id="overrideNote" placeholder="例如：群管理已核对鸡腿消耗截图，350 鸡腿 × 3"></textarea></div>
+    </div>
+    <div class="notice" id="overridePreviewHint">填写昵称/ID 和时间窗后点“预览匹配”。</div>
+    <div class="table-wrap" id="overridePreviewWrap" style="display:none; max-height:260px; overflow:auto;">
+      <table class="redemption-table">
+        <thead><tr><th>时间</th><th>昵称 / ID</th><th>来源</th><th>分数</th><th>当前计分方式</th><th>备注</th></tr></thead>
+        <tbody id="overridePreviewBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close="scoringOverrideModal">取消</button>
+      <button class="btn" id="previewOverrideBtn">预览匹配</button>
+      <button class="btn primary" id="submitOverrideBtn" disabled>提交改判</button>
     </div>
   </div>
 </div>
@@ -1153,6 +1183,7 @@
       var ai = aiSuggestions[entry.id];
       var aiBtn = ai ? '<button class="btn mini gold" data-ai-apply="' + esc(entry.id) + '">应用AI</button>' : "";
       var shipBtn = (entry.source === "weidian" && !entry.settled && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
+      var overrideBtn = (entry.source === "room" || entry.source === "live") ? '<button class="btn mini gold" data-override="' + esc(entry.id) + '">改判</button>' : "";
       var scoring = entry.scoring_method || "";
       var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
       var businessCell = businessAllocationMarkup(entry);
@@ -1168,13 +1199,135 @@
         '<td>' + businessCell + '</td>' +
         '<td class="notice">' + esc(note) + (entry.shipping_error ? '<div style="color:var(--red);">' + esc(entry.shipping_error) + '</div>' : '') + '</td>' +
         '<td><div class="actions">' +
-          '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + aiBtn + shipBtn +
+          '<button class="btn mini" data-edit="' + esc(entry.id) + '">编辑</button>' + overrideBtn + aiBtn + shipBtn +
           '<button class="btn mini" data-dup="' + esc(entry.id) + '">' + (entry.duplicate ? "取消重复" : "重复") + '</button>' +
           '<button class="btn mini danger" data-delete="' + esc(entry.id) + '">删除</button>' +
         '</div></td>' +
       '</tr>';
     }).join("");
     updateSelectAll();
+  }
+
+  var scoringOverridePreview = null;
+
+  function overrideDateTime(id) {
+    var value = $(id).value || "";
+    if (!value) return "";
+    value = value.replace("T", " ");
+    if (value.length === 16) value += id === "overrideEnd" ? ":59" : ":00";
+    return value;
+  }
+
+  function scoringOverridePayload() {
+    return {
+      name: $("overrideName").value.trim(),
+      fan_id: $("overrideId").value.trim(),
+      gift_name: $("overrideGiftName").value.trim() || "弦月回响",
+      start: overrideDateTime("overrideStart"),
+      end: overrideDateTime("overrideEnd"),
+      method: $("overrideMethod").value,
+      note: $("overrideNote").value.trim()
+    };
+  }
+
+  function resetScoringOverride() {
+    scoringOverridePreview = null;
+    $("overrideName").value = "";
+    $("overrideId").value = "";
+    $("overrideGiftName").value = "弦月回响";
+    $("overrideStart").value = "";
+    $("overrideEnd").value = "";
+    $("overrideMethod").value = "鸡腿";
+    $("overrideNote").value = "";
+    $("overridePreviewHint").textContent = "填写昵称/ID 和时间窗后点“预览匹配”。";
+    $("overridePreviewWrap").style.display = "none";
+    $("overridePreviewBody").innerHTML = "";
+    $("submitOverrideBtn").disabled = true;
+  }
+
+  function openScoringOverrideModal(entry) {
+    resetScoringOverride();
+    if (entry) {
+      $("overrideName").value = entry.raw_name || entry.fan_name || "";
+      $("overrideId").value = entry.fan_id || entry.raw_id || "";
+      var note = entry.note || "";
+      var giftName = note.split(" × ")[0] || "弦月回响";
+      $("overrideGiftName").value = giftName;
+      var sourceTime = entry.source_time || "";
+      if (sourceTime) {
+        var start = new Date(sourceTime.replace(" ", "T"));
+        var end = new Date(start.getTime() + 60000);
+        function localValue(date) {
+          var pad = function (value) { return String(value).padStart(2, "0"); };
+          return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+            "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+        }
+        if (!isNaN(start.getTime())) {
+          $("overrideStart").value = localValue(new Date(start.getTime() - 60000));
+          $("overrideEnd").value = localValue(end);
+        }
+      }
+    }
+    $("scoringOverrideModal").classList.remove("hidden");
+  }
+
+  async function previewScoringOverride() {
+    var payload = scoringOverridePayload();
+    if (!payload.name && !payload.fan_id) { showToast("请填写口袋48昵称或 ID", true); return; }
+    $("previewOverrideBtn").disabled = true;
+    try {
+      var result = await api("/api/redblue/scoring-overrides/preview", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      scoringOverridePreview = result;
+      var rows = result.entries || [];
+      $("overridePreviewHint").textContent = "匹配 " + result.matched + " 条，共 " + score(result.total_score) + " 分；确认后再提交。";
+      $("overridePreviewWrap").style.display = rows.length ? "block" : "none";
+      $("overridePreviewBody").innerHTML = rows.map(function (item) {
+        return "<tr>" +
+          "<td>" + esc((item.source_time || "").slice(0, 19)) + "</td>" +
+          "<td>" + esc(item.fan_name || "-") + (item.fan_id ? "<div class=\"notice\">ID " + esc(item.fan_id) + "</div>" : "") + "</td>" +
+          "<td>" + esc(item.source_label || item.source || "-") + "</td>" +
+          "<td>" + score(item.score) + "</td>" +
+          "<td>" + esc(item.scoring_method || "-") + "</td>" +
+          "<td class=\"notice\">" + esc(item.note || "") + "</td>" +
+          "</tr>";
+      }).join("");
+      $("submitOverrideBtn").disabled = !result.matched;
+    } catch (error) {
+      showToast(error.message || "预览失败", true);
+    } finally {
+      $("previewOverrideBtn").disabled = false;
+    }
+  }
+
+  function submitScoringOverride() {
+    if (!scoringOverridePreview || !scoringOverridePreview.matched) {
+      showToast("请先预览匹配条目", true);
+      return;
+    }
+    var payload = scoringOverridePayload();
+    openConfirm(
+      "提交计分方式改判",
+      "将匹配的 " + scoringOverridePreview.matched + " 条（共 " + score(scoringOverridePreview.total_score) + " 分）改为「" + payload.method + "」，确认？",
+      async function () {
+        try {
+          var result = await api("/api/redblue/scoring-overrides", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(payload)
+          });
+          var r = result.result || {};
+          $("scoringOverrideModal").classList.add("hidden");
+          showToast("已改判 " + (r.updated || 0) + " 条为「" + (r.method || payload.method) + "」");
+          await loadData(true);
+        } catch (error) {
+          showToast(error.message || "改判失败", true);
+        }
+      }
+    );
   }
 
   function openEntryModal(entry) {
@@ -2342,6 +2495,9 @@
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
+    $("scoringOverrideBtn").addEventListener("click", function () { openScoringOverrideModal(null); });
+    $("previewOverrideBtn").addEventListener("click", previewScoringOverride);
+    $("submitOverrideBtn").addEventListener("click", submitScoringOverride);
     $("redemptionFan").addEventListener("change", function () {
       if (!editingRedemptionId) chooseDefaultMethod(selectedFanKeys());
       renderRedemptionAllocations();
@@ -2441,6 +2597,12 @@
       }
       var redeem = event.target.closest("[data-redeem-key]");
       if (redeem) { openRedemptionModal(redeem.getAttribute("data-redeem-key"), ""); return; }
+      var override = event.target.closest("[data-override]");
+      if (override) {
+        var overrideEntry = (data.entries || []).find(function (row) { return row.id === override.getAttribute("data-override"); });
+        if (overrideEntry) openScoringOverrideModal(overrideEntry);
+        return;
+      }
       var edit = event.target.closest("[data-edit]");
       if (edit) {
         var entry = (data.entries || []).find(function (row) { return row.id === edit.getAttribute("data-edit"); });
