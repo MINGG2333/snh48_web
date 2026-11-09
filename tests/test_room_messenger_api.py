@@ -469,6 +469,82 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertEqual(response.json()["job"]["total"], 31)
 
 
+
+    def test_batch_delete_records_tombstones(self) -> None:
+        self._login()
+        self._bind()
+        payload = {
+            "channel_id": "1001",
+            "items": [
+                {"msg_id_client": "m1", "msg_time": 1700000000000, "sender_id": "3001", "sender_name": "陈嘉仪", "text": "一"},
+                {"msg_id_client": "m2", "msg_time": 1700000001000, "sender_id": "3001", "sender_name": "陈嘉仪", "text": "二"},
+            ],
+            "confirm": api.DELETE_CONFIRM_WORD,
+        }
+        with patch.object(
+            api,
+            "_run_bridge",
+            return_value={"ok": True, "results": [{"ok": True}, {"ok": True}]},
+        ) as bridge:
+            response = self.client.post(
+                "/api/room-messenger/delete-batch",
+                headers={"Origin": "http://testserver"},
+                json=payload,
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(bridge.call_args.args[0], "messenger-delete-batch")
+        rows = api._deleted_rows("3001", "1001")
+        self.assertEqual(set(rows), {"m1", "m2"})
+        audit = (Path(self.root / "state") / "audit.jsonl").read_text(encoding="utf-8")
+        self.assertIn('"kind":"delete_batch"', audit)
+
+
+
+    def test_job_uses_ack_time_for_sent_timestamps(self) -> None:
+        self._bind()
+        job_id = "c" * 32
+        api._save_jobs(
+            {
+                job_id: {
+                    "id": job_id,
+                    "account_id": "3001",
+                    "channel": {"channel_id": "1001", "server_id": "2001"},
+                    "mode": "batch",
+                    "repeat_daily": False,
+                    "messages": [
+                        {"text": "一", "status": "pending", "sent_at": "", "error": ""},
+                        {"text": "二", "status": "pending", "sent_at": "", "error": ""},
+                    ],
+                    "interval_seconds": 2,
+                    "jitter_seconds": 0,
+                    "next_run_at": 0,
+                    "created_at": "2026-01-01T00:00:00+08:00",
+                    "updated_at": "2026-01-01T00:00:00+08:00",
+                    "status": "running",
+                    "last_error": "",
+                    "last_sent_at": 0,
+                }
+            }
+        )
+        times = [1700000000000, 1700000002000]
+        with patch.object(
+            api,
+            "_run_bridge",
+            return_value={
+                "ok": True,
+                "results": [{"ok": True, "time": times[0]}, {"ok": True, "time": times[1]}],
+            },
+        ):
+            api._run_job(job_id)
+        job = api._load_jobs()[job_id]
+        self.assertEqual(job["messages"][0]["sent_at"], api._iso_from_ms(times[0]))
+        self.assertEqual(job["messages"][1]["sent_at"], api._iso_from_ms(times[1]))
+        self.assertEqual(job["last_sent_at"], times[1] / 1000.0)
+        entries = api._read_sent_log(10, "3001")
+        self.assertEqual(entries[0]["at"], api._iso_from_ms(times[1]))
+        self.assertEqual(entries[1]["at"], api._iso_from_ms(times[0]))
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}

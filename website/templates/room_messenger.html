@@ -81,6 +81,7 @@
                 <p id="channelSubtitle">从左侧选择成员和房间</p>
             </div>
             <div class="rm-head-actions">
+                <button id="selectModeBtn" class="rm-icon-btn" type="button" title="批量删除" aria-label="批量删除"><i class="fas fa-trash-can"></i></button>
                 <button id="refreshBtn" class="rm-icon-btn" type="button" title="刷新消息" aria-label="刷新消息"><i class="fas fa-rotate"></i></button>
                 <button id="queueBtn" class="rm-icon-btn" type="button" title="发送计划" aria-label="发送计划"><i class="fas fa-list-check"></i><span id="queueBadge" class="rm-badge" hidden>0</span></button>
             </div>
@@ -97,6 +98,14 @@
         <button id="jumpLatest" class="rm-jump-latest" type="button" hidden><i class="fas fa-arrow-down"></i> 回到最新</button>
 
         <footer class="rm-composer-wrap">
+            <div id="selectionBar" class="rm-selection-bar" hidden>
+                <span id="selectionCount">已选 0 条</span>
+                <div class="rm-selection-actions">
+                    <button id="selectAllBtn" class="rm-btn rm-btn-small" type="button">全选当前</button>
+                    <button id="batchDeleteBtn" class="rm-btn rm-btn-small" type="button"><i class="fas fa-trash-can"></i> 删除选中</button>
+                    <button id="cancelSelectBtn" class="rm-btn rm-btn-small rm-btn-ghost" type="button">取消</button>
+                </div>
+            </div>
             <div id="composerLock" class="rm-composer-lock">
                 <i class="fas fa-lock"></i> 请先选择频道并绑定个人账号
             </div>

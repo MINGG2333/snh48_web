@@ -18,7 +18,7 @@ COMMANDS = {
     "flip": frozenset({
         "send-sms", "security-answer", "verify-code", "job-status", "latest-job",
         "messenger-status", "messenger-probe", "messenger-history", "messenger-send",
-        "messenger-delete", "messenger-switch",
+        "messenger-delete", "messenger-delete-batch", "messenger-switch",
     }),
     "social": frozenset({"status", "update", "set-primary"}),
 }
@@ -29,6 +29,7 @@ COMMAND_TIMEOUTS = {
     ("flip", "messenger-probe"): 60,
     ("flip", "messenger-status"): 60,
     ("flip", "messenger-delete"): 60,
+    ("flip", "messenger-delete-batch"): 80,
     ("flip", "messenger-switch"): 60,
 }
 

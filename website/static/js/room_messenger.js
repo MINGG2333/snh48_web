@@ -117,7 +117,8 @@
         var date = new Date(Number(value) * 1000);
         if (isNaN(date.getTime())) return "";
         return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0") +
-            " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
+            " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0") +
+            ":" + String(date.getSeconds()).padStart(2, "0");
     }
 
     function formatIso(value) {
@@ -174,6 +175,8 @@
         S.channel = null;
         S.messages = [];
         S.nextTime = 0;
+        S.selectMode = false;
+        S.selectedIds.clear();
         $("app").hidden = true;
         $("loginOverlay").hidden = false;
         $("loginPassword").value = "";
@@ -695,6 +698,10 @@
         S.messages = [];
         S.nextTime = 0;
         S.nearBottom = true;
+        S.selectMode = false;
+        S.selectedIds.clear();
+        $("selectionBar").hidden = true;
+        $("selectModeBtn").classList.remove("is-active");
         $("channelTitle").textContent = channel.member_name || ("频道 " + channel.channel_id);
         $("channelSubtitle").textContent = [
             channel.group || "",
@@ -834,6 +841,10 @@
         var wrapper = document.createElement("div");
         var self = ownId && String(item.sender_id || "") === ownId;
         wrapper.className = "rm-msg" + (self ? " is-self" : "");
+        wrapper.dataset.msgId = item.msg_id_client || "";
+        if (S.selectMode && item.msg_id_client && S.selectedIds.has(item.msg_id_client)) {
+            wrapper.classList.add("is-selected");
+        }
         if (item.type === "GIFT_TEXT") wrapper.classList.add("is-gift");
         if (item.type === "AUDIO" || item.type === "AUDIO_REPLY" || item.type === "AUDIO_GIFT_REPLY") wrapper.classList.add("is-voice");
         if (item.type === "IMAGE" || item.type === "VIDEO" || item.type === "EXPRESSIMAGE") wrapper.classList.add("is-media");
@@ -855,7 +866,18 @@
         time.textContent = formatTime(item.time);
         meta.appendChild(sender);
         meta.appendChild(time);
-        if (self && item.msg_id_client && item.time && !item.deleted) {
+        if (S.selectMode && self && item.msg_id_client && !item.deleted) {
+            var selectButton = document.createElement("button");
+            selectButton.type = "button";
+            selectButton.className = "rm-msg-select";
+            selectButton.title = "选择这条消息";
+            var selected = S.selectedIds.has(item.msg_id_client);
+            selectButton.innerHTML = selected
+                ? '<i class="fas fa-square-check"></i>'
+                : '<i class="fas fa-square"></i>';
+            selectButton.addEventListener("click", function () { toggleMessageSelection(item); });
+            meta.appendChild(selectButton);
+        } else if (self && item.msg_id_client && item.time && !item.deleted) {
             var deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.className = "rm-msg-delete";
@@ -1022,21 +1044,45 @@
     // ── Delete message ─────────────────────────────────────────────────────
     function openDeleteModal(item) {
         if (!item || !item.msg_id_client) return;
-        S.deleteTarget = item;
-        $("deleteTarget").textContent = "频道：" + channelLabel();
-        $("deletePreview").textContent = item.text || "[非文本消息]";
+        openDeleteTargets([item]);
+    }
+
+    function openBatchDeleteModal() {
+        var targets = S.messages.filter(function (item) {
+            return item.msg_id_client && S.selectedIds.has(item.msg_id_client) && !item.deleted;
+        });
+        if (!targets.length) {
+            toast("请先勾选要删除的消息", "error");
+            return;
+        }
+        openDeleteTargets(targets);
+    }
+
+    function openDeleteTargets(targets) {
+        if (!targets || !targets.length) return;
+        S.deleteTargets = targets;
+        S.deleteTarget = targets.length === 1 ? targets[0] : null;
+        $("deleteTarget").textContent = targets.length === 1
+            ? ("频道：" + channelLabel())
+            : ("批量删除 " + targets.length + " 条消息 · " + channelLabel());
+        var preview = targets.map(function (item, index) {
+            return (index + 1) + ". " + (item.text || "[非文本消息]");
+        }).join("\n");
+        if (preview.length > 1500) preview = preview.slice(0, 1500) + "\n…";
+        $("deletePreview").textContent = preview;
         var word = S.limits.delete_confirm_word || "确认删除";
         $("deleteConfirmWordLabel").textContent = word;
         $("deleteConfirmWordInput").value = "";
         showError($("deleteModalError"), "");
         openModal("deleteModal");
         setTimeout(function () { $("deleteConfirmWordInput").focus(); }, 40);
-        track("admin_modal", { page: "room_messenger", action: "delete_confirm" });
+        track("admin_modal", { page: "room_messenger", action: targets.length > 1 ? "batch_delete_confirm" : "delete_confirm" });
     }
 
     function confirmDelete() {
-        var item = S.deleteTarget;
-        if (!item) return;
+        var targets = (S.deleteTargets || []).slice();
+        if (!targets.length && S.deleteTarget) targets = [S.deleteTarget];
+        if (!targets.length) return;
         var expected = S.limits.delete_confirm_word || "确认删除";
         if ($("deleteConfirmWordInput").value.trim() !== expected) {
             showError($("deleteModalError"), "请输入确认词“" + expected + "”");
@@ -1045,32 +1091,115 @@
         var button = $("confirmDeleteBtn");
         button.disabled = true;
         showError($("deleteModalError"), "");
-        api("/delete", {
-            method: "POST",
-            body: {
-                account_id: (S.binding || {}).account_id || "",
-                channel_id: S.channel.channel_id,
-                msg_id_client: item.msg_id_client,
-                msg_time: item.time,
-                sender_id: item.sender_id || "",
-                sender_name: item.sender_name || "",
-                text: item.text || "",
-                confirm: expected
-            }
-        }).then(function (data) {
-            item.deleted = true;
-            item.deleted_at = (data.deleted && data.deleted.deleted_at) || new Date().toISOString();
+        var request;
+        if (targets.length === 1) {
+            var item = targets[0];
+            request = api("/delete", {
+                method: "POST",
+                body: {
+                    account_id: (S.binding || {}).account_id || "",
+                    channel_id: S.channel.channel_id,
+                    msg_id_client: item.msg_id_client,
+                    msg_time: item.time,
+                    sender_id: item.sender_id || "",
+                    sender_name: item.sender_name || "",
+                    text: item.text || "",
+                    confirm: expected
+                }
+            }).then(function (data) {
+                item.deleted = true;
+                item.deleted_at = (data.deleted && data.deleted.deleted_at) || new Date().toISOString();
+                return { ok: true, count: 1 };
+            });
+        } else {
+            request = api("/delete-batch", {
+                method: "POST",
+                body: {
+                    account_id: (S.binding || {}).account_id || "",
+                    channel_id: S.channel.channel_id,
+                    items: targets.map(function (item) {
+                        return {
+                            msg_id_client: item.msg_id_client,
+                            msg_time: item.time,
+                            sender_id: item.sender_id || "",
+                            sender_name: item.sender_name || "",
+                            text: item.text || ""
+                        };
+                    }),
+                    confirm: expected
+                }
+            }).then(function (data) {
+                var deleted = new Set((data.deleted || []).map(function (item) { return item.msg_id_client; }));
+                targets.forEach(function (item) {
+                    if (deleted.has(item.msg_id_client)) {
+                        item.deleted = true;
+                        item.deleted_at = new Date().toISOString();
+                    }
+                });
+                return { ok: true, count: targets.length };
+            });
+        }
+        request.then(function (result) {
+            if (targets.length > 1) setSelectMode(false);
             renderMessages();
             closeModal("deleteModal");
             S.deleteTarget = null;
-            toast("消息已删除，页面保留已删除标记", "success");
-            track("admin_update", { page: "room_messenger", action: "delete_message" });
+            S.deleteTargets = [];
+            toast("已删除 " + result.count + " 条消息，页面保留已删除标记", "success");
+            track("admin_update", { page: "room_messenger", action: targets.length > 1 ? "batch_delete_message" : "delete_message" });
         }).catch(function (error) {
             if (looksLikeTokenError(error.message)) markTokenInvalid(error.message);
             showError($("deleteModalError"), error.message);
         }).finally(function () {
             button.disabled = false;
         });
+    }
+
+    function setSelectMode(enabled) {
+        S.selectMode = Boolean(enabled);
+        if (!S.selectMode) S.selectedIds.clear();
+        $("selectModeBtn").classList.toggle("is-active", S.selectMode);
+        $("selectionBar").hidden = !S.selectMode;
+        renderMessages();
+        updateSelectionBar();
+    }
+
+    function updateSelectionBar() {
+        var count = S.selectedIds ? S.selectedIds.size : 0;
+        $("selectionCount").textContent = "已选 " + count + " 条";
+        $("batchDeleteBtn").disabled = count === 0;
+    }
+
+    function toggleMessageSelection(item) {
+        if (!item || !item.msg_id_client) return;
+        if (S.selectedIds.has(item.msg_id_client)) {
+            S.selectedIds.delete(item.msg_id_client);
+        } else {
+            S.selectedIds.add(item.msg_id_client);
+        }
+        var wrappers = document.querySelectorAll(".rm-msg[data-msg-id]");
+        Array.prototype.forEach.call(wrappers, function (wrapper) {
+            if (wrapper.dataset.msgId !== item.msg_id_client) return;
+            var selected = S.selectedIds.has(item.msg_id_client);
+            wrapper.classList.toggle("is-selected", selected);
+            var button = wrapper.querySelector(".rm-msg-select");
+            if (button) {
+                button.innerHTML = selected
+                    ? '<i class="fas fa-square-check"></i>'
+                    : '<i class="fas fa-square"></i>';
+            }
+        });
+        updateSelectionBar();
+    }
+
+    function selectAllCurrent() {
+        S.messages.forEach(function (item) {
+            if (item.msg_id_client && !item.deleted && String(item.sender_id || "") === String((S.binding || {}).account_id || "")) {
+                S.selectedIds.add(item.msg_id_client);
+            }
+        });
+        renderMessages();
+        updateSelectionBar();
     }
 
     function looksLikeTokenError(message) {
@@ -1441,6 +1570,7 @@
 
     function openQueue() {
         S.jobsOpen = true;
+        $("app").classList.add("queue-open");
         $("queuePanel").hidden = false;
         loadJobs();
         setQueueTab(S.queueTab || "jobs");
@@ -1448,6 +1578,7 @@
 
     function closeQueue() {
         S.jobsOpen = false;
+        $("app").classList.remove("queue-open");
         $("queuePanel").hidden = true;
     }
 
@@ -1489,6 +1620,10 @@
         $("sidebarOpen").addEventListener("click", openSidebar);
         $("sidebarClose").addEventListener("click", closeSidebar);
         $("sidebarBackdrop").addEventListener("click", closeSidebar);
+        $("selectModeBtn").addEventListener("click", function () { setSelectMode(!S.selectMode); });
+        $("selectAllBtn").addEventListener("click", selectAllCurrent);
+        $("batchDeleteBtn").addEventListener("click", openBatchDeleteModal);
+        $("cancelSelectBtn").addEventListener("click", function () { setSelectMode(false); });
         $("refreshBtn").addEventListener("click", function () {
             if (!S.channel) return;
             initialLoad();
@@ -1551,6 +1686,10 @@
             }
             if (S.jobsOpen) {
                 closeQueue();
+                return;
+            }
+            if (S.selectMode) {
+                setSelectMode(false);
                 return;
             }
             closeSidebar();

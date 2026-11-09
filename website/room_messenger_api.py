@@ -127,6 +127,16 @@ def _now_iso() -> str:
     return datetime.now(TZ).isoformat(timespec="seconds")
 
 
+def _iso_from_ms(value: Any) -> str:
+    try:
+        seconds = float(value) / 1000.0
+    except (TypeError, ValueError):
+        return _now_iso()
+    if seconds <= 0:
+        return _now_iso()
+    return datetime.fromtimestamp(seconds, TZ).isoformat(timespec="seconds")
+
+
 def _safe_error(value: Any, fallback: str = "操作失败") -> str:
     text = " ".join(str(value or fallback).split())[:300]
     return re.sub(r"(?<!\d)\d{7,}(?!\d)", "[已隐藏]", text)
@@ -1073,6 +1083,7 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
     result = (data.get("results") or [{}])[0]
     ok = bool(result.get("ok"))
     error = _safe_error(result.get("error"), "") if not ok else ""
+    sent_at = _iso_from_ms(result.get("time"))
     if ok:
         _add_daily_sent(account_id, 1)
     _append_audit(
@@ -1084,6 +1095,7 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
             "ok": ok,
             "error": error,
             "msg_id_client": msg_id,
+            "sent_at": sent_at,
             "text_length": len(text),
             "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16],
             "preview": _message_preview(text, 40),
@@ -1092,7 +1104,7 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
     channel_meta = payload.channel if isinstance(payload.channel, dict) else {}
     _append_sent(
         {
-            "at": _now_iso(),
+            "at": sent_at,
             "source": "manual",
             "account_id": account_id,
             "channel_id": payload.channel_id,
@@ -1104,6 +1116,7 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
             "text_length": len(text),
             "status": "sent" if ok else "failed",
             "error": error,
+            "sent_at": sent_at,
         }
     )
     if ok and payload.channel:
@@ -1190,6 +1203,102 @@ def delete_message(payload: DeleteRequest, request: Request, response: Response,
         }
     )
     return {"ok": True, "message": _safe_error(data.get("message"), "删除成功"), "deleted": deleted}
+
+
+class DeleteBatchItem(BaseModel):
+    msg_id_client: str
+    msg_time: int
+    sender_id: str = ""
+    sender_name: str = ""
+    text: str = ""
+
+
+class DeleteBatchRequest(BaseModel):
+    account_id: str = ""
+    channel_id: str
+    items: list[DeleteBatchItem]
+    confirm: str
+
+
+@router.post("/delete-batch")
+def delete_messages_batch(payload: DeleteBatchRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    if payload.confirm != DELETE_CONFIRM_WORD:
+        raise HTTPException(status_code=422, detail=f"请输入确认词“{DELETE_CONFIRM_WORD}”")
+    account_id = _resolve_account_id(payload.account_id)
+    if not CHANNEL_ID_RE.fullmatch(payload.channel_id):
+        raise HTTPException(status_code=422, detail="频道 ID 无效")
+    if not payload.items or len(payload.items) > 50:
+        raise HTTPException(status_code=422, detail="单次最多删除 50 条消息")
+    for item in payload.items:
+        if not item.msg_id_client or len(item.msg_id_client) > 128:
+            raise HTTPException(status_code=422, detail="消息 ID 无效")
+        if item.msg_time <= 0:
+            raise HTTPException(status_code=422, detail="消息时间无效")
+        if item.sender_id and item.sender_id != account_id:
+            raise HTTPException(status_code=403, detail="只能删除当前账号自己发送的消息")
+    try:
+        data = _run_bridge(
+            "messenger-delete-batch",
+            {
+                "account_id": account_id,
+                "channel_id": payload.channel_id,
+                "items": [
+                    {
+                        "msg_id_client": item.msg_id_client,
+                        "msg_time": item.msg_time,
+                        "sender_id": item.sender_id or account_id,
+                    }
+                    for item in payload.items
+                ],
+            },
+        )
+    except BridgeUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except BridgeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    results = data.get("results") if isinstance(data.get("results"), list) else []
+    deleted = []
+    audit_results = []
+    for index, item in enumerate(payload.items):
+        result = results[index] if index < len(results) and isinstance(results[index], dict) else {}
+        ok = bool(result.get("ok"))
+        error = _safe_error(result.get("error"), "删除失败") if not ok else ""
+        audit_results.append(
+            {
+                "msg_id_client": item.msg_id_client,
+                "ok": ok,
+                "error": error,
+                "text_length": len(item.text),
+                "preview": _message_preview(item.text, 40),
+            }
+        )
+        if ok:
+            deleted.append(
+                _record_deleted(
+                    account_id,
+                    payload.channel_id,
+                    {
+                        "msg_id_client": item.msg_id_client,
+                        "msg_time": item.msg_time,
+                        "sender_id": item.sender_id or account_id,
+                        "sender_name": item.sender_name,
+                        "text": item.text,
+                    },
+                )
+            )
+    _append_audit(
+        {
+            "at": _now_iso(),
+            "kind": "delete_batch",
+            "account_id": account_id,
+            "channel_id": payload.channel_id,
+            "count": len(payload.items),
+            "results": audit_results,
+        }
+    )
+    return {"ok": True, "results": results, "deleted": deleted}
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────
@@ -1619,6 +1728,7 @@ def _run_job(job_id: str) -> None:
             jobs = _load_jobs()
             job = jobs.get(job_id) or {}
             sent_count = 0
+            sent_times: list[int] = []
             current = job.get("messages") if isinstance(job.get("messages"), list) else []
             for offset, (index, _item) in enumerate(chunk):
                 result = results[offset] if 0 <= offset < len(results) else {}
@@ -1626,14 +1736,26 @@ def _run_job(job_id: str) -> None:
                     continue
                 target = current[index]
                 if bool(result.get("ok")):
+                    sent_time = _iso_from_ms(result.get("time"))
                     target["status"] = "sent"
-                    target["sent_at"] = _now_iso()
+                    target["sent_at"] = sent_time
                     target["error"] = ""
                     sent_count += 1
+                    try:
+                        sent_ms = int(result.get("time") or 0)
+                    except (TypeError, ValueError):
+                        sent_ms = 0
+                    if sent_ms > 0:
+                        sent_times.append(sent_ms)
                 else:
                     target["status"] = "failed"
                     target["error"] = _safe_error(result.get("error"), "发送失败")
-            job["last_sent_at"] = time.time() if sent_count else float(job.get("last_sent_at") or 0)
+            if sent_times:
+                job["last_sent_at"] = max(sent_times) / 1000.0
+            elif sent_count:
+                job["last_sent_at"] = time.time()
+            else:
+                job["last_sent_at"] = float(job.get("last_sent_at") or 0)
             job["updated_at"] = _now_iso()
             job["status"] = job.get("status") or "running"
             jobs[job_id] = job
@@ -1641,9 +1763,10 @@ def _run_job(job_id: str) -> None:
             for offset, (index, _item) in enumerate(chunk):
                 result = results[offset] if 0 <= offset < len(results) else {}
                 target = current[index] if 0 <= index < len(current) and isinstance(current[index], dict) else {}
+                sent_at = str(target.get("sent_at") or "") if bool(result.get("ok")) else _now_iso()
                 _append_sent(
                     {
-                        "at": _now_iso(),
+                        "at": sent_at,
                         "source": "job",
                         "job_id": job_id,
                         "account_id": account_id,
