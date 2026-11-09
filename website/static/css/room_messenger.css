@@ -269,7 +269,7 @@
     background: rgba(192, 132, 252, 0.16); color: #d8b4fe; font-size: 0.85rem;
 }
 .rm-member-row .rm-member-name { flex: 1; min-width: 0; font-size: 0.86rem; font-weight: 600; }
-.rm-member-row .rm-member-group { font-size: 0.68rem; color: var(--text-dim); }
+.rm-member-row .rm-member-group { margin-left: 7px; font-size: 0.68rem; font-weight: 400; color: var(--text-dim); }
 .rm-member-rooms { padding: 0 8px 8px 52px; }
 .rm-member-room {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;

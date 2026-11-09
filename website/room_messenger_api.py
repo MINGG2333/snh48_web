@@ -558,6 +558,11 @@ def _load_catalog() -> list[dict[str, Any]]:
         except (OSError, json.JSONDecodeError):
             room_config = {}
         configured = room_config.get("members") if isinstance(room_config.get("members"), list) else []
+        configured_ids = {
+            str(member.get("id") or "").strip()
+            for member in configured
+            if isinstance(member, dict) and str(member.get("id") or "").strip().isdigit()
+        }
         for member in configured:
             if not isinstance(member, dict):
                 continue
@@ -611,6 +616,7 @@ def _load_catalog() -> list[dict[str, Any]]:
             row["search"] = f"{row['name']} {row['id']} {row['group']}".lower()
         rows.sort(
             key=lambda row: (
+                0 if row["id"] in configured_ids else 1,
                 0 if row.get("in_group") else 1,
                 _GROUP_ORDER.get(str(row.get("group") or ""), 99),
                 str(row.get("name") or ""),
