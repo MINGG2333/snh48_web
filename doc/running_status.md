@@ -8,17 +8,17 @@
 - Token 失效入口：页面加载和打开账号弹窗时自动做只读 probe；失效时账号卡显示“重新登录”和红色提示条，历史/发送/删除错误含 token/失效/非法授权时也会切到该状态。
 - 密码策略：不再为房间信使自定义密码。腾讯云 `.env` 的 `ROOM_MESSENGER_PASSWORD` 已置空，页面复用 `SCORE_GIFTS_PASSWORD`（再回退 `GIFT_REPLIES_PASSWORD`）。已删除登录页“个人号专用”“HttpOnly 会话”等内部提示。
 - 代码：网站 `9c0e46f`；fan-hub `80759901d`。桥命令白名单新增 `messenger-delete` / `messenger-switch`（45 秒）；普通翻牌命令仍 40 秒，`messenger-send` 仍 380 秒。
-- 部署：腾讯云重新安装 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1729055`）；移动端与选择模式修复后 `snh48-web.service` 最终 PID `1826348`，`snh48-privileged-bridge-flip.service` PID `1807016`；启动日志有 `Room messenger scheduler started`。
+- 部署：腾讯云重新安装 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1729055`）；iPhone Safari 样式/初始化修复后 `snh48-web.service` 最终 PID `1877220`，`snh48-privileged-bridge-flip.service` PID `1807016`；启动日志有 `Room messenger scheduler started`。
 - 只读烟测：页面 200；用 `SCORE_GIFTS_PASSWORD` 登录 200；账号 200，绑定 `147062891`；probe 200 且返回大号 `147062891`、小号 `174063630`；catalog 200；删除接口错误确认词 422、他人消息 403；切换非法目标 400；QChat 连接探针成功。未调用真实 `/send` 或 `/delete`，未发送/删除任何真实消息。
 - 待 owner 手动验收：先看历史，再发 1 条低风险消息，确认气泡和客户端显示；随后测试删除自己刚发的消息、定时/批量、以及小号切换。首次真实发送/删除前仍需 owner 明确同意并提供内容。
 - 完整发送文本：`1e03cad` 起新增 `/var/lib/snh48-web/room_messenger/sent.jsonl`（0600，20MB 轮转），即时发送和定时/批量每条消息都保存完整 `text`、来源、账号、频道、消息 ID、状态和错误；页面“发送计划 → 发送记录”可查看最近 80 条。测试消息“1”已按审计回填，可在小号 `174063630` 的发送记录中看到。
 - 批量测试复盘：21:39 的 3 条任务功能正常（completed，3/3 sent，实际间隔约 2.2 秒）。发现旧代码把整批 `sent_at` 和发送记录时间都写成批完成时间（21:39:07），已用 QChat ack 时间修复，并把这次测试回填为 21:39:02/21:39:04/21:39:06；预演时间改为精确到秒。
-- 移动端修复（`00657a8`、`837bd14`）：iOS 自动放大根因是输入框字体 0.88rem≈13.3px；移动端媒体查询将所有输入框/textarea/select 固定 16px，并加 `text-size-adjust:100%`、登录层可滚动、Font Awesome 改非阻塞加载。另一个更严重的 bug 是 `selectChannel()` 调用 `S.selectedIds.clear()` 但状态对象缺少 `selectedIds/selectMode/deleteTargets` 字段，导致选频道抛错、聊天区一直“未选择频道”、输入框不出现；已补齐状态字段并加静态防回归断言。移动端实测选频道后标题、消息和输入框正常。
+- 移动端二次修复（`960ff18`、`4c00789`、`269a97a`、`a0d725d`、`06e13e8`）：WebKit 实测本页外部本地 CSS 会出现 `link.sheet=false`，页面退化成无样式，表现为图标贴左上、按钮无布局；改为只内联压缩后的房间信使 CSS（不再依赖 `style.css` 外链），补齐 `:root` 变量和 reset；移除 iOS 易卡的 `backdrop-filter`，补 `100vh` 回退和 `-webkit-overflow-scrolling:touch`；菜单/关闭按钮改文字符号并由 `.rm-icon-btn` flex 居中；JS 初始化增加 1.2 秒兜底，HTML 页面加 `Cache-Control: no-store`，避免 Safari 继续用旧缓存。移动端第一次修复（`00657a8`、`837bd14`）：iOS 自动放大根因是输入框字体 0.88rem≈13.3px；移动端媒体查询将所有输入框/textarea/select 固定 16px，并加 `text-size-adjust:100%`、登录层可滚动、Font Awesome 改非阻塞加载。另一个更严重的 bug 是 `selectChannel()` 调用 `S.selectedIds.clear()` 但状态对象缺少 `selectedIds/selectMode/deleteTargets` 字段，导致选频道抛错、聊天区一直“未选择频道”、输入框不出现；已补齐状态字段并加静态防回归断言。移动端实测选频道后标题、消息和输入框正常。
 - 新增批量删除：聊天页支持选择模式、全选当前、勾选自己发送的多条消息并一次删除；服务端 `messenger-delete-batch` 单次最多 50 条，失败项单独返回，成功项写墓碑。
 - 发送计划栏改为桌面端第三列推开聊天区（`queue-open`），不再覆盖聊天消息；移动端仍为全屏抽屉。
 - 业务上限调整（2026-11-09 晚，用户定）：`49feeab`/`596d608cb` 起取消每日 100 条、单批 30 条和最小间隔 15 秒的业务限制；默认 `ROOM_MESSENGER_MIN_INTERVAL_SECONDS=1`、`MAX_BATCH_MESSAGES=0`、`DAILY_SEND_CAP=0`、`MAX_JITTER_SECONDS=0`。只剩 1 秒技术下限、单任务 5000 条请求上限和单条 1000 字；随机浮动仍保证实际间隔不低于最小间隔。腾讯云 `/verify` 已返回 `min_interval=1,max_batch=0,daily_cap=0`。
 - 删除可视化：`d371be5` 起删除成功不再从页面移除消息，而是在本地 `deleted.json` 写墓碑；历史接口会把墓碑合并为“此消息已删除”并保留原短文本（灰色删除线），刷新页面仍可见。删除审计新增 `text_length`/`text_sha256`/`preview`。测试中已删除的 `91a6dab84d8ae657bdcf177e15ea680c` 已按审计回填墓碑；未重新发送或重新删除。
-- 阿里云：代码已同步到 `41429f7` / `9c4275571`，未重启 `snh48-aliyun.service`，房间信使保持关闭。
+- 阿里云：代码已同步到 `06e13e8` / `9c4275571`，未重启 `snh48-aliyun.service`，房间信使保持关闭。
 
 ## 2026-11-09 房间信使（个人号房间消息发送页）腾讯云已部署，阿里云仅同步代码（待确认）
 
