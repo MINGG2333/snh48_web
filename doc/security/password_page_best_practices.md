@@ -43,6 +43,15 @@
 
 ---
 
+### 1.4 新增密码页的密码来源（2026-11-09 用户定）
+
+- 不要为一个新页面自行发明一套新密码。
+- 正确做法：为该页声明独立环境变量（如 `ROOM_MESSENGER_PASSWORD`），**默认留空**；为空时复用最接近的业务页密码。
+- 当前映射：
+  - `/room/messenger` → `ROOM_MESSENGER_PASSWORD`，为空复用 `SCORE_GIFTS_PASSWORD`，再回退 `GIFT_REPLIES_PASSWORD`；
+  - 其他新页面按同样方式选择语义最接近的现有密码组，并在 `.env.example` 和本文登记。
+- 只有确实需要隔离风险时，才由 owner 显式填写该页面的独立密码；代码和部署流程不得自动生成或写入新密码。
+
 ## 2. 模式 A：HttpOnly Cookie（60 分钟）
 
 ### 2.1 登录流程
