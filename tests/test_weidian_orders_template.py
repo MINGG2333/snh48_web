@@ -60,6 +60,26 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertNotIn("colspan=\"10\"", self.template)
         self.assertIn("发货任务完成后立即重读订单库", self.template)
 
+    def test_filter_summary_and_masked_image_export(self) -> None:
+        for marker in (
+            'id="filterSummary"',
+            'id="exportOrdersBtn"',
+            'id="maskNames"',
+            "function maskName",
+            "function rowsTotal",
+            "function buildFilterText",
+            "function exportOrders",
+            "/api/weidian-orders/export/orders.png",
+            "mask_names",
+            "WEIDIAN_EXPORT_PURE_START",
+            "WEIDIAN_EXPORT_PURE_END",
+            "筛选 ",
+            "合计 ¥",
+        ):
+            self.assertIn(marker, self.template)
+        self.assertIn("maskName(row.display_name)", self.template)
+        self.assertIn("maskName(row.receiver_name)", self.template)
+
     def test_rebroadcast_always_uses_configured_groups_without_marker(self) -> None:
         self.assertNotIn('id="includeTest"', self.template)
         self.assertNotIn('id="marker"', self.template)

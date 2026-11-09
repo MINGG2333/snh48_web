@@ -142,4 +142,27 @@ assert.deepEqual(
   "selected set is intersected with selectable rows"
 );
 
+const exportStartMarker = "// WEIDIAN_EXPORT_PURE_START";
+const exportEndMarker = "// WEIDIAN_EXPORT_PURE_END";
+const exportStart = template.indexOf(exportStartMarker);
+const exportEnd = template.indexOf(exportEndMarker);
+assert.ok(exportStart >= 0 && exportEnd > exportStart, "export pure helper block should exist");
+
+const exportContext = {};
+vm.createContext(exportContext);
+vm.runInContext(
+  template.slice(exportStart + exportStartMarker.length, exportEnd) + `
+    this.maskName = maskName;
+    this.rowsTotal = rowsTotal;
+  `,
+  exportContext
+);
+
+assert.equal(exportContext.maskName("徐某人"), "徐**", "Chinese names keep first char");
+assert.equal(exportContext.maskName("ama"), "a**", "ASCII names keep first char");
+assert.equal(exportContext.maskName("A"), "*", "single char becomes one star");
+assert.equal(exportContext.maskName("  "), "匿名", "empty names become anonymous");
+assert.equal(exportContext.maskName("再坏对你不好吗"), "再**", "mask does not leak name length");
+assert.equal(exportContext.rowsTotal([{ amount: "1.20" }, { amount: 2 }, { amount: null }]), 3.2, "filtered total sums amounts");
+
 console.log("weidian orders frontend account filter tests passed");

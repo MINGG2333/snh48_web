@@ -36,6 +36,8 @@
     .btn.primary:hover { opacity:.9; color:#fff; }
     .btn.mini { height:28px; padding:0 8px; font-size:12px; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .chk { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
+    .summary { color:var(--muted); font-size:12px; margin-left:auto; white-space:nowrap; }
     .multi { position:relative; }
     .multi > summary { list-style:none; height:34px; display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:0 10px; background:#fff; cursor:pointer; user-select:none; }
     .multi > summary::-webkit-details-marker { display:none; }
@@ -97,6 +99,7 @@
     <div class="toolbar">
       <button class="btn primary" id="refreshBtn">立即刷新订单</button>
       <button class="btn" id="shipSelectedBtn" disabled>批量无需物流发货</button>
+      <button class="btn" id="exportOrdersBtn">导出筛选图片</button>
       <details class="multi" id="statusMenu">
         <summary id="statusSummary">全部状态</summary>
         <div class="multi-panel">
@@ -119,6 +122,8 @@
         </div>
       </details>
       <input type="text" id="keyword" placeholder="订单号 / 昵称 / 账号 / 备注 / 商品">
+      <label class="chk"><input type="checkbox" id="maskNames"> 播报名匿名打码</label>
+      <span class="summary" id="filterSummary">筛选 0 单 · 合计 ¥0.00</span>
       <span class="statusbar" id="statusBar"></span>
     </div>
     <div style="overflow:auto;">
@@ -372,6 +377,22 @@
   }
   // WEIDIAN_BULK_SHIP_PURE_END
 
+  // WEIDIAN_EXPORT_PURE_START
+  function maskName(value) {
+    var text = String(value == null ? "" : value).trim();
+    if (!text) return "匿名";
+    var chars = Array.from(text);
+    if (chars.length <= 1) return "*";
+    return chars[0] + "**";
+  }
+
+  function rowsTotal(rows) {
+    return (rows || []).reduce(function (sum, row) {
+      return sum + Number(row.amount || 0);
+    }, 0);
+  }
+  // WEIDIAN_EXPORT_PURE_END
+
   function updateAccountSummary() {
     var count = Object.keys(selectedAccounts).length;
     $("accountSummary").textContent = count ? ("已选 " + count + " 个账号") : "全部账号";
@@ -454,6 +475,9 @@
 
   function render() {
     var rows = filteredRows();
+    var masked = $("maskNames").checked;
+    var total = rowsTotal(rows);
+    $("filterSummary").textContent = "筛选 " + rows.length + " 单 · 合计 ¥" + total.toFixed(2);
     if (!rows.length) {
       $("rows").innerHTML = '<tr><td colspan="11" class="muted">没有匹配的订单</td></tr>';
       updateSelectAll(rows);
@@ -463,7 +487,9 @@
       var notes = [];
       if (row.seller_note) notes.push("商家：" + row.seller_note);
       if (row.buyer_note) notes.push("买家：" + row.buyer_note);
-      var raw = row.receiver_name && row.receiver_name !== row.display_name ? '<div class="raw">收货人：' + esc(row.receiver_name) + '</div>' : "";
+      var displayName = masked ? maskName(row.display_name) : (row.display_name || "");
+      var receiverName = masked ? maskName(row.receiver_name) : (row.receiver_name || "");
+      var raw = receiverName && receiverName !== displayName ? '<div class="raw">收货人：' + esc(receiverName) + '</div>' : "";
       var account = (row.buyer_id || row.buyer_phone_masked) ? '<div class="raw">下单账号：' + esc(accountLabel(row)) + '</div>' : "";
       var ship = row.shipped
         ? '<span class="pill shipped">已发货</span><div class="raw">' + esc(row.shipped_at || "") + '</div>'
@@ -480,7 +506,7 @@
         '<td class="raw">' + esc(row.order_id || "") + '</td>' +
         '<td>' + esc(row.item_name || "") + (row.sku_title ? '<div class="raw">' + esc(row.sku_title) + '</div>' : "") + '</td>' +
         '<td>' + statusPill(row) + '</td>' +
-        '<td><div class="name">' + esc(row.display_name || "") + '</div>' + raw + account + '</td>' +
+        '<td><div class="name">' + esc(displayName) + '</div>' + raw + account + '</td>' +
         '<td class="muted">' + (notes.length ? esc(notes.join(" / ")) : "-") + '</td>' +
         '<td>' + moneyText(row) + '<div class="raw">¥' + Number(row.amount || 0).toFixed(2) + '</div></td>' +
         '<td>' + ship + '</td>' +
@@ -567,6 +593,77 @@
     }
   }
 
+  function buildFilterText() {
+    var parts = [];
+    var statuses = [];
+    STATUS_GROUPS.forEach(function (group) {
+      group.items.forEach(function (item) {
+        if (selectedStatuses[item[0]]) statuses.push(item[1].split("（")[0]);
+      });
+    });
+    if (statuses.length) parts.push("状态：" + statuses.join("、"));
+    var itemSelect = $("itemFilter");
+    if (itemSelect.value !== "all" && itemSelect.selectedIndex >= 0) {
+      parts.push("商品：" + itemSelect.options[itemSelect.selectedIndex].text);
+    }
+    var accountCount = Object.keys(selectedAccounts).length;
+    if (accountCount) parts.push("账号：" + accountCount + " 个");
+    var keyword = $("keyword").value.trim();
+    if (keyword) parts.push("关键词：" + keyword);
+    if ($("maskNames").checked) parts.push("播报名匿名打码");
+    return parts.join(" · ");
+  }
+
+  async function exportOrders() {
+    var rows = filteredRows();
+    if (!rows.length) {
+      toast("没有可导出的订单", true);
+      return;
+    }
+    var button = $("exportOrdersBtn");
+    var originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "生成中…";
+    setStatus("正在生成筛选订单图片…");
+    try {
+      var response = await fetch("/api/weidian-orders/export/orders.png", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          order_ids: rows.map(function (row) { return row.order_id; }),
+          mask_names: $("maskNames").checked,
+          filter_text: buildFilterText()
+        }),
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      if (response.status === 401 || response.status === 403) {
+        showLogin("登录已失效，请重新输入密码");
+        return;
+      }
+      if (!response.ok) {
+        var body = await response.json().catch(function () { return {}; });
+        throw new Error(body.detail || "导出失败，请稍后重试");
+      }
+      var blob = await response.blob();
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = "微店订单_筛选导出_" + new Date().toISOString().slice(0, 10) + ".png";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      toast("图片已导出");
+    } catch (error) {
+      toast(error.message || "导出失败", true);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+      setStatus("");
+    }
+  }
+
   async function shipRows(rows, single) {
     var selectedRows = selectableRows(rows);
     if (!selectedRows.length) {
@@ -647,6 +744,8 @@
     updateShipSelectedButton();
   });
   $("refreshBtn").addEventListener("click", refreshOrders);
+  $("exportOrdersBtn").addEventListener("click", exportOrders);
+  $("maskNames").addEventListener("change", render);
   $("itemFilter").addEventListener("change", render);
   $("statusOptions").addEventListener("change", function (event) {
     var target = event.target;

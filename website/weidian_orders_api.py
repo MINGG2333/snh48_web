@@ -36,6 +36,7 @@ FANHUB_ROOT = Path("/home/snh48-fan-hub")
 FANHUB_PYTHON = FANHUB_ROOT / "venv" / "bin" / "python3"
 FANHUB_CLI = FANHUB_ROOT / "scripts" / "weidian" / "order_admin.py"
 JOB_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+ORDER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
 CACHE_TTL_SECONDS = 8
 
 _cache_lock = threading.Lock()
@@ -210,6 +211,56 @@ def weidian_orders_data(_=Depends(verify_weidian_orders_password)):
             _cache_at = time.time()
             _cache_data = data
     return data
+
+
+@router.post("/export/orders.png")
+def export_weidian_orders(
+    payload: dict[str, Any] = Body(default={}),
+    _=Depends(verify_weidian_orders_password),
+):
+    order_ids: list[str] = []
+    seen: set[str] = set()
+    for value in payload.get("order_ids") or []:
+        order_id = str(value or "").strip()
+        if not ORDER_ID_RE.fullmatch(order_id) or order_id in seen:
+            continue
+        seen.add(order_id)
+        order_ids.append(order_id)
+    if not order_ids:
+        raise HTTPException(status_code=422, detail="请先筛选出要导出的订单")
+    max_rows = int(getattr(cfg, "REDBLUE_IMAGE_EXPORT_MAX_ROWS", 500) or 500)
+    if len(order_ids) > max_rows:
+        raise HTTPException(status_code=413, detail=f"筛选结果 {len(order_ids)} 单，单张图最多 {max_rows} 单，请缩小范围")
+
+    data = _call("snapshot", {})
+    by_id = {
+        str(row.get("order_id")): row
+        for row in (data.get("orders") or [])
+        if isinstance(row, dict) and row.get("order_id")
+    }
+    rows = [by_id[order_id] for order_id in order_ids if order_id in by_id]
+    if not rows:
+        raise HTTPException(status_code=404, detail="当前筛选条件下没有可导出的订单")
+
+    filter_text = str(payload.get("filter_text") or "").replace("\n", " ").strip()[:160]
+    updated = str(data.get("generated_at") or data.get("updated_at") or "")
+    from website.weidian_export import render_orders_png
+
+    png = render_orders_png(
+        rows,
+        filter_text=filter_text,
+        updated=updated,
+        mask_names=bool(payload.get("mask_names")),
+    )
+    stamp = time.strftime("%Y%m%d_%H%M")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'attachment; filename="weidian_orders_{stamp}.png"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post("/jobs")
