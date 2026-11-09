@@ -504,7 +504,8 @@
 
 
     .karaoke-char { transition: color 0.12s ease; cursor: pointer; }
-    .karaoke-char.karaoke-active { color: #e11d48; font-weight: 700; }
+    .karaoke-char.karaoke-sung { color: #e11d48; }
+    .karaoke-char.karaoke-active { color: #b3123a; font-weight: 700; }
     .media-download { display: inline-block; margin-top: 6px; font-size: 12px; }
 
     .transcript-action:disabled {
@@ -1424,6 +1425,7 @@
         spans.forEach(function (span) {
           const start = Number(span.dataset.start || 0);
           const end = Number(span.dataset.end || 0);
+          span.classList.toggle("karaoke-sung", now >= start);
           span.classList.toggle("karaoke-active", now >= start && now < end);
         });
       };
