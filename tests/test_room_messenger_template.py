@@ -40,6 +40,9 @@ class RoomMessengerTemplateTests(unittest.TestCase):
         self.assertNotIn("X-Room-Messenger-Password", source)
         self.assertIn("confirm_word", source)
         self.assertIn("toShanghaiIso", source)
+        self.assertIn("selectedIds: new Set()", source)
+        self.assertIn("selectMode: false", source)
+        self.assertIn("deleteTargets: []", source)
 
     def test_mobile_and_accessibility_hooks_exist(self) -> None:
         source = TEMPLATE.read_text(encoding="utf-8")
