@@ -230,6 +230,21 @@ async def session_detail(
     return {"session": {**session, "segments": segments}, "messages": enriched_messages}
 
 
+@router.get("/sessions/{session_id}/transcript")
+async def session_transcript(
+    session_id: str,
+    response: Response,
+    _=Depends(verify_room_voice_replays_auth),
+):
+    safe_id = _safe_session_id(session_id)
+    session_dir = _root() / "sessions" / safe_id
+    transcript = _read_json(session_dir / "transcripts" / "transcript.json", {})
+    if not isinstance(transcript, dict) or not transcript.get("segments"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="本场转录尚未准备好")
+    response.headers["Cache-Control"] = "no-store"
+    return transcript
+
+
 def _parse_range(value: str, size: int) -> tuple[int, int, bool]:
     if not value:
         return 0, max(0, size - 1), False

@@ -127,6 +127,14 @@
       padding: 13px 18px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--line);
     }
     .messages { height: min(54vh, 620px); overflow: auto; padding: 14px 18px 24px; }
+    .transcript-box { height: min(30vh, 320px); }
+    .transcript-row {
+      padding: 7px 10px; border-radius: 9px; line-height: 1.65; cursor: pointer;
+      transition: background .15s ease;
+    }
+    .transcript-row:hover { background: #fbf6fa; }
+    .transcript-row.current { background: var(--rose-soft); box-shadow: inset 3px 0 var(--rose); }
+    .transcript-empty { color: var(--muted); padding: 12px; }
     .message {
       display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; padding: 10px;
       border-radius: 12px; transition: .15s ease;
@@ -232,6 +240,7 @@
               <h2 id="sessionHeading"></h2>
               <span id="roomTag" class="tag"></span>
               <div class="hero-actions">
+                <button id="transcriptToggle" class="ghost" type="button">显示转录</button>
                 <a id="roomMessagesLink" class="ghost" href="/room-messages">返回 Room</a>
               </div>
             </div>
@@ -256,6 +265,13 @@
               <audio id="audioPlayer" controls preload="metadata"></audio>
             </div>
             <div id="participants" class="participants"></div>
+          </div>
+          <div id="transcriptPanel" hidden>
+            <div class="messages-head">
+              <strong>本场转录</strong>
+              <span id="transcriptNote">点击句子跳转到对应录音位置</span>
+            </div>
+            <div id="transcriptBox" class="messages transcript-box"></div>
           </div>
           <div class="messages-head">
             <strong>同期消息</strong>
@@ -291,6 +307,10 @@
     const playbackStatusText = document.getElementById("playbackStatusText");
     const messagesBox = document.getElementById("messages");
     const roomMessagesLink = document.getElementById("roomMessagesLink");
+    const transcriptToggle = document.getElementById("transcriptToggle");
+    const transcriptPanel = document.getElementById("transcriptPanel");
+    const transcriptBox = document.getElementById("transcriptBox");
+    const transcriptNote = document.getElementById("transcriptNote");
 
     let sessions = [];
     let initialSessionId = new URLSearchParams(window.location.search).get("session") || "";
@@ -302,6 +322,9 @@
     let currentMessageIndex = -1;
     let playbackMode = "compatible";
     let segmentLoadToken = 0;
+    let currentTranscript = null;
+    let transcriptLoadedSessionId = "";
+    let transcriptVisible = false;
     let playbackStatusToken = 0;
     let playbackStatusTimer = null;
     let pendingSeekWallSeconds = null;
@@ -630,6 +653,105 @@
       });
     }
 
+    async function loadTranscript(force) {
+      if (!currentSessionId) return;
+      if (!force && transcriptLoadedSessionId === currentSessionId) return;
+      transcriptBox.replaceChildren();
+      transcriptNote.textContent = "加载中…";
+      try {
+        const response = await fetch(`${API}/sessions/${encodeURIComponent(currentSessionId)}/transcript`);
+        if (!response.ok) {
+          currentTranscript = null;
+          transcriptLoadedSessionId = currentSessionId;
+          transcriptBox.textContent = "本场转录尚未准备好";
+          transcriptNote.textContent = "";
+          return;
+        }
+        const data = await response.json();
+        currentTranscript = data;
+        transcriptLoadedSessionId = currentSessionId;
+        renderTranscript();
+      } catch (_) {
+        transcriptBox.textContent = "转录加载失败，请稍后重试";
+        transcriptNote.textContent = "";
+      }
+    }
+
+    function renderTranscript() {
+      transcriptBox.replaceChildren();
+      const sessionSegments = currentTranscript && Array.isArray(currentTranscript.segments)
+        ? currentTranscript.segments : [];
+      if (!sessionSegments.length) {
+        transcriptBox.textContent = "本场转录尚未准备好";
+        return;
+      }
+      let rows = 0;
+      sessionSegments.forEach((block) => {
+        const segmentNo = Number(block.segment_no || 0);
+        const offsetMs = Number(block.wall_start_offset_seconds || 0) * 1000;
+        const parts = Array.isArray(block.segments) ? block.segments : [];
+        if (!parts.length) {
+          addTranscriptRow(block.text || "", segmentNo, offsetMs, offsetMs + 1);
+          rows += 1;
+          return;
+        }
+        parts.forEach((part) => {
+          const startMs = offsetMs + Number(part.start_ms || 0);
+          const endMs = offsetMs + Number(part.end_ms || part.start_ms || 0);
+          addTranscriptRow(part.text || "", segmentNo, startMs, endMs);
+          rows += 1;
+        });
+      });
+      transcriptNote.textContent = rows ? "点击句子跳转到对应录音位置" : "本场转录尚未准备好";
+      updateTranscriptHighlight(wallSeconds());
+    }
+
+    function addTranscriptRow(text, segmentNo, startMs, endMs) {
+      if (!String(text || "").trim()) return;
+      const row = document.createElement("div");
+      row.className = "transcript-row";
+      row.textContent = text;
+      row.dataset.segmentNo = String(segmentNo);
+      row.dataset.startMs = String(startMs);
+      row.dataset.endMs = String(endMs);
+      row.addEventListener("click", () => {
+        const segments = currentSession && Array.isArray(currentSession.segments)
+          ? currentSession.segments : [];
+        const index = segments.findIndex((item) => Number(item.segment_no) === segmentNo);
+        if (index < 0) return;
+        const segment = segments[index] || {};
+        const offsetMs = Number(segment.wall_start_offset_seconds || 0) * 1000;
+        const seekSeconds = Math.max(0, (startMs - offsetMs) / 1000);
+        loadSegment(index, true, seekSeconds);
+      });
+      transcriptBox.appendChild(row);
+    }
+
+    function updateTranscriptHighlight(wall) {
+      if (!transcriptVisible || !transcriptBox) return;
+      const rows = transcriptBox.querySelectorAll(".transcript-row");
+      let active = null;
+      rows.forEach((row) => {
+        const start = Number(row.dataset.startMs || 0) / 1000;
+        const end = Number(row.dataset.endMs || 0) / 1000;
+        if (wall + 0.15 >= start && wall < end) active = row;
+      });
+      rows.forEach((row) => row.classList.toggle("current", row === active));
+      if (active && !audioPlayer.paused) active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+
+    function setTranscriptVisible(show, force) {
+      transcriptVisible = Boolean(show);
+      transcriptPanel.hidden = !transcriptVisible;
+      transcriptToggle.textContent = transcriptVisible ? "隐藏转录" : "显示转录";
+      transcriptToggle.classList.toggle("primary", transcriptVisible);
+      try { window.localStorage.setItem("room_voice_transcript_open", transcriptVisible ? "1" : "0"); } catch (_) {}
+      if (transcriptVisible) loadTranscript(Boolean(force));
+      else updateTranscriptHighlight(-1);
+    }
+
+    transcriptToggle.addEventListener("click", () => setTranscriptVisible(!transcriptVisible));
+
     function setStat(text, warning) {
       return addText(document.getElementById("stats"), "span", "stat" + (warning ? " warning" : ""), text);
     }
@@ -678,6 +800,10 @@
     function renderDetail() {
       detailEmpty.hidden = true;
       detailContent.hidden = false;
+      currentTranscript = null;
+      transcriptLoadedSessionId = "";
+      transcriptBox.replaceChildren();
+      if (transcriptVisible) loadTranscript(true);
       document.getElementById("sessionHeading").textContent = dateLabel(currentSession.detected_start_at_bj);
       const roomTag = document.getElementById("roomTag");
       roomTag.textContent = currentSession.room_label || "房间";
@@ -822,6 +948,7 @@
       if (!currentSession) return;
       const wall = wallSeconds();
       document.getElementById("timelineLabel").textContent = timeLabel(wall) + " / " + timeLabel(currentSession.wall_duration_seconds);
+      updateTranscriptHighlight(wall);
       let nextIndex = -1;
       for (let index = 0; index < currentMessages.length; index += 1) {
         if (Number(currentMessages[index].offset_ms || 0) / 1000 <= wall) nextIndex = index;
@@ -1012,6 +1139,9 @@
         loadSegment(currentSegmentIndex + 1, true, 0, "正在加载下一段音频…", "auto_next_segment");
       }
     });
+    let transcriptSaved = false;
+    try { transcriptSaved = window.localStorage.getItem("room_voice_transcript_open") === "1"; } catch (_) {}
+    setTranscriptVisible(transcriptSaved);
     syncFilterPanelViewport();
     loadSessions();
   </script>
