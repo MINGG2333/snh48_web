@@ -406,6 +406,28 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertEqual(entries[0]["status"], "sent")
 
 
+
+    def test_job_jitter_never_drops_below_minimum_interval(self) -> None:
+        self._login()
+        self._bind()
+        for interval, jitter, expected in ((15, 10, 0), (60, 120, 45), (300, 120, 120)):
+            with self.subTest(interval=interval):
+                response = self.client.post(
+                    "/api/room-messenger/jobs",
+                    headers={"Origin": "http://testserver"},
+                    json={
+                        "channel": {"channel_id": "1001", "server_id": "2001"},
+                        "messages": ["a", "b"],
+                        "interval_seconds": interval,
+                        "jitter_seconds": jitter,
+                        "start_at": "2099-01-01T20:00:00+08:00",
+                        "confirm": True,
+                    },
+                )
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()["job"]["jitter_seconds"], expected)
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}

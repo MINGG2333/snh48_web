@@ -1342,6 +1342,8 @@ async def create_job(payload: JobRequest, request: Request, response: Response, 
         raise HTTPException(status_code=422, detail=f"单条消息不能超过 {MAX_TEXT_LENGTH} 字")
     interval = max(limits["min_interval"], int(payload.interval_seconds or limits["default_interval"]))
     jitter = max(0, min(limits["max_jitter"], int(payload.jitter_seconds or 0)))
+    # 浮动只能把间隔拉长/缩短，但不得低于页面的最小发送间隔。
+    jitter = min(jitter, max(0, interval - limits["min_interval"]))
     start_at = _parse_start_at(payload.start_at)
     repeat_daily = bool(payload.repeat_daily)
     if repeat_daily:

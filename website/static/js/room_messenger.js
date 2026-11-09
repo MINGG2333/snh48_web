@@ -1089,6 +1089,24 @@
     }
 
     // ── Schedule modal ─────────────────────────────────────────────────────
+    function syncJitterLimit() {
+        var minInterval = S.limits.min_interval || 15;
+        var interval = Number($("jobInterval").value) || (S.limits.default_interval || 60);
+        var maxJitter = Math.min(S.limits.max_jitter || 0, Math.max(0, interval - minInterval));
+        $("jobJitter").max = String(maxJitter);
+        if (Number($("jobJitter").value) > maxJitter) {
+            $("jobJitter").value = String(maxJitter);
+        }
+        var hint = $("batchLimitHint");
+        if (S.scheduleMode === "once") {
+            hint.hidden = true;
+            return;
+        }
+        hint.hidden = false;
+        hint.innerHTML = "单批最多 " + (S.limits.max_batch || 30) + " 条消息；最小间隔 " + minInterval +
+            " 秒。随机浮动不会让实际间隔低于 " + minInterval + " 秒（当前 ±" + maxJitter + " 秒）。";
+    }
+
     function setScheduleMode(mode) {
         S.scheduleMode = mode;
         Array.prototype.forEach.call(document.querySelectorAll(".rm-seg-btn"), function (button) {
@@ -1105,6 +1123,7 @@
             ? "我已确认目标频道、消息内容和发送间隔"
             : "我已确认目标频道和消息内容";
         $("schedulePreview").textContent = "";
+        syncJitterLimit();
     }
 
     function openScheduleModal() {
@@ -1117,6 +1136,7 @@
         $("jobInterval").min = String(S.limits.min_interval || 15);
         $("jobJitter").value = Math.min(10, S.limits.max_jitter || 0);
         $("jobJitter").max = String(S.limits.max_jitter || 0);
+        syncJitterLimit();
         $("jobMessages").value = $("messageInput").value || "";
         $("jobConfirm").checked = false;
         $("schedulePreview").textContent = "";
@@ -1144,6 +1164,8 @@
         if (isNaN(start.getTime())) return { error: "开始时间无效" };
         var interval = withDefault(Number($("jobInterval").value), S.limits.default_interval || 60);
         var jitter = withDefault(Number($("jobJitter").value), 0);
+        var minInterval = S.limits.min_interval || 15;
+        jitter = Math.min(jitter, Math.max(0, interval - minInterval));
         if (messages.length > (S.limits.max_batch || 30)) {
             return { error: "最多 " + (S.limits.max_batch || 30) + " 条消息" };
         }
@@ -1507,6 +1529,7 @@
         Array.prototype.forEach.call(document.querySelectorAll(".rm-seg-btn"), function (button) {
             button.addEventListener("click", function () { setScheduleMode(button.dataset.mode); });
         });
+        $("jobInterval").addEventListener("input", syncJitterLimit);
         $("previewJobBtn").addEventListener("click", previewJob);
         $("createJobBtn").addEventListener("click", createJob);
 
