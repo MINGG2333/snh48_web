@@ -15,10 +15,19 @@ from pathlib import Path
 MAX_MESSAGE_BYTES = 1024 * 1024
 FRAME_HEADER = struct.Struct("!I")
 COMMANDS = {
-    "flip": frozenset({"send-sms", "security-answer", "verify-code", "job-status", "latest-job"}),
+    "flip": frozenset({
+        "send-sms", "security-answer", "verify-code", "job-status", "latest-job",
+        "messenger-status", "messenger-probe", "messenger-history", "messenger-send",
+    }),
     "social": frozenset({"status", "update", "set-primary"}),
 }
 TIMEOUTS = {"flip": 45, "social": 175}
+COMMAND_TIMEOUTS = {
+    ("flip", "messenger-send"): 400,
+    ("flip", "messenger-history"): 60,
+    ("flip", "messenger-probe"): 60,
+    ("flip", "messenger-status"): 60,
+}
 
 
 def _recv_exact(connection: socket.socket, size: int) -> bytes:
@@ -71,7 +80,9 @@ def main() -> int:
     socket_path = runtime_root / f"snh48-privileged-bridge-{args.service}" / "bridge.sock"
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-            connection.settimeout(TIMEOUTS[args.service])
+            connection.settimeout(
+                COMMAND_TIMEOUTS.get((args.service, args.command), TIMEOUTS[args.service])
+            )
             connection.connect(str(socket_path))
             connection.sendall(FRAME_HEADER.pack(len(request)) + request)
             response = json.loads(receive_frame(connection).decode("utf-8"))

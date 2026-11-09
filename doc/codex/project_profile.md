@@ -239,6 +239,25 @@ node script/obfuscate_js.cjs
 - 网页账号管理继续受翻牌密码 Cookie 保护，POST 还要求同源；手机号和验证码只经本机 Unix Socket 请求体进入独立的 `snh48-privileged-bridge-flip.service`，手机号只进入 fan-hub 本机短期 `0600` 会话，验证码不落盘，Token 只进入 `config/accounts.json`；登录成功的非个人号由 fan-hub 侧自动幂等追加进 `account_pool` 并写通知中心（2026-10-20 起），入池失败不影响登录。网站服务本身没有 sudo 或 fan-hub 写权限。翻牌桥通过 `/tmp/snh48-fan-hub-flip-web-rate.lock`、`/tmp/snh48-fan-hub-flip-update.lock`、`/tmp/snh48-fan-hub-transcription.lock` 和 `/tmp/snh48-fan-hub-flip-accounts-manifest.lock` 分别共享短信限速、翻牌更新、本地模型转录及账号清单提交互斥；四个文件必须预创建为 `root:root 0600`，服务单元只放行这些文件而不是整个 `/tmp`。PyTorch 的 `TMPDIR` 固定为 `/home/snh48-fan-hub/notifications/flip_web_admin/tmp` 私有目录。翻牌和房间语音转录共用 fan-hub 专用 `/home/snh48-fan-hub/venv-transcription`，不得重新依赖网站虚拟环境。阿里云只同步脱敏 `web/`、账号级音频和视频，不同步 `metadata/`、`transcripts/`、登录会话或任务日志。
 - 翻牌应用数据由 fan-hub 的 `scripts/tools/render_flip_chat.py` 生成；本地 Whisper 转录仍在 fan-hub 数据生成阶段完成，网站不对转录正文调用 Codex 或其他外部润色模型。页面采用浅色聊天消息流，引用提问使用灰色摘要，转录参考使用语音条下方的分隔文本区。顶部筛选默认收起且默认选择陈嘉仪，其他回复成员可单独筛选；陈嘉仪头像显示“嘉仪”，其他成员显示完整姓名。账号登录和更新状态入口分离，状态弹窗可收起并恢复；首次只渲染筛选结果中最新 50 条翻牌，向上滚动每次补入 50 条并保持阅读位置，音频使用 `preload=none`，避免 iPhone Safari 登录后同时初始化全部媒体。底部“跳到最新”只滚动当前数据，检测到新版本后显示“有新记录，点击查看最新”，此时才重新加载并跳到底部。问题状态 Tag、双向跳转和 4 秒高对比高亮保持不变。
 
+### 房间信使（个人号发送）
+
+入口和文档：
+
+- 页面入口：`/room/messenger`，短入口：`/room-messenger`
+- 专用说明：`doc/codex/room_messenger.md`
+- API：`/api/room-messenger/login`、`/logout`、`/verify`、`/account*`、`/catalog`、`/recent`、`/messages`、`/send`、`/jobs*`
+- 数据源：fan-hub `room_record/陈嘉仪_161808449/cross_room/metadata/member_catalog.json`（成员/频道目录）；个人号 Token 在 `config/accounts.json`
+- 运行状态：`/var/lib/snh48-web/room_messenger/`（绑定、最近频道、每日计数、任务、审计日志；0600/0700）
+
+维护边界：
+
+- 仅腾讯云 `cjy.plus` 启用；`ROOM_MESSENGER_ENABLED` 留空时跟随 `SHARED_STATE_IS_PRIMARY`，阿里云页面壳存在但 API 返回 403。
+- 登录个人号必须立即 `personal` 标记、不得入池；如果账号已在池中，登录失败并提示先移出，不静默改池。
+- Token 只在 root 账号库；网页进程通过既有 `snh48-privileged-bridge-flip.service` 的 `messenger-status/probe/history/send` 固定命令访问，不新增服务、socket 或可写目录。
+- 即时发送要求输入确认词“确认发送”；任务创建要求勾选确认；每日上限、最小间隔和单批上限见环境变量。
+- 发送任务由网站进程内守护线程执行并持久化；网站重启时遗留 `sending` 标记为 `unknown` 并暂停，不自动重发。
+- 自动测试和 agent 不得向真实频道发送消息；真实发送验收由 owner 手动完成。
+
 ### 计分礼物管理页
 
 入口和文档：
@@ -413,6 +432,12 @@ FLIP_CARDS_PASSWORD=独立翻牌页密码；留空复用 OB_PASSWORD
 FLIP_CARDS_DATASET_PATH=/home/snh48-fan-hub/flip_data/web/flip_cards.json
 FLIP_CARDS_ACCOUNTS_PATH=/home/snh48-fan-hub/flip_data/web/accounts.json
 FLIP_CARDS_DATA_DIR=/home/snh48-fan-hub/flip_data
+ROOM_MESSENGER_PASSWORD=独立房间信使密码；留空复用房间消息密码
+ROOM_MESSENGER_ENABLED=腾讯云 true；阿里云 false（留空跟随主节点）
+ROOM_MESSENGER_STATE_DIR=/var/lib/snh48-web/room_messenger
+ROOM_MESSENGER_CATALOG_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/cross_room/metadata/member_catalog.json
+ROOM_MESSENGER_COMMAND=留空回退 FLIP_CARDS_ACCOUNT_ADMIN_COMMAND
+ROOM_MESSENGER_DAILY_SEND_CAP=100
 FLIP_CARDS_ACCOUNT_ADMIN_ENABLED=腾讯云 true；阿里云 false（默认跟随 SHARED_STATE_IS_PRIMARY）
 GIFT_REPLIES_PASSWORD=独立礼物回复页密码
 ROOM_VOICE_REPLAYS_PASSWORD=独立上麦回放密码或留空复用房间消息密码

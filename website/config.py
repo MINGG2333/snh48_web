@@ -319,6 +319,53 @@ ROOM_VOICE_REPLAYS_DIR = os.getenv("ROOM_VOICE_REPLAYS_DIR") or str(
     / "room_voice_replays"
 )
 
+# ── Room Messenger (个人号房间消息发送页) ────────────────────────────────
+# 仅腾讯云私密站启用；个人号 Token 只保存在 fan-hub 账号库并标记 personal，
+# 网页进程通过本机特权桥读写，不直接接触 Token。
+ROOM_MESSENGER_PASSWORD = os.getenv("ROOM_MESSENGER_PASSWORD") or ROOM_MESSAGES_PASSWORD
+ROOM_MESSENGER_STATE_DIR = os.getenv(
+    "ROOM_MESSENGER_STATE_DIR", "/var/lib/snh48-web/room_messenger"
+)
+ROOM_MESSENGER_CATALOG_PATH = os.getenv(
+    "ROOM_MESSENGER_CATALOG_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "room_record"
+        / "陈嘉仪_161808449"
+        / "cross_room"
+        / "metadata"
+        / "member_catalog.json"
+    ),
+)
+ROOM_MESSENGER_BRIDGE_PYTHON = os.getenv("ROOM_MESSENGER_BRIDGE_PYTHON") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "venv" / "bin" / "python3"
+)
+ROOM_MESSENGER_BRIDGE_SCRIPT = os.getenv("ROOM_MESSENGER_BRIDGE_SCRIPT") or str(
+    PROJECT_ROOT.parent / "snh48-fan-hub" / "scripts" / "web" / "flip_account_admin.py"
+)
+ROOM_MESSENGER_MIN_INTERVAL_SECONDS = int(
+    os.getenv("ROOM_MESSENGER_MIN_INTERVAL_SECONDS", "15")
+)
+ROOM_MESSENGER_DEFAULT_INTERVAL_SECONDS = int(
+    os.getenv("ROOM_MESSENGER_DEFAULT_INTERVAL_SECONDS", "60")
+)
+ROOM_MESSENGER_MAX_JITTER_SECONDS = int(
+    os.getenv("ROOM_MESSENGER_MAX_JITTER_SECONDS", "120")
+)
+ROOM_MESSENGER_MAX_BATCH_MESSAGES = int(
+    os.getenv("ROOM_MESSENGER_MAX_BATCH_MESSAGES", "30")
+)
+ROOM_MESSENGER_DAILY_SEND_CAP = int(
+    os.getenv("ROOM_MESSENGER_DAILY_SEND_CAP", "100")
+)
+ROOM_MESSENGER_CHUNK_SECONDS = int(
+    os.getenv("ROOM_MESSENGER_CHUNK_SECONDS", "300")
+)
+ROOM_MESSENGER_HISTORY_POLL_SECONDS = int(
+    os.getenv("ROOM_MESSENGER_HISTORY_POLL_SECONDS", "20")
+)
+
 # ── Flip Cards (口袋48翻牌记录应用数据与本地媒体) ───────────────────────
 FLIP_CARDS_DATA_DIR = os.getenv("FLIP_CARDS_DATA_DIR") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "flip_data"
@@ -346,6 +393,12 @@ SOCIAL_CREDENTIALS_ADMIN_COMMAND = tuple(
 )
 FLIP_CARDS_ACCOUNT_ADMIN_COMMAND = tuple(
     shlex.split(os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_COMMAND", ""))
+)
+ROOM_MESSENGER_COMMAND = tuple(
+    shlex.split(
+        os.getenv("ROOM_MESSENGER_COMMAND")
+        or os.getenv("FLIP_CARDS_ACCOUNT_ADMIN_COMMAND", "")
+    )
 )
 
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
@@ -593,6 +646,17 @@ FLIP_CARDS_ACCOUNT_ADMIN_ENABLED = (
     SHARED_STATE_IS_PRIMARY
     if not _flip_cards_account_admin_enabled
     else _flip_cards_account_admin_enabled not in ("0", "false", "no")
+)
+_room_messenger_enabled = os.getenv("ROOM_MESSENGER_ENABLED", "").strip().lower()
+ROOM_MESSENGER_ENABLED = (
+    False
+    if _room_messenger_enabled in ("0", "false", "no")
+    else bool(ROOM_MESSENGER_PASSWORD)
+    and (
+        SHARED_STATE_IS_PRIMARY
+        if not _room_messenger_enabled
+        else _room_messenger_enabled in ("1", "true", "yes")
+    )
 )
 _social_credentials_admin_enabled = os.getenv("SOCIAL_CREDENTIALS_ADMIN_ENABLED", "").strip().lower()
 SOCIAL_CREDENTIALS_ADMIN_ENABLED = (

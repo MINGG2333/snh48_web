@@ -128,6 +128,22 @@ class PrivilegedBridgeTests(unittest.TestCase):
             with self.assertRaises(bridge_server.BridgeFailure):
                 broker.run({"command": "shell", "payload": {"value": "id"}})
 
+    def test_flip_bridge_exposes_only_room_messenger_send_commands(self) -> None:
+        commands = bridge_server.SERVICE_SETTINGS["flip"]["commands"]
+        for command in (
+            "messenger-status",
+            "messenger-probe",
+            "messenger-history",
+            "messenger-send",
+        ):
+            self.assertIn(command, commands)
+        self.assertEqual(bridge_server.SERVICE_SETTINGS["flip"]["timeout"], 40)
+        self.assertEqual(
+            bridge_server.SERVICE_SETTINGS["flip"]["command_timeouts"]["messenger-send"],
+            380,
+        )
+        self.assertNotIn("messenger-shell", commands)
+
     def test_client_and_server_exchange_json_over_unix_socket(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

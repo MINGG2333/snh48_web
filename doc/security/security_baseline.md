@@ -34,6 +34,7 @@
 | 翻牌记录与账号管理访问控制 | `/api/flip-cards/*` 要求 `FLIP_CARDS_PASSWORD`，2026-11-09 起只接受 `X-Flip-Cards-Password` 请求头（密码仅存页面内存、不下发 Cookie，刷新页面必须重输），`audio`/`video` 元素改用 8 小时短时签名 URL；账号管理 POST 还校验同源，仅腾讯云权威节点启用。密码错误尝试使用独立于观察页的限流预算，旧 Cookie 不再被识别也不会消耗限流。手机号和验证码经本机 Socket 请求体交给独立受限服务，手机号只写腾讯云本机短期 `0600` 会话，验证码不落盘，Token 只写私有账号库；短信有冷却/小时限额，验证码最多尝试 5 次 | 避免个人翻牌、媒体和口袋48登录凭据被公开、跨站触发或同步到阿里云 | 两端页面和代码一致；阿里云同一弹窗只返回当前节点不开放操作且无跳转。网页进程无 sudo 和 fan-hub 写权限；翻牌桥的系统 `/tmp` 保持只读，只将短信限速、翻牌更新、转录串行化和账号清单提交四个预创建锁文件以 `root:root 0600` 放行，PyTorch 临时文件仅写 `notifications/flip_web_admin/tmp` 私有目录，部署脚本不得改为放行整个 `/tmp`；本地 Whisper 以 Hugging Face 离线模式运行，不向外部上传音频或下载模型；媒体按清单允许的账号 ID、固定文件名和 Range API 提供；不得把 `flip_data/` 挂到 `/static` |
 | 红蓝计分台账访问控制 | `/api/redblue/*` 要求 `REDBLUE_LEDGER_PASSWORD`；`POST /api/redblue/login` 成功后签发路径限定、60 分钟、内存密钥的 `HttpOnly`、`Secure`、`SameSite=Strict` Cookie，旧/未知 Cookie 返回 401 不计限流，`/logout` 删除 Cookie；前端不再把密码写入 `sessionStorage`/`localStorage`，数据、导出、轮询和同步请求统一使用 Cookie；`X-Redblue-Password` 仅保留旧客户端兼容 | 避免明文后台密码长期留在浏览器存储并被同源 XSS、恶意扩展或共享设备读取；默认复用业务管理/礼物回复密码时降低连带泄露影响 | Cookie 仅对 `/api/redblue` 生效，服务重启后旧 Cookie 失效需重新登录；不得恢复 `autocomplete="current-password"` 或 Web Storage 保存密码；静态护栏见 `tests/test_password_page_security.py`，实现规范见 `doc/security/password_page_best_practices.md` |
 | 社交 Cookie 隐藏管理 | `/api/social-credentials/*` 要求独立密码或迁移期复用 `OB_PASSWORD`，使用 60 分钟、路径限定、内存密钥的 `HttpOnly`、`SameSite=Strict` Cookie（旧/未知 Cookie 返回 401 不计限流）；更新 POST 校验同源并受 `SHARED_STATE_IS_PRIMARY` 硬门禁；固定命令由独立受限服务执行 | 避免微博/抖音/B站/闲鱼 Cookie 被公开、跨站替换或进入阿里云，同时避免网页进程直接获得 root 或凭据目录写权限 | Cookie 只经 HTTPS、Unix Socket 请求体和 stdin-only 短进程传递；响应、状态、命令行和日志不得回显；严格桥先验证再原子保存，失败保留旧配置；闲鱼用 mtop 搜索轻量验证，成功后写腾讯云 `config/xianyu_cookie.json`（600），经 hub 组同步阿里云供每日查价（2026-11-04 用户批准的例外），失败/恢复写通知中心并走飞书 Bot；页面不进导航并设置 `noindex,nofollow`；2026-11-06 增加 48 商城：两槽分别验证 `shop.48.cn`/`48.gnz48.com` 的 `GetShowBids`，成功后原子写 fan-hub `config/shop48_cookie_snh.txt`/`gnz.txt`（600），只供 48 竞价归档读取，不回显、不进 Git、不同步阿里云。 |
+| 房间信使（个人号发送） | `/api/room-messenger/*` 使用 `ROOM_MESSENGER_PASSWORD`（留空回退房间消息密码）和 60 分钟路径限定 HttpOnly Cookie；登录个人号用手机验证码，成功后立即 `personal` 标记且不入池；历史与发送经本机 root 特权桥，Token 不进入网页进程；即时发送要求确认词，任务有间隔/每日上限/暂停取消 | 让 owner 用个人号在网页查看并发送房间消息，同时避免个人号被自动化采集复用、Token 暴露给网页进程或误批量刷屏 | 仅腾讯云启用；`/var/lib/snh48-web/room_messenger` 0600/0700；桥命令 `messenger-status/probe/history/send` 加入既有 flip 白名单，不新增服务；QChat 发送脚本不记录 Token；真实发送验收必须由 owner 手动完成，自动测试不得调用真实频道；详见 `doc/codex/room_messenger.md` |
 | 密码页三种模式（2026-11-09 起） | 按 `doc/security/password_page_best_practices.md` 第 1 节选择：A=HttpOnly Cookie 60 分钟（`password_session.py`，内存密钥，F5 60 分钟内免密）；B=页面内存密码 + 请求头（F5 必须重输，无媒体）；C=页面内存密码 + 短时媒体签名 URL（F5 必须重输，有 audio/video）。三种模式都要求旧/未知会话 401 不计限流、每个密码组独立限流、密码不写 Web Storage/URL | 统一安全底线，同时保留“F5 是否重输”的产品差异，避免为一致性错误迁移页面 | 不得恢复已归档的 `private_handover/存档/停用密钥/redblue_ledger_cookie_secret` 等持久密钥；新页面先选模式再实现；存量页面只在有具体需求时迁移 |
 | 防滥用限速 | QA、密码尝试、scroller 登录、邮箱提交、追踪事件、投诉、记忆提交、余额查询、OB/礼物回复页/房间消息页/上麦回放页/翻牌页/记忆页模式登录尝试均有限速；翻牌页使用独立的 `FLIP_LOGIN_MAX_PER_WINDOW`/`FLIP_LOGIN_WINDOW_SECONDS`，不与观察页共用预算 | 控制 API 成本和暴力尝试 | 默认阈值在 `website/config.py`，可由 `.env` 覆盖 |
 | 余额接口缓存 | `/api/balance` 对成功结果短期缓存 | 减少公开接口对第三方 API 的压力 | 只缓存成功状态，不缓存缺少 API key 等配置错误 |
@@ -90,6 +91,12 @@ REDBLUE_LEDGER_PASSWORD=独立红蓝计分台账密码或留空复用 BUSINESS_A
 SOCIAL_CREDENTIALS_ADMIN_ENABLED=腾讯云 true；阿里云 false
 SOCIAL_CREDENTIALS_ADMIN_PYTHON=/home/snh48-fan-hub/venv/bin/python3
 SOCIAL_CREDENTIALS_ADMIN_SCRIPT=/home/snh48-fan-hub/scripts/web/social_credentials_admin.py
+ROOM_MESSENGER_PASSWORD=独立房间信使密码或留空复用房间消息密码
+ROOM_MESSENGER_ENABLED=腾讯云 true；阿里云 false（留空跟随主节点）
+ROOM_MESSENGER_STATE_DIR=/var/lib/snh48-web/room_messenger
+ROOM_MESSENGER_CATALOG_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/cross_room/metadata/member_catalog.json
+ROOM_MESSENGER_COMMAND=留空回退 FLIP_CARDS_ACCOUNT_ADMIN_COMMAND（flip 桥）
+ROOM_MESSENGER_DAILY_SEND_CAP=100
 ```
 
 云安全组只应公网放行 `80/443`，以及必要的 SSH `22` 管理入口；`22` 建议限制来源 IP 或配套强认证。不应公网放行后端 `8000` 或图片代理 `8899`。如果备案前或故障排查需要临时暴露 `8000`/`8899`，完成后必须撤销。
@@ -111,6 +118,8 @@ curl -sS -D - -o /dev/null https://cjy.plus/
 test "$(curl -sS -o /dev/null -w '%{http_code}' https://cjy.plus/api/qa/status)" = 404
 curl -sS -D - -o /dev/null https://cjy.plus/room-voice-replays
 curl -sS -D - -o /dev/null https://cjy.plus/api/room-voice-replays/sessions
+curl -sS -D - -o /dev/null https://cjy.plus/room/messenger
+curl -sS -D - -o /dev/null https://cjy.plus/api/room-messenger/verify
 curl -sS -D - -o /dev/null https://cjy.plus/flip-cards
 curl -sS -D - -o /dev/null https://cjy.plus/api/flip-cards/status
 curl -sS -D - -o /dev/null https://cjy.plus/social-credentials-admin
@@ -133,6 +142,7 @@ python3 script/prewarm_image_proxy.py --base-url https://cjy.plus --limit 10 --d
 - 公网访问 `http://124.222.72.203:8000` 和 `http://124.222.72.203:8899/health` 失败或超时；服务器本机访问 `127.0.0.1:8000` 正常。
 - `/replay/{live_id}` 的外部 HLS 回放在 Chrome/Firefox 中可播放。
 - `/room-voice-replays` 页面返回 200；未登录访问 `/api/room-voice-replays/sessions` 返回 401；使用真实密码后列表、详情和音频 Range 请求正常，响应不暴露服务器文件路径或流 URL。
+- `/room/messenger` 页面返回 200 且带 `X-Robots-Tag: noindex, nofollow`；未登录访问 `/api/room-messenger/verify` 返回 401；登录后 `/account`、`/catalog` 返回 200，响应不含 Token；不得在自动验收中调用 `/send` 或创建后启动真实发送任务。
 - `/flip-cards` 页面返回 200；未登录访问 `/api/flip-cards/status` 返回 401；`POST /api/flip-cards/login` 只校验密码、不返回 `Set-Cookie`；带 `X-Flip-Cards-Password` 后应用 JSON 正常，返回的媒体签名 URL 在无请求头时也能完成 MP3/MP4 Range 请求，签名被篡改或过期时返回 401；响应不暴露服务器文件路径或口袋48 Token。
 - `/social-credentials-admin` 页面返回 200 且带 `X-Robots-Tag: noindex, nofollow`；腾讯云未登录访问 status 返回 401，登录后只返回各槽位是否配置和最近验证时间，不含 Cookie。阿里云 API 返回 403，即使误设 enable 也不能写入。
 - `/business/redblue2026` 页面返回 200；未登录访问 `/api/redblue/data` 返回 401；登录响应的 Cookie 带 `HttpOnly`、`Secure`、`SameSite=strict`、`Path=/api/redblue`，带 Cookie 访问数据和导出返回 200，登出后恢复 401；页面源码不含 `sessionStorage`/`localStorage` 保存密码。

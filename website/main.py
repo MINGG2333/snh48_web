@@ -494,6 +494,25 @@ async def room_messages_page(request: Request):
     )
 
 
+@app.get("/room/messenger", response_class=HTMLResponse)
+@app.get("/room-messenger", response_class=HTMLResponse)
+async def room_messenger_page(request: Request):
+    """Password-protected personal-account room messenger page."""
+    return templates.TemplateResponse(
+        "room_messenger.html",
+        {
+            "request": request,
+            "site_title": cfg.SITE_TITLE,
+            "site_icp": cfg.SITE_ICP,
+            "site_police_icp": cfg.SITE_POLICE_ICP,
+            "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
+            "static_version": static_version,
+            "room_messenger_enabled": cfg.ROOM_MESSENGER_ENABLED,
+            "room_messenger_node": cfg.SHARED_STATE_NODE_ID,
+        },
+    )
+
+
 @app.get("/radio", response_class=HTMLResponse)
 @app.get("/room-voice-replays", response_class=HTMLResponse)
 async def room_voice_replays_page(request: Request):
@@ -710,6 +729,15 @@ async def startup():
     start_weidian_auto_sync()
     print(f"✓ Red-blue Weidian auto-sync checked (primary={cfg.SHARED_STATE_IS_PRIMARY}).")
 
+    try:
+        from website.room_messenger_api import start_scheduler as start_room_messenger_scheduler
+        if start_room_messenger_scheduler():
+            print("✓ Room messenger scheduler started.")
+        else:
+            print("  Room messenger is disabled on this node.")
+    except Exception as e:
+        print(f"! Room messenger scheduler failed to start: {e}")
+
     if not cfg.QA_ENABLED:
         print("  QA is disabled on this node; routes and warmup are not loaded.")
     elif cfg.QA_WARMUP_ON_STARTUP:
@@ -796,6 +824,9 @@ app.include_router(gift_replies_router)
 
 from website.room_messages_api import router as room_messages_router
 app.include_router(room_messages_router)
+
+from website.room_messenger_api import router as room_messenger_router
+app.include_router(room_messenger_router)
 
 from website.room_voice_replays_api import router as room_voice_replays_router
 app.include_router(room_voice_replays_router)

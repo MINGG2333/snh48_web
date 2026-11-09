@@ -23,9 +23,18 @@ FRAME_HEADER = struct.Struct("!I")
 DEFAULT_FAN_ROOT = Path("/home/snh48-fan-hub")
 SERVICE_SETTINGS = {
     "flip": {
-        "commands": frozenset({"send-sms", "security-answer", "verify-code", "job-status", "latest-job"}),
+        "commands": frozenset({
+            "send-sms", "security-answer", "verify-code", "job-status", "latest-job",
+            "messenger-status", "messenger-probe", "messenger-history", "messenger-send",
+        }),
         "script": Path("scripts/web/flip_account_admin.py"),
         "timeout": 40,
+        "command_timeouts": {
+            "messenger-send": 380,
+            "messenger-history": 45,
+            "messenger-probe": 45,
+            "messenger-status": 45,
+        },
     },
     "social": {
         "commands": frozenset({"status", "update", "set-primary"}),
@@ -160,7 +169,14 @@ class CommandBroker:
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
         try:
-            stdout, _ = process.communicate(stdin_payload, timeout=int(self.settings["timeout"]))
+            stdout, _ = process.communicate(
+                stdin_payload,
+                timeout=int(
+                    self.settings.get("command_timeouts", {}).get(
+                        command, self.settings["timeout"]
+                    )
+                ),
+            )
         except subprocess.TimeoutExpired as exc:
             os.killpg(process.pid, signal.SIGTERM)
             try:

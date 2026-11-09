@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex,nofollow">
+    <title>房间消息发送 - {{ site_title }}</title>
+    <link rel="icon" href="/favicon.ico" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ static_version('css/style.css') }}">
+    <link rel="stylesheet" href="/static/css/room_messenger.css?v={{ static_version('css/room_messenger.css') }}">
+</head>
+<body class="rm-body">
+<div id="loginOverlay" class="rm-login-overlay">
+    <form id="loginForm" class="rm-login-card" autocomplete="off">
+        <div class="rm-login-icon"><i class="fas fa-comment-dots"></i></div>
+        <h1>房间消息发送</h1>
+        <p class="rm-muted">个人号专用 · 仅限本人使用</p>
+        <label class="rm-field">
+            <span>访问密码</span>
+            <input id="loginPassword" type="password" autocomplete="new-password" placeholder="请输入页面密码" required>
+        </label>
+        <div id="loginError" class="rm-form-error" hidden></div>
+        <button id="loginSubmit" class="rm-btn rm-btn-primary rm-btn-block" type="submit">进入</button>
+        <p class="rm-login-note"><i class="fas fa-lock"></i> 密码仅用于换取 HttpOnly 会话，不写入浏览器存储</p>
+    </form>
+</div>
+
+<div id="app" class="rm-app" hidden>
+    <div id="sidebarBackdrop" class="rm-sidebar-backdrop" hidden></div>
+    <aside id="sidebar" class="rm-sidebar">
+        <div class="rm-sidebar-head">
+            <div class="rm-brand"><i class="fas fa-comment-dots"></i><span>房间信使</span></div>
+            <button id="sidebarClose" class="rm-icon-btn rm-mobile-only" type="button" aria-label="关闭侧栏"><i class="fas fa-xmark"></i></button>
+        </div>
+
+        <div id="accountCard" class="rm-account-card">
+            <div class="rm-account-main">
+                <div id="accountAvatar" class="rm-avatar"><i class="fas fa-user"></i></div>
+                <div class="rm-account-text">
+                    <div id="accountName" class="rm-account-name">未登录个人账号</div>
+                    <div id="accountMeta" class="rm-account-meta">登录后即可发送房间消息</div>
+                </div>
+            </div>
+            <div class="rm-account-actions">
+                <button id="accountLoginBtn" class="rm-btn rm-btn-small rm-btn-primary" type="button"><i class="fas fa-key"></i> 登录</button>
+                <button id="accountProbeBtn" class="rm-btn rm-btn-small" type="button" hidden><i class="fas fa-shield-heart"></i> 检查</button>
+                <button id="accountUnbindBtn" class="rm-btn rm-btn-small rm-btn-ghost" type="button" hidden><i class="fas fa-arrow-right-from-bracket"></i> 解除</button>
+            </div>
+        </div>
+
+        <div class="rm-search">
+            <i class="fas fa-magnifying-glass"></i>
+            <input id="channelSearch" type="search" placeholder="搜索成员 / 频道" autocomplete="off">
+        </div>
+
+        <div class="rm-tabs" role="tablist">
+            <button class="rm-tab is-active" data-tab="recent" type="button" role="tab"><i class="fas fa-clock-rotate-left"></i> 常用频道</button>
+            <button class="rm-tab" data-tab="catalog" type="button" role="tab"><i class="fas fa-users"></i> 成员目录</button>
+        </div>
+
+        <div id="channelList" class="rm-channel-list">
+            <div class="rm-empty-small">选择左侧成员后开始</div>
+        </div>
+        <div class="rm-sidebar-foot">
+            <span id="dailyMeter">今日发送 0 / -</span>
+            <span class="rm-dot"></span>
+            <span id="nodeLabel">{{ room_messenger_node }}</span>
+            <button id="logoutBtn" class="rm-logout-link" type="button">退出</button>
+        </div>
+    </aside>
+
+    <main class="rm-main">
+        <header class="rm-main-head">
+            <button id="sidebarOpen" class="rm-icon-btn rm-mobile-only" type="button" aria-label="打开侧栏"><i class="fas fa-bars"></i></button>
+            <div class="rm-chat-title">
+                <h2 id="channelTitle">未选择频道</h2>
+                <p id="channelSubtitle">从左侧选择成员和房间</p>
+            </div>
+            <div class="rm-head-actions">
+                <button id="refreshBtn" class="rm-icon-btn" type="button" title="刷新消息" aria-label="刷新消息"><i class="fas fa-rotate"></i></button>
+                <button id="queueBtn" class="rm-icon-btn" type="button" title="发送计划" aria-label="发送计划"><i class="fas fa-list-check"></i><span id="queueBadge" class="rm-badge" hidden>0</span></button>
+            </div>
+        </header>
+
+        <section id="chat" class="rm-chat" aria-live="polite">
+            <div id="chatEmpty" class="rm-chat-empty">
+                <div class="rm-empty-illustration"><i class="fas fa-comments"></i></div>
+                <h3>选择一个频道开始</h3>
+                <p>支持查看最近聊天、即时发送、定时发送和按间隔批量发送。</p>
+            </div>
+            <div id="messageList" class="rm-messages"></div>
+        </section>
+        <button id="jumpLatest" class="rm-jump-latest" type="button" hidden><i class="fas fa-arrow-down"></i> 回到最新</button>
+
+        <footer class="rm-composer-wrap">
+            <div id="composerLock" class="rm-composer-lock">
+                <i class="fas fa-lock"></i> 请先选择频道并绑定个人账号
+            </div>
+            <div id="composer" class="rm-composer" hidden>
+                <textarea id="messageInput" rows="1" maxlength="1000" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+                <div class="rm-composer-bar">
+                    <span id="charCount" class="rm-char-count">0 / 1000</span>
+                    <div class="rm-composer-actions">
+                        <button id="scheduleBtn" class="rm-btn rm-btn-ghost" type="button"><i class="fas fa-calendar-clock"></i> 定时 / 批量</button>
+                        <button id="sendBtn" class="rm-btn rm-btn-primary" type="button"><i class="fas fa-paper-plane"></i> 发送</button>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <aside id="queuePanel" class="rm-queue-panel" hidden>
+        <div class="rm-queue-head">
+            <h3><i class="fas fa-list-check"></i> 发送计划</h3>
+            <button id="queueClose" class="rm-icon-btn" type="button" aria-label="关闭"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="rm-queue-hint">定时、批量与每日任务都在服务器执行；关闭页面不会中断。暂停在当前一批发送结束后生效。</div>
+        <div id="jobList" class="rm-job-list"><div class="rm-empty-small">暂无发送计划</div></div>
+    </aside>
+</div>
+
+<div id="accountModal" class="rm-modal" hidden>
+    <div class="rm-modal-backdrop" data-close="accountModal"></div>
+    <div class="rm-modal-card rm-modal-narrow" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+        <div class="rm-modal-head">
+            <h3 id="accountModalTitle"><i class="fas fa-key"></i> 登录个人账号</h3>
+            <button class="rm-icon-btn" type="button" data-close="accountModal" aria-label="关闭"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="rm-modal-body">
+            <div class="rm-warning">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>该账号会立即标记为个人号，不进入自动化账号池，也不会被其他采集任务使用。</span>
+            </div>
+            <form id="accountForm" autocomplete="off">
+                <div id="accountPhoneStep">
+                    <div class="rm-inline-fields">
+                        <label class="rm-field rm-field-area"><span>区号</span><input id="accountArea" value="86" inputmode="numeric" maxlength="3"></label>
+                        <label class="rm-field"><span>手机号</span><input id="accountPhone" inputmode="numeric" autocomplete="off" placeholder="登录口袋48的手机号"></label>
+                    </div>
+                    <div class="rm-sms-row">
+                        <button id="smsBtn" class="rm-btn rm-btn-primary" type="button">发送验证码</button>
+                        <span id="smsStatus" class="rm-muted"></span>
+                    </div>
+                </div>
+                <div id="securityStep" class="rm-stack" hidden>
+                    <div class="rm-field">
+                        <span>安全验证</span>
+                        <p id="securityQuestion" class="rm-security-question"></p>
+                    </div>
+                    <label class="rm-field">
+                        <span>选择答案</span>
+                        <select id="securityOption"></select>
+                    </label>
+                    <button id="securityBtn" class="rm-btn rm-btn-primary" type="button">提交安全验证</button>
+                </div>
+                <div id="codeStep" class="rm-stack" hidden>
+                    <label class="rm-field">
+                        <span>短信验证码</span>
+                        <input id="accountCode" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="请输入收到的验证码">
+                    </label>
+                    <button id="verifyBtn" class="rm-btn rm-btn-primary rm-btn-block" type="button">验证并绑定</button>
+                </div>
+                <div id="accountFormError" class="rm-form-error" hidden></div>
+            </form>
+            <div id="accountListWrap" class="rm-account-list-wrap">
+                <div class="rm-section-label">账号库中的个人号</div>
+                <div id="accountList" class="rm-account-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="sendModal" class="rm-modal" hidden>
+    <div class="rm-modal-backdrop" data-close="sendModal"></div>
+    <div class="rm-modal-card" role="dialog" aria-modal="true" aria-labelledby="sendModalTitle">
+        <div class="rm-modal-head">
+            <h3 id="sendModalTitle"><i class="fas fa-paper-plane"></i> 确认发送</h3>
+            <button class="rm-icon-btn" type="button" data-close="sendModal" aria-label="关闭"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="rm-modal-body">
+            <div class="rm-confirm-target" id="sendTarget"></div>
+            <div class="rm-confirm-preview" id="sendPreview"></div>
+            <label class="rm-field">
+                <span>输入“<b id="confirmWordLabel">确认发送</b>”以继续</span>
+                <input id="confirmWordInput" autocomplete="off" placeholder="确认发送">
+            </label>
+            <div id="sendModalError" class="rm-form-error" hidden></div>
+            <div class="rm-modal-actions">
+                <button class="rm-btn rm-btn-ghost" type="button" data-close="sendModal">取消</button>
+                <button id="confirmSendBtn" class="rm-btn rm-btn-primary" type="button">确认发送</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="scheduleModal" class="rm-modal" hidden>
+    <div class="rm-modal-backdrop" data-close="scheduleModal"></div>
+    <div class="rm-modal-card rm-modal-wide" role="dialog" aria-modal="true" aria-labelledby="scheduleModalTitle">
+        <div class="rm-modal-head">
+            <h3 id="scheduleModalTitle"><i class="fas fa-calendar-clock"></i> 定时 / 批量发送</h3>
+            <button class="rm-icon-btn" type="button" data-close="scheduleModal" aria-label="关闭"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="rm-modal-body">
+            <div class="rm-confirm-target" id="scheduleTarget"></div>
+            <div class="rm-seg" role="tablist">
+                <button class="rm-seg-btn is-active" data-mode="once" type="button">单次定时</button>
+                <button class="rm-seg-btn" data-mode="batch" type="button">批量消息</button>
+                <button class="rm-seg-btn" data-mode="daily" type="button">每日批量</button>
+            </div>
+            <label class="rm-field">
+                <span id="messagesLabel">消息内容</span>
+                <textarea id="jobMessages" rows="6" maxlength="12000" placeholder="每行一条消息"></textarea>
+            </label>
+            <div class="rm-inline-fields">
+                <label class="rm-field">
+                    <span>开始时间</span>
+                    <input id="jobStartAt" type="datetime-local">
+                </label>
+                <label class="rm-field" id="intervalField">
+                    <span>发送间隔（秒）</span>
+                    <input id="jobInterval" type="number" min="15" step="5" value="60">
+                </label>
+                <label class="rm-field" id="jitterField">
+                    <span>随机浮动（秒）</span>
+                    <input id="jobJitter" type="number" min="0" step="1" value="10">
+                </label>
+            </div>
+            <div id="dailyHint" class="rm-hint" hidden><i class="fas fa-rotate"></i> 每日在同一时间重复这批消息，直到手动取消。</div>
+            <div id="schedulePreview" class="rm-schedule-preview"></div>
+            <label class="rm-check">
+                <input id="jobConfirm" type="checkbox">
+                <span>我已确认目标频道、消息内容和发送间隔</span>
+            </label>
+            <div id="scheduleError" class="rm-form-error" hidden></div>
+            <div class="rm-modal-actions">
+                <button id="previewJobBtn" class="rm-btn rm-btn-ghost" type="button"><i class="fas fa-eye"></i> 预演</button>
+                <button id="createJobBtn" class="rm-btn rm-btn-primary" type="button"><i class="fas fa-play"></i> 创建任务</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="rm-toast" hidden></div>
+<script src="/static/js/tracker.js?v={{ static_version('js/tracker.js') }}"></script>
+<script>
+window.ROOM_MESSENGER_BOOT = {
+    enabled: {{ 'true' if room_messenger_enabled else 'false' }},
+    node: {{ room_messenger_node|tojson }}
+};
+</script>
+<script src="/static/js/room_messenger.js?v={{ static_version('js/room_messenger.js') }}"></script>
+</body>
+</html>

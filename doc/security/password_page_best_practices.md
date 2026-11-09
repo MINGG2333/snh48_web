@@ -27,7 +27,7 @@
 
 ### 1.2 当前页面归属（2026-11-09）
 
-- **模式 A**：`/radio`（上麦回放）、`/business/redblue2026`、`/weidian-orders`、`/social-credentials-admin`、`/scroller-admin`
+- **模式 A**：`/radio`（上麦回放）、`/business/redblue2026`、`/weidian-orders`、`/social-credentials-admin`、`/scroller-admin`、`/room/messenger`（房间信使）
 - **模式 B**：`/room`（房间消息）、`/gift-replies`、计分页、`/business-admin`、`/ob`、记忆页、QA
 - **模式 C**：`/flip`、`/flip-cards`
 
@@ -452,6 +452,7 @@ assert s.get("https://example.com/api/xxx/data", timeout=15).status_code == 401
 - `website/redblue_ledger_api.py`：模式 A，红蓝台账 Cookie 登录/登出、旧 Cookie 401。
 - `website/room_voice_replays_api.py`：模式 A，路径限定 Cookie、独立监控 Token、音频 Range 鉴权。
 - `website/social_credentials_admin_api.py`：模式 A，短时会话 + 同源校验 + 凭据桥。
+- `website/room_messenger_api.py` / `website/templates/room_messenger.html`：模式 A，房间信使；个人号 Token 不进网页进程，经本机 root 桥发送；即时发送要求确认词。
 - `website/room_messages_api.py` / `website/templates/room_messages.html`：模式 B，请求头密码 + 页面内存。
 - `website/flip_cards_api.py` / `website/templates/flip_cards.html`：模式 C，请求头密码 + 媒体短时签名 URL。
 - `tests/test_password_page_security.py`：密码页静态护栏测试。
