@@ -40,6 +40,25 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertIn("WEIDIAN_ACCOUNT_FILTER_PURE_START", self.template)
         self.assertIn("WEIDIAN_ACCOUNT_FILTER_PURE_END", self.template)
 
+    def test_bulk_selection_and_shipping_controls(self) -> None:
+        for marker in (
+            'id="selectAll"',
+            'id="shipSelectedBtn"',
+            'data-select=',
+            "selectedOrders",
+            "WEIDIAN_BULK_SHIP_PURE_START",
+            "WEIDIAN_BULK_SHIP_PURE_END",
+            "function isSelectable",
+            "function selectedShipRows",
+            "function shipSelectedOrders",
+            'type: "ship"',
+            "批量无需物流发货",
+        ):
+            self.assertIn(marker, self.template)
+        self.assertIn("colspan=\"11\"", self.template)
+        self.assertNotIn("colspan=\"10\"", self.template)
+        self.assertIn("发货任务完成后立即重读订单库", self.template)
+
     def test_status_filter_is_multi_select_with_semantic_labels(self) -> None:
         for marker in (
             'id="statusMenu"',

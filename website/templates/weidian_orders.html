@@ -66,6 +66,7 @@
     .statusbar { color:var(--muted); font-size:12px; min-height:18px; margin-left:6px; }
     .multi-group { color:var(--muted); font-size:12px; font-weight:600; padding:6px 6px 2px; }
     .job { color:var(--muted); font-size:12px; }
+    th input[type=checkbox], td input[type=checkbox] { width:15px; height:15px; accent-color:var(--pink); vertical-align:middle; }
     @media (max-width: 900px) { th:nth-child(2), td:nth-child(2) { display:none; } }
   </style>
 </head>
@@ -96,6 +97,7 @@
   <div class="card">
     <div class="toolbar">
       <button class="btn primary" id="refreshBtn">立即刷新订单</button>
+      <button class="btn" id="shipSelectedBtn" disabled>批量无需物流发货</button>
       <details class="multi" id="statusMenu">
         <summary id="statusSummary">全部状态</summary>
         <div class="multi-panel">
@@ -126,11 +128,12 @@
       <table>
         <thead>
           <tr>
+            <th style="width:34px;"><input type="checkbox" id="selectAll" aria-label="全选当前可发货订单" title="全选当前可发货订单"></th>
             <th>时间</th><th>订单号</th><th>商品</th><th>状态</th><th>播报名 / 收货人</th>
             <th>备注</th><th>金额 / 计分</th><th>发货</th><th>自动播报</th><th>操作</th>
           </tr>
         </thead>
-        <tbody id="rows"><tr><td colspan="10" class="muted">加载中…</td></tr></tbody>
+        <tbody id="rows"><tr><td colspan="11" class="muted">加载中…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -143,6 +146,7 @@
   var allOrders = [];
   var selectedAccounts = {};
   var selectedStatuses = {};
+  var selectedOrders = {};
   var STATUS_GROUPS = [
     { label: "进行中", items: [["pending_payment", "待付款（未付款）"], ["awaiting_shipment", "待发货（已付款）"], ["shipped", "已发货（运输中）"]] },
     { label: "已结束", items: [["completed", "已完成（交易成功）"], ["closed", "已关闭（未付款/取消）"]] },
@@ -230,6 +234,13 @@
     try {
       var data = await api("/api/weidian-orders/data");
       allOrders = data.orders || [];
+      var stillSelectable = {};
+      allOrders.forEach(function (order) {
+        if (isSelectable(order)) stillSelectable[order.order_id] = true;
+      });
+      Object.keys(selectedOrders).forEach(function (orderId) {
+        if (!stillSelectable[orderId]) delete selectedOrders[orderId];
+      });
       renderItems();
       renderAccounts();
       render();
@@ -342,6 +353,23 @@
   }
   // WEIDIAN_ACCOUNT_FILTER_PURE_END
 
+  // WEIDIAN_BULK_SHIP_PURE_START
+  function isSelectable(row) {
+    return Boolean(row) && !row.shipped && row.status_kind === "awaiting_shipment";
+  }
+
+  function selectableRows(rows) {
+    return (rows || []).filter(isSelectable);
+  }
+
+  function selectedShipRows(rows, selected) {
+    var picked = selected || {};
+    return selectableRows(rows).filter(function (row) {
+      return Boolean(picked[row.order_id]);
+    });
+  }
+  // WEIDIAN_BULK_SHIP_PURE_END
+
   function updateAccountSummary() {
     var count = Object.keys(selectedAccounts).length;
     $("accountSummary").textContent = count ? ("已选 " + count + " 个账号") : "全部账号";
@@ -393,16 +421,40 @@
     updateStatusSummary();
   }
 
-  function render() {
+  function updateSelectAll(rows) {
+    var eligible = selectableRows(rows);
+    var picked = selectedShipRows(rows, selectedOrders);
+    var box = $("selectAll");
+    if (!box) return;
+    box.disabled = !eligible.length;
+    box.checked = Boolean(eligible.length) && picked.length === eligible.length;
+    box.indeterminate = picked.length > 0 && picked.length < eligible.length;
+    updateShipSelectedButton();
+  }
+
+  function updateShipSelectedButton() {
+    var button = $("shipSelectedBtn");
+    if (!button) return;
+    var picked = selectedShipRows(allOrders, selectedOrders);
+    button.disabled = !picked.length;
+    button.textContent = picked.length ? ("批量无需物流发货（" + picked.length + "）") : "批量无需物流发货";
+  }
+
+  function filteredRows() {
     var filters = {
       statuses: selectedStatuses,
       item: $("itemFilter").value,
       keyword: $("keyword").value.trim(),
       accounts: selectedAccounts
     };
-    var rows = allOrders.filter(function (row) { return orderMatchesFilters(row, filters); });
+    return allOrders.filter(function (row) { return orderMatchesFilters(row, filters); });
+  }
+
+  function render() {
+    var rows = filteredRows();
     if (!rows.length) {
-      $("rows").innerHTML = '<tr><td colspan="10" class="muted">没有匹配的订单</td></tr>';
+      $("rows").innerHTML = '<tr><td colspan="11" class="muted">没有匹配的订单</td></tr>';
+      updateSelectAll(rows);
       return;
     }
     $("rows").innerHTML = rows.map(function (row) {
@@ -416,7 +468,12 @@
         : (row.status_kind === "awaiting_shipment" ? '<span class="pill awaiting">待发货</span>' : '<span class="muted">-</span>');
       var shipBtn = (!row.shipped && row.status_kind === "awaiting_shipment")
         ? '<button class="btn mini" data-ship="' + esc(row.order_id) + '" data-item="' + esc(row.item_id) + '">发货</button>' : "";
+      var selectable = isSelectable(row);
+      var checkbox = selectable
+        ? '<input type="checkbox" data-select="' + esc(row.order_id) + '"' + (selectedOrders[row.order_id] ? " checked" : "") + ' aria-label="选择订单 ' + esc(row.order_id) + '">'
+        : "";
       return '<tr>' +
+        '<td>' + checkbox + '</td>' +
         '<td class="muted">' + esc(row.add_time || "") + '</td>' +
         '<td class="raw">' + esc(row.order_id || "") + '</td>' +
         '<td>' + esc(row.item_name || "") + (row.sku_title ? '<div class="raw">' + esc(row.sku_title) + '</div>' : "") + '</td>' +
@@ -433,6 +490,7 @@
         '</div></td>' +
       '</tr>';
     }).join("");
+    updateSelectAll(rows);
   }
 
   async function waitJob(jobId) {
@@ -509,18 +567,55 @@
     }
   }
 
-  async function shipOrder(orderId, itemId) {
-    if (!window.confirm("确认将该订单标记为无需物流发货？")) return;
+  async function shipRows(rows, single) {
+    var selectedRows = selectableRows(rows);
+    if (!selectedRows.length) {
+      toast("请先选择待发货订单", true);
+      return;
+    }
+    var total = selectedRows.reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0);
+    var question = single
+      ? "确认将该订单标记为无需物流发货？"
+      : ("确认将选中的 " + selectedRows.length + " 笔订单标记为无需物流发货？\n合计 ¥" + total.toFixed(2));
+    if (!window.confirm(question)) return;
+    var button = $("shipSelectedBtn");
+    if (button) button.disabled = true;
     try {
-      var result = await submitJob({type: "ship", orders: [{order_id: orderId, item_id: itemId}]}, "发货");
+      var result = await submitJob({
+        type: "ship",
+        orders: selectedRows.map(function (row) {
+          return {order_id: row.order_id, item_id: row.item_id};
+        })
+      }, single ? "发货" : "批量发货");
       var shipped = result.shipped || [];
       var errors = result.errors || [];
-      if (errors.length) toast("发货失败：" + (errors[0].error || "未知错误"), true);
-      else toast(shipped[0] && shipped[0].already ? "该订单已发货" : "发货成功");
+      var fresh = shipped.filter(function (item) { return item.ok && !item.already; }).length;
+      var already = shipped.filter(function (item) { return item.already; }).length;
+      selectedRows.forEach(function (row) { delete selectedOrders[row.order_id]; });
+      if (errors.length) {
+        toast("发货完成 " + (fresh + already) + " 笔，失败 " + errors.length + " 笔：" + (errors[0].error || "未知错误"), true);
+      } else if (single) {
+        toast(already ? "该订单已发货" : "发货成功");
+      } else {
+        toast("发货完成：" + (fresh + already) + " 笔" + (already ? "（其中 " + already + " 笔已发货）" : ""));
+      }
+      // 发货任务完成后立即重读订单库；worker 会在发货后刷新 canonical store。
       await loadData();
     } catch (error) {
       toast(error.message || "发货失败", true);
+    } finally {
+      updateShipSelectedButton();
     }
+  }
+
+  async function shipOrder(orderId, itemId) {
+    var row = allOrders.filter(function (item) { return item.order_id === orderId; })[0];
+    if (!row) row = {order_id: orderId, item_id: itemId, status_kind: "awaiting_shipment", shipped: false, amount: 0};
+    await shipRows([row], true);
+  }
+
+  async function shipSelectedOrders() {
+    await shipRows(selectedShipRows(allOrders, selectedOrders), false);
   }
 
   document.addEventListener("click", function (event) {
@@ -529,6 +624,23 @@
     if (target.dataset.name) renameOrder(target.dataset.name, target.dataset.current);
     else if (target.dataset.rebroadcast) rebroadcastOrder(target.dataset.rebroadcast, target.dataset.current);
     else if (target.dataset.ship) shipOrder(target.dataset.ship, target.dataset.item);
+  });
+  $("shipSelectedBtn").addEventListener("click", shipSelectedOrders);
+  $("selectAll").addEventListener("change", function (event) {
+    var rows = selectableRows(filteredRows());
+    rows.forEach(function (row) {
+      if (event.target.checked) selectedOrders[row.order_id] = true;
+      else delete selectedOrders[row.order_id];
+    });
+    render();
+  });
+  $("rows").addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.dataset || !target.dataset.select) return;
+    if (target.checked) selectedOrders[target.dataset.select] = true;
+    else delete selectedOrders[target.dataset.select];
+    updateSelectAll(filteredRows());
+    updateShipSelectedButton();
   });
   $("refreshBtn").addEventListener("click", refreshOrders);
   $("itemFilter").addEventListener("change", render);

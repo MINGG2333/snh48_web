@@ -103,4 +103,43 @@ assert.equal(context.accountKey({ buyer_id: "" }), "__unknown__");
 assert.equal(context.accountLabel({ buyer_id: "2068326847", buyer_phone_masked: "177****4879" }), "177****4879 · ID 2068326847");
 assert.equal(context.accountLabel({ buyer_id: "", buyer_phone_masked: "" }), "未知账号");
 
+const bulkStartMarker = "// WEIDIAN_BULK_SHIP_PURE_START";
+const bulkEndMarker = "// WEIDIAN_BULK_SHIP_PURE_END";
+const bulkStart = template.indexOf(bulkStartMarker);
+const bulkEnd = template.indexOf(bulkEndMarker);
+assert.ok(bulkStart >= 0 && bulkEnd > bulkStart, "bulk ship pure helper block should exist");
+
+const bulkContext = {};
+vm.createContext(bulkContext);
+vm.runInContext(
+  template.slice(bulkStart + bulkStartMarker.length, bulkEnd) + `
+    this.isSelectable = isSelectable;
+    this.selectableRows = selectableRows;
+    this.selectedShipRows = selectedShipRows;
+  `,
+  bulkContext
+);
+
+const bulkRows = [
+  row({ order_id: "b1", status_kind: "awaiting_shipment", shipped: false }),
+  row({ order_id: "b2", status_kind: "awaiting_shipment", shipped: true }),
+  row({ order_id: "b3", status_kind: "shipped", shipped: true }),
+  row({ order_id: "b4", status_kind: "refunded", refund_state: "refunding", shipped: false }),
+  row({ order_id: "b5", status_kind: "awaiting_shipment", shipped: false })
+];
+assert.equal(bulkContext.isSelectable(bulkRows[0]), true, "awaiting shipment can be selected");
+assert.equal(bulkContext.isSelectable(bulkRows[1]), false, "already shipped cannot be selected");
+assert.equal(bulkContext.isSelectable(bulkRows[2]), false, "shipped status cannot be selected");
+assert.equal(bulkContext.isSelectable(bulkRows[3]), false, "refunding cannot be selected");
+assert.deepEqual(
+  bulkContext.selectableRows(bulkRows).map(item => item.order_id),
+  ["b1", "b5"],
+  "only currently shippable rows are selectable"
+);
+assert.deepEqual(
+  bulkContext.selectedShipRows(bulkRows, { b1: true, b3: true, b5: true }).map(item => item.order_id),
+  ["b1", "b5"],
+  "selected set is intersected with selectable rows"
+);
+
 console.log("weidian orders frontend account filter tests passed");
