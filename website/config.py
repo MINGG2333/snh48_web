@@ -322,8 +322,8 @@ ROOM_VOICE_REPLAYS_DIR = os.getenv("ROOM_VOICE_REPLAYS_DIR") or str(
 # ── Room Messenger (个人号房间消息发送页) ────────────────────────────────
 # 仅腾讯云私密站启用；个人号 Token 只保存在 fan-hub 账号库并标记 personal，
 # 网页进程通过本机特权桥读写，不直接接触 Token。
-# 房间信使复用计分页密码；不要为该页单独发明密码。
-# 环境变量留空时跟随 SCORE_GIFTS_PASSWORD（再回退 GIFT_REPLIES_PASSWORD）。
+# 房间信使复用房间消息页密码；不要为该页单独发明密码。
+# 环境变量留空时跟随 ROOM_MESSAGES_PASSWORD（再回退 GIFT_REPLIES_PASSWORD）。
 ROOM_MESSENGER_STATE_DIR = os.getenv(
     "ROOM_MESSENGER_STATE_DIR", "/var/lib/snh48-web/room_messenger"
 )
@@ -412,7 +412,7 @@ ROOM_MESSENGER_COMMAND = tuple(
 # ── Score Gifts (计分礼物统计页) ─────────────────────────────────────
 # 默认复用礼物回复页密码；如需单独管理可设置 SCORE_GIFTS_PASSWORD。
 SCORE_GIFTS_PASSWORD = os.getenv("SCORE_GIFTS_PASSWORD", GIFT_REPLIES_PASSWORD)
-ROOM_MESSENGER_PASSWORD = os.getenv("ROOM_MESSENGER_PASSWORD") or SCORE_GIFTS_PASSWORD
+ROOM_MESSENGER_PASSWORD = os.getenv("ROOM_MESSENGER_PASSWORD") or ROOM_MESSAGES_PASSWORD
 SCORE_GIFTS_DATA_PATH = os.getenv(
     "SCORE_GIFTS_DATA_PATH",
     str(

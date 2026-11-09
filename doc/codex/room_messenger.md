@@ -96,7 +96,7 @@ scripts/web/room_messenger_qchat.js
 
 ## 6. 安全与防误操作
 
-- 访问密码：复算计分页密码；`ROOM_MESSENGER_PASSWORD` 留空时使用 `SCORE_GIFTS_PASSWORD`（再回退 `GIFT_REPLIES_PASSWORD`）。不要为该页单独发明密码。仅腾讯云启用。
+- 访问密码：复用房间消息页密码；`ROOM_MESSENGER_PASSWORD` 留空时使用 `ROOM_MESSAGES_PASSWORD`（再回退 `GIFT_REPLIES_PASSWORD`）。不要为该页单独发明密码。仅腾讯云启用。
 - 模式 A：60 分钟路径限定 HttpOnly Cookie（`Path=/api/room-messenger`），签名密钥只在进程内存；
   网站重启后需重新输入。
 - 所有写接口要求同源 `Origin`，所有响应 `Cache-Control: no-store`。
@@ -116,7 +116,7 @@ scripts/web/room_messenger_qchat.js
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `ROOM_MESSENGER_PASSWORD` | 回退 `SCORE_GIFTS_PASSWORD` | 留空即可，默认复算计分页密码 |
+| `ROOM_MESSENGER_PASSWORD` | 回退 `ROOM_MESSAGES_PASSWORD` | 留空即可，默认复用房间消息页密码 |
 | `ROOM_MESSENGER_ENABLED` | 跟随主节点 | 阿里云默认关闭 |
 | `ROOM_MESSENGER_STATE_DIR` | `/var/lib/snh48-web/room_messenger` | 任务/绑定/日志 |
 | `ROOM_MESSENGER_CATALOG_PATH` | fan-hub `member_catalog.json` | 成员/频道目录 |
@@ -136,7 +136,7 @@ scripts/web/room_messenger_qchat.js
    `scripts/web/room_messenger_qchat.js` 和 `flip_account_admin.py`。
 2. 安装新版特权桥服务端/客户端（`deploy/harden_runtime_permissions.sh` 或等价安装），
    重启 `snh48-privileged-bridge-flip.service`。**不新增服务。**
-3. 不要设置独立密码；保持 `.env` 的 `ROOM_MESSENGER_PASSWORD` 为空，页面复用 `SCORE_GIFTS_PASSWORD`。
+3. 不要设置独立密码；保持 `.env` 的 `ROOM_MESSENGER_PASSWORD` 为空，页面复用 `ROOM_MESSAGES_PASSWORD`。
 4. 重启 `snh48-web.service`，确认 `/var/lib/snh48-web/room_messenger` 可写（0700/0600）。
 5. 运行 `node script/obfuscate_js.cjs`，提交 `static/js-dist/room_messenger.js` 和
    `static/css-dist/room_messenger.css`。
