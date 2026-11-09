@@ -1,5 +1,18 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-09 房间信使（个人号房间消息发送页）腾讯云已部署，阿里云仅同步代码（待确认）
+
+- 需求：在 `/room/messenger` 新增个人号房间消息页面，支持成员/频道选择、最近聊天、即时发送、单次定时、批量间隔/浮动、每日重复、左侧常用频道、发送计划队列和移动端布局。真实发送由 owner 手动验收，自动化不向任何真实频道发送消息。
+- 代码：网站 `dfbf496`、`d713e77`；fan-hub `03d85f35c`。网站新增 `website/room_messenger_api.py`、模板/JS/CSS 及混淆产物、测试；fan-hub 新增 `scripts/web/room_messenger_ops.py`、`scripts/web/room_messenger_qchat.js`，并扩展 `flip_account_admin.py` 的 `verify-code` 个人号分支和 `messenger-*` 命令。
+- 账号策略：手机号验证码登录后立即 `token_manager.mark_personal()`，不进入 `account_pool`、不创建翻牌任务；如果账号已在池中则明确失败。Token 只存在 root `config/accounts.json`，网页进程不接触。
+- 发送链路：网页 → 既有 `snh48-privileged-bridge-flip.service` 固定命令 `messenger-status/probe/history/send` → fan-hub `room_messenger_ops.py` → QChat CommonLink 发送脚本；未新增 systemd 服务/socket。桥命令白名单与按命令超时已更新，普通翻牌命令仍为 40 秒，`messenger-send` 为 380 秒。
+- 安全：`ROOM_MESSENGER_PASSWORD` 已写入腾讯云 `/home/snh48_web/.env`（0600，未在对话中输出）；60 分钟路径限定 HttpOnly Cookie；即时发送确认词“确认发送”；每日上限 100、最小间隔 15 秒、单批最多 30 条、单批发送块最多 10 条；任务持久化 `/var/lib/snh48-web/room_messenger/`，重启时遗留 `sending` 标记 `unknown` 并暂停，不自动重发。
+- 部署：腾讯云安装新版 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1520951`，18:43:53 起，`NRestarts=0`）；`snh48-web.service` 重启后 PID `1522915`（18:45:22 起），启动日志出现 `Room messenger scheduler started`。`snh48-privileged-bridge-social.service` 未重启（PID `3014153`）。
+- 只读烟测（腾讯云 `https://cjy.plus`）：页面 200；未登录 `/api/room-messenger/verify` 401；登录 200、`/verify` 200、`/account` 200（仅 `has_token` 布尔和账号元数据，无 Token 值）、`/catalog` 200、`/jobs` 200、静态 JS/CSS 200；`catalog?q=陈嘉仪` 返回 1 个成员、2 个频道（`36376935` 公开、`36393478` 小房间），目录补入 `config/room_monitor.json` 的已监控成员。未调用 `/messages`、`/send`，未创建/启动真实发送任务。
+- 测试：网站 `test_room_messenger_api` 9 项、`test_room_messenger_template` 3 项、`test_privileged_bridge` 7 项、`test_password_page_security` 全部通过；fan-hub `test_room_messenger_ops` 7 项、`test_room_messenger_qchat.cjs` 通过。仓库全量测试仍有既有的 Python 3.9/缺失 venv 环境性错误，与本次无关。
+- 阿里云：代码已 `git pull`（网站 `d713e77`、fan-hub `03d85f35c`），但**未重启** `snh48-aliyun.service`；`ROOM_MESSENGER_ENABLED` 在阿里云保持关闭。待 owner 在腾讯云手动验收通过后再重启阿里云。
+- 待 owner 手动完成：用个人号登录、在低风险频道发送 1 条测试消息、确认 QChat 订阅与消息显示；验收前不得把真实频道写入自动测试。
+
 ## 2026-11-09 密码页统一 60 分钟会话并修正旧 Cookie 误报（双端已生效）
 
 - 背景：`/flip` 在部署重启后，浏览器里的旧 Cookie 被当成“密码错误”（403），页面反复请求后把翻牌页限流打到 429；同类问题也存在于上麦回放、社交凭据、红蓝台账、微店订单和背景词管理。
