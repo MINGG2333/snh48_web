@@ -26,6 +26,7 @@ SERVICE_SETTINGS = {
         "commands": frozenset({
             "send-sms", "security-answer", "verify-code", "job-status", "latest-job",
             "messenger-status", "messenger-probe", "messenger-history", "messenger-send",
+            "messenger-delete", "messenger-switch",
         }),
         "script": Path("scripts/web/flip_account_admin.py"),
         "timeout": 40,
@@ -34,6 +35,8 @@ SERVICE_SETTINGS = {
             "messenger-history": 45,
             "messenger-probe": 45,
             "messenger-status": 45,
+            "messenger-delete": 45,
+            "messenger-switch": 45,
         },
     },
     "social": {

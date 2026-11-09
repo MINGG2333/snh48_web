@@ -231,6 +231,66 @@ class RoomMessengerApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+
+    def test_delete_requires_confirm_word_and_own_message(self) -> None:
+        self._login()
+        self._bind()
+        payload = {
+            "channel_id": "1001",
+            "msg_id_client": "abc",
+            "msg_time": 1700000000000,
+            "sender_id": "3001",
+            "confirm": "删除",
+        }
+        self.assertEqual(
+            self.client.post(
+                "/api/room-messenger/delete",
+                headers={"Origin": "http://testserver"},
+                json=payload,
+            ).status_code,
+            422,
+        )
+        payload["confirm"] = api.DELETE_CONFIRM_WORD
+        payload["sender_id"] = "999"
+        self.assertEqual(
+            self.client.post(
+                "/api/room-messenger/delete",
+                headers={"Origin": "http://testserver"},
+                json=payload,
+            ).status_code,
+            403,
+        )
+        payload["sender_id"] = "3001"
+        with patch.object(api, "_run_bridge", return_value={"ok": True, "message": "OK"}) as bridge:
+            result = self.client.post(
+                "/api/room-messenger/delete",
+                headers={"Origin": "http://testserver"},
+                json=payload,
+            )
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(bridge.call_args.args[0], "messenger-delete")
+
+    def test_switch_account_updates_binding(self) -> None:
+        self._login()
+        self._bind()
+        with patch.object(
+            api,
+            "_run_bridge",
+            return_value={
+                "ok": True,
+                "switched": True,
+                "account": {"id": "174063630", "nickname": "小号"},
+            },
+        ) as bridge:
+            result = self.client.post(
+                "/api/room-messenger/account/switch",
+                headers={"Origin": "http://testserver"},
+                json={"target_user_id": "174063630"},
+            )
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["binding"]["account_id"], "174063630")
+        self.assertEqual(bridge.call_args.args[0], "messenger-switch")
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}

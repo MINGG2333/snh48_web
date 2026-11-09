@@ -10,6 +10,8 @@
 
 - 允许 owner 在网页上用**个人口袋48账号**查看成员房间最近聊天并发送文本消息。
 - 支持即时发送、单次定时、批量消息（可定义间隔和随机浮动）、每日重复批量。
+- 支持删除当前账号自己发送的房间消息（口袋48 REST `/im/api/v1/team/msg/delete`）。
+- 个人号 Token 失效时页面显示“重新登录”入口；同一手机号的大号/小号可在账号弹窗内切换。
 - 左侧保留最近使用频道；成员目录可按姓名/口袋号/团体搜索，展开后选择公开房间或小房间。
 - 桌面端三栏（频道 / 聊天 / 发送计划），移动端侧栏抽屉 + 底部输入 + 计划全屏抽屉。
 - **不**使用账号池账号；**不**把该账号加入 `account_pool`；**不**让任何采集任务使用它。
@@ -27,9 +29,11 @@
 - Token 只在 `config/accounts.json`（root 0600）中；网页进程不读取、不返回、不写日志。
 - 网页通过本机 root 特权桥 `snh48-privileged-bridge-flip.service` 调用新增命令：
   - `messenger-status`：个人号清单（不含 Token/手机号）；
-  - `messenger-probe`：验证个人号 Token；
+  - `messenger-probe`：验证个人号 Token，并返回同一手机号的大号/小号列表；
+  - `messenger-switch`：在同一手机号的大号/小号之间切换，保存新 Token 并标记 personal；
   - `messenger-history`：读取房间最近消息；
-  - `messenger-send`：一次 QChat 连接内发送 1–10 条文本。
+  - `messenger-send`：一次 QChat 连接内发送 1–10 条文本；
+  - `messenger-delete`：删除当前账号自己发送的消息。
 - 登录命令 `send-sms` / `security-answer` / `verify-code` 沿用原桥；`verify-code` 新增
   `personal_only: true` 分支。没有新增 systemd 服务、socket 或可写目录。
 
@@ -88,7 +92,7 @@ scripts/web/room_messenger_qchat.js
 
 ## 6. 安全与防误操作
 
-- 访问密码：`ROOM_MESSENGER_PASSWORD`，留空回退 `ROOM_MESSAGES_PASSWORD`；仅腾讯云启用。
+- 访问密码：复算计分页密码；`ROOM_MESSENGER_PASSWORD` 留空时使用 `SCORE_GIFTS_PASSWORD`（再回退 `GIFT_REPLIES_PASSWORD`）。不要为该页单独发明密码。仅腾讯云启用。
 - 模式 A：60 分钟路径限定 HttpOnly Cookie（`Path=/api/room-messenger`），签名密钥只在进程内存；
   网站重启后需重新输入。
 - 所有写接口要求同源 `Origin`，所有响应 `Cache-Control: no-store`。
@@ -107,7 +111,7 @@ scripts/web/room_messenger_qchat.js
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `ROOM_MESSENGER_PASSWORD` | 回退 `ROOM_MESSAGES_PASSWORD` | 独立访问密码 |
+| `ROOM_MESSENGER_PASSWORD` | 回退 `SCORE_GIFTS_PASSWORD` | 留空即可，默认复算计分页密码 |
 | `ROOM_MESSENGER_ENABLED` | 跟随主节点 | 阿里云默认关闭 |
 | `ROOM_MESSENGER_STATE_DIR` | `/var/lib/snh48-web/room_messenger` | 任务/绑定/日志 |
 | `ROOM_MESSENGER_CATALOG_PATH` | fan-hub `member_catalog.json` | 成员/频道目录 |
@@ -125,7 +129,7 @@ scripts/web/room_messenger_qchat.js
    `scripts/web/room_messenger_qchat.js` 和 `flip_account_admin.py`。
 2. 安装新版特权桥服务端/客户端（`deploy/harden_runtime_permissions.sh` 或等价安装），
    重启 `snh48-privileged-bridge-flip.service`。**不新增服务。**
-3. 在腾讯云 `.env` 设置独立 `ROOM_MESSENGER_PASSWORD`；不输出密码明文。
+3. 不要设置独立密码；保持 `.env` 的 `ROOM_MESSENGER_PASSWORD` 为空，页面复用 `SCORE_GIFTS_PASSWORD`。
 4. 重启 `snh48-web.service`，确认 `/var/lib/snh48-web/room_messenger` 可写（0700/0600）。
 5. 运行 `node script/obfuscate_js.cjs`，提交 `static/js-dist/room_messenger.js` 和
    `static/css-dist/room_messenger.css`。

@@ -23,6 +23,11 @@ class RoomMessengerTemplateTests(unittest.TestCase):
         self.assertIn("每日", source)
         self.assertIn("定时", source)
         self.assertIn("批量", source)
+        self.assertIn("deleteModal", source)
+        self.assertIn("switchAccountWrap", source)
+        self.assertIn("tokenWarning", source)
+        self.assertNotIn("个人号专用", source)
+        self.assertNotIn("HttpOnly", source)
 
     def test_script_uses_api_prefix_and_never_persists_password(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")

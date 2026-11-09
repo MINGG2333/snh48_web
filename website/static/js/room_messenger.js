@@ -25,6 +25,9 @@
         },
         accounts: [],
         binding: {},
+        accountValid: null,
+        bigSmall: [],
+        deleteTarget: null,
         channel: null,
         messages: [],
         nextTime: 0,
@@ -238,12 +241,16 @@
         return api("/account").then(function (data) {
             S.accounts = Array.isArray(data.accounts) ? data.accounts : [];
             S.binding = data.binding || {};
+            S.accountValid = null;
+            S.bigSmall = [];
             if (data.limits) S.limits = data.limits;
             if (typeof data.daily_sent === "number") S.dailySent = data.daily_sent;
             renderAccount();
             renderDailyMeter();
             renderAccountList();
+            renderSwitchAccounts();
             updateComposerState();
+            if (S.binding.account_id) probeAccount(true);
             if (S.channel && !S.messages.length) {
                 initialLoad();
                 startPolling();
@@ -263,14 +270,16 @@
         $("accountName").textContent = bound
             ? (S.binding.nickname || (account && account.nickname) || ("个人号 " + bound))
             : "未登录个人账号";
+        var invalid = bound && S.accountValid === false;
         $("accountMeta").textContent = bound
-            ? ("绑定个人号 · " + bound)
+            ? (invalid ? "Token 已失效，请重新登录" : ("绑定个人号 · " + bound))
             : "登录后即可发送房间消息";
-        $("accountLoginBtn").innerHTML = bound
-            ? '<i class="fas fa-right-left"></i> 切换'
-            : '<i class="fas fa-key"></i> 登录';
+        $("accountLoginBtn").innerHTML = invalid
+            ? '<i class="fas fa-key"></i> 重新登录'
+            : (bound ? '<i class="fas fa-right-left"></i> 切换' : '<i class="fas fa-key"></i> 登录');
         $("accountProbeBtn").hidden = !bound;
         $("accountUnbindBtn").hidden = !bound;
+        $("tokenWarning").hidden = !invalid;
     }
 
     function renderAccountList() {
@@ -323,7 +332,9 @@
         $("smsStatus").textContent = "";
         $("accountCode").value = "";
         renderAccountList();
+        renderSwitchAccounts();
         openModal("accountModal");
+        if (S.binding.account_id) probeAccount(true);
     }
 
     function sendSms() {
@@ -434,16 +445,81 @@
         });
     }
 
-    function probeAccount() {
-        api("/account/probe", { method: "POST", body: { account_id: (S.binding || {}).account_id || "" } })
+    function probeAccount(silent) {
+        var accountId = (S.binding || {}).account_id || "";
+        if (!accountId) return;
+        api("/account/probe", { method: "POST", body: { account_id: accountId } })
             .then(function (data) {
-                if (data.valid) {
+                var wasValid = S.accountValid;
+                S.accountValid = Boolean(data.valid);
+                S.bigSmall = Array.isArray(data.big_small) ? data.big_small : [];
+                if (data.valid && !S.binding.nickname && data.nickname) {
+                    S.binding.nickname = data.nickname;
+                }
+                renderAccount();
+                renderSwitchAccounts();
+                if (!data.valid) {
+                    $("tokenWarningText").textContent = "个人号 Token 已失效：" + (data.message || "请重新登录");
+                    if (!silent || wasValid !== false) toast("个人号 Token 已失效，请重新登录", "error");
+                } else if (!silent) {
                     toast("Token 有效：" + (data.nickname || data.account_id), "success");
-                } else {
-                    toast("Token 可能已失效：" + (data.message || ""), "error");
                 }
             })
-            .catch(function (error) { toast(error.message, "error"); });
+            .catch(function (error) {
+                if (!silent) toast(error.message, "error");
+            });
+    }
+
+    function renderSwitchAccounts() {
+        var wrap = $("switchAccountWrap");
+        var list = $("switchAccountList");
+        var rows = S.bigSmall || [];
+        if (!S.binding.account_id || rows.length < 2) {
+            wrap.hidden = true;
+            list.innerHTML = "";
+            return;
+        }
+        wrap.hidden = false;
+        list.innerHTML = "";
+        rows.forEach(function (item) {
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = "rm-account-option";
+            var role = item.role === "small" ? "小号" : "大号";
+            button.innerHTML =
+                '<span class="rm-account-option-name">' + escapeHtml(item.nickname || item.user_id) +
+                (item.current ? ' <i class="fas fa-check" style="color:var(--primary)"></i>' : "") + '</span>' +
+                '<span class="rm-account-option-meta">' + role + ' · ' + escapeHtml(item.user_id) + '</span>';
+            button.disabled = Boolean(item.current);
+            button.addEventListener("click", function () {
+                if (!item.current) switchAccount(item.user_id);
+            });
+            list.appendChild(button);
+        });
+    }
+
+    function switchAccount(targetUserId) {
+        var button = $("accountLoginBtn");
+        button.disabled = true;
+        showError($("accountFormError"), "");
+        api("/account/switch", {
+            method: "POST",
+            body: { target_user_id: String(targetUserId) }
+        }).then(function (data) {
+            S.binding = data.binding || {};
+            S.accountValid = null;
+            S.bigSmall = [];
+            closeModal("accountModal");
+            toast("已切换到 " + ((S.binding || {}).nickname || targetUserId), "success");
+            track("admin_update", { page: "room_messenger", action: "switch_account" });
+            loadAccount();
+            loadRecent();
+            if (S.channel) initialLoad();
+        }).catch(function (error) {
+            showError($("accountFormError"), error.message);
+        }).finally(function () {
+            button.disabled = false;
+        });
     }
 
     function unbindAccount() {
@@ -663,6 +739,7 @@
                 scrollToBottom(true);
             })
             .catch(function (error) {
+                if (looksLikeTokenError(error.message)) markTokenInvalid(error.message);
                 toast(error.message || "读取聊天记录失败", "error");
             })
             .finally(function () { S.loadingMessages = false; });
@@ -768,6 +845,15 @@
         time.textContent = formatTime(item.time);
         meta.appendChild(sender);
         meta.appendChild(time);
+        if (self && item.msg_id_client && item.time) {
+            var deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "rm-msg-delete";
+            deleteButton.title = "删除这条消息";
+            deleteButton.innerHTML = '<i class="fas fa-trash-can"></i>';
+            deleteButton.addEventListener("click", function () { openDeleteModal(item); });
+            meta.appendChild(deleteButton);
+        }
         body.appendChild(meta);
 
         var bubble = document.createElement("div");
@@ -898,11 +984,74 @@
             track("admin_update", { page: "room_messenger", action: "send_now", result: "success" });
             setTimeout(pollMessages, 900);
         }).catch(function (error) {
+            if (looksLikeTokenError(error.message)) markTokenInvalid(error.message);
             showError($("sendModalError"), error.message || "发送失败");
             track("admin_update", { page: "room_messenger", action: "send_now", result: "fail" });
         }).finally(function () {
             button.disabled = false;
         });
+    }
+
+    // ── Delete message ─────────────────────────────────────────────────────
+    function openDeleteModal(item) {
+        if (!item || !item.msg_id_client) return;
+        S.deleteTarget = item;
+        $("deleteTarget").textContent = "频道：" + channelLabel();
+        $("deletePreview").textContent = item.text || "[非文本消息]";
+        var word = S.limits.delete_confirm_word || "确认删除";
+        $("deleteConfirmWordLabel").textContent = word;
+        $("deleteConfirmWordInput").value = "";
+        showError($("deleteModalError"), "");
+        openModal("deleteModal");
+        setTimeout(function () { $("deleteConfirmWordInput").focus(); }, 40);
+        track("admin_modal", { page: "room_messenger", action: "delete_confirm" });
+    }
+
+    function confirmDelete() {
+        var item = S.deleteTarget;
+        if (!item) return;
+        var expected = S.limits.delete_confirm_word || "确认删除";
+        if ($("deleteConfirmWordInput").value.trim() !== expected) {
+            showError($("deleteModalError"), "请输入确认词“" + expected + "”");
+            return;
+        }
+        var button = $("confirmDeleteBtn");
+        button.disabled = true;
+        showError($("deleteModalError"), "");
+        api("/delete", {
+            method: "POST",
+            body: {
+                account_id: (S.binding || {}).account_id || "",
+                channel_id: S.channel.channel_id,
+                msg_id_client: item.msg_id_client,
+                msg_time: item.time,
+                sender_id: item.sender_id || "",
+                confirm: expected
+            }
+        }).then(function () {
+            var key = messageKey(item);
+            S.messages = S.messages.filter(function (row) { return messageKey(row) !== key; });
+            renderMessages();
+            closeModal("deleteModal");
+            S.deleteTarget = null;
+            toast("消息已删除", "success");
+            track("admin_update", { page: "room_messenger", action: "delete_message" });
+        }).catch(function (error) {
+            if (looksLikeTokenError(error.message)) markTokenInvalid(error.message);
+            showError($("deleteModalError"), error.message);
+        }).finally(function () {
+            button.disabled = false;
+        });
+    }
+
+    function looksLikeTokenError(message) {
+        return /token|登录|失效|非法|invalid|401|403/i.test(String(message || ""));
+    }
+
+    function markTokenInvalid(message) {
+        S.accountValid = false;
+        $("tokenWarningText").textContent = "个人号 Token 已失效：" + String(message || "请重新登录");
+        renderAccount();
     }
 
     function channelLabel() {
@@ -1218,7 +1367,8 @@
         $("accountForm").addEventListener("submit", function (event) { event.preventDefault(); });
         $("logoutBtn").addEventListener("click", logoutPage);
         $("accountLoginBtn").addEventListener("click", openAccountModal);
-        $("accountProbeBtn").addEventListener("click", probeAccount);
+        $("tokenReloginBtn").addEventListener("click", openAccountModal);
+        $("accountProbeBtn").addEventListener("click", function () { probeAccount(false); });
         $("accountUnbindBtn").addEventListener("click", unbindAccount);
         $("smsBtn").addEventListener("click", sendSms);
         $("securityBtn").addEventListener("click", submitSecurity);
@@ -1269,6 +1419,13 @@
             if (event.key === "Enter") {
                 event.preventDefault();
                 confirmSend();
+            }
+        });
+        $("confirmDeleteBtn").addEventListener("click", confirmDelete);
+        $("deleteConfirmWordInput").addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                confirmDelete();
             }
         });
 

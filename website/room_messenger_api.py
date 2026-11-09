@@ -38,6 +38,7 @@ AUTH_COOKIE = "room_messenger_auth"
 AUTH_COOKIE_MAX_AGE = password_session.cookie_max_age()
 TZ = timezone(timedelta(hours=8))
 SEND_CONFIRM_WORD = "确认发送"
+DELETE_CONFIRM_WORD = "确认删除"
 MAX_TEXT_LENGTH = 1000
 MAX_CATALOG_PAGE = 100
 MAX_RECENT_CHANNELS = 30
@@ -296,6 +297,7 @@ def _limits_payload() -> dict[str, Any]:
         "max_text_length": MAX_TEXT_LENGTH,
         "timezone": "Asia/Shanghai",
         "confirm_word": SEND_CONFIRM_WORD,
+        "delete_confirm_word": DELETE_CONFIRM_WORD,
     }
 
 
@@ -455,6 +457,34 @@ def account_verify_code(payload: CodeRequest, request: Request, response: Respon
 
 class ProbeRequest(BaseModel):
     account_id: str = ""
+
+
+class SwitchRequest(BaseModel):
+    account_id: str = ""
+    target_user_id: str
+
+
+@router.post("/account/switch")
+def switch_account(payload: SwitchRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    account_id = _resolve_account_id(payload.account_id)
+    if not ACCOUNT_ID_RE.fullmatch(str(payload.target_user_id or "")):
+        raise HTTPException(status_code=422, detail="目标账号无效")
+    try:
+        data = _run_bridge(
+            "messenger-switch",
+            {"account_id": account_id, "target_user_id": payload.target_user_id},
+        )
+    except BridgeUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except BridgeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    account = data.get("account") if isinstance(data.get("account"), dict) else {}
+    new_id = str(account.get("id") or "")
+    if new_id:
+        _set_binding(new_id, str(account.get("nickname") or ""))
+    return {"result": data, "binding": _binding()}
 
 
 @router.post("/account/probe")
@@ -941,6 +971,58 @@ def send_now(payload: SendRequest, request: Request, response: Response, _=Depen
         "daily_sent": _daily_sent(account_id),
         "daily_cap": cap,
     }
+
+
+class DeleteRequest(BaseModel):
+    account_id: str = ""
+    channel_id: str
+    msg_id_client: str
+    msg_time: int
+    sender_id: str = ""
+    confirm: str
+
+
+@router.post("/delete")
+def delete_message(payload: DeleteRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    if payload.confirm != DELETE_CONFIRM_WORD:
+        raise HTTPException(status_code=422, detail=f"请输入确认词“{DELETE_CONFIRM_WORD}”")
+    account_id = _resolve_account_id(payload.account_id)
+    if not CHANNEL_ID_RE.fullmatch(payload.channel_id):
+        raise HTTPException(status_code=422, detail="频道 ID 无效")
+    if not payload.msg_id_client or len(payload.msg_id_client) > 128:
+        raise HTTPException(status_code=422, detail="消息 ID 无效")
+    if payload.msg_time <= 0:
+        raise HTTPException(status_code=422, detail="消息时间无效")
+    if payload.sender_id and payload.sender_id != account_id:
+        raise HTTPException(status_code=403, detail="只能删除当前账号自己发送的消息")
+    try:
+        data = _run_bridge(
+            "messenger-delete",
+            {
+                "account_id": account_id,
+                "channel_id": payload.channel_id,
+                "msg_id_client": payload.msg_id_client,
+                "msg_time": payload.msg_time,
+                "sender_id": payload.sender_id or account_id,
+            },
+        )
+    except BridgeUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except BridgeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _append_audit(
+        {
+            "at": _now_iso(),
+            "kind": "delete",
+            "account_id": account_id,
+            "channel_id": payload.channel_id,
+            "msg_id_client": payload.msg_id_client,
+            "ok": True,
+        }
+    )
+    return {"ok": True, "message": _safe_error(data.get("message"), "删除成功")}
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────

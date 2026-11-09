@@ -135,6 +135,8 @@ class PrivilegedBridgeTests(unittest.TestCase):
             "messenger-probe",
             "messenger-history",
             "messenger-send",
+            "messenger-delete",
+            "messenger-switch",
         ):
             self.assertIn(command, commands)
         self.assertEqual(bridge_server.SERVICE_SETTINGS["flip"]["timeout"], 40)
