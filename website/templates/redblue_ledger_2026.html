@@ -347,7 +347,7 @@
       <div class="field"><label>结束时间</label><input id="overrideEnd" type="datetime-local"></div>
       <div class="field"><label>改为</label><select id="overrideMethod"><option value="鸡腿">鸡腿</option><option value="计分卡">计分卡</option></select></div>
       <div class="field full"><label>凭证/备注</label><textarea id="overrideNote" placeholder="例如：群管理已核对鸡腿消耗截图，350 鸡腿 × 3"></textarea></div>
-      <div class="field full"><label>凭证截图（可多选）</label><input id="overrideFiles" type="file" multiple accept="image/*"><div class="notice" id="overrideFileHint">支持 JPG/PNG/GIF/WebP，单张不超过 8MB；可一次选多张。</div></div>
+      <div class="field full"><label>凭证截图（可多选）</label><input id="overrideFiles" type="file" multiple accept="image/*"><div class="notice" id="overrideFileHint">支持 JPG/PNG/GIF/WebP，单张不超过 8MB；可一次选多张。建议在腾讯云主节点上传，阿里云为只读副本，可查看已同步凭证。</div></div>
     </div>
     <div class="notice" id="overridePreviewHint">填写昵称/ID 和时间窗后点“预览匹配”。</div>
     <div class="table-wrap" id="overridePreviewWrap" style="display:none; max-height:260px; overflow:auto;">
@@ -1259,7 +1259,7 @@
     $("overrideMethod").value = "鸡腿";
     $("overrideNote").value = "";
     $("overrideFiles").value = "";
-    $("overrideFileHint").textContent = "支持 JPG/PNG/GIF/WebP，单张不超过 8MB；可一次选多张。";
+    $("overrideFileHint").textContent = "支持 JPG/PNG/GIF/WebP，单张不超过 8MB；可一次选多张。建议在腾讯云主节点上传，阿里云为只读副本，可查看已同步凭证。";
     $("overrideSelectedWrap").style.display = "none";
     $("overrideSelectedHint").textContent = "";
     ["overrideName", "overrideId", "overrideGiftName", "overrideStart", "overrideEnd"].forEach(function (id) {

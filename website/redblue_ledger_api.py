@@ -2828,6 +2828,11 @@ async def upload_scoring_evidence(
     file: UploadFile = File(...),
     _=Depends(verify_redblue_password),
 ):
+    if getattr(cfg, "SHARED_STATE_SYNC_ENABLED", False) and not getattr(cfg, "SHARED_STATE_IS_PRIMARY", False):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="凭证请在腾讯云主节点红蓝台账上传；阿里云为只读副本",
+        )
     ext = EVIDENCE_MIME_EXT.get((file.content_type or "").lower())
     if not ext:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="仅支持 JPG/PNG/GIF/WebP 图片")
