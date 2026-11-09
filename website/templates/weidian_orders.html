@@ -36,7 +36,6 @@
     .btn.primary:hover { opacity:.9; color:#fff; }
     .btn.mini { height:28px; padding:0 8px; font-size:12px; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
-    .chk { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
     .multi { position:relative; }
     .multi > summary { list-style:none; height:34px; display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:0 10px; background:#fff; cursor:pointer; user-select:none; }
     .multi > summary::-webkit-details-marker { display:none; }
@@ -120,8 +119,6 @@
         </div>
       </details>
       <input type="text" id="keyword" placeholder="订单号 / 昵称 / 账号 / 备注 / 商品">
-      <label class="chk"><input type="checkbox" id="includeTest" checked> 重播含测试群</label>
-      <label class="chk"><input type="checkbox" id="marker" checked> 标记（更正播报）</label>
       <span class="statusbar" id="statusBar"></span>
     </div>
     <div style="overflow:auto;">
@@ -556,14 +553,12 @@
     if (name == null) return;
     name = name.trim();
     if (!name) { toast("昵称不能为空", true); return; }
-    var includeTest = $("includeTest").checked;
-    var marker = $("marker").checked ? "（更正播报）" : "";
-    var target = "QQ 生产群" + (includeTest ? " + test 群" : "") + " + 飞书";
+    var target = "所有已配置微店转发的 QQ 群 + 飞书";
     if (!window.confirm("确认重新播报？\n昵称：" + name + "\n目标：" + target)) return;
     try {
       await submitJob({
         type: "rebroadcast", order_id: orderId, name: name,
-        include_test: includeTest, channels: ["qq", "feishu"], marker: marker
+        channels: ["qq", "feishu"]
       }, "重新播报");
       await loadData();
       toast("重播完成");

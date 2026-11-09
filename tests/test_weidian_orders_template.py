@@ -60,6 +60,16 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertNotIn("colspan=\"10\"", self.template)
         self.assertIn("发货任务完成后立即重读订单库", self.template)
 
+    def test_rebroadcast_always_uses_configured_groups_without_marker(self) -> None:
+        self.assertNotIn('id="includeTest"', self.template)
+        self.assertNotIn('id="marker"', self.template)
+        self.assertNotIn("重播含测试群", self.template)
+        self.assertNotIn("更正播报", self.template)
+        self.assertIn("所有已配置微店转发的 QQ 群 + 飞书", self.template)
+        self.assertIn('channels: ["qq", "feishu"]', self.template)
+        self.assertNotIn("include_test", self.template)
+        self.assertNotIn("marker:", self.template)
+
     def test_status_filter_is_multi_select_with_semantic_labels(self) -> None:
         for marker in (
             'id="statusMenu"',
