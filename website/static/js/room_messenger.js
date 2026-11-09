@@ -827,9 +827,13 @@
         } else {
             lock.hidden = false;
             composer.hidden = true;
-            lock.innerHTML = hasChannel
-                ? '<i class="fas fa-key"></i> 请先登录并绑定个人账号'
-                : '<i class="fas fa-comments"></i> 请先选择频道并绑定个人账号';
+            if (hasChannel && !hasBinding) {
+                lock.innerHTML = '<i class="fas fa-key"></i> 请先登录并绑定个人账号';
+            } else if (!hasChannel && hasBinding) {
+                lock.innerHTML = '<i class="fas fa-comments"></i> 请先从左侧选择频道';
+            } else {
+                lock.innerHTML = '<i class="fas fa-comments"></i> 请先选择频道并绑定个人账号';
+            }
         }
     }
 
