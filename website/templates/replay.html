@@ -487,6 +487,7 @@
   .replay-shortcuts { display: none; }
 }
 
+.radio-panels.hidden { display: none; }
 .radio-panels {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
@@ -582,6 +583,9 @@
                     <span class="player-time" id="timeDisplay">0:00 / 0:00</span>
                 </div>
                 <div class="player-right-group" style="display:flex;align-items:center;gap:8px;">
+                    {% if is_radio %}
+                    <button class="player-btn" id="transcriptToggleBtn" type="button" title="显示转录"><i class="fas fa-align-left"></i></button>
+                    {% endif %}
                     <button class="player-btn" id="danmuToggleBtn" type="button" title="弹幕开关"><i class="fas fa-comments"></i></button>
                     <div class="danmu-settings" id="danmuSettings">
                         <button class="player-btn" id="danmuSettingsBtn" type="button" title="弹幕设置"><i class="fas fa-cog"></i></button>
@@ -685,10 +689,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!radioTranscript || !liveId) return;
       try {
         const response = await fetch(`/api/replay/${encodeURIComponent(liveId)}/transcript.json`);
-        if (!response.ok) { radioTranscript.textContent = "本场暂无转录"; return; }
+        if (!response.ok) { radioTranscript.textContent = "本场转录尚未准备好"; return; }
         const data = await response.json();
         radioSegments = Array.isArray(data.segments) ? data.segments : [];
-        if (!radioSegments.length) { radioTranscript.textContent = "本场暂无转录"; return; }
+        if (!radioSegments.length) { radioTranscript.textContent = "本场转录尚未准备好"; return; }
         radioTranscript.textContent = "";
         radioSegments.forEach((seg, segIndex) => {
           const text = String(seg.text || "");
@@ -709,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
         video.addEventListener("seeked", updateRadioTranscript);
         updateRadioTranscript();
       } catch (_) {
-        radioTranscript.textContent = "转录加载失败";
+        radioTranscript.textContent = "转录加载失败，请稍后重试";
       }
     }
 
@@ -738,7 +742,33 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    loadRadioTranscript();
+    const radioPanels = document.getElementById("radioPanels");
+    const transcriptToggleBtn = document.getElementById("transcriptToggleBtn");
+    let radioTranscriptLoaded = false;
+
+    function setRadioTranscriptVisible(show) {
+      if (!radioPanels) return;
+      radioPanels.classList.toggle("hidden", !show);
+      if (transcriptToggleBtn) transcriptToggleBtn.classList.toggle("active", show);
+      if (show) {
+        if (!radioTranscriptLoaded) {
+          radioTranscriptLoaded = true;
+          loadRadioTranscript();
+        }
+      }
+      try { window.localStorage.setItem("radio_transcript_open", show ? "1" : "0"); } catch (_) {}
+    }
+
+    if (radioPanels) {
+      let initial = false;
+      try { initial = window.localStorage.getItem("radio_transcript_open") === "1"; } catch (_) {}
+      setRadioTranscriptVisible(initial);
+    }
+    if (transcriptToggleBtn) {
+      transcriptToggleBtn.addEventListener("click", function () {
+        setRadioTranscriptVisible(radioPanels.classList.contains("hidden"));
+      });
+    }
     let isPlaying = false;
     let isDraggingProgress = false;
     let danmuItems = [];
@@ -1171,6 +1201,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'f') fullscreenBtn.click();
         if (e.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 10);
         if (e.key === 'ArrowRight') video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        if (e.key === 'Enter' && radioTranscript) {
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed || !selection.anchorNode) return;
+            let node = selection.anchorNode;
+            if (node.nodeType === 3) node = node.parentElement;
+            if (!node || !radioTranscript.contains(node)) return;
+            const span = node.closest ? node.closest(".karaoke-char") : null;
+            if (!span) return;
+            e.preventDefault();
+            video.currentTime = Number(span.dataset.start || 0) / 1000;
+        }
     });
 });
 </script>
