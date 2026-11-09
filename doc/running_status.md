@@ -8,11 +8,12 @@
 - Token 失效入口：页面加载和打开账号弹窗时自动做只读 probe；失效时账号卡显示“重新登录”和红色提示条，历史/发送/删除错误含 token/失效/非法授权时也会切到该状态。
 - 密码策略：不再为房间信使自定义密码。腾讯云 `.env` 的 `ROOM_MESSENGER_PASSWORD` 已置空，页面复用 `SCORE_GIFTS_PASSWORD`（再回退 `GIFT_REPLIES_PASSWORD`）。已删除登录页“个人号专用”“HttpOnly 会话”等内部提示。
 - 代码：网站 `9c0e46f`；fan-hub `80759901d`。桥命令白名单新增 `messenger-delete` / `messenger-switch`（45 秒）；普通翻牌命令仍 40 秒，`messenger-send` 仍 380 秒。
-- 部署：腾讯云重新安装 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1729055`）；删除可视化提交后 `snh48-web.service` 最终 PID `1752204`；启动日志有 `Room messenger scheduler started`。
+- 部署：腾讯云重新安装 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1729055`）；发送记录与墓碑提交后 `snh48-web.service` 最终 PID `1763313`；启动日志有 `Room messenger scheduler started`。
 - 只读烟测：页面 200；用 `SCORE_GIFTS_PASSWORD` 登录 200；账号 200，绑定 `147062891`；probe 200 且返回大号 `147062891`、小号 `174063630`；catalog 200；删除接口错误确认词 422、他人消息 403；切换非法目标 400；QChat 连接探针成功。未调用真实 `/send` 或 `/delete`，未发送/删除任何真实消息。
 - 待 owner 手动验收：先看历史，再发 1 条低风险消息，确认气泡和客户端显示；随后测试删除自己刚发的消息、定时/批量、以及小号切换。首次真实发送/删除前仍需 owner 明确同意并提供内容。
+- 完整发送文本：`1e03cad` 起新增 `/var/lib/snh48-web/room_messenger/sent.jsonl`（0600，20MB 轮转），即时发送和定时/批量每条消息都保存完整 `text`、来源、账号、频道、消息 ID、状态和错误；页面“发送计划 → 发送记录”可查看最近 80 条。测试消息“1”已按审计回填，可在小号 `174063630` 的发送记录中看到。
 - 删除可视化：`d371be5` 起删除成功不再从页面移除消息，而是在本地 `deleted.json` 写墓碑；历史接口会把墓碑合并为“此消息已删除”并保留原短文本（灰色删除线），刷新页面仍可见。删除审计新增 `text_length`/`text_sha256`/`preview`。测试中已删除的 `91a6dab84d8ae657bdcf177e15ea680c` 已按审计回填墓碑；未重新发送或重新删除。
-- 阿里云：代码已同步到 `d371be5` / `9011babb8`，未重启 `snh48-aliyun.service`，房间信使保持关闭。
+- 阿里云：代码已同步到 `1e03cad` / `9011babb8`，未重启 `snh48-aliyun.service`，房间信使保持关闭。
 
 ## 2026-11-09 房间信使（个人号房间消息发送页）腾讯云已部署，阿里云仅同步代码（待确认）
 
