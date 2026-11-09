@@ -1,5 +1,18 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-09 房间信使修复发送失败并补齐删除/小号/Token 失效入口（腾讯云已生效，阿里云仅同步代码）
+
+- 用户反馈发送时返回 `account is invalid`。根因不是 Pocket48 拒绝，而是 QChat 发送脚本把 NIM accId 当成纯数字校验：实际值为 `20250222083119_250u4g4lgoivmjr`（30 位字母数字下划线），在本地 `normalizeId` 就被拒绝。修复为独立的 `normalizeAccount`（允许字母/数字/下划线/短横线），serverId/channelId 仍保持纯数字校验。修复后用个人号 `147062891` 做只读 QChat 连接探针：NIM 登录、QChat 登录、订阅陈嘉仪公开房间全部成功（未发送消息）。
+- 新增删除消息：网页只对自己发送的消息显示删除图标；服务端再次校验 `sender_id == 当前个人号 userId`；经桥命令 `messenger-delete` 调 Pocket48 `/im/api/v1/team/msg/delete`（friendship 头，accId 取当前 NIM 凭据）；删除要求输入确认词“确认删除”。
+- 新增同手机号大号/小号切换：`messenger-probe` 返回 `bigSmallInfo`；账号弹窗显示大号/小号，点击小号通过 `messenger-switch` 调 `/user/api/v1/bigsmall/switch/user`，保存新 Token、立即标记 personal 并切换页面绑定。未在自动验收中实际执行切换。
+- Token 失效入口：页面加载和打开账号弹窗时自动做只读 probe；失效时账号卡显示“重新登录”和红色提示条，历史/发送/删除错误含 token/失效/非法授权时也会切到该状态。
+- 密码策略：不再为房间信使自定义密码。腾讯云 `.env` 的 `ROOM_MESSENGER_PASSWORD` 已置空，页面复用 `SCORE_GIFTS_PASSWORD`（再回退 `GIFT_REPLIES_PASSWORD`）。已删除登录页“个人号专用”“HttpOnly 会话”等内部提示。
+- 代码：网站 `9c0e46f`；fan-hub `80759901d`。桥命令白名单新增 `messenger-delete` / `messenger-switch`（45 秒）；普通翻牌命令仍 40 秒，`messenger-send` 仍 380 秒。
+- 部署：腾讯云重新安装 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1729055`）和 `snh48-web.service`（PID `1729066`）；启动日志有 `Room messenger scheduler started`。
+- 只读烟测：页面 200；用 `SCORE_GIFTS_PASSWORD` 登录 200；账号 200，绑定 `147062891`；probe 200 且返回大号 `147062891`、小号 `174063630`；catalog 200；删除接口错误确认词 422、他人消息 403；切换非法目标 400；QChat 连接探针成功。未调用真实 `/send` 或 `/delete`，未发送/删除任何真实消息。
+- 待 owner 手动验收：先看历史，再发 1 条低风险消息，确认气泡和客户端显示；随后测试删除自己刚发的消息、定时/批量、以及小号切换。首次真实发送/删除前仍需 owner 明确同意并提供内容。
+- 阿里云：代码已同步到 `9c0e46f` / `80759901d`，未重启 `snh48-aliyun.service`，房间信使保持关闭。
+
 ## 2026-11-09 房间信使（个人号房间消息发送页）腾讯云已部署，阿里云仅同步代码（待确认）
 
 - 需求：在 `/room/messenger` 新增个人号房间消息页面，支持成员/频道选择、最近聊天、即时发送、单次定时、批量间隔/浮动、每日重复、左侧常用频道、发送计划队列和移动端布局。真实发送由 owner 手动验收，自动化不向任何真实频道发送消息。
