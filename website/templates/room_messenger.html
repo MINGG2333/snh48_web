@@ -8,8 +8,7 @@
     <link rel="icon" href="/favicon.ico" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
-    <link rel="stylesheet" href="/static/css/style.css?v={{ static_version('css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/room_messenger.css?v={{ static_version('css/room_messenger.css') }}">
+    <style>{{ inline_css|safe }}</style>
 </head>
 <body class="rm-body">
 <div id="loginOverlay" class="rm-login-overlay">
@@ -30,7 +29,7 @@
     <aside id="sidebar" class="rm-sidebar">
         <div class="rm-sidebar-head">
             <div class="rm-brand"><i class="fas fa-comment-dots"></i><span>房间信使</span></div>
-            <button id="sidebarClose" class="rm-icon-btn rm-mobile-only" type="button" aria-label="关闭侧栏"><i class="fas fa-xmark"></i></button>
+            <button id="sidebarClose" class="rm-icon-btn rm-mobile-only" type="button" aria-label="关闭侧栏"><span class="rm-close-glyph">×</span></button>
         </div>
 
         <div id="tokenWarning" class="rm-token-warning" hidden>
@@ -76,7 +75,7 @@
 
     <main class="rm-main">
         <header class="rm-main-head">
-            <button id="sidebarOpen" class="rm-icon-btn rm-mobile-only" type="button" aria-label="打开侧栏"><i class="fas fa-bars"></i></button>
+            <button id="sidebarOpen" class="rm-icon-btn rm-mobile-only" type="button" aria-label="打开侧栏"><span class="rm-menu-glyph">☰</span></button>
             <div class="rm-chat-title">
                 <h2 id="channelTitle">未选择频道</h2>
                 <p id="channelSubtitle">从左侧选择成员和房间</p>
@@ -143,7 +142,7 @@
     <div class="rm-modal-card rm-modal-narrow" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
         <div class="rm-modal-head">
             <h3 id="accountModalTitle"><i class="fas fa-key"></i> 登录个人账号</h3>
-            <button class="rm-icon-btn" type="button" data-close="accountModal" aria-label="关闭"><i class="fas fa-xmark"></i></button>
+            <button class="rm-icon-btn" type="button" data-close="accountModal" aria-label="关闭"><span class="rm-close-glyph">×</span></button>
         </div>
         <div class="rm-modal-body">
             <div class="rm-warning">

@@ -86,6 +86,18 @@ def static_version(filename: str) -> str:
     return "1"
 
 
+def _room_messenger_inline_css() -> str:
+    """Inline page CSS so iPhone Safari never depends on local CSS links."""
+    parts = []
+    for name in ("style.css", "room_messenger.css"):
+        path = cfg.STATIC_DIR / "css" / name
+        try:
+            parts.append(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    return "\n".join(parts)
+
+
 # ── Favicon (random rotation) ──────────────────────────────────────────────
 
 FAVICON_DIR = cfg.STATIC_DIR / "images" / "favicons"
@@ -507,6 +519,7 @@ async def room_messenger_page(request: Request):
             "site_police_icp": cfg.SITE_POLICE_ICP,
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
+            "inline_css": _room_messenger_inline_css(),
             "room_messenger_enabled": cfg.ROOM_MESSENGER_ENABLED,
             "room_messenger_node": cfg.SHARED_STATE_NODE_ID,
         },
