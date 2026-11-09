@@ -297,6 +297,15 @@ if [ "$sync_dynamic" -eq 1 ]; then
   else
     echo "$LOG_TAG all_members skipped (source missing)"
   fi
+
+  # 10. 红蓝计分凭证（网站管理员上传，腾讯云主节点写入；阿里云只读）
+  if ssh -S "$CONTROL_PATH" "$TENCENT" 'test -d /home/snh48-fan-hub/private_handover/web_state/redblue_scoring_evidence'; then
+    mkdir -p /home/snh48-fan-hub/private_handover/web_state/redblue_scoring_evidence
+    rsync -az "${RSYNC_WEB_READ_OPTS[@]}" --delete --partial -e "$RSYNC_RSH" "$TENCENT:/home/snh48-fan-hub/private_handover/web_state/redblue_scoring_evidence/" /home/snh48-fan-hub/private_handover/web_state/redblue_scoring_evidence/
+    echo "$LOG_TAG redblue_scoring_evidence done"
+  else
+    echo "$LOG_TAG redblue_scoring_evidence skipped (source missing)"
+  fi
 fi
 
 if [ "$sync_hub" -eq 1 ]; then
