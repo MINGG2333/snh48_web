@@ -87,6 +87,18 @@ script/user_activity_report.py --days 30 --client user_xxx
 3. 归档校验成功并留存 manifest 后，才允许清理本地副本；
 4. 任何自动清理策略上线前需要明确确认，默认不删除。
 
+归档工具（只复制、不删除源文件）：
+
+```bash
+# 先看会归档哪些内容
+script/archive_user_activity.py --before 2026-06-01
+
+# 真正归档到 NAS/备份盘，生成 tar.gz + sha256 manifest
+script/archive_user_activity.py --before 2026-06-01 --dest /mnt/nas-backup/snh48-web-logs
+```
+
+脚本没有自动删除逻辑，也不会被 timer 调用；源文件保留，确认归档和 manifest 后再人工决定是否清理。
+
 也就是说：**除非人工确认并完成归档校验，数据不会因为“过了保留期”而永久消失**。
 
 ## 隐私边界
