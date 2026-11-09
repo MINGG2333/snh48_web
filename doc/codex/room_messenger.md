@@ -111,6 +111,7 @@ scripts/web/room_messenger_qchat.js
 | `ROOM_MESSENGER_ENABLED` | 跟随主节点 | 阿里云默认关闭 |
 | `ROOM_MESSENGER_STATE_DIR` | `/var/lib/snh48-web/room_messenger` | 任务/绑定/日志 |
 | `ROOM_MESSENGER_CATALOG_PATH` | fan-hub `member_catalog.json` | 成员/频道目录 |
+| `ROOM_MESSENGER_ROOM_CONFIG_PATH` | fan-hub `config/room_monitor.json` | 补入目录中缺失的已监控成员（如陈嘉仪） |
 | `ROOM_MESSENGER_COMMAND` | 回退 `FLIP_CARDS_ACCOUNT_ADMIN_COMMAND` | 特权桥客户端 |
 | `ROOM_MESSENGER_MIN_INTERVAL_SECONDS` | `15` | 批量最小间隔 |
 | `ROOM_MESSENGER_DAILY_SEND_CAP` | `100` | 每日发送上限 |

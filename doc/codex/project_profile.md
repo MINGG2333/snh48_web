@@ -436,6 +436,7 @@ ROOM_MESSENGER_PASSWORD=独立房间信使密码；留空复用房间消息密�
 ROOM_MESSENGER_ENABLED=腾讯云 true；阿里云 false（留空跟随主节点）
 ROOM_MESSENGER_STATE_DIR=/var/lib/snh48-web/room_messenger
 ROOM_MESSENGER_CATALOG_PATH=/home/snh48-fan-hub/room_record/陈嘉仪_161808449/cross_room/metadata/member_catalog.json
+ROOM_MESSENGER_ROOM_CONFIG_PATH=/home/snh48-fan-hub/config/room_monitor.json
 ROOM_MESSENGER_COMMAND=留空回退 FLIP_CARDS_ACCOUNT_ADMIN_COMMAND
 ROOM_MESSENGER_DAILY_SEND_CAP=100
 FLIP_CARDS_ACCOUNT_ADMIN_ENABLED=腾讯云 true；阿里云 false（默认跟随 SHARED_STATE_IS_PRIMARY）

@@ -53,12 +53,38 @@ class RoomMessengerApiTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        self.room_config = self.root / "room_monitor.json"
+        self.room_config.write_text(
+            json.dumps(
+                {
+                    "members": [
+                        {
+                            "id": "4001",
+                            "name": "配置成员",
+                            "channelId": "4002",
+                            "serverId": "4003",
+                            "rooms": [
+                                {
+                                    "type": "small",
+                                    "label": "小房间",
+                                    "channelId": "4004",
+                                    "serverId": "4003",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         self.patches = [
             patch.object(api.cfg, "ROOM_MESSENGER_ENABLED", True),
             patch.object(api.cfg, "ROOM_MESSENGER_PASSWORD", "correct-password"),
             patch.object(api.cfg, "SECURE_COOKIES", False),
             patch.object(api.cfg, "ROOM_MESSENGER_STATE_DIR", str(self.root / "state")),
             patch.object(api.cfg, "ROOM_MESSENGER_CATALOG_PATH", str(self.catalog)),
+            patch.object(api.cfg, "ROOM_MESSENGER_ROOM_CONFIG_PATH", str(self.room_config)),
             patch.object(api.cfg, "ROOM_MESSENGER_DAILY_SEND_CAP", 10),
             patch.object(api.cfg, "ROOM_MESSENGER_MIN_INTERVAL_SECONDS", 15),
             patch.object(api.cfg, "ROOM_MESSENGER_DEFAULT_INTERVAL_SECONDS", 60),
@@ -113,6 +139,13 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertEqual(data["total"], 1)
         self.assertEqual(len(data["members"][0]["rooms"]), 2)
         self.assertEqual(data["members"][0]["rooms"][0]["room_type"], "main")
+        configured = self.client.get("/api/room-messenger/catalog?q=配置成员").json()
+        self.assertEqual(configured["total"], 1)
+        self.assertEqual(len(configured["members"][0]["rooms"]), 2)
+        self.assertEqual(
+            {room["channel_id"] for room in configured["members"][0]["rooms"]},
+            {"4002", "4004"},
+        )
 
     def test_manual_send_requires_exact_confirmation_word(self) -> None:
         self._login()

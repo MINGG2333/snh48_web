@@ -61,7 +61,7 @@ _state_lock = threading.RLock()
 _scheduler_started = False
 _scheduler_recovered = False
 _catalog_lock = threading.Lock()
-_catalog_cache: tuple[float, list[dict[str, Any]]] | None = None
+_catalog_cache: tuple[Any, list[dict[str, Any]]] | None = None
 
 
 # ── Small utilities ───────────────────────────────────────────────────────
@@ -483,22 +483,40 @@ def _catalog_path() -> Path:
     )
 
 
+def _room_config_path() -> Path:
+    return Path(
+        getattr(
+            cfg,
+            "ROOM_MESSENGER_ROOM_CONFIG_PATH",
+            "/home/snh48-fan-hub/config/room_monitor.json",
+        )
+    )
+
+
 def _load_catalog() -> list[dict[str, Any]]:
     global _catalog_cache
     path = _catalog_path()
+    room_config_path = _room_config_path()
     try:
-        mtime = path.stat().st_mtime
+        catalog_mtime = path.stat().st_mtime
     except OSError:
+        catalog_mtime = -1.0
+    try:
+        config_mtime = room_config_path.stat().st_mtime
+    except OSError:
+        config_mtime = -1.0
+    if catalog_mtime < 0 and config_mtime < 0:
         return []
+    signature = (catalog_mtime, config_mtime)
     with _catalog_lock:
-        if _catalog_cache and _catalog_cache[0] == mtime:
+        if _catalog_cache and _catalog_cache[0] == signature:
             return _catalog_cache[1]
+        members: dict[str, dict[str, Any]] = {}
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return []
+            raw = {}
         rooms = raw.get("rooms") if isinstance(raw.get("rooms"), list) else []
-        members: dict[str, dict[str, Any]] = {}
         for room in rooms:
             if not isinstance(room, dict):
                 continue
@@ -525,9 +543,67 @@ def _load_catalog() -> list[dict[str, Any]]:
                     "channel_id": channel_id,
                     "server_id": str(room.get("server_id") or ""),
                     "room_type": "small" if str(room.get("room_type")) == "small" else "main",
-                    "room_label": str(room.get("room_label") or ("小房间" if str(room.get("room_type")) == "small" else "公开房间")),
+                    "room_label": str(
+                        room.get("room_label")
+                        or ("小房间" if str(room.get("room_type")) == "small" else "公开房间")
+                    ),
                 }
             )
+        # The cross-room catalog is built from a public member index that does
+        # not always contain monitored members (for example the owner's own
+        # rooms). Merge the locally monitored member configuration so those
+        # rooms are always selectable.
+        try:
+            room_config = json.loads(room_config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            room_config = {}
+        configured = room_config.get("members") if isinstance(room_config.get("members"), list) else []
+        for member in configured:
+            if not isinstance(member, dict):
+                continue
+            owner_id = str(member.get("id") or "").strip()
+            owner_name = str(member.get("name") or "").strip()
+            if not owner_id.isdigit() or not owner_name:
+                continue
+            entry = members.setdefault(
+                owner_id,
+                {
+                    "id": owner_id,
+                    "name": owner_name,
+                    "group": "",
+                    "in_group": True,
+                    "rooms": [],
+                },
+            )
+            known_channels = {str(item.get("channel_id")) for item in entry["rooms"]}
+            main_channel = str(member.get("channelId") or "").strip()
+            main_server = str(member.get("serverId") or "").strip()
+            if main_channel.isdigit() and main_channel not in known_channels:
+                entry["rooms"].append(
+                    {
+                        "channel_id": main_channel,
+                        "server_id": main_server,
+                        "room_type": "main",
+                        "room_label": "公开房间",
+                    }
+                )
+                known_channels.add(main_channel)
+            for extra in member.get("rooms", []) or []:
+                if not isinstance(extra, dict):
+                    continue
+                channel_id = str(extra.get("channelId") or "").strip()
+                if not channel_id.isdigit() or channel_id in known_channels:
+                    continue
+                room_type = "small" if str(extra.get("type")) == "small" else "main"
+                entry["rooms"].append(
+                    {
+                        "channel_id": channel_id,
+                        "server_id": str(extra.get("serverId") or main_server),
+                        "room_type": room_type,
+                        "room_label": str(extra.get("label") or ("小房间" if room_type == "small" else "公开房间")),
+                    }
+                )
+                known_channels.add(channel_id)
         rows = list(members.values())
         for row in rows:
             row["rooms"].sort(key=lambda item: (0 if item["room_type"] == "main" else 1, item["channel_id"]))
@@ -540,7 +616,7 @@ def _load_catalog() -> list[dict[str, Any]]:
                 str(row.get("name") or ""),
             )
         )
-        _catalog_cache = (mtime, rows)
+        _catalog_cache = (signature, rows)
         return rows
 
 

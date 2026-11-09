@@ -338,6 +338,10 @@ ROOM_MESSENGER_CATALOG_PATH = os.getenv(
         / "member_catalog.json"
     ),
 )
+ROOM_MESSENGER_ROOM_CONFIG_PATH = os.getenv(
+    "ROOM_MESSENGER_ROOM_CONFIG_PATH",
+    str(PROJECT_ROOT.parent / "snh48-fan-hub" / "config" / "room_monitor.json"),
+)
 ROOM_MESSENGER_BRIDGE_PYTHON = os.getenv("ROOM_MESSENGER_BRIDGE_PYTHON") or str(
     PROJECT_ROOT.parent / "snh48-fan-hub" / "venv" / "bin" / "python3"
 )
