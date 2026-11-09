@@ -526,7 +526,7 @@ async def room_messages_page(request: Request):
 @app.get("/room-messenger", response_class=HTMLResponse)
 async def room_messenger_page(request: Request):
     """Password-protected personal-account room messenger page."""
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         "room_messenger.html",
         {
             "request": request,
@@ -540,6 +540,9 @@ async def room_messenger_page(request: Request):
             "room_messenger_node": cfg.SHARED_STATE_NODE_ID,
         },
     )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
 
 
 @app.get("/radio", response_class=HTMLResponse)
