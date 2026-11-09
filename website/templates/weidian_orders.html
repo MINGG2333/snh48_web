@@ -596,7 +596,11 @@
       var errors = result.errors || [];
       var fresh = shipped.filter(function (item) { return item.ok && !item.already; }).length;
       var already = shipped.filter(function (item) { return item.already; }).length;
-      selectedRows.forEach(function (row) { delete selectedOrders[row.order_id]; });
+      var shippedIds = {};
+      shipped.forEach(function (item) { if (item.order_id) shippedIds[item.order_id] = true; });
+      selectedRows.forEach(function (row) {
+        if (shippedIds[row.order_id]) delete selectedOrders[row.order_id];
+      });
       if (errors.length) {
         toast("发货完成 " + (fresh + already) + " 笔，失败 " + errors.length + " 笔：" + (errors[0].error || "未知错误"), true);
       } else if (single) {
