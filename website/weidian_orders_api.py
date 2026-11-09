@@ -242,24 +242,23 @@ def export_weidian_orders(
     if not rows:
         raise HTTPException(status_code=404, detail="当前筛选条件下没有可导出的订单")
 
-    last_time = ""
-    for row in reversed(rows):
-        last_time = str(row.get("add_time") or row.get("paid_at") or row.get("update_time") or "")
-        if last_time:
-            break
-    from website.weidian_export import render_orders_png
+    from website.weidian_export import latest_order_time, render_orders_png, sort_orders
 
+    rows = sort_orders(rows)
+    last_time = latest_order_time(rows)
+    mask_names = bool(payload.get("mask_names"))
     png = render_orders_png(
         rows,
         updated=last_time,
-        mask_names=bool(payload.get("mask_names")),
+        mask_names=mask_names,
     )
     stamp = time.strftime("%Y%m%d_%H%M")
+    suffix = "_masked" if mask_names else ""
     return Response(
         content=png,
         media_type="image/png",
         headers={
-            "Content-Disposition": f'attachment; filename="weidian_orders_{stamp}.png"',
+            "Content-Disposition": f'attachment; filename="weidian_orders{suffix}_{stamp}.png"',
             "Cache-Control": "no-store",
         },
     )

@@ -72,6 +72,7 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
             "mask_names",
             "WEIDIAN_EXPORT_PURE_START",
             "WEIDIAN_EXPORT_PURE_END",
+            "_已打码",
             "筛选 ",
             "合计 ¥",
         ):

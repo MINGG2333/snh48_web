@@ -29,7 +29,7 @@ MIN_WIDTH = 560
 ROW_HEIGHT = 44
 MAX_ITEM_WIDTH = 360
 MAX_NAME_WIDTH = 140
-COLUMN_GAP = 22
+COLUMN_GAP = 28
 
 
 def _font(size: int, bold: bool = False):
@@ -68,13 +68,25 @@ def _row_time(row: dict[str, Any]) -> str:
     return str(row.get("add_time") or row.get("paid_at") or row.get("update_time") or "")
 
 
+def sort_orders(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """按订单时间从早到晚排序；无时间的订单放最后。"""
+    return sorted(
+        list(rows),
+        key=lambda row: (_row_time(row) or "9999-12-31 23:59:59", str(row.get("order_id") or "")),
+    )
+
+
+def latest_order_time(rows: Iterable[dict[str, Any]]) -> str:
+    return max((_row_time(row) for row in rows if _row_time(row)), default="")
+
+
 def render_orders_png(
     rows: Iterable[dict[str, Any]],
     *,
     updated: str = "",
     mask_names: bool = False,
 ) -> bytes:
-    items = list(rows)
+    items = sort_orders(rows)
     Image, ImageDraw, _ = _pil()
     measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
@@ -118,7 +130,7 @@ def render_orders_png(
     card_top = 100
     card_height = 18 + len(items) * ROW_HEIGHT + 18
     card_bottom = card_top + card_height
-    estimated_height = card_bottom + 58 + (24 if mask_names else 0)
+    estimated_height = card_bottom + 58
     image = Image.new("RGB", (width, estimated_height), BG)
     draw = ImageDraw.Draw(image)
 
@@ -145,9 +157,6 @@ def render_orders_png(
         y += ROW_HEIGHT
         if y < card_bottom - 6:
             draw.line([item_x, y - 6, amount_right, y - 6], fill=(240, 232, 245), width=1)
-
-    if mask_names:
-        draw.text((item_x, card_bottom + 10), "播报名已匿名打码（3 字及以上保留首尾）", font=_font(16), fill=FAINT, anchor="la")
 
     draw.text(
         (width / 2, estimated_height - 24),

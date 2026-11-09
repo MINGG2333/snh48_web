@@ -628,6 +628,7 @@
     }
     var button = $("exportOrdersBtn");
     var originalText = button.textContent;
+    var masked = $("maskNames").checked;
     button.disabled = true;
     button.textContent = "生成中…";
     setStatus("正在生成筛选订单图片…");
@@ -637,7 +638,7 @@
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           order_ids: rows.map(function (row) { return row.order_id; }),
-          mask_names: $("maskNames").checked
+          mask_names: masked
         }),
         credentials: "same-origin",
         cache: "no-store"
@@ -654,7 +655,7 @@
       var url = URL.createObjectURL(blob);
       var link = document.createElement("a");
       link.href = url;
-      link.download = "微店订单_筛选导出_" + new Date().toISOString().slice(0, 10) + ".png";
+      link.download = "微店订单_筛选导出_" + new Date().toISOString().slice(0, 10) + (masked ? "_已打码" : "") + ".png";
       document.body.appendChild(link);
       link.click();
       link.remove();
