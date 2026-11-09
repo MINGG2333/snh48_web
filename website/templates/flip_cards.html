@@ -1358,6 +1358,7 @@
         link.target = "_blank";
         link.rel = "noopener";
         link.textContent = "官方下载";
+        link.setAttribute("data-track", "media_download");
         box.appendChild(link);
       }
       return box;
@@ -1469,6 +1470,7 @@
           if (showingAlt) { text.textContent = alt; spans = []; }
           else { showPrimary(); }
           toggle.textContent = showingAlt ? "显示 FireRed 新版" : "显示 Whisper 旧版";
+          if (window._trackEvent) window._trackEvent("transcript_model_toggle", { page: "/flip", mode: showingAlt ? "whisper" : "firered", target: (primary || alt).slice(0, 80) });
         });
         actions.appendChild(toggle);
       }
@@ -1493,7 +1495,9 @@
           if (showingAlt) { text.textContent = alt; spans = []; } else { showPrimary(); }
           fix.textContent = "已记录";
           fix.disabled = true;
+          if (window._trackEvent) window._trackEvent("transcript_correction", { page: "/flip", result: "success", wrong: wrong.slice(0, 60), right: right.slice(0, 60) });
         } catch (err) {
+          if (window._trackEvent) window._trackEvent("transcript_correction", { page: "/flip", result: "failed", wrong: wrong.slice(0, 60), error: String(err.message || "").slice(0, 120) });
           window.alert("纠错保存失败：" + err.message);
         }
       });

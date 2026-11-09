@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from website import audit_log
 from website import config as cfg
 from website.debut_milestones import build_homepage_context
 
@@ -831,6 +832,56 @@ app.include_router(feedback_chat_router)
 
 from website.social_credentials_admin_api import router as social_credentials_admin_router
 app.include_router(social_credentials_admin_router)
+
+
+# ── 写操作审计中间件 ───────────────────────────────────────────────────────
+
+
+@app.middleware("http")
+async def audit_write_requests(request: Request, call_next):
+    """记录所有写 API 的调用方、参数摘要和结果；审计失败不影响请求。"""
+    method = request.method.upper()
+    mutating = method in {"POST", "PUT", "PATCH", "DELETE"}
+    body_bytes = b""
+    if mutating:
+        try:
+            body_bytes = await request.body()
+        except Exception:  # noqa: BLE001
+            body_bytes = b""
+    started = time.perf_counter()
+    response = await call_next(request)
+    if mutating and not audit_log.should_skip(request.url.path):
+        payload: object = ""
+        if body_bytes:
+            try:
+                payload = json.loads(body_bytes.decode("utf-8", errors="replace"))
+            except (ValueError, UnicodeDecodeError):
+                payload = body_bytes[:1000].decode("utf-8", errors="replace")
+        visitor_id = ""
+        try:
+            from website.visitor_observation import read_device_cookie
+
+            visitor_id = read_device_cookie(request.cookies.get("ob_device_profile")) or ""
+        except Exception:  # noqa: BLE001
+            visitor_id = ""
+        try:
+            from website.rate_limiter import get_client_ip
+
+            client_ip = get_client_ip(request)
+        except Exception:  # noqa: BLE001
+            client_ip = request.client.host if request.client else ""
+        audit_log.record(
+            method=method,
+            path=request.url.path,
+            query=request.url.query,
+            status=response.status_code,
+            duration_ms=int((time.perf_counter() - started) * 1000),
+            ip=client_ip,
+            user_agent=request.headers.get("user-agent", ""),
+            visitor_id=visitor_id,
+            body=payload,
+        )
+    return response
 
 
 # ── Security Headers Middleware ─────────────────────────────────────────────

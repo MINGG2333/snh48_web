@@ -35,6 +35,7 @@
     const payload = {
       client_id: clientId,
       event_type: eventType,
+      schema_version: 2,
       data: Object.assign({ page: currentPage }, eventData),
     };
     // Use sendBeacon for reliability (works during page unload)
@@ -109,6 +110,49 @@
     });
   }
 
+  // ── 全局媒体播放/拖动跟踪 ────────────────────────────────────────────
+  function mediaInfo(element) {
+    const src = String(element.currentSrc || element.src || "");
+    return {
+      media: src.split("?")[0].split("/").pop().substring(0, 160),
+      media_kind: element.tagName === "AUDIO" ? "audio" : "video",
+      current_time: Math.round(Number(element.currentTime || 0) * 10) / 10,
+      duration: Math.round(Number(element.duration || 0) * 10) / 10,
+    };
+  }
+
+  function setupMediaTracking() {
+    ["play", "pause", "seeked", "ended"].forEach(function (name) {
+      document.addEventListener(name, function (event) {
+        const el = event.target;
+        if (!el || (el.tagName !== "AUDIO" && el.tagName !== "VIDEO")) return;
+        if (name === "seeked" && !el.__trackedSeek) {
+          el.__trackedSeek = true;
+          setTimeout(function () { el.__trackedSeek = false; }, 500);
+        } else if (name === "seeked" && el.__trackedSeek) {
+          return;
+        }
+        sendEvent("media_" + name, mediaInfo(el));
+      }, true);
+    });
+  }
+
+  // ── 媒体下载链接 ─────────────────────────────────────────────────────
+  function setupDownloadTracking() {
+    document.addEventListener("click", function (event) {
+      const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") || "";
+      if (!href) return;
+      const isDownload = anchor.hasAttribute("download") || /\.(mp3|mp4|m4a|ts|zip|png|jpe?g|webp)(\?|$)/i.test(href);
+      if (!isDownload) return;
+      sendEvent("media_download", {
+        href_path: href.split("?")[0].substring(0, 300),
+        text: String(anchor.textContent || "").trim().substring(0, 50),
+      });
+    }, true);
+  }
+
   // ── Expose global tracking function ───────────────────────────────────
   window._trackEvent = function(eventType, eventData, pushToNotification) {
     sendEvent(eventType, Object.assign({}, eventData, {
@@ -121,6 +165,8 @@
     document.addEventListener('DOMContentLoaded', function() {
       trackPageView();
       setupClickTracking();
+      setupMediaTracking();
+      setupDownloadTracking();
     });
   } else {
     trackPageView();

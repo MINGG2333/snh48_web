@@ -2817,6 +2817,7 @@
           download.rel = "noopener noreferrer";
           download.className = "media-download";
           download.textContent = "官方下载";
+          download.setAttribute("data-track", "media_download");
           media.appendChild(download);
         }
       } else if (item.media_kind === "video") {
@@ -2977,7 +2978,9 @@
           if (showingAlt) { text.textContent = alt; spans = []; } else { showPrimary(); }
           fix.textContent = "已记录";
           fix.disabled = true;
+          if (window._trackEvent) window._trackEvent("transcript_correction", { page: "/room-messages", result: "success", wrong: wrong.slice(0, 60), right: right.slice(0, 60) });
         } catch (err) {
+          if (window._trackEvent) window._trackEvent("transcript_correction", { page: "/room-messages", result: "failed", wrong: wrong.slice(0, 60), error: String(err.message || "").slice(0, 120) });
           window.alert("纠错保存失败：" + err.message);
         }
       });
