@@ -62,7 +62,7 @@ function match(overrides) {
     .filter(item =>
       context.orderMatchesFilters(
         item,
-        Object.assign({ statuses: {}, item: "all", keyword: "", accounts: {} }, overrides || {})
+        Object.assign({ statuses: {}, items: {}, keyword: "", accounts: {} }, overrides || {})
       )
     )
     .map(item => item.order_id);
@@ -88,8 +88,9 @@ assert.deepEqual(match({ statuses: { completed: true, closed: true } }), ["o5", 
 assert.deepEqual(match({ statuses: { refunding: true } }), ["o6"], "refunding filter");
 assert.deepEqual(match({ statuses: { refunded_only: true } }), ["o8"], "refunded-only filter");
 assert.deepEqual(match({ statuses: { refunding: true, refunded_only: true } }), ["o6", "o8"], "refund multi-select union");
-assert.deepEqual(match({ item: "I2" }), ["o3", "o4"], "item filter still works");
-assert.deepEqual(match({ item: "I2", accounts: { __unknown__: true } }), ["o4"], "filters combine");
+assert.deepEqual(match({ items: { I2: true } }), ["o3", "o4"], "item filter still works");
+assert.deepEqual(match({ items: { I2: true }, accounts: { __unknown__: true } }), ["o4"], "filters combine");
+assert.deepEqual(match({ items: { I1: true, I2: true } }), ["o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8"], "item multi-select union");
 
 assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunding: true }), true);
 assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunded_only: true }), false);
@@ -158,11 +159,12 @@ vm.runInContext(
   exportContext
 );
 
-assert.equal(exportContext.maskName("徐某人"), "徐**", "Chinese names keep first char");
-assert.equal(exportContext.maskName("ama"), "a**", "ASCII names keep first char");
+assert.equal(exportContext.maskName("徐某人"), "徐**人", "3+ names keep first and last char");
+assert.equal(exportContext.maskName("ama"), "a**a", "ASCII 3+ names keep first and last char");
 assert.equal(exportContext.maskName("A"), "*", "single char becomes one star");
 assert.equal(exportContext.maskName("  "), "匿名", "empty names become anonymous");
-assert.equal(exportContext.maskName("再坏对你不好吗"), "再**", "mask does not leak name length");
+assert.equal(exportContext.maskName("再坏对你不好吗"), "再**吗", "long names keep first and last char");
+assert.equal(exportContext.maskName("vv"), "v**", "two char names keep first char only");
 assert.equal(exportContext.rowsTotal([{ amount: "1.20" }, { amount: 2 }, { amount: null }]), 3.2, "filtered total sums amounts");
 
 console.log("weidian orders frontend account filter tests passed");

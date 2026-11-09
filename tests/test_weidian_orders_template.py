@@ -67,7 +67,6 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
             'id="maskNames"',
             "function maskName",
             "function rowsTotal",
-            "function buildFilterText",
             "function exportOrders",
             "/api/weidian-orders/export/orders.png",
             "mask_names",
@@ -79,6 +78,22 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
             self.assertIn(marker, self.template)
         self.assertIn("maskName(row.display_name)", self.template)
         self.assertIn("maskName(row.receiver_name)", self.template)
+        self.assertNotIn("filter_text", self.template)
+        self.assertNotIn("buildFilterText", self.template)
+
+    def test_item_filter_is_a_multi_select(self) -> None:
+        for marker in (
+            'id="itemMenu"',
+            'id="itemSummary"',
+            'id="itemOptions"',
+            'id="itemAll"',
+            'id="itemClear"',
+            "data-item-key",
+            "selectedItems",
+            "items: selectedItems",
+        ):
+            self.assertIn(marker, self.template)
+        self.assertNotIn('id="itemFilter"', self.template)
 
     def test_rebroadcast_always_uses_configured_groups_without_marker(self) -> None:
         self.assertNotIn('id="includeTest"', self.template)

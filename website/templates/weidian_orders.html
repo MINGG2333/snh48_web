@@ -110,7 +110,16 @@
           <div class="multi-options" id="statusOptions"></div>
         </div>
       </details>
-      <select id="itemFilter"><option value="all">全部商品</option></select>
+      <details class="multi" id="itemMenu">
+        <summary id="itemSummary">全部商品</summary>
+        <div class="multi-panel">
+          <div class="multi-actions">
+            <button type="button" class="btn mini" id="itemAll">全选</button>
+            <button type="button" class="btn mini" id="itemClear">清空</button>
+          </div>
+          <div class="multi-options" id="itemOptions"></div>
+        </div>
+      </details>
       <details class="multi" id="accountMenu">
         <summary id="accountSummary">全部账号</summary>
         <div class="multi-panel">
@@ -148,6 +157,7 @@
   var allOrders = [];
   var selectedAccounts = {};
   var selectedStatuses = {};
+  var selectedItems = {};
   var selectedOrders = {};
   var STATUS_GROUPS = [
     { label: "进行中", items: [["pending_payment", "待付款（未付款）"], ["awaiting_shipment", "待发货（已付款）"], ["shipped", "已发货（运输中）"]] },
@@ -262,18 +272,32 @@
     }
   }
 
+  function updateItemSummary() {
+    var count = Object.keys(selectedItems).length;
+    $("itemSummary").textContent = count ? ("已选 " + count + " 个商品") : "全部商品";
+  }
+
   function renderItems() {
-    var select = $("itemFilter");
-    var current = select.value || "all";
+    var container = $("itemOptions");
+    if (!container) return;
     var seen = {};
-    var options = ['<option value="all">全部商品</option>'];
+    var items = [];
     allOrders.forEach(function (row) {
       if (!row.item_id || seen[row.item_id]) return;
       seen[row.item_id] = true;
-      options.push('<option value="' + esc(row.item_id) + '">' + esc(row.item_name) + '</option>');
+      items.push({id: String(row.item_id), label: row.item_name || String(row.item_id)});
     });
-    select.innerHTML = options.join("");
-    select.value = seen[current] ? current : "all";
+    items.sort(function (left, right) { return left.label.localeCompare(right.label, "zh-CN"); });
+    var valid = {};
+    items.forEach(function (item) { valid[item.id] = true; });
+    Object.keys(selectedItems).forEach(function (itemId) {
+      if (!valid[itemId]) delete selectedItems[itemId];
+    });
+    container.innerHTML = items.map(function (item) {
+      var checked = selectedItems[item.id] ? " checked" : "";
+      return '<label><input type="checkbox" data-item-key="' + esc(item.id) + '"' + checked + '> <span>' + esc(item.label) + '</span></label>';
+    }).join("");
+    updateItemSummary();
   }
 
   function statusText(row) {
@@ -347,7 +371,9 @@
 
   function orderMatchesFilters(row, filters) {
     if (!statusMatches(row, filters.statuses)) return false;
-    if (filters.item && filters.item !== "all" && row.item_id !== filters.item) return false;
+    var items = filters.items || {};
+    var itemKeys = Object.keys(items);
+    if (itemKeys.length && itemKeys.indexOf(String(row.item_id)) === -1) return false;
     var accounts = filters.accounts || {};
     var accountKeys = Object.keys(accounts);
     if (accountKeys.length && accountKeys.indexOf(accountKey(row)) === -1) return false;
@@ -383,7 +409,8 @@
     if (!text) return "匿名";
     var chars = Array.from(text);
     if (chars.length <= 1) return "*";
-    return chars[0] + "**";
+    if (chars.length === 2) return chars[0] + "**";
+    return chars[0] + "**" + chars[chars.length - 1];
   }
 
   function rowsTotal(rows) {
@@ -466,7 +493,7 @@
   function filteredRows() {
     var filters = {
       statuses: selectedStatuses,
-      item: $("itemFilter").value,
+      items: selectedItems,
       keyword: $("keyword").value.trim(),
       accounts: selectedAccounts
     };
@@ -593,27 +620,6 @@
     }
   }
 
-  function buildFilterText() {
-    var parts = [];
-    var statuses = [];
-    STATUS_GROUPS.forEach(function (group) {
-      group.items.forEach(function (item) {
-        if (selectedStatuses[item[0]]) statuses.push(item[1].split("（")[0]);
-      });
-    });
-    if (statuses.length) parts.push("状态：" + statuses.join("、"));
-    var itemSelect = $("itemFilter");
-    if (itemSelect.value !== "all" && itemSelect.selectedIndex >= 0) {
-      parts.push("商品：" + itemSelect.options[itemSelect.selectedIndex].text);
-    }
-    var accountCount = Object.keys(selectedAccounts).length;
-    if (accountCount) parts.push("账号：" + accountCount + " 个");
-    var keyword = $("keyword").value.trim();
-    if (keyword) parts.push("关键词：" + keyword);
-    if ($("maskNames").checked) parts.push("播报名匿名打码");
-    return parts.join(" · ");
-  }
-
   async function exportOrders() {
     var rows = filteredRows();
     if (!rows.length) {
@@ -631,8 +637,7 @@
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           order_ids: rows.map(function (row) { return row.order_id; }),
-          mask_names: $("maskNames").checked,
-          filter_text: buildFilterText()
+          mask_names: $("maskNames").checked
         }),
         credentials: "same-origin",
         cache: "no-store"
@@ -746,7 +751,28 @@
   $("refreshBtn").addEventListener("click", refreshOrders);
   $("exportOrdersBtn").addEventListener("click", exportOrders);
   $("maskNames").addEventListener("change", render);
-  $("itemFilter").addEventListener("change", render);
+  $("itemOptions").addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.dataset || !target.dataset.itemKey) return;
+    if (target.checked) selectedItems[target.dataset.itemKey] = true;
+    else delete selectedItems[target.dataset.itemKey];
+    updateItemSummary();
+    render();
+  });
+  $("itemAll").addEventListener("click", function (event) {
+    event.preventDefault();
+    allOrders.forEach(function (row) {
+      if (row.item_id) selectedItems[String(row.item_id)] = true;
+    });
+    renderItems();
+    render();
+  });
+  $("itemClear").addEventListener("click", function (event) {
+    event.preventDefault();
+    selectedItems = {};
+    renderItems();
+    render();
+  });
   $("statusOptions").addEventListener("change", function (event) {
     var target = event.target;
     if (!target || !target.dataset || !target.dataset.statusKey) return;
@@ -790,7 +816,7 @@
     render();
   });
   document.addEventListener("click", function (event) {
-    ["accountMenu", "statusMenu"].forEach(function (id) {
+    ["accountMenu", "statusMenu", "itemMenu"].forEach(function (id) {
       var menu = $(id);
       if (menu && menu.open && !menu.contains(event.target)) menu.open = false;
     });
