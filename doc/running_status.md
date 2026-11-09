@@ -10,7 +10,7 @@
 - 部署：腾讯云安装新版 `/usr/local/libexec/snh48-privileged-bridge-server` 和 `/usr/local/bin/snh48-privileged-bridge-client`，重启 `snh48-privileged-bridge-flip.service`（PID `1520951`，18:43:53 起，`NRestarts=0`）；`snh48-web.service` 最终重启后 PID `1536440`（19:00 后最终重启），启动日志出现 `Room messenger scheduler started`。`snh48-privileged-bridge-social.service` 未重启（PID `3014153`）。
 - 只读烟测（腾讯云 `https://cjy.plus`）：页面 200；未登录 `/api/room-messenger/verify` 401；登录 200、`/verify` 200、`/account` 200（仅 `has_token` 布尔和账号元数据，无 Token 值）、`/catalog` 200、`/jobs` 200、静态 JS/CSS 200；`catalog?q=陈嘉仪` 返回 1 个成员、2 个频道（`36376935` 公开、`36393478` 小房间），目录补入 `config/room_monitor.json` 的已监控成员。未调用真实 `/messages`、`/send`，未创建/启动真实发送任务；页面聊天/定时/批量弹窗用拦截的合成消息做过桌面与移动端截图检查，未向任何真实频道读取或发送。
 - 测试：网站 `test_room_messenger_api` 9 项、`test_room_messenger_template` 3 项、`test_privileged_bridge` 7 项、`test_password_page_security` 全部通过；fan-hub `test_room_messenger_ops` 7 项、`test_room_messenger_qchat.cjs` 通过。仓库全量测试仍有既有的 Python 3.9/缺失 venv 环境性错误，与本次无关。
-- 阿里云：代码已 `git pull`（网站 `d713e77`、fan-hub `03d85f35c`），但**未重启** `snh48-aliyun.service`；`ROOM_MESSENGER_ENABLED` 在阿里云保持关闭。待 owner 在腾讯云手动验收通过后再重启阿里云。阿里的代码已到 `4e52196`/`03d85f35c`，运行进程仍是旧版。
+- 阿里云：代码已 `git pull`（网站 `d713e77`、fan-hub `03d85f35c`），但**未重启** `snh48-aliyun.service`；`ROOM_MESSENGER_ENABLED` 在阿里云保持关闭。待 owner 在腾讯云手动验收通过后再重启阿里云。阿里的代码已到 `ad41dea`/`03d85f35c`，运行进程仍是旧版。
 - 待 owner 手动完成：用个人号登录、在低风险频道发送 1 条测试消息、确认 QChat 订阅与消息显示；验收前不得把真实频道写入自动测试。
 
 ## 2026-11-09 密码页统一 60 分钟会话并修正旧 Cookie 误报（双端已生效）
