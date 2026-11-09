@@ -1186,13 +1186,14 @@
       var overrideBtn = (entry.source === "room" || entry.source === "live") ? '<button class="btn mini gold" data-override="' + esc(entry.id) + '">改判</button>' : "";
       var scoring = entry.scoring_method || "";
       var scoringClass = scoring === "鸡腿" ? "leg" : (scoring === "计分卡" ? "card" : "");
+      var scoringNote = entry.scoring_method_note ? '<div class="notice">改判：' + esc(entry.scoring_method_note) + '</div>' : "";
       var businessCell = businessAllocationMarkup(entry);
       return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
         '<td><strong>' + esc(name) + '</strong>' + warning + identityNote + '</td>' +
         '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || entry.source) + '</span></td>' +
-        '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span></td>' +
+        '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span>' + scoringNote + '</td>' +
         '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
         '<td>' + businessStatusMarkup(entry) + '</td>' +
