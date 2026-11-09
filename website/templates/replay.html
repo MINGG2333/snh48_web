@@ -502,7 +502,9 @@
 {% block content %}
 <main class="replay-page">
     <div class="player-container{% if is_radio %} radio-mode{% endif %}" id="playerContainer">
-        <video id="replayVideo" playsinline></video>
+        <video id="replayVideo" playsinline>
+            <track id="replaySubtitleTrack" kind="subtitles" srclang="zh" label="中文" default>
+        </video>
         {% if is_radio %}
         <div class="radio-stage">
             <img class="radio-cover" src="{{ cover_url or '/static/images/favicons/favicon1.png' }}" alt="电台封面"
@@ -598,6 +600,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const replayUrl = {{ replay_url|tojson }};
     const liveId = {{ live_id|tojson }};
+    const replaySubtitleTrack = document.getElementById("replaySubtitleTrack");
+    if (replaySubtitleTrack && liveId) {
+      replaySubtitleTrack.src = `/api/replay/${encodeURIComponent(liveId)}/subtitles.vtt`;
+      replaySubtitleTrack.addEventListener("error", function () { replaySubtitleTrack.remove(); });
+    }
     let isPlaying = false;
     let isDraggingProgress = false;
     let danmuItems = [];

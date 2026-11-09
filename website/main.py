@@ -260,6 +260,21 @@ async def timeline_page(request: Request):
     )
 
 
+@app.get("/api/replay/{live_id}/subtitles.vtt")
+async def replay_subtitles(live_id: str):
+    """返回该场已转录的 VTT 字幕；没有转录时 404，页面会忽略。"""
+    import glob
+    from fastapi.responses import FileResponse
+
+    if not live_id.isdigit():
+        raise HTTPException(status_code=404, detail="invalid live id")
+    root = Path(cfg.PROJECT_ROOT).parent / "snh48-fan-hub" / "live_archive"
+    matches = glob.glob(str(root / "*" / "archive" / "sessions" / f"*_{live_id}" / "transcripts" / "subtitles.vtt"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="subtitle not found")
+    return FileResponse(matches[0], media_type="text/vtt", headers={"Cache-Control": "public, max-age=300"})
+
+
 @app.get("/replay/{live_id}", response_class=HTMLResponse)
 async def replay_page(request: Request, live_id: str):
     """Video or radio replay page with synchronized danmu."""
