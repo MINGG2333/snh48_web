@@ -87,12 +87,16 @@ def static_version(filename: str) -> str:
 
 
 def _room_messenger_inline_css() -> str:
-    """Inline page CSS so iPhone Safari never depends on local CSS links."""
-    path = cfg.STATIC_DIR / "css" / "room_messenger.css"
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
+    """Inline minified page CSS so iPhone Safari never depends on local CSS links."""
+    for path in (
+        cfg.STATIC_DIR / "css-dist" / "room_messenger.css",
+        cfg.STATIC_DIR / "css" / "room_messenger.css",
+    ):
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+    return ""
 
 
 # ── Favicon (random rotation) ──────────────────────────────────────────────

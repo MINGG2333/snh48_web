@@ -1707,7 +1707,15 @@
         });
     }
 
+    var initialized = false;
+
     function init() {
+        if (initialized) return;
+        if (!document.getElementById("loginForm")) {
+            setTimeout(init, 300);
+            return;
+        }
+        initialized = true;
         bindEvents();
         autoResizeComposer();
         renderDailyMeter();
@@ -1715,8 +1723,10 @@
         boot();
     }
 
+    // Safari 偶发把 DOMContentLoaded 拖到很晚；保留一个兜底，确保按钮能绑定。
     if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", init);
+        document.addEventListener("DOMContentLoaded", init, { once: true });
+        setTimeout(init, 1200);
     } else {
         init();
     }
