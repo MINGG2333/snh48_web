@@ -545,6 +545,117 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertEqual(entries[1]["at"], api._iso_from_ms(times[0]))
 
 
+
+    def test_edit_scheduled_job_replaces_messages(self) -> None:
+        self._login()
+        self._bind()
+        created = self.client.post(
+            "/api/room-messenger/jobs",
+            headers={"Origin": "http://testserver"},
+            json={
+                "channel": {"channel_id": "1001", "server_id": "2001"},
+                "messages": ["旧一", "旧二"],
+                "interval_seconds": 30,
+                "start_at": "2099-01-01T20:00:00+08:00",
+                "confirm": True,
+            },
+        ).json()["job"]
+        response = self.client.post(
+            f"/api/room-messenger/jobs/{created['id']}/edit",
+            headers={"Origin": "http://testserver"},
+            json={
+                "messages": ["新一", "新二", "新三"],
+                "interval_seconds": 20,
+                "jitter_seconds": 5,
+                "start_at": "2099-01-02T20:00:00+08:00",
+                "repeat_daily": True,
+                "confirm": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        job = response.json()["job"]
+        self.assertEqual(job["total"], 3)
+        self.assertEqual(job["status"], "scheduled")
+        self.assertEqual(job["interval_seconds"], 20)
+        self.assertTrue(job["repeat_daily"])
+        self.assertEqual([item["text"] for item in job["messages"]], ["新一", "新二", "新三"])
+
+    def test_edit_rejects_job_with_sent_messages(self) -> None:
+        self._login()
+        self._bind()
+        job_id = "d" * 32
+        api._save_jobs(
+            {
+                job_id: {
+                    "id": job_id,
+                    "account_id": "3001",
+                    "channel": {"channel_id": "1001", "server_id": "2001"},
+                    "mode": "once",
+                    "repeat_daily": False,
+                    "messages": [{"text": "已发", "status": "sent", "sent_at": "", "error": ""}],
+                    "interval_seconds": 60,
+                    "jitter_seconds": 0,
+                    "next_run_at": 0,
+                    "created_at": "2026-01-01T00:00:00+08:00",
+                    "updated_at": "2026-01-01T00:00:00+08:00",
+                    "status": "paused",
+                    "last_error": "",
+                }
+            }
+        )
+        response = self.client.post(
+            f"/api/room-messenger/jobs/{job_id}/edit",
+            headers={"Origin": "http://testserver"},
+            json={
+                "messages": ["新"],
+                "interval_seconds": 60,
+                "start_at": "2099-01-01T20:00:00+08:00",
+                "confirm": True,
+            },
+        )
+        self.assertEqual(response.status_code, 409)
+
+
+
+    def test_rate_limit_result_pauses_job(self) -> None:
+        self._bind()
+        job_id = "e" * 32
+        api._save_jobs(
+            {
+                job_id: {
+                    "id": job_id,
+                    "account_id": "3001",
+                    "channel": {"channel_id": "1001", "server_id": "2001"},
+                    "mode": "once",
+                    "repeat_daily": False,
+                    "messages": [{"text": "一", "status": "pending", "sent_at": "", "error": ""}],
+                    "interval_seconds": 1,
+                    "jitter_seconds": 0,
+                    "next_run_at": 0,
+                    "created_at": "2026-01-01T00:00:00+08:00",
+                    "updated_at": "2026-01-01T00:00:00+08:00",
+                    "status": "running",
+                    "last_error": "",
+                    "last_sent_at": 0,
+                }
+            }
+        )
+        with patch.object(
+            api,
+            "_run_bridge",
+            return_value={"ok": True, "results": [{"ok": False, "error": "操作频繁，请稍后再试"}]},
+        ):
+            api._run_job(job_id)
+        job = api._load_jobs()[job_id]
+        self.assertEqual(job["status"], "paused")
+        self.assertIn("限流", job["last_error"])
+
+    def test_looks_rate_limited(self) -> None:
+        self.assertTrue(api._looks_rate_limited("操作频繁，请稍后再试"))
+        self.assertTrue(api._looks_rate_limited("HTTP 429 too many requests"))
+        self.assertFalse(api._looks_rate_limited("订阅频道失败"))
+
+
     def test_chunk_size_respects_interval_and_daily_cap(self) -> None:
         self._bind()
         job = {"interval_seconds": 60}

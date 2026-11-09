@@ -87,6 +87,13 @@
             </div>
         </header>
 
+        <div id="globalAlert" class="rm-global-alert" hidden>
+            <i class="fas fa-triangle-exclamation"></i>
+            <span id="globalAlertText"></span>
+            <button id="globalAlertQueueBtn" class="rm-btn rm-btn-small" type="button">查看计划</button>
+            <button id="globalAlertClose" class="rm-icon-btn" type="button" aria-label="关闭提醒"><span class="rm-close-glyph">×</span></button>
+        </div>
+
         <section id="chat" class="rm-chat" aria-live="polite">
             <div id="chatEmpty" class="rm-chat-empty">
                 <div class="rm-empty-illustration"><i class="fas fa-comments"></i></div>
@@ -125,11 +132,23 @@
     <aside id="queuePanel" class="rm-queue-panel" hidden>
         <div class="rm-queue-head">
             <h3><i class="fas fa-list-check"></i> 发送计划</h3>
-            <button id="queueClose" class="rm-icon-btn" type="button" aria-label="关闭"><i class="fas fa-xmark"></i></button>
+            <div class="rm-queue-head-actions">
+                <button id="enableNotifyBtn" class="rm-btn rm-btn-small rm-btn-ghost" type="button">通知</button>
+                <button id="queueClose" class="rm-icon-btn" type="button" aria-label="关闭"><span class="rm-close-glyph">×</span></button>
+            </div>
         </div>
         <div class="rm-queue-tabs">
             <button class="rm-queue-tab is-active" data-qtab="jobs" type="button">发送计划</button>
             <button class="rm-queue-tab" data-qtab="log" type="button">发送记录</button>
+        </div>
+        <div id="sentLogFilters" class="rm-sent-filters" hidden>
+            <input id="sentLogQuery" type="search" placeholder="搜索成员 / 房间 / 内容" autocomplete="off">
+            <select id="sentLogStatus">
+                <option value="">全部状态</option>
+                <option value="sent">已发送</option>
+                <option value="failed">发送失败</option>
+            </select>
+            <input id="sentLogDate" type="date">
         </div>
         <div class="rm-queue-hint">定时、批量与每日任务都在服务器执行；关闭页面不会中断。暂停在当前一批发送结束后生效。</div>
         <div id="jobList" class="rm-job-list"><div class="rm-empty-small">暂无发送计划</div></div>

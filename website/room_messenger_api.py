@@ -137,6 +137,11 @@ def _iso_from_ms(value: Any) -> str:
     return datetime.fromtimestamp(seconds, TZ).isoformat(timespec="seconds")
 
 
+def _looks_rate_limited(value: Any) -> bool:
+    text = str(value or "")
+    return bool(re.search(r"(rate.?limit|too many|429|频繁|限流|稍后|frequent)", text, re.I))
+
+
 def _safe_error(value: Any, fallback: str = "操作失败") -> str:
     text = " ".join(str(value or fallback).split())[:300]
     return re.sub(r"(?<!\d)\d{7,}(?!\d)", "[已隐藏]", text)
@@ -1517,6 +1522,92 @@ async def create_job(payload: JobRequest, request: Request, response: Response, 
     return {"job": _job_public(job)}
 
 
+class JobEditRequest(BaseModel):
+    messages: list[str]
+    interval_seconds: int = 60
+    jitter_seconds: int = 0
+    start_at: str = ""
+    repeat_daily: bool = False
+    confirm: bool = False
+
+
+@router.post("/jobs/{job_id}/edit")
+async def edit_job(job_id: str, payload: JobEditRequest, request: Request, response: Response, _=Depends(require_auth)):
+    _same_origin(request)
+    _no_store(response)
+    if not payload.confirm:
+        raise HTTPException(status_code=422, detail="请确认修改发送计划")
+    if not JOB_ID_RE.fullmatch(job_id):
+        raise HTTPException(status_code=404, detail="任务不存在")
+    limits = _limits_payload()
+    messages = [str(item).strip() for item in payload.messages if str(item or "").strip()]
+    if not messages:
+        raise HTTPException(status_code=422, detail="请填写至少一条消息")
+    if len(messages) > MAX_JOB_MESSAGES_HARD:
+        raise HTTPException(status_code=422, detail=f"单次最多 {MAX_JOB_MESSAGES_HARD} 条消息（技术上限）")
+    if limits["max_batch"] > 0 and len(messages) > limits["max_batch"]:
+        raise HTTPException(status_code=422, detail=f"单次最多 {limits['max_batch']} 条消息")
+    if any(len(item) > MAX_TEXT_LENGTH for item in messages):
+        raise HTTPException(status_code=422, detail=f"单条消息不能超过 {MAX_TEXT_LENGTH} 字")
+    interval = max(limits["min_interval"], int(payload.interval_seconds or limits["default_interval"]))
+    jitter = max(0, int(payload.jitter_seconds or 0))
+    if limits["max_jitter"] > 0:
+        jitter = min(jitter, limits["max_jitter"])
+    jitter = min(jitter, max(0, interval - limits["min_interval"]))
+    start_at = _parse_start_at(payload.start_at)
+    repeat_daily = bool(payload.repeat_daily)
+    if repeat_daily:
+        mode = "daily"
+    elif len(messages) > 1:
+        mode = "batch"
+    else:
+        mode = "once"
+    with _state_lock:
+        jobs = _load_jobs()
+        job = jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if job.get("status") not in {"scheduled", "paused"}:
+            raise HTTPException(status_code=409, detail="只有等待中或已暂停的任务可以编辑")
+        existing = job.get("messages") if isinstance(job.get("messages"), list) else []
+        if any(
+            isinstance(item, dict) and item.get("status") in {"sent", "sending", "unknown"}
+            for item in existing
+        ):
+            raise HTTPException(status_code=409, detail="任务已有发送记录，不能再修改消息内容")
+        job["messages"] = [
+            {"text": text, "status": "pending", "sent_at": "", "error": ""} for text in messages
+        ]
+        job["mode"] = mode
+        job["repeat_daily"] = repeat_daily
+        job["interval_seconds"] = interval
+        job["jitter_seconds"] = jitter
+        job["next_run_at"] = start_at
+        job["daily_time"] = (
+            datetime.fromtimestamp(start_at, TZ).strftime("%H:%M:%S") if repeat_daily else ""
+        )
+        job["status"] = "scheduled"
+        job["last_error"] = ""
+        job["updated_at"] = _now_iso()
+        jobs[job_id] = job
+        _save_jobs(jobs)
+    _append_audit(
+        {
+            "at": _now_iso(),
+            "kind": "job_edited",
+            "job_id": job_id,
+            "account_id": str(job.get("account_id") or ""),
+            "channel_id": str((job.get("channel") or {}).get("channel_id") or ""),
+            "total": len(messages),
+            "interval": interval,
+            "jitter": jitter,
+            "repeat_daily": repeat_daily,
+            "next_run_at": start_at,
+        }
+    )
+    return {"job": _job_public(job)}
+
+
 def _job_action(job_id: str, action: str) -> dict[str, Any]:
     if not JOB_ID_RE.fullmatch(job_id):
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -1717,8 +1808,11 @@ def _run_job(job_id: str) -> None:
                     if 0 <= index < len(current) and isinstance(current[index], dict):
                         current[index]["status"] = "failed"
                         current[index]["error"] = str(exc)
-                job["status"] = "failed"
-                job["last_error"] = str(exc)
+                rate_limited = _looks_rate_limited(exc)
+                job["status"] = "paused" if rate_limited else "failed"
+                job["last_error"] = (
+                    "疑似口袋48限流，任务已暂停：" + str(exc) if rate_limited else str(exc)
+                )
                 job["updated_at"] = _now_iso()
                 jobs[job_id] = job
                 _save_jobs(jobs)
@@ -1795,6 +1889,21 @@ def _run_job(job_id: str) -> None:
                         "error": "" if bool(result.get("ok")) else _safe_error(result.get("error"), "发送失败"),
                     }
                 )
+            rate_limited = any(
+                not bool(result.get("ok"))
+                and _looks_rate_limited(result.get("error"))
+                for result in results
+                if isinstance(result, dict)
+            )
+            if rate_limited:
+                if sent_count:
+                    _add_daily_sent(account_id, sent_count)
+                job["status"] = "paused"
+                job["last_error"] = "疑似口袋48限流，任务已暂停；请调大间隔后手动继续"
+                job["updated_at"] = _now_iso()
+                jobs[job_id] = job
+                _save_jobs(jobs)
+                return
             if sent_count:
                 _add_daily_sent(account_id, sent_count)
                 _append_audit(

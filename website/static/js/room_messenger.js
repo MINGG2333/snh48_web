@@ -31,6 +31,9 @@
         deleteTargets: [],
         selectMode: false,
         selectedIds: new Set(),
+        editingJobId: null,
+        lastAlertKey: "",
+        dismissedAlertKey: "",
         channel: null,
         messages: [],
         nextTime: 0,
@@ -1264,8 +1267,38 @@
         syncJitterLimit();
     }
 
+    function openEditJob(job) {
+        if (!job) return;
+        S.editingJobId = job.id;
+        $("scheduleModalTitle").innerHTML = '<i class="fas fa-pen"></i> 编辑发送计划';
+        $("createJobBtn").innerHTML = '<i class="fas fa-floppy-disk"></i> 保存修改';
+        $("scheduleTarget").textContent = "目标频道：" + [
+            job.channel && job.channel.member_name,
+            job.channel && job.channel.room_label,
+            job.channel && job.channel.channel_id
+        ].filter(Boolean).join(" · ");
+        var mode = job.repeat_daily ? "daily" : (job.mode === "batch" ? "batch" : "once");
+        setScheduleMode(mode);
+        var messages = (job.messages || []).map(function (item) { return item.text || ""; });
+        $("jobMessages").value = messages.join("\n");
+        $("jobInterval").value = job.interval_seconds || S.limits.default_interval || 60;
+        $("jobJitter").value = job.jitter_seconds || 0;
+        var startMs = Number(job.next_run_at || 0) * 1000;
+        if (!startMs || startMs < Date.now()) startMs = Date.now() + 5 * 60 * 1000;
+        $("jobStartAt").value = localInputValue(new Date(startMs));
+        $("jobConfirm").checked = false;
+        $("schedulePreview").textContent = "";
+        showError($("scheduleError"), "");
+        syncJitterLimit();
+        openModal("scheduleModal");
+        track("admin_modal", { page: "room_messenger", action: "edit_job" });
+    }
+
     function openScheduleModal() {
         if (!S.channel || !S.binding) return;
+        S.editingJobId = null;
+        $("scheduleModalTitle").innerHTML = '<i class="fas fa-calendar-clock"></i> 定时 / 批量发送';
+        $("createJobBtn").innerHTML = '<i class="fas fa-play"></i> 创建任务';
         $("scheduleTarget").textContent = "目标频道：" + channelLabel();
         setScheduleMode("once");
         var start = new Date(Date.now() + 5 * 60 * 1000);
@@ -1356,21 +1389,29 @@
         var button = $("createJobBtn");
         button.disabled = true;
         showError($("scheduleError"), "");
-        api("/jobs", {
+        var editingJobId = S.editingJobId;
+        var body = {
+            messages: preview.messages,
+            interval_seconds: preview.interval,
+            jitter_seconds: preview.jitter,
+            start_at: toShanghaiIso($("jobStartAt").value),
+            repeat_daily: S.scheduleMode === "daily",
+            confirm: true
+        };
+        if (!editingJobId) body.channel = S.channel;
+        api(editingJobId ? ("/jobs/" + encodeURIComponent(editingJobId) + "/edit") : "/jobs", {
             method: "POST",
-            body: {
-                channel: S.channel,
-                messages: preview.messages,
-                interval_seconds: preview.interval,
-                jitter_seconds: preview.jitter,
-                start_at: toShanghaiIso($("jobStartAt").value),
-                repeat_daily: S.scheduleMode === "daily",
-                confirm: true
-            }
-        }).then(function (data) {
+            body: body
+        }).then(function () {
             closeModal("scheduleModal");
-            toast("发送计划已创建", "success");
-            track("admin_update", { page: "room_messenger", action: "create_job", mode: S.scheduleMode, total: preview.messages.length });
+            toast(editingJobId ? "发送计划已保存" : "发送计划已创建", "success");
+            track("admin_update", {
+                page: "room_messenger",
+                action: editingJobId ? "edit_job" : "create_job",
+                mode: S.scheduleMode,
+                total: preview.messages.length
+            });
+            S.editingJobId = null;
             loadJobs();
             openQueue();
         }).catch(function (error) {
@@ -1405,6 +1446,7 @@
         });
         $("jobList").hidden = tab !== "jobs";
         $("sentLogList").hidden = tab !== "log";
+        $("sentLogFilters").hidden = tab !== "log";
         if (tab === "log") loadSentLog();
     }
 
@@ -1419,12 +1461,24 @@
 
     function renderSentLog() {
         var wrap = $("sentLogList");
-        if (!S.sentLog.length) {
-            wrap.innerHTML = '<div class="rm-empty-small">暂无发送记录</div>';
+        var query = $("sentLogQuery").value.trim().toLowerCase();
+        var status = $("sentLogStatus").value;
+        var date = $("sentLogDate").value;
+        var rows = S.sentLog.filter(function (entry) {
+            if (status && entry.status !== status) return false;
+            if (date && String(entry.at || "").slice(0, 10) !== date) return false;
+            if (query) {
+                var haystack = [entry.member_name, entry.room_label, entry.channel_id, entry.text].join(" ").toLowerCase();
+                if (haystack.indexOf(query) < 0) return false;
+            }
+            return true;
+        });
+        if (!rows.length) {
+            wrap.innerHTML = '<div class="rm-empty-small">' + (S.sentLog.length ? "没有匹配的发送记录" : "暂无发送记录") + '</div>';
             return;
         }
         wrap.innerHTML = "";
-        S.sentLog.forEach(function (entry) {
+        rows.forEach(function (entry) {
             var card = document.createElement("div");
             card.className = "rm-sent-card" + (entry.status === "failed" ? " is-failed" : "");
             var channel = [entry.member_name, entry.room_label].filter(Boolean).join(" · ") || ("频道 " + (entry.channel_id || ""));
@@ -1440,6 +1494,31 @@
         });
     }
 
+    function checkJobAlerts() {
+        var bad = S.jobs.find(function (job) {
+            return (job.status === "failed" || job.status === "paused") && job.last_error;
+        });
+        if (!bad) {
+            $("globalAlert").hidden = true;
+            return;
+        }
+        var key = [bad.id, bad.status, bad.last_error, bad.updated_at].join("|");
+        if (key === S.dismissedAlertKey) {
+            $("globalAlert").hidden = true;
+            return;
+        }
+        var label = [bad.channel && bad.channel.member_name, bad.channel && bad.channel.room_label].filter(Boolean).join(" · ") || "发送任务";
+        var text = label + "：" + bad.last_error;
+        $("globalAlertText").textContent = text;
+        $("globalAlert").hidden = false;
+        if (key !== S.lastAlertKey && typeof Notification !== "undefined" && Notification.permission === "granted") {
+            try {
+                new Notification("房间信使任务异常", { body: text.slice(0, 180) });
+            } catch (error) { /* notification is best effort */ }
+        }
+        S.lastAlertKey = key;
+    }
+
     function loadJobs() {
         return api("/jobs").then(function (data) {
             S.jobs = Array.isArray(data.jobs) ? data.jobs : [];
@@ -1450,6 +1529,7 @@
             }
             renderJobs();
             updateQueueBadge();
+            checkJobAlerts();
         }).catch(function () { /* quiet */ });
     }
 
@@ -1485,6 +1565,18 @@
                 (job.last_error ? '<div class="rm-form-error" style="margin:6px 0 0">' + escapeHtml(job.last_error) + '</div>' : "") +
                 '<div class="rm-job-actions"></div>';
             var actions = card.querySelector(".rm-job-actions");
+            var editable = ["scheduled", "paused"].indexOf(job.status) >= 0 &&
+                (job.messages || []).every(function (item) {
+                    return item.status === "pending" || item.status === "failed";
+                });
+            if (editable) {
+                var editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.className = "rm-btn rm-btn-small";
+                editButton.textContent = "编辑";
+                editButton.addEventListener("click", function () { openEditJob(job); });
+                actions.appendChild(editButton);
+            }
             if (job.status === "scheduled" || job.status === "running") {
                 actions.appendChild(jobActionButton("暂停", "pause", job, "fa-pause"));
             }
@@ -1635,9 +1727,30 @@
         });
         $("queueBtn").addEventListener("click", openQueue);
         $("queueClose").addEventListener("click", closeQueue);
+        $("globalAlertQueueBtn").addEventListener("click", openQueue);
+        $("globalAlertClose").addEventListener("click", function () {
+            S.dismissedAlertKey = S.lastAlertKey;
+            $("globalAlert").hidden = true;
+        });
+        $("enableNotifyBtn").addEventListener("click", function () {
+            if (typeof Notification === "undefined") {
+                toast("当前浏览器不支持桌面通知", "error");
+                return;
+            }
+            try {
+                Notification.requestPermission().then(function (permission) {
+                    toast(permission === "granted" ? "已开启任务异常通知" : "未获得通知权限", permission === "granted" ? "success" : "error");
+                }).catch(function () { toast("未获得通知权限", "error"); });
+            } catch (error) {
+                toast("当前浏览器不支持桌面通知", "error");
+            }
+        });
         Array.prototype.forEach.call(document.querySelectorAll(".rm-queue-tab"), function (button) {
             button.addEventListener("click", function () { setQueueTab(button.dataset.qtab); });
         });
+        $("sentLogQuery").addEventListener("input", renderSentLog);
+        $("sentLogStatus").addEventListener("change", renderSentLog);
+        $("sentLogDate").addEventListener("change", renderSentLog);
         $("jumpLatest").addEventListener("click", function () { scrollToBottom(true); });
 
         $("chat").addEventListener("scroll", function () {
