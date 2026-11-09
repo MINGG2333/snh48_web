@@ -1866,8 +1866,7 @@ def _mutator_set_scoring_method(doc: dict[str, Any], payload: dict[str, Any]):
         current = _entry_scoring_method(entry)
         target = ("鸡腿" if current == "计分卡" else "计分卡") if method == "toggle" else method
         entry["scoring_method"] = target
-        if note:
-            entry["scoring_method_note"] = note
+        entry["scoring_method_note"] = note or ("一键切换" if method == "toggle" else "")
         entry["scoring_method_overridden_at"] = now
         existing = entry.get("scoring_evidence") if isinstance(entry.get("scoring_evidence"), list) else []
         merged = [_clean(item, 80) for item in existing if EVIDENCE_NAME_RE.fullmatch(_clean(item, 80))]
