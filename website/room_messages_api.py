@@ -1205,11 +1205,17 @@ def _load_audio_transcripts() -> dict[str, dict[str, Any]]:
                 transcript = str(item.get("transcript") or "").strip()
                 if not message_id or not transcript:
                     continue
+                segments = item.get("segments")
+                words = item.get("words")
                 transcripts[message_id] = {
                     "text": transcript,
-                    "source": "whisper",
+                    "source": str(item.get("backend") or "whisper"),
                     "updated_at": str(item.get("updated_at") or ""),
                     "keyword_hit": bool(item.get("keyword_hit")),
+                    "segments": segments if isinstance(segments, list) else [],
+                    "words": words if isinstance(words, list) else [],
+                    "whisper_text": str(item.get("whisper_transcript") or ""),
+                    "backend": str(item.get("backend") or ""),
                 }
     except OSError:
         return {}
