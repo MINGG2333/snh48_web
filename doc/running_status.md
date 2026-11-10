@@ -7,6 +7,8 @@
 - 页面：`website/templates/redblue_ledger_2026.html` 新增“重复代投分析/代投明细”弹窗；行内重复按钮只对非应援会来源显示，已代投显示“代投明细”且不提供取消；移除顶部“标记重复”批量按钮，避免绕过代投；备注列显示代投覆盖分和结转分。
 - 计算口径：`可用 = 该计分方式上次结转 + 本条重复分数`；只有 `可用 >= 条目分数` 的应援会条目才会被标记已投并扣减，遇到不足以完整覆盖的下一条即停止，剩余全数结转；鸡腿/计分卡分别独立结转。
 - 验证：`tests/test_redblue_ledger_api.py` 56 项通过（新增 FIFO 覆盖、跨次结转、应援会禁止重复 2 项）；页面脚本 `node --check`、`py_compile` 通过。
+- 部署：网站提交 `e6f53c0` 已推 GitHub；腾讯云/阿里云均 `git pull --ff-only` 到该提交。腾讯云 `snh48-web.service` 重启后 active，MainPID `42556`；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2057104`。
+- 线上烟测：两端 `/business/redblue2026` 200 且含“重复代投分析/代投明细”；`/api/redblue/data` 返回 `is_association` 和 `proxy_settlement`；对生产一条房间·鸡腿条目只做只读预览 `GET /api/redblue/settlement/preview` 返回 200，可用 1 分、完全覆盖最早微店·鸡腿 1 分、下一条 99 分需继续结转，未执行 apply、未改动生产台账。
 
 ## 2026-11-11 红蓝台账应援会条目改为独立履约状态（未发货/已发货/已付款）
 
