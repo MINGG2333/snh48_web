@@ -243,7 +243,7 @@
         <div class="spacer"></div>
       </div>
       <div class="filters">
-        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="weidian_manual">应援会（手动）</option><option value="room">房间</option><option value="live">直播</option></select></div>
+        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="weidian_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
         <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
@@ -673,7 +673,7 @@
     } else if (ws.status === "running") {
       weidianText = " · 微店同步进行中";
     }
-    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 7 类计分来源（房间/直播 × 计分卡/鸡腿、应援会自动、应援会手动、暗票） · 按时间正序" + weidianText;
+    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 7 类计分来源（房间/直播 × 计分卡/鸡腿、应援会（微店）、手动、暗票） · 按时间正序" + weidianText;
     $("metaLine").title = ws.last_error || ws.note || "";
     hideDailyTooltip();
     if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
@@ -694,8 +694,12 @@
     }).join("");
   }
 
+  function sourceDisplay(source) {
+    return {manual:"暗票",weidian:"微店",weidian_manual:"手动",room:"房间",live:"直播"}[source] || source || "-";
+  }
+
   function sourceScoringLabel(key) {
-    var base = {manual:"暗票",weidian:"应援会",weidian_manual:"应援会（手动）",room:"房间",live:"直播"}[key] || key;
+    var base = {manual:"暗票",weidian:"应援会（微店）",weidian_manual:"手动",room:"房间",live:"直播"}[key] || key;
     var method = {manual:"计分卡",weidian:"鸡腿",weidian_manual:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
     return method ? base + "·" + method : base;
   }
@@ -705,7 +709,7 @@
     {source:"room", method:"鸡腿", label:"房间·鸡腿", cls:"leg"},
     {source:"live", method:"计分卡", label:"直播·计分卡", cls:"card"},
     {source:"live", method:"鸡腿", label:"直播·鸡腿", cls:"leg"},
-    {source:"weidian", method:"鸡腿", label:"应援会·鸡腿", cls:"leg"},
+    {source:"weidian", method:"鸡腿", label:"应援会·鸡腿（微店）", cls:"leg"},
     {source:"weidian_manual", method:"鸡腿", label:"应援会·鸡腿（手动）", cls:"leg"},
     {source:"manual", method:"计分卡", label:"暗票·计分卡", cls:"card"}
   ];
@@ -721,8 +725,8 @@
   var DAILY_SOURCE_DEFS = [
     {key:"room", label:"房间", color:"#67a8ff", parts:["room|计分卡", "room|鸡腿"]},
     {key:"live", label:"直播", color:"#41b9aa", parts:["live|计分卡", "live|鸡腿"]},
-    {key:"weidian", label:"应援会（自动）", color:"#8b6cc9", parts:["weidian|鸡腿"]},
-    {key:"weidian_manual", label:"应援会（手动）", color:"#c084d8", parts:["weidian_manual|鸡腿"]},
+    {key:"weidian", label:"应援会（微店）", color:"#8b6cc9", parts:["weidian|鸡腿"]},
+    {key:"weidian_manual", label:"手动", color:"#c084d8", parts:["weidian_manual|鸡腿"]},
     {key:"manual", label:"暗票", color:"#e36f6f", parts:["manual|计分卡"]}
   ];
   var dailyModalView = "source";
@@ -1214,7 +1218,7 @@
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
         '<td><strong>' + esc(name) + '</strong>' + warning + identityNote + '</td>' +
-        '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || entry.source) + '</span></td>' +
+        '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || sourceDisplay(entry.source)) + '</span></td>' +
         '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span>' + scoringNote + '</td>' +
         '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
@@ -1374,7 +1378,7 @@
         return "<tr>" +
           "<td>" + esc((item.source_time || "").slice(0, 19)) + "</td>" +
           "<td>" + esc(item.fan_name || "-") + (item.fan_id ? "<div class=\"notice\">ID " + esc(item.fan_id) + "</div>" : "") + "</td>" +
-          "<td>" + esc(item.source_label || item.source || "-") + "</td>" +
+          "<td>" + esc(item.source_label || sourceDisplay(item.source) || "-") + "</td>" +
           "<td>" + score(item.score) + "</td>" +
           "<td>" + esc(item.scoring_method || "-") + "</td>" +
           "<td class=\"notice\">" + esc(item.note || "") + "</td>" +
@@ -2514,7 +2518,7 @@
         + '<span class="daily-tip-name" title="' + esc(record.fan_name) + '">' + esc(record.fan_name) + '</span>'
         + '<span class="daily-tip-score">+' + esc(score(record.score)) + '</span>'
         + '</div>'
-        + '<div class="daily-tip-detail"><span class="daily-tip-source">' + esc(record.source_label || record.source || "") + '</span>' + esc(dailyRecordDetail(record)) + '</div>'
+        + '<div class="daily-tip-detail"><span class="daily-tip-source">' + esc(record.source_label || sourceDisplay(record.source) || "") + '</span>' + esc(dailyRecordDetail(record)) + '</div>'
         + '</div>';
     }).join("");
     if (!rows) rows = '<div class="daily-tip-empty">当天该范围暂无计分明细</div>';

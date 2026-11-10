@@ -890,7 +890,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         labels = {item["source"]: item["source_scoring_label"] for item in data["entries"]}
         self.assertEqual(labels["room"], "房间·计分卡")
         self.assertEqual(labels["live"], "直播·计分卡")
-        self.assertEqual(labels["weidian"], "应援会·鸡腿")
+        self.assertEqual(labels["weidian"], "应援会（微店）·鸡腿")
         self.assertEqual(labels["manual"], "暗票·计分卡")
 
     def test_manual_weidian_entry_is_chicken_leg_and_separate_source(self):
@@ -916,7 +916,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         created = response.json()["result"]
         self.assertEqual(created["source"], "weidian_manual")
         self.assertEqual(created["scoring_method"], "鸡腿")
-        self.assertEqual(created["source_scoring_label"], "应援会（手动）·鸡腿")
+        self.assertEqual(created["source_scoring_label"], "手动·鸡腿")
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         entry = next(item for item in data["entries"] if item["source"] == "weidian_manual")
         self.assertEqual(entry["score"], 48.0)

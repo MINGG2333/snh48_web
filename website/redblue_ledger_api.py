@@ -46,7 +46,7 @@ VALID_SOURCES = {"manual", "weidian", "weidian_manual", "room", "live"}
 SOURCE_LABELS = {
     "manual": "暗票",
     "weidian": "微店",
-    "weidian_manual": "应援会（手动）",
+    "weidian_manual": "手动",
     "room": "房间",
     "live": "直播",
 }
@@ -59,8 +59,8 @@ DEFAULT_SCORING_METHODS = {
 }
 SCORING_SOURCE_LABELS = {
     "manual": "暗票",
-    "weidian": "应援会",
-    "weidian_manual": "应援会（手动）",
+    "weidian": "应援会（微店）",
+    "weidian_manual": "手动",
     "room": "房间",
     "live": "直播",
 }
@@ -90,7 +90,7 @@ DAILY_SCORING_CATEGORIES = (
     {"key": "room|鸡腿", "label": "房间·鸡腿", "source": "room", "method": "鸡腿"},
     {"key": "live|计分卡", "label": "直播·计分卡", "source": "live", "method": "计分卡"},
     {"key": "live|鸡腿", "label": "直播·鸡腿", "source": "live", "method": "鸡腿"},
-    {"key": "weidian|鸡腿", "label": "应援会·鸡腿", "source": "weidian", "method": "鸡腿"},
+    {"key": "weidian|鸡腿", "label": "应援会·鸡腿（微店）", "source": "weidian", "method": "鸡腿"},
     {"key": "weidian_manual|鸡腿", "label": "应援会·鸡腿（手动）", "source": "weidian_manual", "method": "鸡腿"},
     {"key": "manual|计分卡", "label": "暗票·计分卡", "source": "manual", "method": "计分卡"},
 )
