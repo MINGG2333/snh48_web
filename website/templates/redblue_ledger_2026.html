@@ -1707,6 +1707,7 @@
       body.innerHTML = '<tr><td colspan="6" class="empty">请选择粉丝</td></tr>';
       $("redemptionSummary").textContent = "请选择粉丝。";
       renderRedemptionList([]);
+      updateBonusAvailability();
       return;
     }
     var entries = fanEntries(keys, method);
