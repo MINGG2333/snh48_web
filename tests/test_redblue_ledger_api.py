@@ -361,6 +361,18 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entry["business_display_labels"], ["ID 合影", "答案之书"])
         self.assertEqual(_business_text(entry), "ID 合影+答案之书")
 
+        self._write_single_entry(source="association_manual", scoring_method="鸡腿")
+        manual_chicken = self.client.post(
+            "/api/redblue/redemptions",
+            headers=self.headers,
+            json={
+                "fan_id": "1001",
+                "business": "6-ID 合影",
+                "bonus_business": "6-答案之书",
+            },
+        )
+        self.assertEqual(manual_chicken.status_code, 200, manual_chicken.text)
+
         self._write_single_entry(source="room")
         rejected = self.client.post(
             "/api/redblue/redemptions",

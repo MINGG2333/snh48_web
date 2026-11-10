@@ -396,6 +396,7 @@
       <div class="field"><label>粉丝（可多选拼单）</label><select id="redemptionFan" multiple size="7" title="按住 Ctrl/⌘ 可多选；拼单时选择多个粉丝，列表第一项作为业务名义持有人"></select></div>
       <div class="field"><label>计分方式</label><select id="redemptionMethod"><option value="计分卡">计分卡</option><option value="鸡腿">鸡腿</option></select></div>
       <div class="field"><label>业务</label><select id="redemptionBusiness"></select></div>
+      <div class="field"><label>加赠业务（仅鸡腿计分）</label><select id="redemptionBonus"></select></div>
       <div class="field"><label>状态</label><select id="redemptionStatus"><option value="pending">兑换中</option><option value="done">已兑换</option></select></div>
       <div class="field"><label>备注</label><input id="redemptionNote" placeholder="可选"></div>
     </div>
@@ -1608,6 +1609,13 @@
     return match ? Number(match[1]) : 0;
   }
 
+  function updateBonusAvailability() {
+    var keys = selectedFanKeys();
+    var enabled = Boolean(keys.length && $("redemptionMethod").value === "鸡腿" && methodRemaining(keys, "鸡腿") > 0);
+    $("redemptionBonus").disabled = !enabled;
+    if (!enabled) $("redemptionBonus").value = "";
+  }
+
   function chooseDefaultMethod(keys) {
     var card = methodRemaining(keys, "计分卡");
     var chicken = methodRemaining(keys, "鸡腿");
@@ -1720,6 +1728,7 @@
     }
     renderRedemptionList(keys);
     updateRedemptionSummary();
+    updateBonusAvailability();
   }
 
   function resetRedemptionForm() {
@@ -1727,6 +1736,7 @@
     $("redemptionFan").disabled = false;
     setSelectedFanKeys([]);
     $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+    $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
     $("redemptionStatus").value = "pending";
     $("redemptionNote").value = "";
     renderRedemptionAllocations();
@@ -1744,12 +1754,14 @@
         $("redemptionFan").disabled = true;
         $("redemptionMethod").value = redemption.scoring_method || "计分卡";
         $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
+        $("redemptionBonus").innerHTML = businessOptionsMarkup(redemption.bonus_business || "", "bonus");
         $("redemptionStatus").value = redemption.status;
         $("redemptionNote").value = redemption.note || "";
       } else {
         var keys = selectedFanKeys();
         if (keys.length) chooseDefaultMethod(keys);
         $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+        $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
             $("redemptionStatus").value = "pending";
         $("redemptionNote").value = "";
       }
@@ -1808,6 +1820,7 @@
       participants: participants,
       scoring_method: method,
       business: business,
+      bonus_business: $("redemptionBonus").value,
       status: $("redemptionStatus").value,
       note: $("redemptionNote").value.trim(),
       allocations: allocations
@@ -1846,6 +1859,7 @@
     $("redemptionFan").disabled = true;
     $("redemptionMethod").value = redemption.scoring_method || "计分卡";
     $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
+    $("redemptionBonus").innerHTML = businessOptionsMarkup(redemption.bonus_business || "", "bonus");
     $("redemptionStatus").value = redemption.status;
     $("redemptionNote").value = redemption.note || "";
     renderRedemptionAllocations();

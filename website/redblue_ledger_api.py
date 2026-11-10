@@ -2112,8 +2112,8 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
     if bonus_business and bonus_option is None:
         raise ValueError("加赠业务无效")
     if bonus_option is not None:
-        if not any(_clean(entry_map[entry_id].get("source"), 20) == "weidian" for entry_id in seen):
-            raise ValueError("只有微店条目可以叠加加赠业务")
+        if not any(_entry_scoring_method(entry_map[entry_id]) == "鸡腿" for entry_id in seen):
+            raise ValueError("只有鸡腿条目可以叠加加赠业务")
     now = _now()
     completion_entry_id = _completion_entry_id(allocations, entry_map, cost)
     fan_id = _clean(payload.get("fan_id") or source.get("fan_id"), 32)
@@ -2215,7 +2215,7 @@ def _mutator_migrate_legacy_business(doc: dict[str, Any], payload: dict[str, Any
             skipped += 1
             continue
         bonus_option = BONUS_OPTION_MAP.get(selected_bonus) if selected_bonus else None
-        if bonus_option is not None and _clean(entry.get("source"), 20) != "weidian":
+        if bonus_option is not None and _entry_scoring_method(entry) != "鸡腿":
             bonus_option = None
         status = "done" if entry.get("business_done") else "pending"
         record = {
