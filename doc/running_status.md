@@ -9,6 +9,7 @@
 - 验证：`tests/test_redblue_ledger_api.py` 56 项通过（新增 FIFO 覆盖、跨次结转、应援会禁止重复 2 项）；页面脚本 `node --check`、`py_compile` 通过。
 - 部署：网站提交 `e6f53c0` 已推 GitHub；腾讯云/阿里云均 `git pull --ff-only` 到该提交。腾讯云 `snh48-web.service` 重启后 active，MainPID `42556`；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2057104`。
 - 线上烟测：两端 `/business/redblue2026` 200 且含“重复代投分析/代投明细”；`/api/redblue/data` 返回 `is_association` 和 `proxy_settlement`；对生产一条房间·鸡腿条目只做只读预览 `GET /api/redblue/settlement/preview` 返回 200，可用 1 分、完全覆盖最早微店·鸡腿 1 分、下一条 99 分需继续结转，未执行 apply、未改动生产台账。
+- 分享文本（`e2fc72f`）：预演/代投明细弹窗新增“分享文本”区块和复制按钮，格式为 `包含：` + 每行 `昵称 的N个琴音生花`；礼物名从重复条目备注 `礼物 × N` 提取，鸡腿缺失时回退“琴音生花”。两端已 pull 并重启：腾讯云 `snh48-web.service` PID `54290`、阿里云 `snh48-aliyun.service` PID `2076475`；只读预览返回 `gift_name=琴音生花`，可生成“包含：/ 南方有嘉木 的1个琴音生花”。页面含 `proxyShareText`/`proxyShareCopyBtn`。
 
 ## 2026-11-11 红蓝台账应援会条目改为独立履约状态（未发货/已发货/已付款）
 
