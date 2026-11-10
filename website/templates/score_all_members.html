@@ -87,6 +87,16 @@
     .btn.primary { background: var(--teal); border-color: var(--teal); color: var(--ink); font-weight: 700; }
     .coverage { display: none; margin-bottom: 16px; border: 1px solid #6b5320; border-radius: 8px; background: rgba(240,184,75,.08); color: #f2d38b; padding: 11px 14px; font-size: 13px; }
     .coverage.show { display: block; }
+    .coverage-badge { margin-left: 8px; padding: 2px 7px; border: 1px solid #8a6420; border-radius: 99px; background: rgba(240,184,75,.14); color: var(--gold); font-size: 11px; font-weight: 700; vertical-align: middle; }
+    .coverage-badge:hover, .coverage-badge:focus-visible { background: var(--gold); color: var(--ink); outline: none; }
+    .gap-headline { margin: 14px 14px 0; padding: 11px 13px; border: 1px solid #6b5320; border-radius: 8px; background: rgba(240,184,75,.08); color: #f2d38b; font-size: 13px; }
+    .gap-card { margin: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 13px 14px; }
+    .gap-card h3 { margin: 0 0 10px; font-size: 15px; color: var(--gold); }
+    .gap-row { display: grid; grid-template-columns: 96px 1fr; gap: 9px; padding: 5px 0; border-bottom: 1px dashed rgba(149,164,182,.18); font-size: 13px; }
+    .gap-row:last-child { border-bottom: 0; }
+    .gap-row .k { color: var(--faint); }
+    .gap-row .v { color: var(--text); word-break: break-all; }
+    .gap-reason { margin-top: 10px; padding: 9px 10px; border-left: 3px solid var(--gold); background: rgba(240,184,75,.06); color: #f2d38b; font-size: 12px; line-height: 1.55; }
     .two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-bottom: 16px; }
     .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
     .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 15px; border-bottom: 1px solid var(--line); }
@@ -230,6 +240,8 @@
         <div class="kpi"><div class="label">赛季</div><div class="value" id="kpiCoverage">-</div><div class="sub" id="kpiCoverageSub">-</div></div>
       </section>
 
+      <div id="coverageNotice" class="coverage"></div>
+
       <section class="two-col">
         <div class="panel">
           <div class="panel-head"><h2>队伍分布</h2><span id="teamMeta">-</span></div>
@@ -284,6 +296,17 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="gapModal" role="dialog" aria-modal="true" aria-labelledby="gapModalTitle">
+    <div class="modal-backdrop" id="gapModalBackdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h2 id="gapModalTitle">数据缺口说明</h2>
+        <button class="btn" id="closeGapBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body" id="gapModalBody"></div>
+    </div>
+  </div>
+
   <script>
     (function () {
       var password = "";
@@ -295,6 +318,7 @@
       var sourceFilter = "all";
       var expanded = {};
       var SEASON_LABELS = {};
+      var COVERAGE_NOTES = {};
 
       var loginOverlay = document.getElementById("loginOverlay");
       var passwordInput = document.getElementById("passwordInput");
@@ -317,6 +341,12 @@
       var openFiltersBtn = document.getElementById("openFiltersBtn");
       var closeFiltersBtn = document.getElementById("closeFiltersBtn");
       var filtersModalBackdrop = document.getElementById("filtersModalBackdrop");
+      var gapModal = document.getElementById("gapModal");
+      var gapModalBackdrop = document.getElementById("gapModalBackdrop");
+      var gapModalBody = document.getElementById("gapModalBody");
+      var gapModalTitle = document.getElementById("gapModalTitle");
+      var closeGapBtn = document.getElementById("closeGapBtn");
+      var coverageNotice = document.getElementById("coverageNotice");
       var scoreNavSelect = document.getElementById("scoreNavSelect");
 
       function formatScore(value) {
@@ -331,6 +361,43 @@
         return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
           return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch];
         });
+      }
+      function coverageSourceLabel(note) {
+        if (note.source === "live") return "直播间";
+        if (note.source === "room") return "房间";
+        return note.source || "-";
+      }
+      function closeGapModal() {
+        gapModal.classList.add("hidden");
+      }
+      function showGapModal(memberId) {
+        var note = COVERAGE_NOTES[memberId];
+        if (!note) return;
+        var recover = note.recoverable === false ? "官方侧确认无法补回"
+          : note.recoverable === true ? "可通过官方 LRC 补回" : "待确认（房间消息需另行回补）";
+        var ident = note.live_id ? ("直播 ID " + note.live_id) : note.room_id ? ("房间 ID " + note.room_id) : "-";
+        gapModalTitle.textContent = (note.member_name || "成员") + " · 数据缺口说明";
+        gapModalBody.innerHTML =
+          '<div class="gap-headline">' + escapeHtml(note.reason || "该成员的部分历史礼物未能从官方数据源补回。") + '</div>' +
+          '<div class="gap-card">' +
+          '<h3>缺口 ' + escapeHtml(formatScore(note.missing)) + ' 分</h3>' +
+          '<div class="gap-row"><span class="k">第三方</span><span class="v">' + escapeHtml(formatScore(note.third_party_score)) + ' 分</span></div>' +
+          '<div class="gap-row"><span class="k">本工程</span><span class="v">' + escapeHtml(formatScore(note.our_score)) + ' 分</span></div>' +
+          '<div class="gap-row"><span class="k">来源</span><span class="v">' + escapeHtml(coverageSourceLabel(note)) + '</span></div>' +
+          '<div class="gap-row"><span class="k">日期</span><span class="v">' + escapeHtml(note.date || "-") + (note.time_range ? " · " + escapeHtml(note.time_range) : "") + '</span></div>' +
+          '<div class="gap-row"><span class="k">礼物</span><span class="v">' + escapeHtml(note.gift || "-") + '</span></div>' +
+          '<div class="gap-row"><span class="k">场次</span><span class="v">' + escapeHtml(ident) + '</span></div>' +
+          '<div class="gap-row"><span class="k">可否补回</span><span class="v">' + escapeHtml(recover) + '</span></div>' +
+          '</div>';
+        gapModal.classList.remove("hidden");
+      }
+      function renderCoverageNotice() {
+        var ids = Object.keys(COVERAGE_NOTES || {});
+        if (!ids.length) { coverageNotice.classList.remove("show"); coverageNotice.textContent = ""; return; }
+        var totalMissing = ids.reduce(function (sum, id) { return sum + Number(COVERAGE_NOTES[id].missing || 0); }, 0);
+        var text = (data && data.coverage_summary) || ("有 " + ids.length + " 名成员共 " + formatScore(totalMissing) + " 分历史数据无法从官方侧补回。");
+        coverageNotice.innerHTML = '⚠️ ' + escapeHtml(text) + ' 点击成员行中的「数据缺口」查看具体场次和原因。';
+        coverageNotice.classList.add("show");
       }
       function setLoginError(text) {
         loginError.textContent = text || "密码错误";
@@ -449,6 +516,8 @@
         }
         memberRows.innerHTML = rows.map(function (row) {
           var id = escapeHtml(row.member_id);
+          var note = COVERAGE_NOTES[row.member_id];
+          var gapBadge = note ? ' <button class="coverage-badge" type="button" data-gap-id="' + id + '">数据缺口 -' + escapeHtml(formatScore(note.missing)) + '</button>' : "";
           var detail = expanded[row.member_id] ?
             '<tr class="detail-row"><td colspan="8"><div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
             (row.gifts || []).map(function (gift) {
@@ -457,7 +526,7 @@
             }).join("") + '</div></div></td></tr>' : "";
           return '<tr class="member-row" data-member-id="' + id + '">' +
             '<td class="num rank">' + escapeHtml(row.rank) + '</td>' +
-            '<td><div class="member-name">' + escapeHtml(row.member_name) + '</div><div class="member-sub">ID ' + id + (row.period_name ? " · " + escapeHtml(row.period_name) : "") + '</div></td>' +
+            '<td><div class="member-name">' + escapeHtml(row.member_name) + gapBadge + '</div><div class="member-sub">ID ' + id + (row.period_name ? " · " + escapeHtml(row.period_name) : "") + '</div></td>' +
             '<td><span class="tag">' + escapeHtml(row.group || "-") + '</span> <span class="tag">' + escapeHtml(row.team_label || "未分组") + '</span></td>' +
             '<td class="num score-main">' + formatScore(row.total_score) + '</td>' +
             '<td class="num">' + formatScore(row.room_score) + '</td>' +
@@ -472,9 +541,17 @@
             renderMemberRows(data.members || []);
           });
         });
+        memberRows.querySelectorAll("[data-gap-id]").forEach(function (btn) {
+          btn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            showGapModal(btn.getAttribute("data-gap-id"));
+          });
+        });
       }
       function render() {
         if (!data) return;
+        COVERAGE_NOTES = data.coverage_notes || {};
+        renderCoverageNotice();
         generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
         var summary = data.summary || {};
         document.getElementById("kpiScore").textContent = formatScore(summary.total_score);
@@ -595,8 +672,12 @@
       openFiltersBtn.addEventListener("click", openFiltersModal);
       closeFiltersBtn.addEventListener("click", closeFiltersModal);
       filtersModalBackdrop.addEventListener("click", closeFiltersModal);
+      closeGapBtn.addEventListener("click", closeGapModal);
+      gapModalBackdrop.addEventListener("click", closeGapModal);
       document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" && !filtersModal.classList.contains("hidden")) closeFiltersModal();
+        if (event.key !== "Escape") return;
+        if (!gapModal.classList.contains("hidden")) closeGapModal();
+        else if (!filtersModal.classList.contains("hidden")) closeFiltersModal();
       });
       sourceSegment.querySelectorAll("button").forEach(function (btn) {
         btn.addEventListener("click", function () { setSource(btn.getAttribute("data-source")); updateActiveFilters(); });

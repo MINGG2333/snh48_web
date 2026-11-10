@@ -330,6 +330,8 @@ def get_score_all_members_summary(
         "seasons": board.get("seasons", {}),
         "latest_season": board.get("latest_season", ""),
         "gift_authority": board.get("gift_authority", []),
+        "coverage_notes": board.get("coverage_notes") or {},
+        "coverage_summary": str(board.get("coverage_summary", "")),
         "facets": _facets(board, key),
     }
 
@@ -395,6 +397,8 @@ def get_score_all_members_data(
         "seasons": board.get("seasons", {}),
         "latest_season": board.get("latest_season", ""),
         "gift_authority": board.get("gift_authority", []),
+        "coverage_notes": board.get("coverage_notes") or {},
+        "coverage_summary": str(board.get("coverage_summary", "")),
         "facets": _facets(board, key),
         "summary": aggregated["summary"],
         "members": rows[start:end],
