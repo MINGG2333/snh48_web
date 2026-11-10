@@ -393,6 +393,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             f"/api/redblue/settlement/preview?entry_id={room['id']}", headers=self.headers
         ).json()
         self.assertEqual(preview["method"], "鸡腿")
+        self.assertEqual(preview["gift_name"], "礼物")
         self.assertEqual(preview["available_score"], 3.0)
         self.assertEqual([item["entry_id"] for item in preview["allocations"]], [first["id"]])
         self.assertEqual(preview["covered_score"], 2.0)
@@ -414,6 +415,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entries[first["id"]]["status"], "settled")
         self.assertEqual(entries[second["id"]]["status"], "paid")
         self.assertTrue(entries[room["id"]]["duplicate"])
+        self.assertEqual(entries[room["id"]]["proxy_settlement"]["gift_name"], "礼物")
         self.assertEqual(entries[room["id"]]["proxy_settlement"]["remainder"], 1.0)
 
         next_preview = self.client.get(

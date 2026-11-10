@@ -196,6 +196,9 @@
     .proxy-table .ok-text { color: var(--green); font-weight: 700; }
     .proxy-table .wait-text { color: var(--gold); font-weight: 700; }
     .proxy-empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+    .proxy-share { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.02); padding: 10px 12px; }
+    .proxy-share-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .proxy-share pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-family: inherit; font-size: 13px; line-height: 1.7; color: var(--text); }
     .suggest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
     .suggest { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
     .suggest .raw { color: var(--muted); font-size: 12px; }
@@ -1601,10 +1604,50 @@
         esc(plan.next.source_label || "") + ' · 需要 ' + score(plan.next.score || 0) + ' 分，还差 ' +
         score(plan.next.shortfall || 0) + ' 分，本次保持待投。</p>';
     }
-    $("proxyBody").innerHTML = stats + table + tail;
+    var giftName = plan.gift_name || (plan.method === "鸡腿" ? "琴音生花" : "计分卡");
+    var shareLines = ["包含："];
+    (plan.allocations || []).forEach(function (item) {
+      shareLines.push((item.fan_name || item.raw_name || "未登记") + " 的" +
+        score(item.covered_score || item.score || 0) + "个" + giftName);
+    });
+    if (!(plan.allocations || []).length) {
+      shareLines.push("（暂无可完全覆盖的应援会条目）");
+    }
+    var share = '<div class="proxy-share"><div class="proxy-share-head"><span>分享文本</span>' +
+      '<button class="btn mini" type="button" id="proxyShareCopyBtn">复制</button></div>' +
+      '<pre id="proxyShareText"></pre></div>';
+    $("proxyBody").innerHTML = stats + table + share + tail;
+    $("proxyShareText").textContent = shareLines.join("\n");
+    $("proxyShareCopyBtn").addEventListener("click", copyProxyShare);
     $("proxyConfirmBtn").classList.toggle("hidden", Boolean(applied));
     $("proxyConfirmBtn").disabled = false;
     $("proxyConfirmBtn").textContent = "确认代投并标记已投";
+  }
+
+  async function copyProxyShare() {
+    var node = $("proxyShareText");
+    var text = node ? node.textContent : "";
+    if (!text) { showToast("暂无分享文本", true); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("已复制分享文本");
+      return;
+    } catch (error) {
+      // 非 HTTPS 或未授权时回退到 execCommand。
+    }
+    var helper = document.createElement("textarea");
+    helper.value = text;
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    document.body.appendChild(helper);
+    helper.select();
+    try {
+      document.execCommand("copy");
+      showToast("已复制分享文本");
+    } catch (error) {
+      showToast("复制失败，请手动选择文本", true);
+    }
+    helper.remove();
   }
 
   async function openProxyModal(entryId) {
@@ -1639,6 +1682,7 @@
         score: proxy.entry_score
       },
       method: proxy.method,
+      gift_name: proxy.gift_name,
       pool_remainder: proxy.pool_before,
       entry_score: proxy.entry_score,
       available_score: proxy.available_score,

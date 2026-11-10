@@ -4,7 +4,7 @@
 
 - 需求：重复按钮只出现在非应援会来源（房间/直播/暗票）；应援会来源（微店/应援会手动）不再显示重复按钮。点击重复时弹窗分析该条目的计分方式，按时间从早到晚匹配同计分方式的应援会待投条目，预演可完全覆盖的条目和结转分数；确认后把完全覆盖的应援会条目标记已投，未凑整的剩余分结转到下一次重复条目。
 - 代码：`website/redblue_ledger_api.py` 新增台账级 `association_settlement.remainder`（按计分方式分开）、`_settlement_plan()` 预演和 `settle_association` mutator；重复条目保存 `proxy_settlement`（覆盖条目、覆盖分、结转分），被覆盖条目写 `status=settled`、`settled=True`、`settled_by_duplicates`。新增 `GET /api/redblue/settlement/preview`、`POST /api/redblue/settlement/apply`；`duplicate` mutator 拒绝应援会来源和已代投条目。
-- 页面：`website/templates/redblue_ledger_2026.html` 新增“重复代投分析/代投明细”弹窗；行内重复按钮只对非应援会来源显示，已代投显示“代投明细”且不提供取消；移除顶部“标记重复”批量按钮，避免绕过代投；备注列显示代投覆盖分和结转分。
+- 页面：`website/templates/redblue_ledger_2026.html` 新增“重复代投分析/代投明细”弹窗；行内重复按钮只对非应援会来源显示，已代投显示“代投明细”且不提供取消；移除顶部“标记重复”批量按钮，避免绕过代投；备注列显示代投覆盖分和结转分；弹窗内提供可复制的分享文本（格式：`包含：` + 每行 `昵称 的N个琴音生花`，礼物名取重复条目备注中的礼物名，缺失时鸡腿回退“琴音生花”、计分卡回退“计分卡”），右上“复制”按钮写入剪贴板。
 - 计算口径：`可用 = 该计分方式上次结转 + 本条重复分数`；只有 `可用 >= 条目分数` 的应援会条目才会被标记已投并扣减，遇到不足以完整覆盖的下一条即停止，剩余全数结转；鸡腿/计分卡分别独立结转。
 - 验证：`tests/test_redblue_ledger_api.py` 56 项通过（新增 FIFO 覆盖、跨次结转、应援会禁止重复 2 项）；页面脚本 `node --check`、`py_compile` 通过。
 - 部署：网站提交 `e6f53c0` 已推 GitHub；腾讯云/阿里云均 `git pull --ff-only` 到该提交。腾讯云 `snh48-web.service` 重启后 active，MainPID `42556`；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2057104`。

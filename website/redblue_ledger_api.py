@@ -282,6 +282,18 @@ def _set_settlement_remainder(doc: dict[str, Any], method: str, value: float) ->
     doc["association_settlement"] = block
 
 
+def _settlement_gift_name(entry: dict[str, Any], method: str) -> str:
+    note = _clean(entry.get("note"), 200)
+    match = re.match(r"^(.+?)\s*(?:×|x|\*)\s*\d+", note)
+    if match:
+        name = _clean(match.group(1), 60)
+        if name:
+            return name
+    if method == "鸡腿":
+        return "琴音生花"
+    return "计分卡"
+
+
 def _settlement_plan(doc: dict[str, Any], entry_id: str) -> dict[str, Any]:
     """预演“重复条目代投应援会”。
 
@@ -300,6 +312,7 @@ def _settlement_plan(doc: dict[str, Any], entry_id: str) -> dict[str, Any]:
         raise ValueError("该条目已完成代投，不能重复代投")
     method = _entry_scoring_method(source)
     entry_score = round(_to_float(source.get("score"), 0.0), 4)
+    gift_name = _settlement_gift_name(source, method)
     pool = _settlement_remainder(doc, method)
     available = round(pool + entry_score, 4)
     candidates = sorted(
@@ -355,6 +368,7 @@ def _settlement_plan(doc: dict[str, Any], entry_id: str) -> dict[str, Any]:
             "duplicate": bool(source.get("duplicate")),
         },
         "method": method,
+        "gift_name": gift_name,
         "pool_remainder": pool,
         "entry_score": entry_score,
         "available_score": round(pool + entry_score, 4),
@@ -396,6 +410,7 @@ def _mutator_settle_association(doc: dict[str, Any], payload: dict[str, Any]):
     source["duplicate"] = True
     source["proxy_settlement"] = {
         "method": method,
+        "gift_name": plan["gift_name"],
         "entry_score": plan["entry_score"],
         "pool_before": plan["pool_remainder"],
         "available_score": plan["available_score"],
