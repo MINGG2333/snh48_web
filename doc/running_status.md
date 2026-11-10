@@ -4,7 +4,7 @@
 
 - 需求：`/business/redblue2026` 条目状态列中，应援会来源（微店/应援会手动）不再使用“已投”。微店显示“未发货/已发货”，应援会手动显示“已付款”；“已投”保留给未来口径。该状态不改变“按条目”导出 PNG 的内容；暗票和房间/直播仍为“已投/待投”。
 - 代码：`website/redblue_ledger_api.py` 新增 `status` 字段和 `ENTRY_STATUS_BY_SOURCE`（微店 `unshipped/shipped/settled`、应援会手动 `paid/settled`），`_entry_status()` 统一派生；微店状态由订单 `shipped`/状态关键词自动同步，发货成功后写 `shipped`；应援会手动新增默认 `paid`。`settled` 由状态派生：只有 `settled` 才算已投，微店未发货/已发货和应援会手动已付款都计入待投合计与“待投”筛选。状态筛选新增 `unshipped/shipped/paid`，导出筛选文案显示中文。
-- 页面：`website/templates/redblue_ledger_2026.html` 状态列改用 `status/status_label` 胶囊（未发货金色、已发货绿色、已付款青色）；状态筛选新增三项；编辑弹窗对应来源显示状态下拉（微店、应援会手动），暗票和房间/直播仍显示“已投”复选；发货按钮只对 `unshipped` 微店条目显示；批量发货服务端跳过已发货/已投条目。
+- 页面：`website/templates/redblue_ledger_2026.html` 状态列改用 `status/status_label` 胶囊（未发货金色、已发货蓝色、已付款青色，只有已投为绿色）；状态筛选新增三项；编辑弹窗对应来源显示状态下拉（微店、应援会手动），暗票和房间/直播仍显示“已投”复选；发货按钮只对 `unshipped` 微店条目显示；批量发货服务端跳过已发货/已投条目；顶部汇总改为“总计分、已投、待投、条目、人数、未登记”。
 - 验证：`tests/test_redblue_ledger_api.py` 54 项通过（新增应援会状态、已发货计入待投、发货切换状态 3 项）；内联脚本 `node --check` 通过；`py_compile` 通过。
 - 部署：网站提交 `92f4662` 已推 GitHub；腾讯云/阿里云均 `git pull --ff-only` 到该提交。腾讯云 `snh48-web.service` 重启后 active，MainPID `20337`；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2020546`（2026-11-11 06:3x HKT）。
 - 线上烟测：两端 `/business/redblue2026` 200，页面含“未发货/已发货/已付款”；`/api/redblue/data` 200，生产条目状态为微店 42 条 `shipped/已发货`（计入待投）、应援会手动 1 条 `paid/已付款`（计入待投）、房间 79 条与直播 35 条 `settled/已投`；按条目导出 PNG 200 `image/png`（约 1.38MB），状态未影响导出内容。

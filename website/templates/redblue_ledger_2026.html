@@ -143,6 +143,7 @@
     .pill.leg { color: var(--pink); border-color: rgba(232,125,167,.4); background: rgba(232,125,167,.08); }
     .pill.ok { color: var(--green); border-color: rgba(77,194,124,.4); }
     .pill.wait { color: var(--gold); border-color: rgba(240,184,75,.4); }
+    .pill.shipped { color: var(--blue); border-color: rgba(103,168,255,.4); }
     .pill.paid { color: var(--teal); border-color: rgba(65,185,170,.4); }
     .pill.bad { color: var(--red); border-color: rgba(227,111,111,.4); }
     .pill.dup { color: var(--faint); }
@@ -685,10 +686,10 @@
     var s = data.summary || {};
     var cards = [
       ["总计分", score(s.total_score), "teal"],
-      ["人数", s.people_count || 0, "blue"],
-      ["条目", s.entry_count || 0, ""],
       ["已投", score(s.settled_score), "teal", "仅状态为已投的条目计入"],
       ["待投", score(s.pending_score), "pink", "微店未发货/已发货、手动已付款，以及房间/直播待投条目"],
+      ["条目", s.entry_count || 0, ""],
+      ["人数", s.people_count || 0, "blue"],
       ["未登记", s.warning_count || 0, "red"]
     ];
     $("kpis").innerHTML = cards.map(function (item) {
@@ -1109,7 +1110,7 @@
   }
 
   var ENTRY_STATUS_LABELS = {unshipped:"未发货", shipped:"已发货", paid:"已付款", settled:"已投", pending:"待投"};
-  var ENTRY_STATUS_CLASS = {unshipped:"wait", shipped:"ok", paid:"paid", settled:"ok", pending:"wait"};
+  var ENTRY_STATUS_CLASS = {unshipped:"wait", shipped:"shipped", paid:"paid", settled:"ok", pending:"wait"};
 
   function statusPills(entry) {
     if (entry.duplicate) return '<span class="pill dup">重复</span>';
