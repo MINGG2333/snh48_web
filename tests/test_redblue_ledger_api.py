@@ -248,6 +248,112 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(data["summary"]["entry_count"], 3)
         self.assertEqual(data["summary"]["total_score"], 6.0)
 
+    def _apply_weidian_orders(self, orders: list[dict]) -> dict:
+        (self.tmp / "weidian.json").write_text(
+            json.dumps({"orders": orders}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        job_id = "b" * 32
+        result_dir = self.tmp / "wd" / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / f"{job_id}.json").write_text(json.dumps({"status": "done"}), encoding="utf-8")
+        return self.client.post(
+            "/api/redblue/weidian/sync/apply",
+            headers=self.headers,
+            json={"job_id": job_id},
+        ).json()["result"]
+
+    @staticmethod
+    def _weidian_order(**overrides) -> dict:
+        order = {
+            "order_id": "O1",
+            "item_id": "7879362063",
+            "item_name": "红蓝鸡腿",
+            "add_time": "2026-10-24 14:00:00",
+            "status": "待发货",
+            "buyer_name": "Alice",
+            "buyer_note": "",
+            "seller_note": "",
+            "quantity": 2,
+            "amount": "52.50",
+            "shipped": False,
+            "shipped_at": "",
+        }
+        order.update(overrides)
+        return order
+
+    def test_association_entries_use_fulfilment_status(self):
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        self._apply_weidian_orders([self._weidian_order()])
+        association = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "Alice", "score": 1, "source": "association_manual"},
+        ).json()["result"]
+        manual = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "Alice", "score": 1, "source": "manual"},
+        ).json()["result"]
+        self.assertEqual(association["status"], "paid")
+        self.assertEqual(manual["status"], "settled")
+
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        by_source = {entry["source"]: entry for entry in data["entries"] if entry["source"] != "live"}
+        self.assertEqual(by_source["weidian"]["status"], "unshipped")
+        self.assertEqual(by_source["weidian"]["status_label"], "未发货")
+        self.assertFalse(by_source["weidian"]["settled"])
+        self.assertEqual(by_source["association_manual"]["status"], "paid")
+        self.assertEqual(by_source["association_manual"]["status_label"], "已付款")
+        self.assertFalse(by_source["association_manual"]["settled"])
+        self.assertEqual(by_source["manual"]["status"], "settled")
+        self.assertEqual(by_source["manual"]["status_label"], "已投")
+        self.assertEqual(by_source["room"]["status"], "settled")
+        self.assertEqual(by_source["room"]["status_label"], "已投")
+        # 微店未发货/已发货、应援会手动已付款都计入待投；暗票和房间/直播仍按已投统计。
+        self.assertEqual(data["summary"]["settled_score"], 5.0)
+        self.assertEqual(data["summary"]["pending_score"], 3.0)
+
+        unshipped = self.client.get(
+            "/api/redblue/data?status=unshipped", headers=self.headers
+        ).json()
+        self.assertEqual([entry["source"] for entry in unshipped["entries"]], ["weidian"])
+        paid = self.client.get("/api/redblue/data?status=paid", headers=self.headers).json()
+        self.assertEqual([entry["source"] for entry in paid["entries"]], ["association_manual"])
+
+    def test_shipped_weidian_entry_still_counts_as_pending(self):
+        self._apply_weidian_orders(
+            [self._weidian_order(status="已发货", shipped=True, shipped_at="2026-10-25 09:00:00")]
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = data["entries"][0]
+        self.assertEqual(entry["status"], "shipped")
+        self.assertEqual(entry["status_label"], "已发货")
+        self.assertFalse(entry["settled"])
+        self.assertEqual(data["summary"]["pending_score"], 2.0)
+        self.assertEqual(data["summary"]["settled_score"], 0.0)
+
+    def test_mark_shipped_switches_weidian_status(self):
+        self._apply_weidian_orders([self._weidian_order()])
+        entry = self.client.get("/api/redblue/data", headers=self.headers).json()["entries"][0]
+        self.assertEqual(entry["status"], "unshipped")
+        job_id = "c" * 32
+        result_dir = self.tmp / "wd" / "results"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / f"{job_id}.json").write_text(
+            json.dumps({"status": "done", "shipped": [{"order_id": "O1"}]}),
+            encoding="utf-8",
+        )
+        applied = self.client.post(
+            "/api/redblue/weidian/ship/apply",
+            headers=self.headers,
+            json={"job_id": job_id},
+        ).json()
+        self.assertEqual(applied["updated"], 1)
+        entry = self.client.get("/api/redblue/data", headers=self.headers).json()["entries"][0]
+        self.assertEqual(entry["status"], "shipped")
+        self.assertFalse(entry["settled"])
+
     def test_business_redemption_splits_and_marks_first_entry(self):
         self._write_business_ledger()
         response = self.client.post(

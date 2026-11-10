@@ -143,6 +143,7 @@
     .pill.leg { color: var(--pink); border-color: rgba(232,125,167,.4); background: rgba(232,125,167,.08); }
     .pill.ok { color: var(--green); border-color: rgba(77,194,124,.4); }
     .pill.wait { color: var(--gold); border-color: rgba(240,184,75,.4); }
+    .pill.paid { color: var(--teal); border-color: rgba(65,185,170,.4); }
     .pill.bad { color: var(--red); border-color: rgba(227,111,111,.4); }
     .pill.dup { color: var(--faint); }
     .warn-icon { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; vertical-align: 1px; }
@@ -244,7 +245,7 @@
       </div>
       <div class="filters">
         <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="association_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
-        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
+        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="paid">已付款</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
         <div class="field"><label>开始日期</label><input id="dateFrom" type="date"></div>
@@ -293,7 +294,7 @@
     </section>
 
     <section class="panel">
-      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><span class="notice">「弦月回响」默认计分卡；凭鸡腿消耗截图可改判鸡腿。</span></div>
+      <div class="toolbar"><strong style="font-size:15px;">条目</strong><span class="notice" id="entryHint"></span><span class="notice">微店状态：未发货/已发货；应援会手动：已付款；均计入待投。</span><span class="notice">「弦月回响」默认计分卡；凭鸡腿消耗截图可改判鸡腿。</span></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th style="width:34px;"><input type="checkbox" id="selectAll" aria-label="全选当前列表" title="全选当前列表"></th><th>时间</th><th>当前昵称 / 口袋ID</th><th>来源</th><th>计分方式</th><th>分数</th><th>状态</th><th>业务状态</th><th>兑换业务</th><th>备注</th><th>操作</th></tr></thead>
@@ -325,7 +326,8 @@
       <div class="field"><label>口袋48昵称</label><input id="entryName" placeholder="粉丝昵称"></div>
       <div class="field"><label>口袋48 ID</label><input id="entryId" placeholder="可选；填了会优先校验"></div>
       <div class="field"><label>分数</label><input id="entryScore" type="number" min="0.01" step="0.01" placeholder="1"></div>
-      <div class="field"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
+      <div class="field" id="entryStatusField"><label>状态</label><select id="entryStatus"></select></div>
+      <div class="field" id="entrySettledField"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
       <div class="field full"><label>备注</label><textarea id="entryNote" placeholder="可选"></textarea></div>
       <div class="field full"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
     </div>
@@ -685,12 +687,12 @@
       ["总计分", score(s.total_score), "teal"],
       ["人数", s.people_count || 0, "blue"],
       ["条目", s.entry_count || 0, ""],
-      ["已投", score(s.settled_score), "teal"],
-      ["待投", score(s.pending_score), "pink"],
+      ["已投", score(s.settled_score), "teal", "仅状态为已投的条目计入"],
+      ["待投", score(s.pending_score), "pink", "微店未发货/已发货、手动已付款，以及房间/直播待投条目"],
       ["未登记", s.warning_count || 0, "red"]
     ];
     $("kpis").innerHTML = cards.map(function (item) {
-      return '<div class="kpi"><div class="label">' + esc(item[0]) + '</div><div class="value ' + item[2] + '">' + esc(item[1]) + '</div></div>';
+      return '<div class="kpi" title="' + esc(item[3] || "") + '"><div class="label">' + esc(item[0]) + '</div><div class="value ' + item[2] + '">' + esc(item[1]) + '</div></div>';
     }).join("");
   }
 
@@ -1106,12 +1108,14 @@
     });
   }
 
+  var ENTRY_STATUS_LABELS = {unshipped:"未发货", shipped:"已发货", paid:"已付款", settled:"已投", pending:"待投"};
+  var ENTRY_STATUS_CLASS = {unshipped:"wait", shipped:"ok", paid:"paid", settled:"ok", pending:"wait"};
+
   function statusPills(entry) {
-    var out = [];
-    if (entry.duplicate) out.push('<span class="pill dup">重复</span>');
-    else if (entry.settled) out.push('<span class="pill ok">已投</span>');
-    else out.push('<span class="pill wait">待投</span>');
-    return out.join(" ");
+    if (entry.duplicate) return '<span class="pill dup">重复</span>';
+    var key = entry.status || (entry.settled ? "settled" : "pending");
+    var label = entry.status_label || ENTRY_STATUS_LABELS[key] || key;
+    return '<span class="pill ' + (ENTRY_STATUS_CLASS[key] || "") + '">' + esc(label) + '</span>';
   }
 
   function businessOptionsMarkup(current, group) {
@@ -1205,7 +1209,7 @@
       }
       var ai = aiSuggestions[entry.id];
       var aiBtn = ai ? '<button class="btn mini gold" data-ai-apply="' + esc(entry.id) + '">应用AI</button>' : "";
-      var shipBtn = (entry.source === "weidian" && !entry.settled && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
+      var shipBtn = (entry.source === "weidian" && entry.status === "unshipped" && !entry.duplicate) ? '<button class="btn mini pink" data-ship="' + esc(entry.id) + '">发货</button>' : "";
       var overrideBtn = (entry.source === "room" || entry.source === "live") ? '<button class="btn mini gold" data-override="' + esc(entry.id) + '">改判</button>' : "";
       var toggleScoringBtn = (entry.source === "room" || entry.source === "live") ? '<button class="btn mini" data-toggle-scoring="' + esc(entry.id) + '">' + (entry.scoring_method === "鸡腿" ? "切计分卡" : "切鸡腿") + '</button>' : "";
       var evidenceCount = (entry.scoring_evidence || []).length;
@@ -1453,12 +1457,31 @@
     $("entryModalSub").textContent = entry
       ? "来源：" + (entry.source_label || entry.source) + " · 原始时间：" + (entry.source_time || entry.created_at || "-")
       : (chosen === "association_manual"
-        ? "手动补录应援会鸡腿，计分方式固定为鸡腿；时间按登记时间计入。"
+        ? "手动补录应援会鸡腿，计分方式固定为鸡腿，状态默认已付款；时间按登记时间计入。"
         : "暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。");
     $("entryName").value = entry ? (entry.raw_name || entry.fan_name || "") : "";
     $("entryId").value = entry ? (entry.fan_id || entry.raw_id || "") : "";
     $("entryScore").value = entry ? entry.score : "1";
-    $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
+    var associationStatuses = {
+      weidian: [["unshipped", "未发货"], ["shipped", "已发货"]],
+      association_manual: [["paid", "已付款"]]
+    };
+    var statusSource = entry ? entry.source : chosen;
+    var statusOptions = associationStatuses[statusSource];
+    if (statusOptions) {
+      $("entryStatusField").classList.remove("hidden");
+      $("entrySettledField").classList.add("hidden");
+      $("entryStatus").innerHTML = statusOptions.map(function (item) {
+        return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + '</option>';
+      }).join("");
+      var currentStatus = entry && entry.status ? entry.status : statusOptions[0][0];
+      if (!statusOptions.some(function (item) { return item[0] === currentStatus; })) currentStatus = statusOptions[0][0];
+      $("entryStatus").value = currentStatus;
+    } else {
+      $("entryStatusField").classList.add("hidden");
+      $("entrySettledField").classList.remove("hidden");
+      $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
+    }
     $("entryNote").value = entry ? (entry.note || "") : "";
     $("entryDuplicate").checked = entry ? Boolean(entry.duplicate) : false;
     $("entryModal").classList.remove("hidden");
@@ -1475,11 +1498,16 @@
       raw_id: $("entryId").value.trim(),
       score: Number($("entryScore").value || 0),
       note: $("entryNote").value.trim(),
-      settled: $("entrySettled").checked,
       duplicate: $("entryDuplicate").checked
     };
     if (source === "association_manual") {
       payload.weidian = {sku_title: payload.score + "分（手动）", status: "手动登记"};
+    }
+    if (!$("entryStatusField").classList.contains("hidden")) {
+      payload.status = $("entryStatus").value;
+    }
+    if (!$("entrySettledField").classList.contains("hidden")) {
+      payload.settled = $("entrySettled").checked;
     }
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
     if (!(payload.score > 0)) { showToast("分数必须大于 0", true); return; }

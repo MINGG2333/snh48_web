@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-11 红蓝台账应援会条目改为独立履约状态（未发货/已发货/已付款）
+
+- 需求：`/business/redblue2026` 条目状态列中，应援会来源（微店/应援会手动）不再使用“已投”。微店显示“未发货/已发货”，应援会手动显示“已付款”；“已投”保留给未来口径。该状态不改变“按条目”导出 PNG 的内容；暗票和房间/直播仍为“已投/待投”。
+- 代码：`website/redblue_ledger_api.py` 新增 `status` 字段和 `ENTRY_STATUS_BY_SOURCE`（微店 `unshipped/shipped/settled`、应援会手动 `paid/settled`），`_entry_status()` 统一派生；微店状态由订单 `shipped`/状态关键词自动同步，发货成功后写 `shipped`；应援会手动新增默认 `paid`。`settled` 由状态派生：只有 `settled` 才算已投，微店未发货/已发货和应援会手动已付款都计入待投合计与“待投”筛选。状态筛选新增 `unshipped/shipped/paid`，导出筛选文案显示中文。
+- 页面：`website/templates/redblue_ledger_2026.html` 状态列改用 `status/status_label` 胶囊（未发货金色、已发货绿色、已付款青色）；状态筛选新增三项；编辑弹窗对应来源显示状态下拉（微店、应援会手动），暗票和房间/直播仍显示“已投”复选；发货按钮只对 `unshipped` 微店条目显示；批量发货服务端跳过已发货/已投条目。
+- 验证：`tests/test_redblue_ledger_api.py` 54 项通过（新增应援会状态、已发货计入待投、发货切换状态 3 项）；内联脚本 `node --check` 通过；`py_compile` 通过。
+- 部署：网站提交后推 GitHub，腾讯云/阿里云 `git pull` 并重启 `snh48-web.service` / `snh48-aliyun.service` 后生效。
+
 ## 2026-11-09 房间信使修复发送失败并补齐删除/小号/Token 失效入口（腾讯云已生效，阿里云仅同步代码）
 
 - 用户反馈发送时返回 `account is invalid`。根因不是 Pocket48 拒绝，而是 QChat 发送脚本把 NIM accId 当成纯数字校验：实际值为 `20250222083119_250u4g4lgoivmjr`（30 位字母数字下划线），在本地 `normalizeId` 就被拒绝。修复为独立的 `normalizeAccount`（允许字母/数字/下划线/短横线），serverId/channelId 仍保持纯数字校验。修复后用个人号 `147062891` 做只读 QChat 连接探针：NIM 登录、QChat 登录、订阅陈嘉仪公开房间全部成功（未发送消息）。

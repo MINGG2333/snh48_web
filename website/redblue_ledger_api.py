@@ -68,6 +68,20 @@ SCORING_SOURCE_LABELS = {
     "live": "直播",
 }
 SCORING_METHODS = ("计分卡", "鸡腿")
+# 应援会来源（微店/应援会手动）使用独立的履约状态；已投保留给未来使用。
+ASSOCIATION_SOURCES = {"weidian", "association_manual", "weidian_manual"}
+ENTRY_STATUS_LABELS = {
+    "unshipped": "未发货",
+    "shipped": "已发货",
+    "paid": "已付款",
+    "settled": "已投",
+    "pending": "待投",
+}
+ENTRY_STATUS_BY_SOURCE = {
+    "weidian": ("unshipped", "shipped", "settled"),
+    "association_manual": ("paid", "settled"),
+    "weidian_manual": ("paid", "settled"),
+}
 EVIDENCE_DIR = Path(
     getattr(
         cfg,
@@ -210,6 +224,40 @@ def _weidian_order_score(order: dict[str, Any]) -> float:
         unit_price = max(_to_float(getattr(cfg, "REDBLUE_WEIDIAN_UNIT_PRICE", 26.25), 26.25), 0.01)
         return round(amount / unit_price, 4)
     return round(_to_float(order.get("quantity"), 0.0), 4)
+
+
+def _weidian_order_shipped(order: dict[str, Any]) -> bool:
+    status_desc = _clean(order.get("status"), 40)
+    return bool(order.get("shipped")) or any(
+        keyword in status_desc for keyword in ("已发货", "交易成功", "完成")
+    )
+
+
+def _entry_status(entry: dict[str, Any]) -> str:
+    """条目履约状态。
+
+    微店/手动（应援会来源）用未发货、已发货、已付款、已投；
+    房间/直播沿用原“已投/待投”结算状态。
+    """
+    source = _clean(entry.get("source"), 20)
+    status = _clean(entry.get("status"), 20).lower()
+    allowed = ENTRY_STATUS_BY_SOURCE.get(source)
+    if allowed:
+        if status in allowed:
+            return status
+        if source == "weidian":
+            weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
+            shipped = bool(weidian.get("shipped")) or any(
+                keyword in _clean(weidian.get("status"), 40)
+                for keyword in ("已发货", "交易成功", "完成")
+            )
+            return "shipped" if shipped else "unshipped"
+        return "paid"
+    return "settled" if bool(entry.get("settled")) else "pending"
+
+
+def _entry_settled(entry: dict[str, Any]) -> bool:
+    return _entry_status(entry) == "settled"
 
 
 def _business_option(value: Any, group: str | None = None) -> str:
@@ -1356,11 +1404,16 @@ def _new_entry(
     scoring_method: str = "",
     selected_business: str = "",
     selected_business_bonus: str = "",
+    status: str = "",
 ) -> dict[str, Any]:
     entry_id = f"rb-{uuid.uuid4().hex}"
     method = _clean(scoring_method, 10)
     if method not in SCORING_METHODS:
         method = DEFAULT_SCORING_METHODS.get(_clean(source, 20), "计分卡")
+    status_key = _clean(status, 20).lower()
+    allowed_statuses = ENTRY_STATUS_BY_SOURCE.get(source)
+    if allowed_statuses and status_key not in allowed_statuses:
+        status_key = allowed_statuses[0]
     entry = {
         "id": entry_id,
         "fan_id": "",
@@ -1375,6 +1428,7 @@ def _new_entry(
         "created_at": _now(),
         "updated_at": _now(),
         "settled": bool(settled),
+        "status": status_key,
         "warning": False,
         "warning_reason": "",
         "duplicate": False,
@@ -1413,6 +1467,7 @@ def _upsert_entry(doc: dict[str, Any], candidate: dict[str, Any]) -> tuple[dict[
         "scoring_method",
         "source_time",
         "settled",
+        "status",
         "weidian",
         "shipping_error",
     ):
@@ -1435,6 +1490,7 @@ def _upsert_entry(doc: dict[str, Any], candidate: dict[str, Any]) -> tuple[dict[
 def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = ()) -> dict[str, Any]:
     source = _clean(entry.get("source"), 20)
     scoring_method = _entry_scoring_method(entry)
+    status = _entry_status(entry)
     raw_name = _clean(entry.get("raw_name"), 120)
     raw_id = _clean(entry.get("raw_id"), 32)
     fan_id = _clean(entry.get("fan_id"), 32)
@@ -1476,7 +1532,9 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "source_time": _clean(entry.get("source_time"), 32),
         "created_at": _clean(entry.get("created_at"), 32),
         "updated_at": _clean(entry.get("updated_at"), 32),
-        "settled": bool(entry.get("settled")),
+        "settled": _entry_settled(entry),
+        "status": status,
+        "status_label": ENTRY_STATUS_LABELS.get(status, status),
         "warning": warning,
         "warning_reason": warning_reason,
         "duplicate": bool(entry.get("duplicate")),
@@ -1554,6 +1612,8 @@ def _filter_entries(
         if status_filter == "settled" and not item["settled"]:
             continue
         if status_filter == "pending" and item["settled"]:
+            continue
+        if status_filter in {"unshipped", "shipped", "paid"} and item["status"] != status_filter:
             continue
         if status_filter == "warning" and not item["warning"]:
             continue
@@ -1952,7 +2012,12 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
         raw_name=raw_name,
         raw_id=raw_id,
         score=score,
-        settled=_to_bool(payload.get("settled"), True),
+        settled=False if source in ASSOCIATION_SOURCES else _to_bool(payload.get("settled"), True),
+        status=(
+            _clean(payload.get("status"), 20) or "paid"
+            if source in ASSOCIATION_SOURCES
+            else ""
+        ),
         note=_clean(payload.get("note")),
         weidian=weidian or None,
         scoring_method=scoring_method,
@@ -1981,7 +2046,15 @@ def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
         entry["score"] = round(score, 4)
     if payload.get("note") is not None:
         entry["note"] = _clean(payload.get("note"))
-    if payload.get("settled") is not None:
+    source = _clean(entry.get("source"), 20)
+    if payload.get("status") is not None:
+        status = _clean(payload.get("status"), 20).lower()
+        allowed_statuses = ENTRY_STATUS_BY_SOURCE.get(source)
+        if allowed_statuses:
+            if status not in allowed_statuses:
+                raise ValueError("状态无效")
+            entry["status"] = status
+    if payload.get("settled") is not None and source not in ASSOCIATION_SOURCES:
         entry["settled"] = _to_bool(payload.get("settled"), bool(entry.get("settled")))
     if payload.get("duplicate") is not None:
         entry["duplicate"] = _to_bool(payload.get("duplicate"), bool(entry.get("duplicate")))
@@ -2363,9 +2436,7 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
         raw_name = buyer_name
         status_desc = _clean(order.get("status"), 40)
         shipped_at = _clean(order.get("shipped_at"), 32)
-        settled = bool(order.get("shipped")) or any(
-            keyword in status_desc for keyword in ("已发货", "交易成功", "完成")
-        )
+        shipped = _weidian_order_shipped(order)
         weidian = {
             "order_id": order_id,
             "item_id": _clean(order.get("item_id"), 40),
@@ -2378,7 +2449,7 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
             "quantity": _to_float(order.get("quantity"), 0.0),
             "score": _weidian_order_score(order),
             "amount": _to_float(order.get("amount"), 0.0),
-            "shipped": bool(order.get("shipped")),
+            "shipped": shipped,
             "shipped_at": shipped_at,
         }
         candidate = _new_entry(
@@ -2389,11 +2460,14 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
             raw_name=raw_name,
             raw_id=raw_id,
             score=_weidian_order_score(order),
-            settled=settled,
+            settled=False,
+            status="shipped" if shipped else "unshipped",
             note=note,
             weidian=weidian,
         )
         existing = _find_entry(doc, "weidian", order_id)
+        if existing is not None and _entry_status(existing) == "settled":
+            candidate["status"] = "settled"
         if existing is not None and existing.get("identity_locked"):
             candidate["identity_locked"] = True
             candidate["fan_id"] = existing.get("fan_id") or candidate.get("fan_id")
@@ -2440,7 +2514,9 @@ def _mutator_mark_shipped(doc: dict[str, Any], payload: dict[str, Any]):
             continue
         if _clean(entry.get("source_id"), 120) not in order_ids:
             continue
-        entry["settled"] = True
+        if _entry_status(entry) != "settled":
+            entry["status"] = "shipped"
+            entry["settled"] = False
         entry["shipping_error"] = ""
         entry["updated_at"] = _now()
         weidian = entry.setdefault("weidian", {})
@@ -2591,10 +2667,9 @@ def _weidian_changed(doc: dict[str, Any], orders: list[dict[str, Any]]) -> bool:
         weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
         if _clean(weidian.get("status"), 40) != _clean(order.get("status"), 40):
             return True
-        expected_settled = bool(order.get("shipped")) or any(
-            keyword in _clean(order.get("status"), 40) for keyword in ("已发货", "交易成功", "完成")
-        )
-        if bool(entry.get("settled")) != expected_settled:
+        expected_status = "shipped" if _weidian_order_shipped(order) else "unshipped"
+        current_status = _entry_status(entry)
+        if current_status != "settled" and current_status != expected_status:
             return True
         if _clean(weidian.get("item_name"), 160) != _clean(order.get("item_name"), 160):
             return True
@@ -2722,7 +2797,7 @@ def _export_context(
     if source != "all":
         filters.append("来源：" + SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source)))
     if status_filter != "all":
-        filters.append("状态：" + status_filter)
+        filters.append("状态：" + ENTRY_STATUS_LABELS.get(status_filter, status_filter))
     if keyword:
         filters.append("关键词：" + keyword)
     if parsed_scores:
@@ -3248,7 +3323,7 @@ def create_weidian_ship_job(payload: dict[str, Any] = Body(default={}), _=Depend
             continue
         if entry.get("source") != "weidian":
             continue
-        if entry.get("settled"):
+        if _entry_status(entry) in {"shipped", "settled"}:
             continue
         weidian = entry.get("weidian") or {}
         order_id = _clean(weidian.get("order_id") or entry.get("source_id"), 120)
