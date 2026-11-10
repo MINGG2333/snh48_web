@@ -42,10 +42,28 @@ logger = logging.getLogger(__name__)
 
 BJ_TZ = timezone(timedelta(hours=8))
 RESOURCE = "redblue_ledger"
-VALID_SOURCES = {"manual", "weidian", "room", "live"}
-SOURCE_LABELS = {"manual": "暗票", "weidian": "微店", "room": "房间", "live": "直播"}
-DEFAULT_SCORING_METHODS = {"manual": "计分卡", "weidian": "鸡腿", "room": "计分卡", "live": "计分卡"}
-SCORING_SOURCE_LABELS = {"manual": "暗票", "weidian": "应援会", "room": "房间", "live": "直播"}
+VALID_SOURCES = {"manual", "weidian", "weidian_manual", "room", "live"}
+SOURCE_LABELS = {
+    "manual": "暗票",
+    "weidian": "微店",
+    "weidian_manual": "应援会（手动）",
+    "room": "房间",
+    "live": "直播",
+}
+DEFAULT_SCORING_METHODS = {
+    "manual": "计分卡",
+    "weidian": "鸡腿",
+    "weidian_manual": "鸡腿",
+    "room": "计分卡",
+    "live": "计分卡",
+}
+SCORING_SOURCE_LABELS = {
+    "manual": "暗票",
+    "weidian": "应援会",
+    "weidian_manual": "应援会（手动）",
+    "room": "房间",
+    "live": "直播",
+}
 SCORING_METHODS = ("计分卡", "鸡腿")
 EVIDENCE_DIR = Path(
     getattr(
@@ -73,6 +91,7 @@ DAILY_SCORING_CATEGORIES = (
     {"key": "live|计分卡", "label": "直播·计分卡", "source": "live", "method": "计分卡"},
     {"key": "live|鸡腿", "label": "直播·鸡腿", "source": "live", "method": "鸡腿"},
     {"key": "weidian|鸡腿", "label": "应援会·鸡腿", "source": "weidian", "method": "鸡腿"},
+    {"key": "weidian_manual|鸡腿", "label": "应援会·鸡腿（手动）", "source": "weidian_manual", "method": "鸡腿"},
     {"key": "manual|计分卡", "label": "暗票·计分卡", "source": "manual", "method": "计分卡"},
 )
 DAILY_SCORING_KEYS = {item["key"] for item in DAILY_SCORING_CATEGORIES}
@@ -1893,16 +1912,45 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
         raise ValueError("分数必须大于 0")
     if not raw_name and not raw_id:
         raise ValueError("请填写口袋48昵称或 ID")
+    source = _clean(payload.get("source"), 20) or "manual"
+    if source not in {"manual", "weidian_manual"}:
+        raise ValueError("手动条目只能选择暗票或应援会（手动）")
+    scoring_method = "鸡腿" if source == "weidian_manual" else "计分卡"
+    source_time = _clean(payload.get("source_time"), 32) or _now()
+    weidian = {}
+    if source == "weidian_manual":
+        raw_weidian = payload.get("weidian") if isinstance(payload.get("weidian"), dict) else {}
+        weidian = {
+            "order_id": _clean(payload.get("source_id"), 120) or f"weidian-manual-{uuid.uuid4().hex}",
+            "item_id": _clean(raw_weidian.get("item_id"), 40),
+            "item_name": _clean(raw_weidian.get("item_name"), 160) or "应援会鸡腿·手动补录",
+            "sku_title": _clean(raw_weidian.get("sku_title"), 40) or f"{score:g}分（手动）",
+            "status": _clean(raw_weidian.get("status"), 40) or "手动登记",
+            "buyer_name": raw_name,
+            "quantity": _to_float(raw_weidian.get("quantity"), 1.0) or 1.0,
+            "score": score,
+            "amount": _to_float(raw_weidian.get("amount"), 0.0),
+            "unit_price": _to_float(raw_weidian.get("unit_price"), 0.0),
+            "discount": _to_float(raw_weidian.get("discount"), 0.0),
+            "manual": True,
+            "channel": "manual",
+            "shipped": False,
+            "shipped_at": "",
+        }
     entry = _new_entry(
         doc,
-        source="manual",
-        source_id=f"manual-{uuid.uuid4().hex}",
-        source_time=_now(),
+        source=source,
+        source_id=_clean(payload.get("source_id"), 120)
+        or (weidian.get("order_id") if source == "weidian_manual" else "")
+        or f"{source}-{uuid.uuid4().hex}",
+        source_time=source_time,
         raw_name=raw_name,
         raw_id=raw_id,
         score=score,
         settled=_to_bool(payload.get("settled"), True),
         note=_clean(payload.get("note")),
+        weidian=weidian or None,
+        scoring_method=scoring_method,
         selected_business=_clean(payload.get("selected_business"), 80),
         selected_business_bonus=_clean(payload.get("selected_business_bonus"), 80),
     )

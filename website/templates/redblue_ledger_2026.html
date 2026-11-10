@@ -230,6 +230,7 @@
     <section class="panel">
       <div class="toolbar">
         <button class="btn primary" id="addManualBtn">＋ 新增暗票</button>
+        <button class="btn primary" id="addWeidianManualBtn">＋ 新增应援会手动</button>
         <button class="btn" id="syncRoomLiveBtn">立即同步房间/直播</button>
         <button class="btn pink" id="syncWeidianBtn">立即同步微店</button>
         <button class="btn gold" id="aiResolveBtn">AI 识别未登记</button>
@@ -242,7 +243,7 @@
         <div class="spacer"></div>
       </div>
       <div class="filters">
-        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店</option><option value="room">房间</option><option value="live">直播</option></select></div>
+        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="weidian_manual">应援会（手动）</option><option value="room">房间</option><option value="live">直播</option></select></div>
         <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
@@ -319,6 +320,8 @@
     <h2 id="entryModalTitle">新增暗票</h2>
     <div class="sub" id="entryModalSub">暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。</div>
     <div class="form-grid">
+      <div class="field"><label>类型</label><select id="entrySource"><option value="manual">暗票·计分卡</option><option value="weidian_manual">应援会·鸡腿（手动）</option></select></div>
+      <div class="field"><label>登记时间</label><input id="entryTime" type="datetime-local"></div>
       <div class="field"><label>口袋48昵称</label><input id="entryName" placeholder="粉丝昵称"></div>
       <div class="field"><label>口袋48 ID</label><input id="entryId" placeholder="可选；填了会优先校验"></div>
       <div class="field"><label>分数</label><input id="entryScore" type="number" min="0.01" step="0.01" placeholder="1"></div>
@@ -670,7 +673,7 @@
     } else if (ws.status === "running") {
       weidianText = " · 微店同步进行中";
     }
-    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 6 类计分来源（房间/直播 × 计分卡/鸡腿、应援会/暗票） · 按时间正序" + weidianText;
+    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 7 类计分来源（房间/直播 × 计分卡/鸡腿、应援会自动、应援会手动、暗票） · 按时间正序" + weidianText;
     $("metaLine").title = ws.last_error || ws.note || "";
     hideDailyTooltip();
     if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
@@ -692,8 +695,8 @@
   }
 
   function sourceScoringLabel(key) {
-    var base = {manual:"暗票",weidian:"应援会",room:"房间",live:"直播"}[key] || key;
-    var method = {manual:"计分卡",weidian:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
+    var base = {manual:"暗票",weidian:"应援会",weidian_manual:"应援会（手动）",room:"房间",live:"直播"}[key] || key;
+    var method = {manual:"计分卡",weidian:"鸡腿",weidian_manual:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
     return method ? base + "·" + method : base;
   }
 
@@ -703,6 +706,7 @@
     {source:"live", method:"计分卡", label:"直播·计分卡", cls:"card"},
     {source:"live", method:"鸡腿", label:"直播·鸡腿", cls:"leg"},
     {source:"weidian", method:"鸡腿", label:"应援会·鸡腿", cls:"leg"},
+    {source:"weidian_manual", method:"鸡腿", label:"应援会·鸡腿（手动）", cls:"leg"},
     {source:"manual", method:"计分卡", label:"暗票·计分卡", cls:"card"}
   ];
   var DAILY_TREND_COLORS = {
@@ -711,12 +715,14 @@
     "live|计分卡": "#41b9aa",
     "live|鸡腿": "#f0b84b",
     "weidian|鸡腿": "#8b6cc9",
+    "weidian_manual|鸡腿": "#c084d8",
     "manual|计分卡": "#e36f6f"
   };
   var DAILY_SOURCE_DEFS = [
     {key:"room", label:"房间", color:"#67a8ff", parts:["room|计分卡", "room|鸡腿"]},
     {key:"live", label:"直播", color:"#41b9aa", parts:["live|计分卡", "live|鸡腿"]},
-    {key:"weidian", label:"应援会", color:"#8b6cc9", parts:["weidian|鸡腿"]},
+    {key:"weidian", label:"应援会（自动）", color:"#8b6cc9", parts:["weidian|鸡腿"]},
+    {key:"weidian_manual", label:"应援会（手动）", color:"#c084d8", parts:["weidian_manual|鸡腿"]},
     {key:"manual", label:"暗票", color:"#e36f6f", parts:["manual|计分卡"]}
   ];
   var dailyModalView = "source";
@@ -1423,12 +1429,28 @@
     );
   }
 
-  function openEntryModal(entry) {
+  function localDateTimeInput() {
+    var d = new Date();
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function openEntryModal(entry, source) {
     editingId = entry ? entry.id : "";
-    $("entryModalTitle").textContent = entry ? "编辑条目" : "新增暗票";
+    var chosen = source || (entry && entry.source) || "manual";
+    if (chosen !== "weidian_manual") chosen = "manual";
+    $("entrySource").value = chosen;
+    $("entrySource").disabled = Boolean(entry);
+    $("entryTime").disabled = Boolean(entry);
+    $("entryTime").value = entry
+      ? (entry.source_time || entry.created_at || "").replace(" ", "T").slice(0, 16)
+      : localDateTimeInput();
+    $("entryModalTitle").textContent = entry ? "编辑条目" : (chosen === "weidian_manual" ? "新增应援会手动" : "新增暗票");
     $("entryModalSub").textContent = entry
       ? "来源：" + (entry.source_label || entry.source) + " · 原始时间：" + (entry.source_time || entry.created_at || "-")
-      : "暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。";
+      : (chosen === "weidian_manual"
+        ? "手动补录应援会鸡腿，计分方式固定为鸡腿；时间按登记时间计入。"
+        : "暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。");
     $("entryName").value = entry ? (entry.raw_name || entry.fan_name || "") : "";
     $("entryId").value = entry ? (entry.fan_id || entry.raw_id || "") : "";
     $("entryScore").value = entry ? entry.score : "1";
@@ -1440,7 +1462,11 @@
   }
 
   async function saveEntry() {
+    var source = $("entrySource").value;
+    var timeValue = $("entryTime").value || "";
     var payload = {
+      source: source,
+      source_time: timeValue ? timeValue.replace("T", " ") + ":00" : "",
       raw_name: $("entryName").value.trim(),
       raw_id: $("entryId").value.trim(),
       score: Number($("entryScore").value || 0),
@@ -1448,6 +1474,9 @@
       settled: $("entrySettled").checked,
       duplicate: $("entryDuplicate").checked
     };
+    if (source === "weidian_manual") {
+      payload.weidian = {sku_title: payload.score + "分（手动）", status: "手动登记"};
+    }
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
     if (!(payload.score > 0)) { showToast("分数必须大于 0", true); return; }
     $("saveEntryBtn").disabled = true;
@@ -2586,7 +2615,8 @@
     $("openFanModalBtn").addEventListener("click", openFanModal);
     $("fanMoreBar").addEventListener("click", openFanModal);
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
-    $("addManualBtn").addEventListener("click", function () { openEntryModal(null); });
+    $("addManualBtn").addEventListener("click", function () { openEntryModal(null, "manual"); });
+    $("addWeidianManualBtn").addEventListener("click", function () { openEntryModal(null, "weidian_manual"); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
     $("scoringOverrideBtn").addEventListener("click", function () { openScoringOverrideModal(null); });
     $("batchScoringBtn").addEventListener("click", openBatchScoringModal);
