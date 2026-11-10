@@ -898,7 +898,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "/api/redblue/entries",
             headers=self.headers,
             json={
-                "source": "weidian_manual",
+                "source": "association_manual",
                 "source_time": "2026-11-10 17:27:00",
                 "raw_name": "Alice",
                 "raw_id": "1001",
@@ -914,18 +914,18 @@ class RedblueLedgerApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         created = response.json()["result"]
-        self.assertEqual(created["source"], "weidian_manual")
+        self.assertEqual(created["source"], "association_manual")
         self.assertEqual(created["scoring_method"], "鸡腿")
         self.assertEqual(created["source_scoring_label"], "手动·鸡腿")
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
-        entry = next(item for item in data["entries"] if item["source"] == "weidian_manual")
+        entry = next(item for item in data["entries"] if item["source"] == "association_manual")
         self.assertEqual(entry["score"], 48.0)
         self.assertTrue(entry["weidian"]["manual"])
         self.assertEqual(entry["weidian"]["unit_price"], 28.0)
         daily = data["daily_scoring"]
-        self.assertIn("weidian_manual|鸡腿", [item["key"] for item in daily["categories"]])
+        self.assertIn("association_manual|鸡腿", [item["key"] for item in daily["categories"]])
         day = next(item for item in daily["days"] if item["date"] == "2026-11-10")
-        self.assertEqual(day["scores"].get("weidian_manual|鸡腿", 0), 48.0)
+        self.assertEqual(day["scores"].get("association_manual|鸡腿", 0), 48.0)
 
     def test_daily_scoring_fills_days_from_start(self):
         self.client.post("/api/redblue/sync/room-live", headers=self.headers)
@@ -934,7 +934,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(daily["start"], "2026-10-24")
         self.assertEqual(
             [item["key"] for item in daily["categories"]],
-            ["room|计分卡", "room|鸡腿", "live|计分卡", "live|鸡腿", "weidian|鸡腿", "weidian_manual|鸡腿", "manual|计分卡"],
+            ["room|计分卡", "room|鸡腿", "live|计分卡", "live|鸡腿", "weidian|鸡腿", "association_manual|鸡腿", "manual|计分卡"],
         )
         first = daily["days"][0]
         self.assertEqual(first["date"], "2026-10-24")

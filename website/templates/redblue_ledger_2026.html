@@ -243,7 +243,7 @@
         <div class="spacer"></div>
       </div>
       <div class="filters">
-        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="weidian_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
+        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="association_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
         <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
@@ -320,7 +320,7 @@
     <h2 id="entryModalTitle">新增暗票</h2>
     <div class="sub" id="entryModalSub">暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。</div>
     <div class="form-grid">
-      <div class="field"><label>类型</label><select id="entrySource"><option value="manual">暗票·计分卡</option><option value="weidian_manual">应援会·鸡腿（手动）</option></select></div>
+      <div class="field"><label>类型</label><select id="entrySource"><option value="manual">暗票·计分卡</option><option value="association_manual">应援会·鸡腿（手动）</option></select></div>
       <div class="field"><label>登记时间</label><input id="entryTime" type="datetime-local"></div>
       <div class="field"><label>口袋48昵称</label><input id="entryName" placeholder="粉丝昵称"></div>
       <div class="field"><label>口袋48 ID</label><input id="entryId" placeholder="可选；填了会优先校验"></div>
@@ -396,8 +396,7 @@
       <div class="field"><label>粉丝（可多选拼单）</label><select id="redemptionFan" multiple size="7" title="按住 Ctrl/⌘ 可多选；拼单时选择多个粉丝，列表第一项作为业务名义持有人"></select></div>
       <div class="field"><label>计分方式</label><select id="redemptionMethod"><option value="计分卡">计分卡</option><option value="鸡腿">鸡腿</option></select></div>
       <div class="field"><label>业务</label><select id="redemptionBusiness"></select></div>
-      <div class="field"><label>加赠业务（仅微店）</label><select id="redemptionBonus"></select></div>
-      <div class="field"><label>状态</label><select id="redemptionStatus"><option value="pending">兑换中</option><option value="done">已完成</option></select></div>
+      <div class="field"><label>状态</label><select id="redemptionStatus"><option value="pending">兑换中</option><option value="done">已兑换</option></select></div>
       <div class="field"><label>备注</label><input id="redemptionNote" placeholder="可选"></div>
     </div>
     <div class="redemption-summary" id="redemptionSummary"></div>
@@ -695,12 +694,12 @@
   }
 
   function sourceDisplay(source) {
-    return {manual:"暗票",weidian:"微店",weidian_manual:"手动",room:"房间",live:"直播"}[source] || source || "-";
+    return {manual:"暗票",weidian:"微店",association_manual:"手动",room:"房间",live:"直播"}[source] || source || "-";
   }
 
   function sourceScoringLabel(key) {
-    var base = {manual:"暗票",weidian:"应援会（微店）",weidian_manual:"手动",room:"房间",live:"直播"}[key] || key;
-    var method = {manual:"计分卡",weidian:"鸡腿",weidian_manual:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
+    var base = {manual:"暗票",weidian:"应援会（微店）",association_manual:"手动",room:"房间",live:"直播"}[key] || key;
+    var method = {manual:"计分卡",weidian:"鸡腿",association_manual:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
     return method ? base + "·" + method : base;
   }
 
@@ -710,7 +709,7 @@
     {source:"live", method:"计分卡", label:"直播·计分卡", cls:"card"},
     {source:"live", method:"鸡腿", label:"直播·鸡腿", cls:"leg"},
     {source:"weidian", method:"鸡腿", label:"应援会·鸡腿（微店）", cls:"leg"},
-    {source:"weidian_manual", method:"鸡腿", label:"应援会·鸡腿（手动）", cls:"leg"},
+    {source:"association_manual", method:"鸡腿", label:"应援会·鸡腿（手动）", cls:"leg"},
     {source:"manual", method:"计分卡", label:"暗票·计分卡", cls:"card"}
   ];
   var DAILY_TREND_COLORS = {
@@ -719,14 +718,14 @@
     "live|计分卡": "#41b9aa",
     "live|鸡腿": "#f0b84b",
     "weidian|鸡腿": "#8b6cc9",
-    "weidian_manual|鸡腿": "#c084d8",
+    "association_manual|鸡腿": "#c084d8",
     "manual|计分卡": "#e36f6f"
   };
   var DAILY_SOURCE_DEFS = [
     {key:"room", label:"房间", color:"#67a8ff", parts:["room|计分卡", "room|鸡腿"]},
     {key:"live", label:"直播", color:"#41b9aa", parts:["live|计分卡", "live|鸡腿"]},
     {key:"weidian", label:"应援会（微店）", color:"#8b6cc9", parts:["weidian|鸡腿"]},
-    {key:"weidian_manual", label:"手动", color:"#c084d8", parts:["weidian_manual|鸡腿"]},
+    {key:"association_manual", label:"手动", color:"#c084d8", parts:["association_manual|鸡腿"]},
     {key:"manual", label:"暗票", color:"#e36f6f", parts:["manual|计分卡"]}
   ];
   var dailyModalView = "source";
@@ -1116,7 +1115,7 @@
 
   function businessOptionsMarkup(current, group) {
     var currentValue = current || "";
-    var items = businessOptions.filter(function (option) { return !group || option.group === group; });
+    var items = businessOptions.filter(function (option) { if (!group && option.group === "bonus") return false; return !group || option.group === group; });
     var groups = {};
     var order = [];
     items.forEach(function (option) {
@@ -1145,7 +1144,7 @@
   function businessAllocationMarkup(entry) {
     var allocations = entry.business_allocations || [];
     var lines = allocations.map(function (item) {
-      var status = item.status === "done" ? "已完成" : "兑换中";
+      var status = item.status === "done" ? "已兑换" : "兑换中";
       var bonus = item.bonus_business_name ? " · 加赠 " + item.bonus_business_name : "";
       return '<div class="business-alloc"><strong>' + esc(item.business || item.business_name || "") + '</strong>' +
         '<div class="notice">本条 ' + score(item.score) + ' 分' + (item.completion ? " · 拼成点" : "") + bonus + ' · ' + status + '</div></div>';
@@ -1172,7 +1171,7 @@
     var allocations = entry.business_allocations || [];
     if (allocations.length) {
       var done = entry.business_status === "done";
-      return '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成业务" : "兑换中") + '</span>';
+      return '<span class="pill ' + (done ? "ok" : "wait") + '" data-toggle-entry-redemptions="' + esc(entry.id) + '" title="点击切换兑换状态" style="cursor:pointer">' + (done ? "已兑换" : "兑换中") + '</span>';
     }
     return '<span class="notice">未兑换</span>';
   }
@@ -1442,17 +1441,17 @@
   function openEntryModal(entry, source) {
     editingId = entry ? entry.id : "";
     var chosen = source || (entry && entry.source) || "manual";
-    if (chosen !== "weidian_manual") chosen = "manual";
+    if (chosen !== "association_manual") chosen = "manual";
     $("entrySource").value = chosen;
     $("entrySource").disabled = Boolean(entry);
     $("entryTime").disabled = Boolean(entry);
     $("entryTime").value = entry
       ? (entry.source_time || entry.created_at || "").replace(" ", "T").slice(0, 16)
       : localDateTimeInput();
-    $("entryModalTitle").textContent = entry ? "编辑条目" : (chosen === "weidian_manual" ? "新增应援会手动" : "新增暗票");
+    $("entryModalTitle").textContent = entry ? "编辑条目" : (chosen === "association_manual" ? "新增应援会手动" : "新增暗票");
     $("entryModalSub").textContent = entry
       ? "来源：" + (entry.source_label || entry.source) + " · 原始时间：" + (entry.source_time || entry.created_at || "-")
-      : (chosen === "weidian_manual"
+      : (chosen === "association_manual"
         ? "手动补录应援会鸡腿，计分方式固定为鸡腿；时间按登记时间计入。"
         : "暗票按登记时间计入，计分方式为计分卡；房间/直播/微店条目时间来自原始记录。");
     $("entryName").value = entry ? (entry.raw_name || entry.fan_name || "") : "";
@@ -1478,7 +1477,7 @@
       settled: $("entrySettled").checked,
       duplicate: $("entryDuplicate").checked
     };
-    if (source === "weidian_manual") {
+    if (source === "association_manual") {
       payload.weidian = {sku_title: payload.score + "分（手动）", status: "手动登记"};
     }
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
@@ -1609,17 +1608,6 @@
     return match ? Number(match[1]) : 0;
   }
 
-  function fanHasWeidian(keys, method) {
-    return method === "鸡腿" && fanEntries(keys, "鸡腿").some(function (entry) { return entry.source === "weidian"; });
-  }
-
-  function updateBonusAvailability() {
-    var keys = selectedFanKeys();
-    var enabled = Boolean(keys.length && fanHasWeidian(keys, $("redemptionMethod").value));
-    $("redemptionBonus").disabled = !enabled;
-    if (!enabled) $("redemptionBonus").value = "";
-  }
-
   function chooseDefaultMethod(keys) {
     var card = methodRemaining(keys, "计分卡");
     var chicken = methodRemaining(keys, "鸡腿");
@@ -1665,14 +1653,14 @@
         }).join(" + ");
         return '<div class="redemption-item"><div><strong>' + esc(item.business) + '</strong> ' +
           '<span class="pill ' + (item.scoring_method === "鸡腿" ? "leg" : "card") + '">' + esc(item.scoring_method || "-") + '</span> ' +
-          '<span class="pill ' + (done ? "ok" : "wait") + '">' + (done ? "已完成" : "兑换中") + '</span>' +
+          '<span class="pill ' + (done ? "ok" : "wait") + '" data-toggle-redemption="' + esc(item.id) + '" data-status="' + (done ? "pending" : "done") + '" title="点击切换兑换状态" style="cursor:pointer">' + (done ? "已兑换" : "兑换中") + '</span>' +
           (item.bonus_business_name ? ' <span class="notice">加赠 ' + esc(item.bonus_business_name) + '</span>' : '') +
           (multi ? '<div class="notice">拼单：' + esc(participants) + '</div>' : '') +
           '<div class="notice">分摊：' + esc(allocations || "-") + '</div>' +
           (item.note ? '<div class="notice">备注：' + esc(item.note) + '</div>' : '') +
           '</div><div class="actions">' +
           '<button class="btn mini" data-edit-redemption="' + esc(item.id) + '">编辑</button>' +
-          '<button class="btn mini" data-toggle-redemption="' + esc(item.id) + '" data-status="' + (done ? "pending" : "done") + '">' + (done ? "改为兑换中" : "标记完成") + '</button>' +
+          '<button class="btn mini" data-toggle-redemption="' + esc(item.id) + '" data-status="' + (done ? "pending" : "done") + '">' + (done ? "改为兑换中" : "标记已兑换") + '</button>' +
           '<button class="btn mini danger" data-delete-redemption="' + esc(item.id) + '">删除</button>' +
           '</div></div>';
       }).join("");
@@ -1731,7 +1719,6 @@
       }).join("");
     }
     renderRedemptionList(keys);
-    updateBonusAvailability();
     updateRedemptionSummary();
   }
 
@@ -1740,7 +1727,6 @@
     $("redemptionFan").disabled = false;
     setSelectedFanKeys([]);
     $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
-    $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
     $("redemptionStatus").value = "pending";
     $("redemptionNote").value = "";
     renderRedemptionAllocations();
@@ -1758,15 +1744,13 @@
         $("redemptionFan").disabled = true;
         $("redemptionMethod").value = redemption.scoring_method || "计分卡";
         $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
-        $("redemptionBonus").innerHTML = businessOptionsMarkup(redemption.bonus_business || "", "bonus");
         $("redemptionStatus").value = redemption.status;
         $("redemptionNote").value = redemption.note || "";
       } else {
         var keys = selectedFanKeys();
         if (keys.length) chooseDefaultMethod(keys);
         $("redemptionBusiness").innerHTML = businessOptionsMarkup("", "");
-        $("redemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
-        $("redemptionStatus").value = "pending";
+            $("redemptionStatus").value = "pending";
         $("redemptionNote").value = "";
       }
       renderRedemptionAllocations();
@@ -1824,7 +1808,6 @@
       participants: participants,
       scoring_method: method,
       business: business,
-      bonus_business: $("redemptionBonus").value,
       status: $("redemptionStatus").value,
       note: $("redemptionNote").value.trim(),
       allocations: allocations
@@ -1863,7 +1846,6 @@
     $("redemptionFan").disabled = true;
     $("redemptionMethod").value = redemption.scoring_method || "计分卡";
     $("redemptionBusiness").innerHTML = businessOptionsMarkup(redemption.business, "");
-    $("redemptionBonus").innerHTML = businessOptionsMarkup(redemption.bonus_business || "", "bonus");
     $("redemptionStatus").value = redemption.status;
     $("redemptionNote").value = redemption.note || "";
     renderRedemptionAllocations();
@@ -1879,6 +1861,27 @@
         showToast("兑换已删除");
       } catch (error) { showToast(error.message || "删除失败", true); }
     });
+  }
+
+  async function toggleEntryRedemptions(entryId) {
+    var entry = (data.entries || []).find(function (row) { return row.id === entryId; });
+    if (!entry) return;
+    var allocations = entry.business_allocations || [];
+    var ids = Array.from(new Set(allocations.map(function (item) { return item.redemption_id; }).filter(Boolean)));
+    if (!ids.length) return;
+    var target = allocations.every(function (item) { return item.status === "done"; }) ? "pending" : "done";
+    try {
+      for (var i = 0; i < ids.length; i += 1) {
+        await api("/api/redblue/redemptions/" + encodeURIComponent(ids[i]), {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({status: target})
+        });
+      }
+      await loadData(true);
+      renderRedemptionList(selectedFanKeys());
+      showToast("已切换为" + (target === "done" ? "已兑换" : "兑换中"));
+    } catch (error) { showToast(error.message || "状态更新失败", true); }
   }
 
   async function toggleRedemptionStatus(id, status) {
@@ -2620,7 +2623,7 @@
     $("fanMoreBar").addEventListener("click", openFanModal);
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null, "manual"); });
-    $("addWeidianManualBtn").addEventListener("click", function () { openEntryModal(null, "weidian_manual"); });
+    $("addWeidianManualBtn").addEventListener("click", function () { openEntryModal(null, "association_manual"); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
     $("scoringOverrideBtn").addEventListener("click", function () { openScoringOverrideModal(null); });
     $("batchScoringBtn").addEventListener("click", openBatchScoringModal);
@@ -2737,6 +2740,11 @@
       if (evidence) {
         var evidenceEntry = (data.entries || []).find(function (row) { return row.id === evidence.getAttribute("data-evidence"); });
         if (evidenceEntry) openEvidenceModal(evidenceEntry);
+        return;
+      }
+      var entryStatusToggle = event.target.closest("[data-toggle-entry-redemptions]");
+      if (entryStatusToggle) {
+        toggleEntryRedemptions(entryStatusToggle.getAttribute("data-toggle-entry-redemptions"));
         return;
       }
       var edit = event.target.closest("[data-edit]");

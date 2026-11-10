@@ -42,10 +42,11 @@ logger = logging.getLogger(__name__)
 
 BJ_TZ = timezone(timedelta(hours=8))
 RESOURCE = "redblue_ledger"
-VALID_SOURCES = {"manual", "weidian", "weidian_manual", "room", "live"}
+VALID_SOURCES = {"manual", "weidian", "association_manual", "weidian_manual", "room", "live"}
 SOURCE_LABELS = {
     "manual": "暗票",
     "weidian": "微店",
+    "association_manual": "手动",
     "weidian_manual": "手动",
     "room": "房间",
     "live": "直播",
@@ -53,6 +54,7 @@ SOURCE_LABELS = {
 DEFAULT_SCORING_METHODS = {
     "manual": "计分卡",
     "weidian": "鸡腿",
+    "association_manual": "鸡腿",
     "weidian_manual": "鸡腿",
     "room": "计分卡",
     "live": "计分卡",
@@ -60,6 +62,7 @@ DEFAULT_SCORING_METHODS = {
 SCORING_SOURCE_LABELS = {
     "manual": "暗票",
     "weidian": "应援会（微店）",
+    "association_manual": "手动",
     "weidian_manual": "手动",
     "room": "房间",
     "live": "直播",
@@ -91,7 +94,7 @@ DAILY_SCORING_CATEGORIES = (
     {"key": "live|计分卡", "label": "直播·计分卡", "source": "live", "method": "计分卡"},
     {"key": "live|鸡腿", "label": "直播·鸡腿", "source": "live", "method": "鸡腿"},
     {"key": "weidian|鸡腿", "label": "应援会·鸡腿（微店）", "source": "weidian", "method": "鸡腿"},
-    {"key": "weidian_manual|鸡腿", "label": "应援会·鸡腿（手动）", "source": "weidian_manual", "method": "鸡腿"},
+    {"key": "association_manual|鸡腿", "label": "应援会·鸡腿（手动）", "source": "association_manual", "method": "鸡腿"},
     {"key": "manual|计分卡", "label": "暗票·计分卡", "source": "manual", "method": "计分卡"},
 )
 DAILY_SCORING_KEYS = {item["key"] for item in DAILY_SCORING_CATEGORIES}
@@ -1913,12 +1916,14 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
     if not raw_name and not raw_id:
         raise ValueError("请填写口袋48昵称或 ID")
     source = _clean(payload.get("source"), 20) or "manual"
-    if source not in {"manual", "weidian_manual"}:
+    if source == "weidian_manual":
+        source = "association_manual"
+    if source not in {"manual", "association_manual"}:
         raise ValueError("手动条目只能选择暗票或应援会（手动）")
-    scoring_method = "鸡腿" if source == "weidian_manual" else "计分卡"
+    scoring_method = "鸡腿" if source == "association_manual" else "计分卡"
     source_time = _clean(payload.get("source_time"), 32) or _now()
     weidian = {}
-    if source == "weidian_manual":
+    if source == "association_manual":
         raw_weidian = payload.get("weidian") if isinstance(payload.get("weidian"), dict) else {}
         weidian = {
             "order_id": _clean(payload.get("source_id"), 120) or f"weidian-manual-{uuid.uuid4().hex}",
@@ -1941,7 +1946,7 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
         doc,
         source=source,
         source_id=_clean(payload.get("source_id"), 120)
-        or (weidian.get("order_id") if source == "weidian_manual" else "")
+        or (weidian.get("order_id") if source == "association_manual" else "")
         or f"{source}-{uuid.uuid4().hex}",
         source_time=source_time,
         raw_name=raw_name,
@@ -2446,6 +2451,24 @@ def _mutator_mark_shipped(doc: dict[str, Any], payload: dict[str, Any]):
     return doc, {"updated": updated}
 
 
+def _mutator_migrate_manual_source(doc: dict[str, Any], payload: dict[str, Any]):
+    old_source = _clean(payload.get("old_source"), 20) or "weidian_manual"
+    new_source = _clean(payload.get("new_source"), 20) or "association_manual"
+    if old_source not in {"weidian_manual", "association_manual"} or new_source != "association_manual":
+        raise ValueError("手动来源迁移参数无效")
+    now = _now()
+    updated = 0
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict) or _clean(entry.get("source"), 20) != old_source:
+            continue
+        entry["source"] = new_source
+        entry["scoring_method"] = "鸡腿"
+        entry["updated_at"] = now
+        updated += 1
+    return doc, {"updated": updated, "old_source": old_source, "new_source": new_source}
+
+
+register_mutator(RESOURCE, "migrate_manual_source", _mutator_migrate_manual_source)
 register_mutator(RESOURCE, "add", _mutator_add)
 register_mutator(RESOURCE, "update", _mutator_update)
 register_mutator(RESOURCE, "delete", _mutator_delete)
