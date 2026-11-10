@@ -416,7 +416,14 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entries[second["id"]]["status"], "paid")
         self.assertTrue(entries[room["id"]]["duplicate"])
         self.assertEqual(entries[room["id"]]["proxy_settlement"]["gift_name"], "礼物")
+        self.assertEqual(entries[room["id"]]["proxy_settlement"]["covered_score"], 2.0)
         self.assertEqual(entries[room["id"]]["proxy_settlement"]["remainder"], 1.0)
+        summary = self.client.get("/api/redblue/data", headers=self.headers).json()["summary"]
+        # 重复主行的已用分不统计；结转分 1 分计入已投和总计分；子行不计条目数。
+        self.assertEqual(summary["entry_count"], 3)
+        self.assertEqual(summary["total_score"], 6.0)
+        self.assertEqual(summary["settled_score"], 4.0)
+        self.assertEqual(summary["pending_score"], 2.0)
 
         next_preview = self.client.get(
             f"/api/redblue/settlement/preview?entry_id={live['id']}", headers=self.headers
@@ -433,6 +440,8 @@ class RedblueLedgerApiTests(unittest.TestCase):
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         entries = {entry["id"]: entry for entry in data["entries"]}
         self.assertEqual(entries[second["id"]]["status"], "settled")
+        self.assertEqual(entries[room["id"]]["proxy_settlement"]["remainder"], 0.0)
+        self.assertEqual(entries[live["id"]]["proxy_settlement"]["remainder"], 0.0)
         self.assertEqual(data["summary"]["total_score"], 4.0)
         self.assertEqual(data["summary"]["settled_score"], 4.0)
         self.assertEqual(data["summary"]["pending_score"], 0.0)

@@ -134,6 +134,9 @@
     th { color: var(--faint); font-weight: 600; font-size: 12px; white-space: nowrap; }
     tr.row:hover { background: rgba(65,185,170,.04); }
     tr.warn td { background: rgba(227,111,111,.06); }
+    tr.sub-row td { background: rgba(65,185,170,.04); border-bottom: 1px solid var(--line); padding-top: 3px; padding-bottom: 3px; }
+    tr.sub-row td.notice { color: var(--muted); font-size: 12px; }
+    tr.sub-row .sub-score { color: var(--green); font-weight: 760; }
     .pill { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
     .pill.manual { color: var(--gold); border-color: rgba(240,184,75,.4); }
     .pill.weidian { color: var(--pink); border-color: rgba(232,125,167,.4); }
@@ -1242,8 +1245,10 @@
       var scoringNote = entry.scoring_method_note ? '<div class="notice">改判：' + esc(entry.scoring_method_note) + '</div>' : "";
       var businessCell = businessAllocationMarkup(entry);
       var proxy = entry.proxy_settlement || {};
+      var proxyUsedScore = proxy.method ? Number(proxy.covered_score || 0) : Number(entry.score || 0);
+      var displayScore = proxy.method ? proxyUsedScore : entry.score;
       if (proxy.method) {
-        note = (note ? note + " · " : "") + "代投应援会·" + proxy.method + " " + score(proxy.covered_score || 0) + " 分，结转 " + score(proxy.remainder || 0) + " 分";
+        note = (note ? note + " · " : "") + "代投应援会·" + proxy.method + "，已用 " + score(proxyUsedScore) + " 分";
       }
       var dupBtn = "";
       if (!entry.is_association) {
@@ -1251,13 +1256,13 @@
           ? '<button class="btn mini" data-proxy-view="' + esc(entry.id) + '">代投明细</button>'
           : '<button class="btn mini" data-dup="' + esc(entry.id) + '">' + (entry.duplicate ? "取消重复" : "重复") + '</button>';
       }
-      return '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
+      var rowHtml = '<tr class="row ' + (entry.warning ? "warn" : "") + '">' +
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
         '<td><strong>' + esc(name) + '</strong>' + warning + identityNote + '</td>' +
         '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || sourceDisplay(entry.source)) + '</span></td>' +
         '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span>' + scoringNote + '</td>' +
-        '<td style="color:var(--gold);font-weight:760;">' + score(entry.score) + '</td>' +
+        '<td style="color:var(--gold);font-weight:760;">' + score(displayScore) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
         '<td>' + businessStatusMarkup(entry) + '</td>' +
         '<td>' + businessCell + '</td>' +
@@ -1268,6 +1273,17 @@
           '<button class="btn mini danger" data-delete="' + esc(entry.id) + '">删除</button>' +
         '</div></td>' +
       '</tr>';
+      if (proxy.method && Number(proxy.remainder || 0) > 0) {
+        rowHtml += '<tr class="sub-row">' +
+          '<td></td><td></td>' +
+          '<td class="notice">↳ 剩余结转</td>' +
+          '<td></td><td></td>' +
+          '<td class="sub-score">' + score(proxy.remainder) + '</td>' +
+          '<td><span class="pill ok">已投</span></td>' +
+          '<td></td><td></td><td></td><td></td>' +
+          '</tr>';
+      }
+      return rowHtml;
     }).join("");
     updateSelectAll();
   }

@@ -267,7 +267,11 @@ def _settlement_block(doc: dict[str, Any]) -> dict[str, Any]:
     remainder = block.get("remainder")
     if not isinstance(remainder, dict):
         remainder = {}
+    owner = block.get("owner")
+    if not isinstance(owner, dict):
+        owner = {}
     block["remainder"] = remainder
+    block["owner"] = owner
     return block
 
 
@@ -422,6 +426,30 @@ def _mutator_settle_association(doc: dict[str, Any], payload: dict[str, Any]):
     if not source.get("duplicate_note"):
         source["duplicate_note"] = f"代投应援会·{method}"
     source["updated_at"] = now
+    block = _settlement_block(doc)
+    owners = block["owner"]
+    old_owner_id = _clean(owners.get(method), 80)
+    if old_owner_id and old_owner_id != entry_id:
+        old_owner = next(
+            (
+                item
+                for item in doc.get("entries") or []
+                if isinstance(item, dict) and _clean(item.get("id"), 80) == old_owner_id
+            ),
+            None,
+        )
+        old_proxy = old_owner.get("proxy_settlement") if isinstance(old_owner, dict) else None
+        if isinstance(old_proxy, dict) and old_proxy:
+            # 上一次的结转分已并入本次可用分，从旧条目第二行扣减，避免重复统计。
+            old_proxy["remainder"] = 0.0
+            old_proxy["remainder_transferred_to"] = entry_id
+            old_owner["updated_at"] = now
+    if plan["remainder"] > 0.0001:
+        owners[method] = entry_id
+    else:
+        owners.pop(method, None)
+    block["owner"] = owners
+    doc["association_settlement"] = block
     _set_settlement_remainder(doc, method, plan["remainder"])
     return doc, {
         "entry_id": entry_id,
@@ -1825,19 +1853,31 @@ def _filter_entries(
 
 
 def _summary(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    items = [item for item in entries if isinstance(item, dict) and not item.get("duplicate")]
+    all_items = [item for item in entries if isinstance(item, dict)]
+    items = [item for item in all_items if not item.get("duplicate")]
     settled = [item for item in items if item.get("settled")]
     pending = [item for item in items if not item.get("settled")]
     people = {_entry_key(item) for item in items}
+    # 重复条目当前未用完、结转到下一次的分数记为已投，并从“重复”主行拆出；
+    # 子行不计条目数，也不进入按昵称汇总。
+    remainder_score = 0.0
+    for item in all_items:
+        if not item.get("duplicate"):
+            continue
+        proxy = item.get("proxy_settlement") if isinstance(item.get("proxy_settlement"), dict) else {}
+        remainder_score += max(0.0, _to_float(proxy.get("remainder"), 0.0))
+    remainder_score = round(remainder_score, 4)
+    base_total = round(sum(_to_float(item.get("score"), 0.0) for item in items), 4)
+    base_settled = round(sum(_to_float(item.get("score"), 0.0) for item in settled), 4)
     return {
         "entry_count": len(items),
         "people_count": len(people),
-        "total_score": round(sum(_to_float(item.get("score"), 0.0) for item in items), 4),
-        "settled_score": round(sum(_to_float(item.get("score"), 0.0) for item in settled), 4),
+        "total_score": round(base_total + remainder_score, 4),
+        "settled_score": round(base_settled + remainder_score, 4),
         "pending_score": round(sum(_to_float(item.get("score"), 0.0) for item in pending), 4),
         "warning_count": sum(1 for item in items if item.get("warning")),
         "pending_count": len(pending),
-        "duplicate_count": sum(1 for item in entries if isinstance(item, dict) and item.get("duplicate")),
+        "duplicate_count": sum(1 for item in all_items if item.get("duplicate")),
     }
 
 
