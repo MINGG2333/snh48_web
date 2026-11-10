@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-11 红蓝台账“重复”改为应援会代投分析（结转覆盖）
+
+- 需求：重复按钮只出现在非应援会来源（房间/直播/暗票）；应援会来源（微店/应援会手动）不再显示重复按钮。点击重复时弹窗分析该条目的计分方式，按时间从早到晚匹配同计分方式的应援会待投条目，预演可完全覆盖的条目和结转分数；确认后把完全覆盖的应援会条目标记已投，未凑整的剩余分结转到下一次重复条目。
+- 代码：`website/redblue_ledger_api.py` 新增台账级 `association_settlement.remainder`（按计分方式分开）、`_settlement_plan()` 预演和 `settle_association` mutator；重复条目保存 `proxy_settlement`（覆盖条目、覆盖分、结转分），被覆盖条目写 `status=settled`、`settled=True`、`settled_by_duplicates`。新增 `GET /api/redblue/settlement/preview`、`POST /api/redblue/settlement/apply`；`duplicate` mutator 拒绝应援会来源和已代投条目。
+- 页面：`website/templates/redblue_ledger_2026.html` 新增“重复代投分析/代投明细”弹窗；行内重复按钮只对非应援会来源显示，已代投显示“代投明细”且不提供取消；移除顶部“标记重复”批量按钮，避免绕过代投；备注列显示代投覆盖分和结转分。
+- 计算口径：`可用 = 该计分方式上次结转 + 本条重复分数`；只有 `可用 >= 条目分数` 的应援会条目才会被标记已投并扣减，遇到不足以完整覆盖的下一条即停止，剩余全数结转；鸡腿/计分卡分别独立结转。
+- 验证：`tests/test_redblue_ledger_api.py` 56 项通过（新增 FIFO 覆盖、跨次结转、应援会禁止重复 2 项）；页面脚本 `node --check`、`py_compile` 通过。
+
 ## 2026-11-11 红蓝台账应援会条目改为独立履约状态（未发货/已发货/已付款）
 
 - 需求：`/business/redblue2026` 条目状态列中，应援会来源（微店/应援会手动）不再使用“已投”。微店显示“未发货/已发货”，应援会手动显示“已付款”；“已投”保留给未来口径。该状态不改变“按条目”导出 PNG 的内容；暗票和房间/直播仍为“已投/待投”。

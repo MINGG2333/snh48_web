@@ -354,6 +354,105 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(entry["status"], "shipped")
         self.assertFalse(entry["settled"])
 
+    def _entry_by_source_id(self, source_id: str) -> dict:
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        return next(entry for entry in data["entries"] if entry["source_id"] == source_id)
+
+    def test_duplicate_settles_association_entries_earliest_first(self):
+        self.client.post("/api/redblue/sync/room-live", headers=self.headers)
+        room = self._entry_by_source_id("room-1")
+        live = self._entry_by_source_id("live-1")
+        override = self.client.post(
+            "/api/redblue/entries/scoring-method",
+            headers=self.headers,
+            json={"entry_ids": [room["id"], live["id"]], "method": "鸡腿"},
+        )
+        self.assertEqual(override.status_code, 200, override.text)
+        first = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={
+                "source": "association_manual",
+                "raw_name": "Alice",
+                "score": 2,
+                "source_time": "2026-10-24 10:00:00",
+            },
+        ).json()["result"]
+        second = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={
+                "source": "association_manual",
+                "raw_name": "Alice",
+                "score": 2,
+                "source_time": "2026-10-24 11:00:00",
+            },
+        ).json()["result"]
+
+        preview = self.client.get(
+            f"/api/redblue/settlement/preview?entry_id={room['id']}", headers=self.headers
+        ).json()
+        self.assertEqual(preview["method"], "鸡腿")
+        self.assertEqual(preview["available_score"], 3.0)
+        self.assertEqual([item["entry_id"] for item in preview["allocations"]], [first["id"]])
+        self.assertEqual(preview["covered_score"], 2.0)
+        self.assertEqual(preview["remainder"], 1.0)
+        self.assertEqual(preview["next"]["entry_id"], second["id"])
+        self.assertEqual(preview["next"]["shortfall"], 1.0)
+
+        applied = self.client.post(
+            "/api/redblue/settlement/apply",
+            headers=self.headers,
+            json={"entry_id": room["id"]},
+        ).json()["result"]
+        self.assertEqual(applied["covered_count"], 1)
+        self.assertEqual(applied["remainder"], 1.0)
+        entries = {
+            entry["id"]: entry
+            for entry in self.client.get("/api/redblue/data", headers=self.headers).json()["entries"]
+        }
+        self.assertEqual(entries[first["id"]]["status"], "settled")
+        self.assertEqual(entries[second["id"]]["status"], "paid")
+        self.assertTrue(entries[room["id"]]["duplicate"])
+        self.assertEqual(entries[room["id"]]["proxy_settlement"]["remainder"], 1.0)
+
+        next_preview = self.client.get(
+            f"/api/redblue/settlement/preview?entry_id={live['id']}", headers=self.headers
+        ).json()
+        self.assertEqual(next_preview["pool_remainder"], 1.0)
+        self.assertEqual(next_preview["available_score"], 2.0)
+        self.assertEqual([item["entry_id"] for item in next_preview["allocations"]], [second["id"]])
+        self.assertEqual(next_preview["remainder"], 0.0)
+        self.client.post(
+            "/api/redblue/settlement/apply",
+            headers=self.headers,
+            json={"entry_id": live["id"]},
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entries = {entry["id"]: entry for entry in data["entries"]}
+        self.assertEqual(entries[second["id"]]["status"], "settled")
+        self.assertEqual(data["summary"]["total_score"], 4.0)
+        self.assertEqual(data["summary"]["settled_score"], 4.0)
+        self.assertEqual(data["summary"]["pending_score"], 0.0)
+
+    def test_association_entries_cannot_be_marked_duplicate(self):
+        entry = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"source": "association_manual", "raw_name": "Alice", "score": 2},
+        ).json()["result"]
+        preview = self.client.get(
+            f"/api/redblue/settlement/preview?entry_id={entry['id']}", headers=self.headers
+        )
+        self.assertEqual(preview.status_code, 422)
+        toggle = self.client.post(
+            f"/api/redblue/entries/{entry['id']}/duplicate",
+            headers=self.headers,
+            json={"duplicate": True},
+        )
+        self.assertEqual(toggle.status_code, 422)
+
+
     def test_business_redemption_splits_and_marks_first_entry(self):
         self._write_business_ledger()
         response = self.client.post(

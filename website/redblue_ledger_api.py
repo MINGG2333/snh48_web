@@ -260,6 +260,164 @@ def _entry_settled(entry: dict[str, Any]) -> bool:
     return _entry_status(entry) == "settled"
 
 
+def _settlement_block(doc: dict[str, Any]) -> dict[str, Any]:
+    block = doc.get("association_settlement")
+    if not isinstance(block, dict):
+        block = {}
+    remainder = block.get("remainder")
+    if not isinstance(remainder, dict):
+        remainder = {}
+    block["remainder"] = remainder
+    return block
+
+
+def _settlement_remainder(doc: dict[str, Any], method: str) -> float:
+    return round(_to_float(_settlement_block(doc)["remainder"].get(method), 0.0), 4)
+
+
+def _set_settlement_remainder(doc: dict[str, Any], method: str, value: float) -> None:
+    block = _settlement_block(doc)
+    block["remainder"][method] = round(max(0.0, value), 4)
+    block["updated_at"] = _now()
+    doc["association_settlement"] = block
+
+
+def _settlement_plan(doc: dict[str, Any], entry_id: str) -> dict[str, Any]:
+    """预演“重复条目代投应援会”。
+
+    重复条目的分数（加上该计分方式此前结转的剩余分）按时间从早到晚
+    依次覆盖同计分方式的应援会条目；只有能被完整覆盖的条目才会标记已投，
+    不足以完整覆盖的下一条目保持原状态，剩余分结转到下一次。
+    """
+    entries = [item for item in doc.get("entries") or [] if isinstance(item, dict)]
+    source = next((item for item in entries if _clean(item.get("id"), 80) == _clean(entry_id, 80)), None)
+    if source is None:
+        raise ValueError("条目不存在")
+    source_name = _clean(source.get("source"), 20)
+    if source_name in ASSOCIATION_SOURCES:
+        raise ValueError("应援会来源条目不能标记重复")
+    if isinstance(source.get("proxy_settlement"), dict) and source.get("proxy_settlement"):
+        raise ValueError("该条目已完成代投，不能重复代投")
+    method = _entry_scoring_method(source)
+    entry_score = round(_to_float(source.get("score"), 0.0), 4)
+    pool = _settlement_remainder(doc, method)
+    available = round(pool + entry_score, 4)
+    candidates = sorted(
+        (
+            item
+            for item in entries
+            if _clean(item.get("source"), 20) in ASSOCIATION_SOURCES
+            and not item.get("duplicate")
+            and _entry_status(item) != "settled"
+            and _entry_scoring_method(item) == method
+            and _to_float(item.get("score"), 0.0) > 0
+        ),
+        key=lambda item: (_entry_time(item), _clean(item.get("id"), 80)),
+    )
+    allocations: list[dict[str, Any]] = []
+    next_item: dict[str, Any] | None = None
+    for candidate in candidates:
+        score = round(_to_float(candidate.get("score"), 0.0), 4)
+        if available + 0.0001 < score:
+            next_item = {
+                "entry_id": _clean(candidate.get("id"), 80),
+                "fan_name": _clean(candidate.get("fan_name") or candidate.get("raw_name") or "未登记", 120),
+                "source": _clean(candidate.get("source"), 20),
+                "source_label": SOURCE_LABELS.get(_clean(candidate.get("source"), 20), ""),
+                "source_time": _entry_time(candidate),
+                "score": score,
+                "shortfall": round(score - available, 4),
+            }
+            break
+        allocations.append(
+            {
+                "entry_id": _clean(candidate.get("id"), 80),
+                "fan_name": _clean(candidate.get("fan_name") or candidate.get("raw_name") or "未登记", 120),
+                "source": _clean(candidate.get("source"), 20),
+                "source_label": SOURCE_LABELS.get(_clean(candidate.get("source"), 20), ""),
+                "source_time": _entry_time(candidate),
+                "score": score,
+                "covered_score": score,
+            }
+        )
+        available = round(available - score, 4)
+    covered_score = round(sum(item["covered_score"] for item in allocations), 4)
+    return {
+        "entry": {
+            "id": _clean(source.get("id"), 80),
+            "fan_name": _clean(source.get("fan_name") or source.get("raw_name") or "未登记", 120),
+            "raw_name": _clean(source.get("raw_name"), 120),
+            "source": source_name,
+            "source_label": SOURCE_LABELS.get(source_name, source_name),
+            "source_time": _entry_time(source),
+            "score": entry_score,
+            "scoring_method": method,
+            "duplicate": bool(source.get("duplicate")),
+        },
+        "method": method,
+        "pool_remainder": pool,
+        "entry_score": entry_score,
+        "available_score": round(pool + entry_score, 4),
+        "allocations": allocations,
+        "covered_count": len(allocations),
+        "covered_score": covered_score,
+        "remainder": round(max(0.0, available), 4),
+        "next": next_item,
+    }
+
+
+def _mutator_settle_association(doc: dict[str, Any], payload: dict[str, Any]):
+    entry_id = _clean(payload.get("entry_id") or payload.get("id"), 80)
+    if not entry_id:
+        raise ValueError("缺少条目 ID")
+    plan = _settlement_plan(doc, entry_id)
+    method = plan["method"]
+    now = _now()
+    covered_ids = {item["entry_id"] for item in plan["allocations"]}
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict) or _clean(entry.get("id"), 80) not in covered_ids:
+            continue
+        entry["status"] = "settled"
+        entry["settled"] = True
+        entry["settled_at"] = now
+        sources = entry.get("settled_by_duplicates")
+        if not isinstance(sources, list):
+            sources = []
+        if entry_id not in sources:
+            sources.append(entry_id)
+        entry["settled_by_duplicates"] = sources
+        entry["updated_at"] = now
+    source = next(
+        (item for item in doc.get("entries") or [] if isinstance(item, dict) and _clean(item.get("id"), 80) == entry_id),
+        None,
+    )
+    if source is None:
+        raise ValueError("条目不存在")
+    source["duplicate"] = True
+    source["proxy_settlement"] = {
+        "method": method,
+        "entry_score": plan["entry_score"],
+        "pool_before": plan["pool_remainder"],
+        "available_score": plan["available_score"],
+        "covered": plan["allocations"],
+        "covered_score": plan["covered_score"],
+        "remainder": plan["remainder"],
+        "applied_at": now,
+    }
+    if not source.get("duplicate_note"):
+        source["duplicate_note"] = f"代投应援会·{method}"
+    source["updated_at"] = now
+    _set_settlement_remainder(doc, method, plan["remainder"])
+    return doc, {
+        "entry_id": entry_id,
+        "method": method,
+        "covered_count": plan["covered_count"],
+        "covered_score": plan["covered_score"],
+        "remainder": plan["remainder"],
+        "allocations": plan["allocations"],
+    }
+
+
 def _business_option(value: Any, group: str | None = None) -> str:
     text = _clean(value, 80)
     allowed = BUSINESS_GROUP_VALUES.get(group, BUSINESS_OPTION_VALUES) if group else BUSINESS_OPTION_VALUES
@@ -1539,6 +1697,12 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "warning_reason": warning_reason,
         "duplicate": bool(entry.get("duplicate")),
         "duplicate_note": _clean(entry.get("duplicate_note")),
+        "is_association": source in ASSOCIATION_SOURCES,
+        "proxy_settlement": (
+            entry.get("proxy_settlement")
+            if isinstance(entry.get("proxy_settlement"), dict)
+            else {}
+        ),
         "business_done": bool(entry.get("business_done")),
         "business_done_at": _clean(entry.get("business_done_at"), 32),
         "selected_business": _clean(entry.get("selected_business"), 80),
@@ -2057,6 +2221,10 @@ def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
     if payload.get("settled") is not None and source not in ASSOCIATION_SOURCES:
         entry["settled"] = _to_bool(payload.get("settled"), bool(entry.get("settled")))
     if payload.get("duplicate") is not None:
+        if source in ASSOCIATION_SOURCES:
+            raise ValueError("应援会来源条目不能标记重复")
+        if entry.get("proxy_settlement"):
+            raise ValueError("已代投的条目不能通过编辑修改重复状态")
         entry["duplicate"] = _to_bool(payload.get("duplicate"), bool(entry.get("duplicate")))
     if payload.get("duplicate_note") is not None:
         entry["duplicate_note"] = _clean(payload.get("duplicate_note"))
@@ -2329,7 +2497,12 @@ def _mutator_duplicate(doc: dict[str, Any], payload: dict[str, Any]):
     entry = next((item for item in doc.get("entries") or [] if isinstance(item, dict) and item.get("id") == entry_id), None)
     if entry is None:
         raise ValueError("条目不存在")
-    entry["duplicate"] = _to_bool(payload.get("duplicate"), not bool(entry.get("duplicate")))
+    if _clean(entry.get("source"), 20) in ASSOCIATION_SOURCES:
+        raise ValueError("应援会来源条目不能标记重复")
+    target = _to_bool(payload.get("duplicate"), not bool(entry.get("duplicate")))
+    if entry.get("proxy_settlement"):
+        raise ValueError("已代投的条目不能通过重复按钮修改")
+    entry["duplicate"] = target
     if payload.get("duplicate_note") is not None:
         entry["duplicate_note"] = _clean(payload.get("duplicate_note"))
     if payload.get("business_done") is not None:
@@ -2549,6 +2722,7 @@ register_mutator(RESOURCE, "add", _mutator_add)
 register_mutator(RESOURCE, "update", _mutator_update)
 register_mutator(RESOURCE, "delete", _mutator_delete)
 register_mutator(RESOURCE, "duplicate", _mutator_duplicate)
+register_mutator(RESOURCE, "settle_association", _mutator_settle_association)
 register_mutator(RESOURCE, "apply_ai", _mutator_apply_ai)
 register_mutator(RESOURCE, "upsert_room_live", _mutator_upsert_room_live)
 register_mutator(RESOURCE, "upsert_weidian", _mutator_upsert_weidian)
@@ -2930,6 +3104,30 @@ def mark_duplicate(entry_id: str, request: Request, payload: dict[str, Any] = Bo
     data = dict(payload or {})
     data["id"] = entry_id
     return _mutate("duplicate", data, request)
+
+
+@router.get("/settlement/preview")
+def preview_association_settlement(entry_id: str = Query(""), _=Depends(verify_redblue_password)):
+    entry_id = _clean(entry_id, 80)
+    if not entry_id:
+        raise HTTPException(status_code=422, detail="缺少条目 ID")
+    try:
+        doc = load_document(RESOURCE)
+    except SharedStateError as exc:
+        logger.warning("redblue settlement preview load failed: %s", exc)
+        raise HTTPException(status_code=503, detail="红蓝台账暂时不可用，请稍后重试") from exc
+    try:
+        return _settlement_plan(doc, entry_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/settlement/apply")
+def apply_association_settlement(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    entry_id = _clean(payload.get("entry_id") or payload.get("id"), 80)
+    if not entry_id:
+        raise HTTPException(status_code=422, detail="缺少条目 ID")
+    return _mutate("settle_association", {"entry_id": entry_id}, request)
 
 
 @router.post("/scoring-overrides/preview")
