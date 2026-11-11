@@ -202,6 +202,11 @@
     .proxy-share { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.02); padding: 10px 12px; }
     .proxy-share-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
     .proxy-share pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-family: inherit; font-size: 13px; line-height: 1.7; color: var(--text); }
+    .proxy-batch-entry { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .proxy-batch-entry:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+    .proxy-batch-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 4px; }
+    .proxy-batch-head strong { font-size: 14px; }
+    .proxy-batch-foot { margin-top: 6px; }
     .suggest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
     .suggest { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
     .suggest .raw { color: var(--muted); font-size: 12px; }
@@ -252,6 +257,7 @@
         <button class="btn" id="businessRedeemBtn">业务兑换</button>
         <button class="btn gold" id="scoringOverrideBtn">计分方式更正</button>
         <button class="btn gold" id="batchScoringBtn">批量改判/凭证</button>
+        <button class="btn gold" id="proxyBatchBtn">批量代投明细</button>
         <button class="btn" id="applySelectedAiBtn">应用选中 AI 建议</button>
         <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
         <div class="spacer"></div>
@@ -1712,6 +1718,92 @@
     $("proxyModal").classList.remove("hidden");
   }
 
+  function selectedProxyEntries() {
+    return (data.entries || []).filter(function (entry) {
+      return selected.has(entry.id) && entry.proxy_settlement && entry.proxy_settlement.method;
+    }).sort(function (left, right) {
+      return String(left.source_time || left.created_at || "").localeCompare(String(right.source_time || right.created_at || ""));
+    });
+  }
+
+  function batchProxyShareLines(rows) {
+    var order = [];
+    var grouped = {};
+    rows.forEach(function (row) {
+      var proxy = row.proxy_settlement || {};
+      var giftName = proxy.gift_name || (proxy.method === "鸡腿" ? "琴音生花" : "计分卡");
+      (proxy.covered || []).forEach(function (item) {
+        var person = item.fan_name || item.raw_name || "未登记";
+        var key = giftName + "\u0000" + person;
+        if (!grouped[key]) {
+          grouped[key] = {name: person, gift: giftName, count: 0};
+          order.push(key);
+        }
+        grouped[key].count += Number(item.covered_score || item.score || 0);
+      });
+    });
+    var lines = ["包含："];
+    if (!order.length) lines.push("（暂无代投明细）");
+    order.forEach(function (key) {
+      var group = grouped[key];
+      lines.push(group.name + " 的" + score(group.count) + "个" + group.gift);
+    });
+    return lines;
+  }
+
+  function renderProxyBatch(rows, skipped) {
+    var totals = {entryScore: 0, coveredCount: 0, coveredScore: 0, remainder: 0};
+    rows.forEach(function (row) {
+      var proxy = row.proxy_settlement || {};
+      totals.entryScore += Number(proxy.entry_score || 0);
+      totals.coveredCount += (proxy.covered || []).length;
+      totals.coveredScore += Number(proxy.covered_score || 0);
+      totals.remainder += Number(proxy.remainder || 0);
+    });
+    $("proxyTitle").textContent = "代投明细（合计）";
+    $("proxySub").textContent = "已选 " + rows.length + " 条代投条目" +
+      (skipped > 0 ? "（另有 " + skipped + " 条选中条目未代投，已忽略）" : "") +
+      " · 合计 " + score(totals.entryScore) + " 分";
+    var stats = '<div class="proxy-stats">' +
+      '<span>代投条目 <strong>' + rows.length + '</strong> 条</span>' +
+      '<span>本条合计 <strong>' + score(totals.entryScore) + '</strong> 分</span>' +
+      '<span>覆盖应援会 <strong>' + totals.coveredCount + '</strong> 条 / <strong>' + score(totals.coveredScore) + '</strong> 分</span>' +
+      '<span>结转下次 <strong>' + score(totals.remainder) + '</strong> 分</span>' +
+      '</div>';
+    var sections = rows.map(function (row, index) {
+      var proxy = row.proxy_settlement || {};
+      var covered = proxy.covered || [];
+      var head = '<div class="proxy-batch-head"><strong>' + (index + 1) + '. ' +
+        esc(row.fan_name || row.raw_name || "未登记") + '</strong><span class="notice">' +
+        esc((row.source_time || "").slice(0, 16)) + ' · ' + esc(row.source_label || sourceDisplay(row.source)) +
+        ' · ' + score(proxy.entry_score) + ' 分 · ' + esc(proxy.method || "-") + '</span></div>';
+      var table = covered.length
+        ? '<table class="proxy-table"><thead><tr><th>时间</th><th>昵称</th><th>来源</th><th>分数</th><th>结果</th></tr></thead><tbody>' +
+          covered.map(proxyRowMarkup).join("") + '</tbody></table>'
+        : '<div class="proxy-empty">该次代投没有完全覆盖的应援会条目，分数全部结转到下一次。</div>';
+      var foot = '<div class="notice proxy-batch-foot">覆盖 ' + covered.length + ' 条 / ' +
+        score(proxy.covered_score || 0) + ' 分 · 结转 ' + score(proxy.remainder || 0) + ' 分' +
+        (proxy.applied_at ? ' · 完成于 ' + esc(proxy.applied_at.slice(0, 16)) : '') + '</div>';
+      return '<div class="proxy-batch-entry">' + head + table + foot + '</div>';
+    }).join("");
+    var share = '<div class="proxy-share"><div class="proxy-share-head"><span>分享文本（合计）</span>' +
+      '<button class="btn mini" type="button" id="proxyShareCopyBtn">复制</button></div>' +
+      '<pre id="proxyShareText"></pre></div>';
+    $("proxyBody").innerHTML = stats + sections + share;
+    $("proxyShareText").textContent = batchProxyShareLines(rows).join("\n");
+    $("proxyShareCopyBtn").addEventListener("click", copyProxyShare);
+    $("proxyConfirmBtn").classList.add("hidden");
+  }
+
+  function openProxyBatch() {
+    var rows = selectedProxyEntries();
+    if (!rows.length) { showToast("请先勾选已完成代投的条目（操作列显示“代投明细”）", true); return; }
+    proxyEntryId = "";
+    proxyPlan = null;
+    renderProxyBatch(rows, selected.size - rows.length);
+    $("proxyModal").classList.remove("hidden");
+  }
+
   async function confirmProxySettlement() {
     if (!proxyEntryId) return;
     $("proxyConfirmBtn").disabled = true;
@@ -2895,6 +2987,7 @@
     $("applySelectedAiBtn").addEventListener("click", function () { applyAi(""); });
     $("shipSelectedBtn").addEventListener("click", shipSelected);
     $("proxyConfirmBtn").addEventListener("click", confirmProxySettlement);
+    $("proxyBatchBtn").addEventListener("click", openProxyBatch);
     ["sourceFilter","statusFilter","sortFilter","includeDuplicate","dateFrom","dateTo"].forEach(function (id) {
       $(id).addEventListener("change", function () { loadData().catch(function () {}); });
     });
