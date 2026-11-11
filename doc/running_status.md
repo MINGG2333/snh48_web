@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-11 红蓝台账：新口袋 ID 即时请求重建身份索引，叹号提示写清
+
+- 需求：`/business/redblue2026` 的房间直投新粉丝显示红色 `!`，提示只有「口袋48 ID 未找到」，容易被理解成来源有问题；且新账号要等身份索引整点重建才能识别。
+- 实现：`website/redblue_ledger_api.py` 新增 `_request_identity_rebuild()` / `_identity_rebuild_pending()` / `_identity_index_age_note()`；`_apply_identity` 在数字 ID 未命中身份索引且 `SHARED_STATE_IS_PRIMARY` 时写 `private_handover/web_state/fan_identity_rebuild_jobs/pending/<ID>.json`（按 ID 去重，`done/` 标记 24 小时内抑制重复，非主节点不写）；`_normalise_entry` 把 `warning_reason` 扩展为「原因（身份索引更新于 MM-DD HH:MM，已排队重建索引）」。`website/config.py` 新增 `REDBLUE_IDENTITY_REBUILD_QUEUE_DIR` / `_ENABLED` / `_SUPPRESS_SECONDS`。模板行内在 ID 下方新增红色说明行（`notice warn-text`），状态筛选与 KPI 文案改为「身份待确认」。fan-hub 侧新增 `fan-identity-rebuild-worker.timer` 每分钟消费请求并立即触发 `fan-identity-index.service`，exporter 构建完成后把请求移到 `done/` 并记录 `resolved`。
+- 验证：腾讯云 `tests.test_redblue_ledger_api` 59 项（含新增 3 项：请求入队与去重、明细提示、副本节点不入队、完成后抑制重复）、`tests.test_password_page_security` 3 项通过；端到端请求由 worker 触发全量重建并在 20:30:58 消费；以 `snh48-web` 身份写入队列成功。
+- 部署：网站提交 `cfa8d97`、`edc063b` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 20:32:54 重启，MainPID `1063512`，active；阿里云 `snh48-aliyun.service` 20:33:09 重启，MainPID `3700576`，20 秒内监听 8000。两端 `/business/redblue2026` 200，HTML 含「身份待确认」；`https://cjy.plus` 与 `https://cjy.xn--6qq986b3xl` 均 200。
+
 ## 2026-11-11 红蓝台账新增“批量代投明细”与合计分享文本
 
 - 需求：`/business/redblue2026` 勾选多条已代投条目后，一次查看各条目的代投明细，并生成合计分享文本。
