@@ -1112,6 +1112,10 @@ def _identity_rebuild_dirs() -> tuple[Path, Path]:
     done = root / "done"
     for path in (root, pending, done):
         path.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(path, 0o775)
+        except OSError:
+            pass
         if os.geteuid() == 0:
             # 共享状态 peer 以 root 执行 mutator 时，队列目录必须交回网站用户，
             # 否则本机网站进程之后无法写入新的重建请求。
@@ -1180,7 +1184,8 @@ def _request_identity_rebuild(fan_id: str, fan_name: str, reason: str) -> bool:
             tmp.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
             os.chmod(tmp, 0o644)
             tmp.replace(target)
-        except OSError:
+        except OSError as exc:
+            logger.warning("identity rebuild request failed for %s: %s", fan_id, exc)
             try:
                 tmp.unlink()
             except OSError:
