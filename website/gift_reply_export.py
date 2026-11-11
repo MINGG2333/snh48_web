@@ -76,10 +76,12 @@ FALLBACK_FONT_PATHS = (
     Path(__file__).resolve().parent / "static" / "fonts" / "NotoSansEgyptianHieroglyphs-Regular.ttf",
     Path(__file__).resolve().parent / "static" / "fonts" / "NotoEmoji-Regular.ttf",
     Path("/usr/share/fonts/truetype/freefont/FreeSerif.ttf"),
-    Path("/usr/share/fonts/truetype/unifont/unifont.ttf"),
-    Path("/usr/share/fonts/truetype/unifont/unifont_upper.ttf"),
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+    Path("/usr/share/fonts/unifont/unifont.otf"),
+    Path("/usr/share/fonts/unifont/unifont_upper.otf"),
+    Path("/usr/share/fonts/truetype/unifont/unifont.ttf"),
+    Path("/usr/share/fonts/truetype/unifont/unifont_upper.ttf"),
 )
 FALLBACK_FONT_PATH = FALLBACK_FONT_PATHS[0]
 EMOJI_FONT_PATH = FALLBACK_FONT_PATHS[1]
