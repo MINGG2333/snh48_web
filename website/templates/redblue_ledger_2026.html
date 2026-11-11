@@ -214,6 +214,7 @@
     .suggest .reason { color: var(--faint); font-size: 12px; margin-top: 2px; }
     .ai-panel { margin-top: 12px; }
     .notice { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .notice.warn-text { color: var(--red); }
     @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3,minmax(0,1fr)); } .filters { grid-template-columns: repeat(2,minmax(0,1fr)); } .analytics-grid { grid-template-columns: 1fr; } }
     @media (max-width: 620px) { .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } .filters { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } .trend-canvas-wrap { height: 260px; } }
   </style>
@@ -264,7 +265,7 @@
       </div>
       <div class="filters">
         <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="association_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
-        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="paid">已付款</option><option value="warning">未登记</option><option value="duplicate">重复</option></select></div>
+        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="paid">已付款</option><option value="warning">身份待确认</option><option value="duplicate">重复</option></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
         <div class="field"><label>开始日期</label><input id="dateFrom" type="date"></div>
@@ -721,7 +722,7 @@
       ["待投", score(s.pending_score), "pink", "微店未发货/已发货、手动已付款，以及房间/直播待投条目"],
       ["条目", s.entry_count || 0, ""],
       ["人数", s.people_count || 0, "blue"],
-      ["未登记", s.warning_count || 0, "red"]
+      ["身份待确认", s.warning_count || 0, "red", "口袋48 ID/昵称尚未在身份索引中确认，悬停叹号查看原因"]
     ];
     $("kpis").innerHTML = cards.map(function (item) {
       return '<div class="kpi" title="' + esc(item[3] || "") + '"><div class="label">' + esc(item[0]) + '</div><div class="value ' + item[2] + '">' + esc(item[1]) + '</div></div>';
@@ -1224,7 +1225,8 @@
       var scoringName = entry.raw_name || "";
       var scoreNote = scoringName && scoringName !== name ? "计分昵称：" + scoringName : "";
       var identityNote = '<div class="notice">' + esc(rawId || "未登记 ID") + '</div>' +
-        (scoreNote ? '<div class="notice">' + esc(scoreNote) + '</div>' : "");
+        (scoreNote ? '<div class="notice">' + esc(scoreNote) + '</div>' : '') +
+        (entry.warning && entry.warning_reason ? '<div class="notice warn-text">' + esc(entry.warning_reason) + '</div>' : "");
       var warning = entry.warning ? '<span class="warn-icon" title="' + esc(entry.warning_reason || "待修正") + '">!</span>' : "";
       var note = entry.note || "";
       var weidian = entry.weidian || {};

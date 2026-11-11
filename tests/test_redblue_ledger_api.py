@@ -100,6 +100,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "weidian": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
             "ai": cfg.REDBLUE_AI_QUEUE_DIR,
             "wd": cfg.REDBLUE_WEIDIAN_QUEUE_DIR,
+            "rebuild": cfg.REDBLUE_IDENTITY_REBUILD_QUEUE_DIR,
             "sync_state": cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH,
             "sync": cfg.SHARED_STATE_SYNC_ENABLED,
             "primary": cfg.SHARED_STATE_IS_PRIMARY,
@@ -113,6 +114,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = str(self.tmp / "weidian.json")
         cfg.REDBLUE_AI_QUEUE_DIR = str(self.tmp / "ai")
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = str(self.tmp / "wd")
+        cfg.REDBLUE_IDENTITY_REBUILD_QUEUE_DIR = str(self.tmp / "rebuild_jobs")
         cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = str(self.tmp / "weidian_sync_state.json")
         cfg.SHARED_STATE_SYNC_ENABLED = False
         cfg.SHARED_STATE_IS_PRIMARY = True
@@ -131,6 +133,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = self._old["weidian"]
         cfg.REDBLUE_AI_QUEUE_DIR = self._old["ai"]
         cfg.REDBLUE_WEIDIAN_QUEUE_DIR = self._old["wd"]
+        cfg.REDBLUE_IDENTITY_REBUILD_QUEUE_DIR = self._old["rebuild"]
         cfg.REDBLUE_WEIDIAN_SYNC_STATE_PATH = self._old["sync_state"]
         cfg.SHARED_STATE_SYNC_ENABLED = self._old["sync"]
         cfg.SHARED_STATE_IS_PRIMARY = self._old["primary"]
@@ -230,6 +233,53 @@ class RedblueLedgerApiTests(unittest.TestCase):
         ).json()["result"]
         self.assertFalse(fixed["warning"])
         self.assertEqual(fixed["fan_id"], "1002")
+
+    def test_unknown_pocket_id_queues_identity_rebuild(self):
+        payload = {"raw_name": "酸萝卜炖的老鸭子太好次了", "raw_id": "67567622", "score": 8}
+        missing = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json=payload,
+        ).json()["result"]
+        self.assertTrue(missing["warning"])
+        pending = self.tmp / "rebuild_jobs" / "pending" / "67567622.json"
+        self.assertTrue(pending.exists())
+        request = json.loads(pending.read_text(encoding="utf-8"))
+        self.assertEqual(request["fan_id"], "67567622")
+        self.assertEqual(request["reason"], "口袋48 ID 未找到")
+        self.assertEqual(request["origin_node"], cfg.SHARED_STATE_NODE_ID)
+
+        # 同一 ID 的重复写入不会产生第二个重建请求
+        self.client.post("/api/redblue/entries", headers=self.headers, json=payload)
+        pending_files = list((self.tmp / "rebuild_jobs" / "pending").glob("*.json"))
+        self.assertEqual(len(pending_files), 1)
+
+        # 列表页把索引更新时间和“已排队重建”写进 warning_reason
+        entries = self.client.get("/api/redblue/data", headers=self.headers).json()["entries"]
+        row = next(item for item in entries if item.get("raw_id") == "67567622")
+        self.assertIn("口袋48 ID 未找到", row["warning_reason"])
+        self.assertIn("身份索引更新于 10-24 12:00", row["warning_reason"])
+        self.assertIn("已排队重建索引", row["warning_reason"])
+
+    def test_replica_node_does_not_queue_identity_rebuild(self):
+        cfg.SHARED_STATE_IS_PRIMARY = False
+        self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "新粉丝", "raw_id": "67567622", "score": 1},
+        )
+        pending = self.tmp / "rebuild_jobs" / "pending"
+        self.assertFalse(pending.exists() and any(pending.iterdir()))
+
+    def test_finished_rebuild_request_suppresses_repeat(self):
+        payload = {"raw_name": "新粉丝", "raw_id": "67567622", "score": 1}
+        self.client.post("/api/redblue/entries", headers=self.headers, json=payload)
+        pending = self.tmp / "rebuild_jobs" / "pending" / "67567622.json"
+        self.assertTrue(pending.exists())
+        # 模拟索引已重建但该 ID 仍不存在（例如手工填错）：短期内不再重复触发
+        pending.replace(self.tmp / "rebuild_jobs" / "done" / "67567622.json")
+        self.client.post("/api/redblue/entries", headers=self.headers, json=payload)
+        self.assertFalse(pending.exists())
 
     def test_sync_room_live_and_weidian(self):
         room = self.client.post("/api/redblue/sync/room-live", headers=self.headers).json()["result"]

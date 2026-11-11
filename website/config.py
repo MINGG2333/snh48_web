@@ -555,6 +555,26 @@ REDBLUE_IDENTITY_FALLBACK_PATHS = {
         / "fan_name_map.json"
     ),
 }
+# 台账遇到身份索引里没有的口袋48 ID 时写入重建请求；腾讯云
+# fan-identity-rebuild-worker.timer 每分钟检查并立即触发全量索引重建，
+# 不必等整点定时任务。done/ 下的标记保留一段时间，避免同一错误 ID
+# （例如手工填错）反复触发重建。
+REDBLUE_IDENTITY_REBUILD_QUEUE_DIR = os.getenv(
+    "REDBLUE_IDENTITY_REBUILD_QUEUE_DIR",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "fan_identity_rebuild_jobs"
+    ),
+)
+REDBLUE_IDENTITY_REBUILD_ENABLED = os.getenv(
+    "REDBLUE_IDENTITY_REBUILD_ENABLED", "true"
+).lower() in ("1", "true", "yes")
+REDBLUE_IDENTITY_REBUILD_SUPPRESS_SECONDS = int(
+    os.getenv("REDBLUE_IDENTITY_REBUILD_SUPPRESS_SECONDS", "86400")
+)
 REDBLUE_AI_QUEUE_DIR = os.getenv(
     "REDBLUE_AI_QUEUE_DIR",
     str(

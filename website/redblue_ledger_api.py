@@ -1096,6 +1096,106 @@ def _resolve_identity(
     return {"fan_id": "", "fan_name": "", "warning": True, "reason": "缺少口袋48昵称或 ID"}
 
 
+# ── 身份索引重建请求 ────────────────────────────────────────────────────
+#
+# 身份索引由腾讯云全房间/全直播归档每小时重建一次，新出现的口袋48账号会
+# 在整点重建前查不到。台账在写入时如果发现数字 ID 不在索引里，就落一个
+# 重建请求；腾讯云 fan-identity-rebuild-worker.timer 每分钟检查并立即触发
+# 一次完整重建，而不是等到下一个整点。
+
+_IDENTITY_REBUILD_LOCK = threading.Lock()
+
+
+def _identity_rebuild_dirs() -> tuple[Path, Path]:
+    root = Path(cfg.REDBLUE_IDENTITY_REBUILD_QUEUE_DIR)
+    pending = root / "pending"
+    done = root / "done"
+    for path in (root, pending, done):
+        path.mkdir(parents=True, exist_ok=True)
+        if os.geteuid() == 0:
+            # 共享状态 peer 以 root 执行 mutator 时，队列目录必须交回网站用户，
+            # 否则本机网站进程之后无法写入新的重建请求。
+            try:
+                import pwd
+
+                info = pwd.getpwnam("snh48-web")
+                os.chown(path, info.pw_uid, info.pw_gid)
+                os.chmod(path, 0o775)
+            except (KeyError, OSError):
+                pass
+    return pending, done
+
+
+def _identity_rebuild_pending(fan_id: str) -> bool:
+    fan_id = _clean(fan_id, 32)
+    if not fan_id.isdigit():
+        return False
+    try:
+        pending, _ = _identity_rebuild_dirs()
+    except OSError:
+        return False
+    return (pending / f"{fan_id}.json").exists()
+
+
+def _request_identity_rebuild(fan_id: str, fan_name: str, reason: str) -> bool:
+    """Queue a full identity-index rebuild for an unknown Pocket48 account.
+
+    Only the shared-state primary writes the queue, because that is the node
+    that runs the index builder; replica nodes cannot rebuild the index.
+    Duplicate requests are collapsed per fan id, and a finished request
+    suppresses repeats for ``REDBLUE_IDENTITY_REBUILD_SUPPRESS_SECONDS`` so a
+    wrong/manual id cannot keep rebuilding the index.
+    """
+    fan_id = _clean(fan_id, 32)
+    if not fan_id.isdigit() or not cfg.REDBLUE_IDENTITY_REBUILD_ENABLED:
+        return False
+    if not getattr(cfg, "SHARED_STATE_IS_PRIMARY", False):
+        return False
+    try:
+        pending, done = _identity_rebuild_dirs()
+    except OSError:
+        return False
+    with _IDENTITY_REBUILD_LOCK:
+        target = pending / f"{fan_id}.json"
+        if target.exists():
+            return False
+        done_path = done / f"{fan_id}.json"
+        try:
+            if done_path.exists() and (
+                time.time() - done_path.stat().st_mtime
+                < cfg.REDBLUE_IDENTITY_REBUILD_SUPPRESS_SECONDS
+            ):
+                return False
+        except OSError:
+            pass
+        payload = {
+            "fan_id": fan_id,
+            "fan_name": _clean(fan_name, 120),
+            "reason": _clean(reason, 120),
+            "requested_at": datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S"),
+            "origin_node": cfg.SHARED_STATE_NODE_ID,
+        }
+        tmp = pending / f".{fan_id}.tmp"
+        try:
+            tmp.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
+            os.chmod(tmp, 0o644)
+            tmp.replace(target)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return False
+    return True
+
+
+def _identity_index_age_note() -> str:
+    generated_at = _clean(identity_index.redblue_index().get("generated_at"), 40)
+    if not generated_at:
+        return "身份索引尚未生成"
+    return f"身份索引更新于 {generated_at[5:16]}"
+
+
 # ── 条目工具 ────────────────────────────────────────────────────────────
 
 
@@ -1502,6 +1602,12 @@ def _apply_identity(
     entry["fan_name"] = resolved["fan_name"] or raw_name
     entry["warning"] = bool(resolved["warning"])
     entry["warning_reason"] = resolved["reason"]
+    if entry["warning"]:
+        _request_identity_rebuild(
+            raw_id or (raw_name if raw_name.isdigit() else ""),
+            entry.get("fan_name") or raw_name,
+            entry.get("warning_reason") or "",
+        )
     if write_alias and not resolved["warning"] and resolved["fan_id"]:
         _add_alias(doc, raw_name or resolved["fan_name"], resolved["fan_id"], resolved["fan_name"], source)
 
@@ -1707,6 +1813,12 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
             fan_name = resolved["fan_name"] or fan_name
             warning = False
             warning_reason = ""
+    if warning:
+        # Explain the warning instead of a bare "ID 未找到": say how fresh the
+        # identity index is and whether a rebuild has already been queued.
+        note = _identity_index_age_note()
+        queued = "，已排队重建索引" if _identity_rebuild_pending(fan_id or raw_id) else ""
+        warning_reason = f"{warning_reason or '口袋48 身份待确认'}（{note}{queued}）"
     return {
         "id": _clean(entry.get("id"), 80),
         "fan_id": fan_id,
