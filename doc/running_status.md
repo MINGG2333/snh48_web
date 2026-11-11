@@ -3,9 +3,9 @@
 ## 2026-11-11 社交凭据管理页通知改为右下角 toast
 
 - 需求：新浪/抖音等凭据更新、登录、口袋48 Token 操作的结果原来放在页面底部 `.message` 区域并 `scrollIntoView`，需要改成与红蓝台账一致的右下角弹窗。
-- 实现：`website/templates/social_credentials_admin.html` 增加固定 `right:20px;bottom:20px` 的 `.toast`（移动端左右 12px），新增 `showToast(message,isError,{sticky})`；登录、刷新、凭据验证/设主账号、口袋48 发短信/安全验证/Token 登录的成功和失败全部改走 toast，4 秒自动消失、可点击关闭，进行中状态 sticky；移除旧的 `#login-message`/`#update-message`/`#pocket-message` 内联容器。静态说明文字保留在表单内。
+- 实现：`website/templates/social_credentials_admin.html` 增加固定 `right:20px;bottom:20px` 的 `.toast`（移动端左右 12px），新增 `showToast(message,isError,{sticky})`；登录、刷新、凭据验证/设主账号、口袋48 发短信/安全验证/Token 登录的成功和失败全部改走 toast，默认 4200ms 自动消失（与红蓝台账一致）、可点击关闭，进行中状态 sticky；移除旧的 `#login-message`/`#update-message`/`#pocket-message` 内联容器。静态说明文字保留在表单内。
 - 验证：页面脚本 `node --check` 通过；腾讯云 `/social-credentials-admin` 返回 200，HTML 含 `id="toast"`/`showToast`，旧 message ID 为 0；阿里云该路由仍为既有 404（页面只在腾讯云 `cjy.plus` 提供）。
-- 部署：网站提交 `5ff8f5c` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启后 active，MainPID `131993`；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2204634`。
+- 部署：网站提交 `be812dd`（含 `5ff8f5c`）已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启后 active，MainPID `134944`；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2210476`。
 
 ## 2026-11-11 红蓝台账“重复”改为应援会代投分析（结转覆盖）
 
