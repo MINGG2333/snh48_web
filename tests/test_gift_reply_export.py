@@ -152,7 +152,9 @@ class GiftReplyExportTests(unittest.TestCase):
         rendered = _display_text(name, font, fallback)
         self.assertIn("ᴗ", rendered)
         self.assertIn("🐱", rendered)
-        self.assertEqual(rendered, "炸毛小猫🐱>ᴗo")
+        # 生僻字（⌯/ಣ）是否保留取决于节点装了哪些字体，但顺序不能变、也不能多出字符。
+        name_iter = iter(name)
+        self.assertTrue(all(char in name_iter for char in rendered))
 
     def test_display_text_never_keeps_unrenderable_glyphs(self) -> None:
         """保留下来的字符必须在主字体或备用字体链里有真实字形，避免导出方框。"""
