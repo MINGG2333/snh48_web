@@ -1,5 +1,14 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-12 导出图恢复单色 emoji 并修复昵称 kaomoji 丢字（双端已生效）
+
+- 现象：`/business/redblue2026` 导出的昵称 `炸毛小猫🐱⌯>ᴗo⌯ಣ` 少了 `ᴗ`，表情却从黑白线稿变成了彩色。
+- 根因：①`_display_text()` 把 `U+1D00–U+1DBF`（音标扩展）和 `U+02B0–U+02FF`（修饰字母）整段当装饰字过滤，误伤 kaomoji 的 `ᴗ`/`ᴥ`；②备用字体链里的 `_ColorEmojiFont` 包装字体取不到 `.notdef` 位图，`_glyph_is_missing()` 于是把所有字符都判成“有字形”，`⌯`、`ಣ` 被交给彩色 emoji 字体渲染成空白；③腾讯云没有 FreeSerif/Unifont，emoji 全部落到 Noto Color Emoji，所以变成彩色。
+- 代码（网站 `f251d89`、`51f1b85`）：仓库新增 `website/static/fonts/NotoEmoji-Regular.ttf`（上游 Noto Emoji 变量字体固定 wght=400 的静态实例，886KB，OFL）与 `NotoEmoji-OFL.txt`，字体链改为 埃及圣书体 → 单色 Noto Emoji → 系统 FreeSerif/Unifont/DejaVu，删除彩色 emoji 包装字体和 109px 缩放逻辑；`_glyph_is_missing()` 在取不到 `.notdef` 时改用“有无墨迹 + bbox”兜底；`_display_text()` 取消按 Unicode 区块整段丢弃，改为按实际字形判断；新增字素簇处理（`_clusters`/`_font_runs`/`_fit`），emoji 的 ZWJ 组合、变体选择符、肤色修饰符和 keycap 作为整体选字体并交给 HarfBuzz 塑形；单色 emoji 按 1.15 倍字号绘制以对齐 CJK 正文。`doc/website_pages.md` 同步字体链说明，`tests/test_gift_reply_export.py` 新增/调整 6 项（kaomoji、字形可达性、emoji 组合、单色字体、截断边界）。
+- 验证：两端 `tests.test_gift_reply_export` 14 项通过；本地 `tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 60 项通过。两端用真实昵称渲染按昵称汇总图：`🐱`、`🌲`、`🐒` 等均为黑白线稿，`ᴗ` 正常显示；阿里云因装有 Unifont，`⌯`/`ಣ` 也可显示，腾讯云尚无覆盖这两个码位的字体，仍会略去（见“待确认”）。
+- 部署：网站 `f251d89`、`51f1b85` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 本轮最终重启 `2026-11-12 01:53:20`，MainPID `1451456`；阿里云 `snh48-aliyun.service` 同时重启，MainPID `93961`；两端 active/running、`NRestarts=0`。`https://cjy.plus/business/redblue2026` 与 `https://cjy.xn--6qq986b3xl/business/redblue2026` 均 200，未登录 `/api/redblue/export/summary.png` 401。
+- 待确认：`⌯`(U+232F)、`ಣ`(U+0CA3) 这类生僻 kaomoji 字只有 Unifont 覆盖，腾讯云目前没装。若要两端完全一致，需在腾讯云安装 `fonts-unifont`（系统包），或把 Unifont 子集放进仓库（约 0.5–1.3MB，GPL-2+）。
+
 ## 2026-11-11 红蓝台账：新口袋 ID 即时请求重建身份索引，叹号提示写清
 
 - 需求：`/business/redblue2026` 的房间直投新粉丝显示红色 `!`，提示只有「口袋48 ID 未找到」，容易被理解成来源有问题；且新账号要等身份索引整点重建才能识别。
