@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-11 红蓝台账新增“批量代投明细”与合计分享文本
+
+- 需求：`/business/redblue2026` 勾选多条已代投条目后，一次查看各条目的代投明细，并生成合计分享文本。
+- 页面：`website/templates/redblue_ledger_2026.html` 工具栏新增“批量代投明细”按钮；新增 `selectedProxyEntries()`（只取选中且带 `proxy_settlement.method` 的条目，按记录时间正序）、`renderProxyBatch()`（顶部合计：代投条目数/本条合计分/覆盖应援会条数与分数/结转分，下方按条目分节展示覆盖明细表与完成时间）和 `openProxyBatch()`；勾选的非代投条目在弹窗副标题中提示已忽略。合计分享文本由 `batchProxyShareLines()` 按“礼物名+昵称”跨条目累加生成，格式仍为 `包含：` + `昵称 的N个礼物名`，沿用右上“复制”按钮；批量弹窗隐藏“确认代投”按钮，不改变任何台账数据。
+- 验证：模板脚本 `node --check` 通过；用真实模板函数在 Node 桩环境验证 2 条代投条目（计分卡+鸡腿）合并输出 4 行分享文本、忽略 1 条未代投条目、确认按钮隐藏；新增 `tests/test_redblue_ledger_template.py` 4 项与既有 `test_password_page_security` 3 项通过。
+- 部署：网站提交 `23393ea` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only` 到该提交。模板按请求读取，本次未重启服务：腾讯云 `snh48-web.service` active、MainPID `134944`；阿里云 `snh48-aliyun.service` active、MainPID `2210476`。两端 `/business/redblue2026` 均返回 200，HTML 含 `proxyBatchBtn` 与 `batchProxyShareLines`。
+
 ## 2026-11-11 社交凭据管理页通知改为右下角 toast
 
 - 需求：新浪/抖音等凭据更新、登录、口袋48 Token 操作的结果原来放在页面底部 `.message` 区域并 `scrollIntoView`，需要改成与红蓝台账一致的右下角弹窗。
