@@ -7,8 +7,12 @@
 按 2x 像素密度渲染（输出 2000px 宽），长图放大或在高分屏上更清晰。
 
 只依赖 Pillow 与系统 CJK 字体（阿里云文泉驿/腾讯云 Noto 均可）；备用字体链为
-仓库内置 Noto Sans Egyptian Hieroglyphs + 系统 FreeSerif/Unifont/DejaVu，
-覆盖埃及圣书体、符号和常见 emoji；缺字平台再用 Noto Color Emoji 缩放回退。
+仓库内置 Noto Sans Egyptian Hieroglyphs、仓库内置单色 Noto Emoji（emoji 统一为
+黑/白线稿，不使用彩色 emoji），再接系统 FreeSerif/Unifont/DejaVu，覆盖埃及圣书体、
+kaomoji 特殊字符、符号和 emoji。
+
+昵称按“字素簇”处理：emoji 的 ZWJ 组合、变体选择符、肤色修饰符和 keycap 会作为整体
+选字体并交给 HarfBuzz 塑形，避免 👨‍👩‍👧、1️⃣ 这类组合被拆成多个字符。
 """
 from __future__ import annotations
 
@@ -70,17 +74,17 @@ BOLD_CANDIDATES = (
 ) + FONT_CANDIDATES
 FALLBACK_FONT_PATHS = (
     Path(__file__).resolve().parent / "static" / "fonts" / "NotoSansEgyptianHieroglyphs-Regular.ttf",
+    Path(__file__).resolve().parent / "static" / "fonts" / "NotoEmoji-Regular.ttf",
     Path("/usr/share/fonts/truetype/freefont/FreeSerif.ttf"),
     Path("/usr/share/fonts/truetype/unifont/unifont.ttf"),
     Path("/usr/share/fonts/truetype/unifont/unifont_upper.ttf"),
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
 )
-COLOR_EMOJI_FONT_PATHS = (
-    Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"),
-    Path("/usr/share/fonts/google-noto-emoji-fonts/NotoColorEmoji.ttf"),
-)
 FALLBACK_FONT_PATH = FALLBACK_FONT_PATHS[0]
+EMOJI_FONT_PATH = FALLBACK_FONT_PATHS[1]
+# 单色 emoji 字形比中日韩字形略小，按同一字号绘制会显得偏小，统一放大一点。
+EMOJI_FONT_SCALE = 1.15
 
 
 def _pil():
@@ -145,75 +149,77 @@ def _missing_glyph_mask(font) -> bytes:
 
 @lru_cache(maxsize=65536)
 def _glyph_is_missing(font, char: str) -> bool:
+    if char.isspace():
+        return False
     mask = _missing_glyph_mask(font)
-    if not mask:
+    try:
+        glyph = bytes(font.getmask(char, mode="L"))
+    except (AttributeError, OSError, ValueError):
+        return True
+    if mask:
+        return glyph == mask
+    # 没有 .notdef 位图的字体无法按位图比对，退化为“有没有墨迹”判断。
+    if glyph:
         return False
     try:
-        return bytes(font.getmask(char, mode="L")) == mask
+        return font.getbbox(char) is None
     except (AttributeError, OSError, ValueError):
         return True
 
 
-class _ColorEmojiFont:
-    """Noto Color Emoji only loads at 109px; render then scale to the target size."""
-
-    def __init__(self, size: int, base):
-        self.size = max(1, int(size))
-        self._base = base
-
-    def getmask(self, char: str, mode: str = "L"):
-        return self._base.getmask(char, mode=mode)
-
-    def getbbox(self, char: str):
-        return self._base.getbbox(char)
-
-    def getlength(self, text: str, *args, **kwargs) -> float:
-        return self.size * 1.06 * len(text)
-
-    def getmetrics(self):
-        return self.size, max(2, int(self.size * 0.2))
-
-    def render(self, text: str):
-        Image, ImageDraw, _ = _pil()
-        width = max(64, 160 * max(1, len(text)))
-        canvas = Image.new("RGBA", (width, 200), (0, 0, 0, 0))
-        ImageDraw.Draw(canvas).text(
-            (10, 170), text, font=self._base, embedded_color=True, anchor="ls"
-        )
-        bbox = canvas.getbbox()
-        if not bbox:
-            return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-        glyph = canvas.crop(bbox)
-        glyph_width, glyph_height = glyph.size
-        target_height = self.size
-        target_width = max(1, round(glyph_width * target_height / glyph_height))
-        return glyph.resize((target_width, target_height), Image.LANCZOS)
+_ZWJ = "\u200d"
+_VARIATION_SELECTORS = frozenset({"\ufe0e", "\ufe0f"})
+_SKIP_CATEGORIES = frozenset({"Cs", "Cn", "Co"})
 
 
-@lru_cache(maxsize=16)
-def _color_emoji_font(size: int):
-    _, _, ImageFont = _pil()
-    for path in COLOR_EMOJI_FONT_PATHS:
-        try:
-            return _ColorEmojiFont(size, ImageFont.truetype(str(path), 109))
-        except OSError:
+def _is_emoji_modifier(char: str) -> bool:
+    return "\U0001F3FB" <= char <= "\U0001F3FF"
+
+
+def _is_joinable(char: str) -> bool:
+    if char == _ZWJ or char in _VARIATION_SELECTORS or _is_emoji_modifier(char):
+        return True
+    return unicodedata.category(char) in {"Mn", "Me", "Mc"}
+
+
+def _clusters(text: str) -> list[str]:
+    """按字素簇切分：基字符带组合标记/变体选择符/肤色修饰，或以 ZWJ 连成 emoji 序列。"""
+    clusters: list[str] = []
+    for char in text:
+        if clusters and (_is_joinable(char) or clusters[-1].endswith(_ZWJ)):
+            clusters[-1] += char
+        else:
+            clusters.append(char)
+    return clusters
+
+
+def _is_invisible(char: str) -> bool:
+    return char == _ZWJ or char in _VARIATION_SELECTORS
+
+
+def _font_covers(font, text: str) -> bool:
+    """整段文字（含 emoji 组合）能否都由同一字体渲染。"""
+    if font is None:
+        return False
+    for char in text:
+        if _is_invisible(char) or char.isspace():
             continue
-    return None
+        if _glyph_is_missing(font, char):
+            return False
+    return True
 
 
 @lru_cache(maxsize=64)
 def _fallback_fonts(size: int):
-    """补充 WQY/Noto CJK 不含的装饰字符、符号和 emoji。"""
+    """补充 WQY/Noto CJK 不含的装饰字符、符号和 emoji（单色）。"""
     _, _, ImageFont = _pil()
     fonts = []
     for path in FALLBACK_FONT_PATHS:
+        scaled = round(size * EMOJI_FONT_SCALE) if path == EMOJI_FONT_PATH else round(size)
         try:
-            fonts.append(ImageFont.truetype(str(path), max(1, int(size))))
+            fonts.append(ImageFont.truetype(str(path), max(1, scaled)))
         except OSError:
             continue
-    color_emoji = _color_emoji_font(int(size))
-    if color_emoji is not None:
-        fonts.append(color_emoji)
     return tuple(fonts)
 
 
@@ -241,15 +247,38 @@ def _pick_font(char: str, font, fallbacks):
     return font
 
 
+def _pick_cluster_font(cluster: str, font, fallbacks):
+    """为整个字素簇挑一个能渲染全部可见字符的字体，保证 emoji 组合不被拆开。"""
+    for candidate in (font, *fallbacks):
+        if _font_covers(candidate, cluster):
+            return candidate
+    return None
+
+
 def _font_runs(text: str, font, fallback=None):
     fallbacks = _fallback_list(fallback)
     runs: list[list[Any]] = []
-    for char in text:
-        use = _pick_font(char, font, fallbacks)
-        if runs and runs[-1][1] is use:
-            runs[-1][0] += char
+    for cluster in _clusters(text):
+        use = _pick_cluster_font(cluster, font, fallbacks)
+        if use is not None:
+            pieces = [(cluster, use)]
         else:
-            runs.append([char, use])
+            # 同一簇里没有单一字体能全渲染时，退回逐字挑字体并丢掉真的缺字部分。
+            pieces = []
+            for char in cluster:
+                if _is_invisible(char):
+                    if pieces:
+                        pieces[-1] = (pieces[-1][0] + char, pieces[-1][1])
+                    continue
+                chosen = _pick_cluster_font(char, font, fallbacks)
+                if chosen is None:
+                    continue
+                pieces.append((char, chosen))
+        for piece, use in pieces:
+            if runs and runs[-1][1] is use:
+                runs[-1][0] += piece
+            else:
+                runs.append([piece, use])
     return runs
 
 
@@ -258,20 +287,6 @@ def _text_width_fallback(draw, text: str, font, fallback=None) -> float:
     if not fallbacks:
         return draw.textlength(text, font=font)
     return sum(draw.textlength(run, font=use) for run, use in _font_runs(text, font, fallbacks))
-
-
-def _draw_color_emoji(draw, x, baseline, text: str, font: _ColorEmojiFont) -> None:
-    scale = getattr(draw, "_scale", 1) or 1
-    image_draw = getattr(draw, "_draw", draw)
-    image = getattr(image_draw, "_image", None)
-    if image is None:
-        return
-    glyph = font.render(text)
-    image.paste(
-        glyph,
-        (round(x * scale), round(baseline * scale) - glyph.height),
-        glyph,
-    )
 
 
 def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
@@ -305,37 +320,37 @@ def _draw_text_fallback(draw, xy, text: str, font, fallback=None, **kwargs):
     else:
         baseline = y + ascent
     for run, use in runs:
-        if isinstance(use, _ColorEmojiFont):
-            _draw_color_emoji(draw, cursor, baseline, run, use)
-        else:
-            draw.text((cursor, baseline), run, font=use, anchor="ls", **kwargs)
+        draw.text((cursor, baseline), run, font=use, anchor="ls", **kwargs)
         cursor += draw.textlength(run, font=use)
 
 
 def _display_text(text: Any, font=None, fallback_font=None) -> str:
-    """去掉字体和备用字体都无法渲染的 emoji/装饰符号，避免导出图出现方框。
+    """去掉主字体和备用字体链都无法渲染的字符，避免导出图出现方框。
 
-    仅跳过制表线、方块、盲文这类纯装饰字符；常见符号和 emoji（如 ⛽、✅、⚡）
-    交由备用字体链判断，能渲染就保留。
+    保留能渲染的 kaomoji 装饰字符（如 ᴗ、ʕ、ˊ）、符号和 emoji；emoji 的 ZWJ 组合、
+    变体选择符、肤色修饰符和 keycap 作为字素簇整体保留，交给字体塑形。
     """
     value = "" if text is None else str(text)
     fallbacks = _fallback_list(fallback_font)
-    cleaned = []
-    for char in value:
-        code = ord(char)
-        if code in (0x200D, 0xFE0E, 0xFE0F) or 0x1F3FB <= code <= 0x1F3FF:
+    candidates = tuple(item for item in (font, *fallbacks) if item is not None)
+    if not candidates:
+        return "".join(ch for ch in value if unicodedata.category(ch) not in _SKIP_CATEGORIES)
+    kept: list[str] = []
+    for cluster in _clusters(value):
+        cleaned = "".join(ch for ch in cluster if unicodedata.category(ch) not in _SKIP_CATEGORIES)
+        if not cleaned:
             continue
-        if 0x02B0 <= code <= 0x02FF or 0x1D00 <= code <= 0x1DBF:
+        if any(_font_covers(item, cleaned) for item in candidates):
+            kept.append(cleaned)
             continue
-        if 0x2500 <= code <= 0x259F or 0x2800 <= code <= 0x28FF:
-            continue
-        if unicodedata.category(char) in {"Mn", "Me", "Cs", "Cn", "Co"}:
-            continue
-        if font is not None and _glyph_is_missing(font, char):
-            if not any(not _glyph_is_missing(item, char) for item in fallbacks):
+        for char in cleaned:
+            if _is_invisible(char) or char.isspace():
+                if kept:
+                    kept.append(char)
                 continue
-        cleaned.append(char)
-    return "".join(cleaned)
+            if any(_font_covers(item, char) for item in candidates):
+                kept.append(char)
+    return "".join(kept)
 
 
 def _text_width(draw, text: str, font) -> float:
@@ -347,14 +362,15 @@ def _fit(draw, text: str, font, max_width: float, fallback=None) -> str:
     if _text_width_fallback(draw, text, font, fallback) <= max_width:
         return text
     ellipsis = "…"
-    low, high = 0, len(text)
+    clusters = _clusters(text)
+    low, high = 0, len(clusters)
     while low < high:
         mid = (low + high + 1) // 2
-        if _text_width_fallback(draw, text[:mid] + ellipsis, font, fallback) <= max_width:
+        if _text_width_fallback(draw, "".join(clusters[:mid]) + ellipsis, font, fallback) <= max_width:
             low = mid
         else:
             high = mid - 1
-    return text[:low] + ellipsis if low else ellipsis
+    return "".join(clusters[:low]) + ellipsis if low else ellipsis
 
 
 def _fmt_time(value: str, *, with_date: bool) -> str:

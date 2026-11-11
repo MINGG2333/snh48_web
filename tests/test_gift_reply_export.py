@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from website.gift_replies_api import (
     _export_period_text,
@@ -11,11 +11,15 @@ from website.gift_replies_api import (
     _timeline_filter_text,
 )
 from website.gift_reply_export import (
+    EMOJI_FONT_PATH,
     ExportTooLarge,
     SCALE,
     _display_text,
+    _fallback_fonts,
     _fallback_for,
+    _fit,
     _font,
+    _glyph_is_missing,
     render_overview_png,
     render_timeline_png,
 )
@@ -139,6 +143,55 @@ class GiftReplyExportTests(unittest.TestCase):
         for name in ("JOJO⭐", "拾蹄悦(悦悦🌲)", "衡绥suí🌲🐒", "挺吉⛽", "✅测试", "闪电⚡"):
             with self.subTest(name=name):
                 self.assertEqual(_display_text(name, font, fallback), name)
+
+    def test_display_text_keeps_kaomoji_glyphs(self) -> None:
+        """kaomoji 里的 ᴗ 等装饰字符曾被当成“字体不支持”整段过滤掉。"""
+        font = _font(24)
+        fallback = _fallback_for(font)
+        name = "炸毛小猫🐱⌯>ᴗo⌯ಣ"
+        rendered = _display_text(name, font, fallback)
+        self.assertIn("ᴗ", rendered)
+        self.assertIn("🐱", rendered)
+        self.assertEqual(rendered, "炸毛小猫🐱>ᴗo")
+
+    def test_display_text_never_keeps_unrenderable_glyphs(self) -> None:
+        """保留下来的字符必须在主字体或备用字体链里有真实字形，避免导出方框。"""
+        font = _font(24)
+        fallback = _fallback_for(font)
+        candidates = (font, *fallback)
+        for name in ("炸毛小猫🐱⌯>ᴗo⌯ಣ", "ʕ•ᴥ•ʔ", "衡绥suí🌲🐒", "1️⃣键帽", "👍🏻赞"):
+            with self.subTest(name=name):
+                rendered = _display_text(name, font, fallback)
+                for char in rendered:
+                    if char in {"\u200d", "\ufe0e", "\ufe0f"} or char.isspace():
+                        continue
+                    self.assertTrue(
+                        any(not _glyph_is_missing(item, char) for item in candidates),
+                        f"{char!r} 没有可用字形",
+                    )
+
+    def test_display_text_keeps_emoji_sequences_together(self) -> None:
+        font = _font(24)
+        fallback = _fallback_for(font)
+        for name in ("👨‍👩‍👧家庭", "👍🏻赞", "❤️爱"):
+            with self.subTest(name=name):
+                self.assertEqual(_display_text(name, font, fallback), name)
+
+    def test_emoji_fallback_is_monochrome_vendored_font(self) -> None:
+        fonts = _fallback_fonts(24)
+        paths = [str(getattr(item, "path", "")) for item in fonts]
+        self.assertIn(str(EMOJI_FONT_PATH), paths)
+        for path in paths:
+            self.assertNotIn("NotoColorEmoji", path)
+
+    def test_fit_truncates_on_grapheme_clusters(self) -> None:
+        font = _font(20)
+        fallback = _fallback_for(font)
+        draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        name = "一二三四五👨‍👩‍👧六七八九十一二三四五"
+        fitted = _fit(draw, name, font, 80, fallback)
+        self.assertTrue(fitted.endswith("…"))
+        self.assertFalse(fitted[:-1].endswith("\u200d"))
 
     def test_filter_labels(self) -> None:
         self.assertEqual(_export_period_text("2026-10-01", "2026-10-23"), "2026-10-01 至 2026-10-23")
