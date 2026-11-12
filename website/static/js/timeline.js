@@ -732,9 +732,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function buildLocationMapLinks(location) {
+  function buildLocationMapLinks(location, displayText) {
     const place = String(location || '').trim();
-    if (!place) return '';
+    const display = String(displayText || place || '').trim();
+    if (!display) return '';
+    if (!place) {
+      return `<div class="timeline-modal-info timeline-location-info"><i class="fas fa-map-marker-alt"></i> <span class="timeline-location-text">${escapeHtml(display)}</span></div>`;
+    }
 
     const amapAppUrl = buildAmapAppUrl(place);
     const amapWebSource = isMobileBrowser() ? 'xinshangzhenzangji' : getMapSourceId();
@@ -761,21 +765,21 @@ document.addEventListener('DOMContentLoaded', () => {
       wd: place,
     });
 
-    const safePlace = escapeHtml(place);
+    const safeDisplay = escapeHtml(display);
     return `
       <div class="timeline-location-block">
         <div class="timeline-modal-info timeline-location-info">
           <i class="fas fa-map-marker-alt"></i>
           <button type="button" class="timeline-location-trigger" aria-expanded="false">
-            <span class="timeline-location-text">${safePlace}</span>
+            <span class="timeline-location-text">${safeDisplay}</span>
           </button>
         </div>
         <div class="timeline-map-choice-popover" hidden>
-          <button type="button" class="timeline-map-choice timeline-map-choice-amap" data-map-app-url="${escapeHtml(amapAppUrl)}" data-map-web-url="${escapeHtml(amapWebUrl)}" aria-label="用高德地图打开 ${safePlace}">
+          <button type="button" class="timeline-map-choice timeline-map-choice-amap" data-map-app-url="${escapeHtml(amapAppUrl)}" data-map-web-url="${escapeHtml(amapWebUrl)}" aria-label="用高德地图打开 ${safeDisplay}">
             <i class="fas fa-location-arrow"></i>
             <span>高德地图</span>
           </button>
-          <button type="button" class="timeline-map-choice timeline-map-choice-baidu" data-map-app-url="${escapeHtml(baiduAppUrl)}" data-map-web-url="${escapeHtml(baiduWebUrl)}" aria-label="用百度地图打开 ${safePlace}">
+          <button type="button" class="timeline-map-choice timeline-map-choice-baidu" data-map-app-url="${escapeHtml(baiduAppUrl)}" data-map-web-url="${escapeHtml(baiduWebUrl)}" aria-label="用百度地图打开 ${safeDisplay}">
             <i class="fas fa-map-marked-alt"></i>
             <span>百度地图</span>
           </button>
@@ -932,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.content_type === 'live' ? '<span class="timeline-modal-badge live" style="margin-left:0;">直播</span>' : ''}
-        ${buildLocationMapLinks(event.location)}
+        ${buildLocationMapLinks(event.location, event.location_display)}
         ${ticketHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
         ${callWordsHtml}
