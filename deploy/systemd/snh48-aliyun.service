@@ -15,6 +15,10 @@ ExecStart=/home/snh48_web/venv/bin/python -m website.main
 Restart=always
 RestartSec=5
 UMask=0077
+# 公开站主服务：同机后台任务（QA/导出/同步/agent 会话）一律让路（2026-11-13）
+CPUWeight=800
+IOAccounting=yes
+IOWeight=800
 NoNewPrivileges=yes
 PrivateDevices=yes
 PrivateTmp=yes
