@@ -19,15 +19,20 @@ from typing import Any
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response, status
 
 from website import config as cfg
+from website import password_session
 from website import identity_index
 from website.maintenance import ensure_writable
 from website.rate_limiter import check_admin_login_limit, get_client_ip
 from website.shared_runtime_state import SharedStateError, SharedStatePeerError, execute_mutation, register_mutator
 
 router = APIRouter(prefix="/api/score-gifts", tags=["计分礼物页"])
+
+AUTH_COOKIE = "score_gifts_auth"
+# 覆盖计分礼物页与全员榜两个 API 前缀；HttpOnly Cookie，不写浏览器存储。
+AUTH_COOKIE_PATH = "/api"
 
 VALID_SOURCES = {"all", "room", "live"}
 VALID_SORTS = {"time_desc", "score_desc"}
@@ -63,27 +68,32 @@ _cache_doc: dict[str, Any] = {}
 async def verify_score_gifts_password(
     request: Request,
     x_score_gifts_password: str = Header(None, alias="X-Score-Gifts-Password"),
+    score_gifts_auth: str = Cookie(None, alias=AUTH_COOKIE),
 ):
-    """Verify the score gifts page password."""
+    """Verify the score page password via HttpOnly cookie or legacy header."""
     expected = cfg.SCORE_GIFTS_PASSWORD
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="计分礼物页未启用",
         )
-    if not x_score_gifts_password:
-        check_score_gifts_login_limit(request)
+    if score_gifts_auth and hmac.compare_digest(
+        score_gifts_auth, password_session.cookie_token(expected, context="score-gifts")
+    ):
+        return True
+    if x_score_gifts_password and hmac.compare_digest(expected, x_score_gifts_password):
+        return True
+    if not password_session.password_was_submitted(x_score_gifts_password):
+        # 缺密码或旧/未知 Cookie：登录已过期，不计入失败限流。
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="需要密码",
         )
-    if not hmac.compare_digest(expected, x_score_gifts_password):
-        check_score_gifts_login_limit(request)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="密码错误",
-        )
-    return True
+    check_score_gifts_login_limit(request)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="密码错误",
+    )
 
 
 def check_score_gifts_login_limit(request: Request) -> None:
@@ -98,6 +108,35 @@ def verify_score_gifts_login(
     """Verify the password without loading score-gift data."""
     response.headers["Cache-Control"] = "no-store"
     return {"verified": True}
+
+
+@router.post("/login")
+def login_score_gifts(payload: dict[str, Any], response: Response, request: Request):
+    expected = cfg.SCORE_GIFTS_PASSWORD
+    if not expected:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="计分礼物页未启用")
+    supplied = str(payload.get("password") or "")
+    if not hmac.compare_digest(supplied, expected):
+        check_score_gifts_login_limit(request)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="密码错误")
+    response.set_cookie(
+        key=AUTH_COOKIE,
+        value=password_session.cookie_token(expected, context="score-gifts"),
+        max_age=password_session.cookie_max_age(),
+        path=AUTH_COOKIE_PATH,
+        httponly=True,
+        secure=cfg.SECURE_COOKIES,
+        samesite="strict",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": True}
+
+
+@router.post("/logout")
+def logout_score_gifts(response: Response):
+    response.delete_cookie(AUTH_COOKIE, path=AUTH_COOKIE_PATH)
+    response.headers["Cache-Control"] = "no-store"
+    return {"verified": False}
 
 
 @router.get("/data")
