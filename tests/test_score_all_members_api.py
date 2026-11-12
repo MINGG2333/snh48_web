@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -11,6 +13,7 @@ from website.score_all_members_api import (
     _aggregate,
     _facets,
     _filter_cells,
+    _load_board,
     _season_key,
 )
 from website.score_gifts_api import _data_path
@@ -176,6 +179,47 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         self.assertEqual(member["third_party_score"], 3.0)
         self.assertEqual(member["gifts"][0]["third_party_score"], 3.0)
         self.assertEqual(member["gifts"][0]["provenance"], ["xox48"])
+
+    def test_realtime_overlay_replaces_today_cells(self) -> None:
+        import website.score_all_members_api as api
+
+        with tempfile.TemporaryDirectory() as tmp:
+            board_path = Path(tmp) / "score_board.json"
+            overlay_path = Path(tmp) / "realtime_cells.json"
+            board = {
+                **BOARD,
+                "generated_at": "2026-11-13 10:00:00",
+                "cells": [
+                    {"season": "2026-winter", "date": "2026-11-13", "source": "room", "member_id": "1", "gift_id": "g1", "gift_name": "弦月回响", "count": 1, "score": 1.0, "records": 1},
+                    {"season": "2026-winter", "date": "2026-11-12", "source": "room", "member_id": "1", "gift_id": "g1", "gift_name": "弦月回响", "count": 2, "score": 2.0, "records": 1},
+                ],
+            }
+            overlay = {
+                "date": "2026-11-13",
+                "season": "2026-winter",
+                "generated_at": "2026-11-13 10:00:05",
+                "cells": [
+                    {"season": "2026-winter", "date": "2026-11-13", "source": "room", "member_id": "1", "gift_id": "g1", "gift_name": "弦月回响", "count": 5, "score": 5.0, "records": 3}
+                ],
+            }
+            board_path.write_text(json.dumps(board), encoding="utf-8")
+            overlay_path.write_text(json.dumps(overlay), encoding="utf-8")
+            old_path = cfg.SCORE_ALL_MEMBERS_DATA_PATH
+            cfg.SCORE_ALL_MEMBERS_DATA_PATH = str(board_path)
+            api._cache_path = ""
+            api._cache_mtime_ns = -1
+            api._cache_overlay_mtime_ns = -1
+            try:
+                loaded = _load_board()
+            finally:
+                cfg.SCORE_ALL_MEMBERS_DATA_PATH = old_path
+                api._cache_path = ""
+                api._cache_mtime_ns = -1
+                api._cache_overlay_mtime_ns = -1
+        today = [c for c in loaded["cells"] if c["date"] == "2026-11-13"]
+        self.assertEqual(len(today), 1)
+        self.assertEqual(today[0]["score"], 5.0)
+        self.assertEqual(loaded["generated_at"], "2026-11-13 10:00:05")
 
     def test_gift_and_team_facets(self) -> None:
         facets = _facets(BOARD, "2026-winter")

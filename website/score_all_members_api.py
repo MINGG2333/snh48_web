@@ -26,20 +26,32 @@ VALID_SORTS = {"score_desc", "name_asc", "team_asc"}
 _cache_lock = threading.Lock()
 _cache_path = ""
 _cache_mtime_ns = -1
+_cache_overlay_mtime_ns = -1
 _cache_doc: dict[str, Any] = {}
 
 
 def _load_board() -> dict[str, Any]:
-    global _cache_path, _cache_mtime_ns, _cache_doc
+    global _cache_path, _cache_mtime_ns, _cache_overlay_mtime_ns, _cache_doc
     path = Path(cfg.SCORE_ALL_MEMBERS_DATA_PATH)
+    overlay_path = path.parent / "realtime_cells.json"
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="全员计分数据未生成")
     stat = path.stat()
-    if _cache_path == str(path) and _cache_mtime_ns == stat.st_mtime_ns:
+    overlay_mtime = overlay_path.stat().st_mtime_ns if overlay_path.exists() else 0
+    if (
+        _cache_path == str(path)
+        and _cache_mtime_ns == stat.st_mtime_ns
+        and _cache_overlay_mtime_ns == overlay_mtime
+    ):
         return _cache_doc
     with _cache_lock:
         stat = path.stat()
-        if _cache_path == str(path) and _cache_mtime_ns == stat.st_mtime_ns:
+        overlay_mtime = overlay_path.stat().st_mtime_ns if overlay_path.exists() else 0
+        if (
+            _cache_path == str(path)
+            and _cache_mtime_ns == stat.st_mtime_ns
+            and _cache_overlay_mtime_ns == overlay_mtime
+        ):
             return _cache_doc
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
@@ -47,8 +59,29 @@ def _load_board() -> dict[str, Any]:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="全员计分数据读取失败") from exc
         if not isinstance(doc, dict):
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="全员计分数据格式无效")
+        if overlay_path.exists():
+            try:
+                overlay = json.loads(overlay_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                overlay = {}
+            overlay_cells = overlay.get("cells") if isinstance(overlay.get("cells"), list) else []
+            overlay_date = str(overlay.get("date") or "")
+            overlay_season = str(overlay.get("season") or "")
+            if overlay_cells and overlay_date:
+                doc = dict(doc)
+                doc["cells"] = [
+                    cell
+                    for cell in (doc.get("cells") or [])
+                    if not (
+                        str(cell.get("date") or "") == overlay_date
+                        and (not overlay_season or str(cell.get("season") or "") == overlay_season)
+                    )
+                ] + overlay_cells
+                if str(overlay.get("generated_at") or "") > str(doc.get("generated_at") or ""):
+                    doc["generated_at"] = str(overlay.get("generated_at"))
         _cache_path = str(path)
         _cache_mtime_ns = stat.st_mtime_ns
+        _cache_overlay_mtime_ns = overlay_mtime
         _cache_doc = doc
         return _cache_doc
 
