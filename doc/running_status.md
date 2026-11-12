@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-13 05:00 时光轴票务区增加分团官方竞价/票务入口（双端已生效）
+
+- 需求：票务区显示对应分团的官方竞价页/票务页通用入口，不放具体商品链接。
+- 代码（网站 `f4ff0bc`）：`timeline_api/router.py` 输出 `branch`/`ticket_bid_url`/`ticket_sale_url`；`timeline.js` 在票务区渲染“<分团> 竞价页/票务页”链接，`timeline.html` 增加链接样式；`doc/website_pages.md` 同步。源 `timeline.js` 已按 `script/obfuscate_js.cjs` 配置重建 `js-dist/timeline.js`。
+- 数据（fan-hub `7a1f61257`）：CSV 新增 `branch`/`ticket_bid_url`/`ticket_sale_url`；有 `ticket_info` 的行按 branch 自动补通用入口（SNH48/BEJ/CKG/CGT→shop.48.cn，GNZ48→48.gnz48.com）。
+- 验证：Playwright 实测 11/15 首演“SNH48 竞价页/票务页”、11/21 广州站“GNZ48 竞价页/票务页”，href 正确；47 项相关单元测试通过。
+- 部署：网站 `f4ff0bc`、fan-hub `7a1f61257` 已推 GitHub，两端 `git pull --ff-only`。阿里云 `snh48-aliyun.service` 04:55:31 重启 MainPID `3329186`；腾讯云 `snh48-web.service` 04:57:09 重启 MainPID `3594766`；两端 active。
+
 ## 2026-11-13 时光轴搜索、票务/Call词、直播活动与展示列（双端已生效）
 
 - 需求：粉丝视角补时光轴搜索、票务信息、Call 词、第N场、数据更新时间；所有展示内容落到 fan-hub CSV 列（`ticket_info`、`location_display`、`call_words`、`show_no`、`updated_at`），网站只读不解析 `remark`；行程直播类型改为 `直播活动`，与房间直播筛选区分。
