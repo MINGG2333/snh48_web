@@ -286,7 +286,6 @@ def get_weidian_order_job(job_id: str, _=Depends(verify_weidian_orders_password)
     return result
 
 
-MAX_NOTE_ORDERS = 500
 MAX_NOTE_CHARS = 200
 NOTE_MODES = {"append", "replace", "clear"}
 
@@ -306,8 +305,6 @@ def set_weidian_order_notes(
             order_ids.append(order_id)
     if not order_ids:
         raise HTTPException(status_code=422, detail="请先选择要写备注的订单")
-    if len(order_ids) > MAX_NOTE_ORDERS:
-        raise HTTPException(status_code=422, detail=f"单次最多处理 {MAX_NOTE_ORDERS} 单")
     note = str(payload.get("note") or "").strip()
     if len(note) > MAX_NOTE_CHARS:
         raise HTTPException(status_code=422, detail=f"备注最长 {MAX_NOTE_CHARS} 字")

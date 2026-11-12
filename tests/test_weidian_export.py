@@ -47,6 +47,17 @@ class WeidianExportTests(unittest.TestCase):
         self.assertGreaterEqual(image.size[0], 560)
         self.assertGreater(image.size[1], 200)
 
+    def test_long_display_name_widens_image_instead_of_truncating(self) -> None:
+        long_name = "陈嘉仪应援会超长播报昵称测试一二三四五六七八九十" * 2
+        png = render_orders_png(
+            [{"order_id": "1", "item_name": "补邮", "display_name": long_name, "amount": "1.00"}],
+            updated="2026-11-12 08:00",
+            mask_names=False,
+        )
+        image = Image.open(io.BytesIO(png))
+        # 48 个汉字 × 22px 字号约 1056px，加上商品/金额列与列距后应明显超过旧版 560~700px。
+        self.assertGreater(image.size[0], 1200)
+
     def test_renders_without_mask(self) -> None:
         rows = [{"order_id": "1", "item_name": "补邮", "display_name": "ama", "amount": "3.00"}]
         png = render_orders_png(rows, updated="", mask_names=False)

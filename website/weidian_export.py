@@ -28,8 +28,7 @@ PAD = 20
 MIN_WIDTH = 560
 ROW_HEIGHT = 44
 MAX_ITEM_WIDTH = 360
-MAX_NAME_WIDTH = 140
-COLUMN_GAP = 28
+COLUMN_GAP = 56
 
 
 def _font(size: int, bold: bool = False):
@@ -119,7 +118,7 @@ def render_orders_png(
         amount_width = max(amount_width, _text_width(measure, _amount(row.get("amount")), amount_font))
 
     item_width = min(item_width, MAX_ITEM_WIDTH)
-    name_width = min(name_width, MAX_NAME_WIDTH)
+    name_width = max(name_width, 48.0) + 4
     item_x = PAD + 24
     name_x = item_x + item_width + COLUMN_GAP
     amount_right = name_x + name_width + COLUMN_GAP + amount_width
@@ -150,7 +149,7 @@ def render_orders_png(
         item_text = _fit_text(draw, row.get("item_name") or "未知商品", item_font, item_fallback, item_width)
         display = row.get("display_name") or row.get("receiver_name") or "匿名"
         name_text = mask_name(display) if mask_names else str(display)
-        name_text = _fit_text(draw, name_text, name_font, name_fallback, name_width)
+        name_text = _display_text(name_text, name_font, name_fallback)
         _draw_text_fallback(draw, (item_x, center_y), item_text, item_font, item_fallback, fill=NAME, anchor="lm")
         _draw_text_fallback(draw, (name_x, center_y), name_text, name_font, name_fallback, fill=NAME, anchor="lm")
         draw.text((amount_right, center_y), _amount(row.get("amount")), font=amount_font, fill=NAME, anchor="rm")
