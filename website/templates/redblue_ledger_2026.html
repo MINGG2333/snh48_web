@@ -2431,10 +2431,10 @@
   function startAutoSync() {
     if (autoSyncStarted) return;
     autoSyncStarted = true;
-    setTimeout(function () { syncRoomLive(true).catch(function () {}); }, 1500);
-    setTimeout(function () { syncWeidian(true).catch(function () {}); }, 5000);
-    setInterval(function () { syncRoomLive(true).catch(function () {}); }, 60000);
-    setInterval(function () { syncWeidian(true).catch(function () {}); }, 300000);
+    setTimeout(function () { syncRoomLive(true).catch(function () {}); }, 100);
+    setTimeout(function () { syncWeidian(true).catch(function () {}); }, 1000);
+    setInterval(function () { if (!document.hidden) syncRoomLive(true).catch(function () {}); }, 1000);
+    setInterval(function () { if (!document.hidden) syncWeidian(true).catch(function () {}); }, 5000);
   }
 
   async function shipOne(entryId) {
