@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from website import config as cfg
 from website import identity_index
 from website import redblue_ledger_api as api
-from website.redblue_export import _business_text
+from website.redblue_export import _business_text, _entry_name
 from website.redblue_ledger_api import _weidian_changed, _weidian_order_score, router
 
 
@@ -1873,6 +1873,36 @@ class RedblueLedgerApiTests(unittest.TestCase):
                 }
             ),
             "点唱整首+查水表",
+        )
+
+    def test_export_duplicate_entry_uses_scoring_name_and_dash(self):
+        self.assertEqual(
+            _entry_name(
+                {
+                    "fan_name": "DZ封心锁爱版",
+                    "raw_name": "花甲鱼粉",
+                    "duplicate": True,
+                }
+            ),
+            "花甲鱼粉",
+        )
+        self.assertEqual(
+            _entry_name({"fan_name": "DZ封心锁爱版", "raw_name": "花甲鱼粉"}),
+            "DZ封心锁爱版",
+        )
+        self.assertEqual(
+            _entry_name({"duplicate": True, "fan_name": "当前昵称"}),
+            "当前昵称",
+        )
+        self.assertEqual(
+            _business_text(
+                {
+                    "duplicate": True,
+                    "business_display_labels": ["点唱整首"],
+                    "selected_business": "6-ID 合影",
+                }
+            ),
+            "—",
         )
 
     def test_stale_cookie_is_login_expired_not_wrong_password(self):

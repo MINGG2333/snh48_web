@@ -4,6 +4,7 @@
 浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽，按条目按最长昵称/业务名动态定宽（最小 820px），正文 20–27px。
 未登记口袋48昵称的条目不再标红，昵称统一颜色，只在名字后保留一个低对比度 ! 标记。
 按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接；业务名固定显示在该笔兑换最早的分摊条目（第 1 条记录）上。
+已标记重复的条目在按条目导出时，昵称列使用计分时的昵称（`raw_name`），方便与当时的礼物记录和代投明细核对；这些条目的业务列固定显示破折号。
 """
 from __future__ import annotations
 
@@ -178,8 +179,11 @@ def _business_text(row: dict[str, Any]) -> str:
     """Export only marks the first contributing entry of a business redemption.
 
     Later contributing entries show an em dash; multiple businesses completed
-    on the same entry are joined with '+'.
+    on the same entry are joined with '+'. Duplicate entries never carry a
+    business in the export, so they always show an em dash.
     """
+    if row.get("duplicate"):
+        return "—"
     display_labels = row.get("business_display_labels")
     if isinstance(display_labels, list) and display_labels:
         names: list[str] = []
@@ -201,6 +205,19 @@ def _business_text(row: dict[str, Any]) -> str:
         if name and name not in names:
             names.append(name)
     return "+".join(names)
+
+
+def _entry_name(row: dict[str, Any]) -> str:
+    """按条目导出使用的昵称。
+
+    已标记重复的条目显示“计分时的昵称”（`raw_name`），与当时的礼物记录、
+    代投明细保持一致；其他条目仍显示当前口袋昵称（`fan_name`）。
+    """
+    if row.get("duplicate"):
+        score_name = str(row.get("raw_name") or "").strip()
+        if score_name:
+            return score_name
+    return row.get("fan_name") or row.get("raw_name") or "未登记"
 
 
 def _draw_entries(
@@ -259,7 +276,7 @@ def _draw_entries(
             time_text = str(row.get("source_time") or row.get("created_at") or "")[11:16] or "-"
             draw.text((x0, center_y), time_text, font=time_font, fill=FAINT, anchor="lm")
 
-            name = row.get("fan_name") or row.get("raw_name") or "未登记"
+            name = _entry_name(row)
             name_x = x0 + 70
             source_x = x0 + source_offset
             score_x = source_x + 100
@@ -388,7 +405,7 @@ def render_entries_png(
     business_fallback = _fallback_for(business_font)
     max_name_width = 0
     for item in items:
-        name = item.get("fan_name") or item.get("raw_name") or "未登记"
+        name = _entry_name(item)
         name_width = _text_width_fallback(
             measure,
             _display_text(name, name_font, name_fallback),
