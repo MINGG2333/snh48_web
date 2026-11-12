@@ -607,6 +607,9 @@ def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> L
             location = (row.get("location") or "").strip()
             location_display = (row.get("location_display") or "").strip() or location
             ticket_info = (row.get("ticket_info") or "").strip()
+            ticket_bid_url = (row.get("ticket_bid_url") or "").strip()
+            ticket_sale_url = (row.get("ticket_sale_url") or "").strip()
+            branch = (row.get("branch") or "").strip()
             call_words = (row.get("call_words") or "").strip()
             updated_at = (row.get("updated_at") or "").strip()
             cover_url_src = (row.get("cover_url") or "").strip()
@@ -675,6 +678,9 @@ def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> L
                 "location": location,
                 "location_display": location_display,
                 "ticket_info": ticket_info,
+                "ticket_bid_url": ticket_bid_url,
+                "ticket_sale_url": ticket_sale_url,
+                "branch": branch,
                 "call_words": call_words,
                 "updated_at": updated_at,
                 "source_url": source_url,

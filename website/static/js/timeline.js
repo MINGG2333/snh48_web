@@ -919,8 +919,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modalTimeText = event.datetime && !String(event.datetime).endsWith('00:00:00') ? ' ' + String(event.datetime).slice(11).trim() : '';
     const ticketInfo = String(event.ticket_info || '').trim();
-    const ticketHtml = ticketInfo
-      ? `<div class="timeline-modal-info timeline-ticket-info"><i class="fas fa-ticket-alt"></i> <span><strong>票务：</strong>${escapeHtml(ticketInfo)}</span></div>`
+    const branchLabel = event.branch ? `${event.branch} ` : '官方';
+    const ticketLinks = [];
+    const bidUrl = safeUrl(event.ticket_bid_url);
+    if (bidUrl) {
+      ticketLinks.push(`<a href="${bidUrl}" target="_blank" rel="noopener"><i class="fas fa-gavel"></i> ${escapeHtml(branchLabel)}竞价页</a>`);
+    }
+    const saleUrl = safeUrl(event.ticket_sale_url);
+    if (saleUrl) {
+      ticketLinks.push(`<a href="${saleUrl}" target="_blank" rel="noopener"><i class="fas fa-ticket-alt"></i> ${escapeHtml(branchLabel)}票务页</a>`);
+    }
+    const ticketLinksHtml = ticketLinks.length
+      ? `<div class="timeline-ticket-links">${ticketLinks.join('')}</div>`
+      : '';
+    const ticketHtml = (ticketInfo || ticketLinksHtml)
+      ? `<div class="timeline-modal-info timeline-ticket-info"><i class="fas fa-ticket-alt"></i> <span>${ticketInfo ? `<strong>票务：</strong>${escapeHtml(ticketInfo)}` : '<strong>官方票务</strong>'}</span>${ticketLinksHtml}</div>`
       : '';
     const callWords = String(event.call_words || '').trim();
     const callWordsHtml = callWords
