@@ -20,7 +20,7 @@ from website.score_gifts_api import verify_score_gifts_password
 router = APIRouter(prefix="/api/score-all-members", tags=["全员计分榜"])
 BJ_TZ = timezone(timedelta(hours=8))
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-VALID_SOURCES = {"all", "room", "live", "gnz"}
+VALID_SOURCES = {"all", "room", "live", "gnz", "xox", "third_party"}
 VALID_SORTS = {"score_desc", "name_asc", "team_asc"}
 
 _cache_lock = threading.Lock()
@@ -163,6 +163,7 @@ def _aggregate(
                 "room_score": 0.0,
                 "live_score": 0.0,
                 "gnz_score": 0.0,
+                "third_party_score": 0.0,
                 "total_count": 0,
                 "records": 0,
                 "gifts": {},
@@ -175,8 +176,10 @@ def _aggregate(
             row["room_score"] += score
         elif source == "live":
             row["live_score"] += score
-        elif source == "gnz":
-            row["gnz_score"] += score
+        elif source in {"gnz", "xox", "third_party"}:
+            row["third_party_score"] += score
+            if source == "gnz":
+                row["gnz_score"] += score
         row["total_count"] += count
         row["records"] += records
         day = str(cell.get("date") or "")
@@ -186,13 +189,15 @@ def _aggregate(
         gift_key = gift_id or gift_name
         gift = row["gifts"].setdefault(
             gift_key,
-            {"gift_id": gift_id, "gift_name": gift_name, "score": 0.0, "count": 0, "records": 0, "gnz_score": 0.0, "provenance": set()},
+            {"gift_id": gift_id, "gift_name": gift_name, "score": 0.0, "count": 0, "records": 0, "gnz_score": 0.0, "third_party_score": 0.0, "provenance": set()},
         )
         gift["score"] += score
         gift["count"] += count
         gift["records"] += records
-        if source == "gnz":
-            gift["gnz_score"] += score
+        if source in {"gnz", "xox", "third_party"}:
+            gift["third_party_score"] += score
+            if source == "gnz":
+                gift["gnz_score"] += score
             if cell.get("provenance"):
                 gift["provenance"].add(str(cell.get("provenance")))
 
@@ -230,6 +235,7 @@ def _aggregate(
         row["room_score"] = round(float(row["room_score"]), 6)
         row["live_score"] = round(float(row["live_score"]), 6)
         row["gnz_score"] = round(float(row["gnz_score"]), 6)
+        row["third_party_score"] = round(float(row["third_party_score"]), 6)
         member_rows.append(row)
 
     gift_rows = []
@@ -255,6 +261,7 @@ def _aggregate(
     room_score = sum(float(row["room_score"]) for row in member_rows)
     live_score = sum(float(row["live_score"]) for row in member_rows)
     gnz_score = sum(float(row["gnz_score"]) for row in member_rows)
+    third_party_score = sum(float(row["third_party_score"]) for row in member_rows)
     total_score = sum(float(row["total_score"]) for row in member_rows)
     return {
         "summary": {
@@ -262,6 +269,7 @@ def _aggregate(
             "room_score": round(room_score, 6),
             "live_score": round(live_score, 6),
             "gnz_score": round(gnz_score, 6),
+            "third_party_score": round(third_party_score, 6),
             "total_count": sum(int(row["total_count"]) for row in member_rows),
             "records": sum(int(row["records"]) for row in member_rows),
             "members": len(member_rows),

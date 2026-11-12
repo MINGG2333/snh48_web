@@ -363,6 +363,14 @@
           return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch];
         });
       }
+      function thirdPartyLabel(provenance) {
+        var list = provenance || [];
+        var hasGnz = list.indexOf("gnz.hk") >= 0;
+        var hasXox = list.indexOf("xox48") >= 0;
+        if (hasGnz && hasXox) return "第三方补录";
+        if (hasXox) return "XOX补录";
+        return "GNZ补录";
+      }
       function coverageSourceLabel(note) {
         if (note.source === "live") return "直播间";
         if (note.source === "room") return "房间";
@@ -525,7 +533,7 @@
             (row.gifts || []).map(function (gift) {
               return '<span class="gift-chip">' + escapeHtml(gift.gift_name || gift.gift_id) +
                 ' <strong>' + formatScore(gift.score) + '</strong> 分 · ' + formatNumber(gift.count) + ' 个' +
-                (Number(gift.gnz_score || 0) > 0 ? '<span class="provenance-inline">GNZ补录 ' + formatScore(gift.gnz_score) + ' 分</span>' : '') + '</span>';
+                (Number(gift.third_party_score || 0) > 0 ? '<span class="provenance-inline">' + thirdPartyLabel(gift.provenance) + ' ' + formatScore(gift.third_party_score) + ' 分</span>' : '') + '</span>';
             }).join("") + '</div></div></td></tr>' : "";
           return '<tr class="member-row" data-member-id="' + id + '">' +
             '<td class="num rank">' + escapeHtml(row.rank) + '</td>' +
