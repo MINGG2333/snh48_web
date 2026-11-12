@@ -105,6 +105,42 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         self.assertEqual(result["members"][0]["member_name"], "乙")
         self.assertEqual(result["summary"]["total_score"], 3.0)
 
+    def test_gnz_source_and_provenance_aggregation(self) -> None:
+        board = dict(BOARD)
+        board["cells"] = list(BOARD["cells"]) + [
+            {
+                "season": "2026-winter",
+                "date": "2026-10-24",
+                "source": "gnz",
+                "member_id": "1",
+                "gift_id": "g1",
+                "gift_name": "弦月回响",
+                "count": 4,
+                "score": 4.0,
+                "records": 1,
+                "provenance": "gnz.hk",
+            }
+        ]
+        board["provenance_summary"] = {"gnz.hk": {"cells": 1, "score": 4.0, "members": 1}}
+        cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="gnz",
+            date_from="",
+            date_to="",
+        )
+        self.assertEqual(len(cells), 1)
+        result = _aggregate(board, cells)
+        self.assertEqual(result["summary"]["gnz_score"], 4.0)
+        member = result["members"][0]
+        self.assertEqual(member["gnz_score"], 4.0)
+        self.assertEqual(member["gifts"][0]["gnz_score"], 4.0)
+        self.assertEqual(member["gifts"][0]["provenance"], ["gnz.hk"])
+
     def test_gift_and_team_facets(self) -> None:
         facets = _facets(BOARD, "2026-winter")
         self.assertEqual(facets["groups"], ["SNH48"])

@@ -89,6 +89,9 @@
     .coverage.show { display: block; }
     .coverage-badge { margin-left: 8px; padding: 2px 7px; border: 1px solid #8a6420; border-radius: 99px; background: rgba(240,184,75,.14); color: var(--gold); font-size: 11px; font-weight: 700; vertical-align: middle; }
     .coverage-badge:hover, .coverage-badge:focus-visible { background: var(--gold); color: var(--ink); outline: none; }
+    .provenance-badge { margin-left: 8px; padding: 2px 7px; border: 1px solid #2f6f8a; border-radius: 99px; background: rgba(80,180,220,.12); color: #8fd8f2; font-size: 11px; font-weight: 700; vertical-align: middle; }
+    .provenance-inline { margin-left: 5px; color: #8fd8f2; font-size: 11px; font-weight: 600; }
+    .coverage.provenance { border-color: #2f6f8a; background: rgba(80,180,220,.08); color: #a9e2f5; }
     .gap-headline { margin: 14px 14px 0; padding: 11px 13px; border: 1px solid #6b5320; border-radius: 8px; background: rgba(240,184,75,.08); color: #f2d38b; font-size: 13px; }
     .gap-card { margin: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 13px 14px; }
     .gap-card h3 { margin: 0 0 10px; font-size: 15px; color: var(--gold); }
@@ -241,6 +244,7 @@
       </section>
 
       <div id="coverageNotice" class="coverage"></div>
+      <div id="provenanceNotice" class="coverage provenance"></div>
 
       <section class="two-col">
         <div class="panel">
@@ -282,7 +286,7 @@
           <div class="field"><label for="teamSelect">队伍</label><select id="teamSelect"><option value="">全部队伍</option></select></div>
           <div class="field"><label for="memberInput">成员</label><input id="memberInput" type="search" placeholder="昵称或 ID"></div>
           <div class="field"><label for="giftSelect">礼物</label><select id="giftSelect"><option value="">全部计分礼物</option></select></div>
-          <div class="field"><label>来源</label><div class="segment" id="sourceSegment"><button type="button" data-source="all" class="active">全部</button><button type="button" data-source="room">房间</button><button type="button" data-source="live">直播</button></div></div>
+          <div class="field"><label>来源</label><div class="segment" id="sourceSegment"><button type="button" data-source="all" class="active">全部</button><button type="button" data-source="room">房间</button><button type="button" data-source="live">直播</button><button type="button" data-source="gnz">GNZ补录</button></div></div>
           <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date"></div>
           <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
         </div>
@@ -347,6 +351,7 @@
       var gapModalTitle = document.getElementById("gapModalTitle");
       var closeGapBtn = document.getElementById("closeGapBtn");
       var coverageNotice = document.getElementById("coverageNotice");
+      var provenanceNotice = document.getElementById("provenanceNotice");
       var scoreNavSelect = document.getElementById("scoreNavSelect");
 
       function formatScore(value) {
@@ -365,6 +370,7 @@
       function coverageSourceLabel(note) {
         if (note.source === "live") return "直播间";
         if (note.source === "room") return "房间";
+        if (note.source === "gnz") return "GNZ 补录";
         return note.source || "-";
       }
       function closeGapModal() {
@@ -393,11 +399,32 @@
       }
       function renderCoverageNotice() {
         var ids = Object.keys(COVERAGE_NOTES || {});
-        if (!ids.length) { coverageNotice.classList.remove("show"); coverageNotice.textContent = ""; return; }
+        var prov = (data && data.provenance_summary) || {};
+        var provKeys = Object.keys(prov);
+        var provParts = provKeys.map(function (key) {
+          var item = prov[key] || {};
+          return formatScore(item.score || 0) + " 分（" + formatNumber(item.members || 0) + " 名成员，" + formatNumber(item.cells || 0) + " 条）";
+        });
+        if (!ids.length && !provKeys.length) {
+          coverageNotice.classList.remove("show"); coverageNotice.textContent = "";
+          provenanceNotice.classList.remove("show"); provenanceNotice.textContent = "";
+          return;
+        }
         var totalMissing = ids.reduce(function (sum, id) { return sum + Number(COVERAGE_NOTES[id].missing || 0); }, 0);
-        var text = (data && data.coverage_summary) || ("有 " + ids.length + " 名成员共 " + formatScore(totalMissing) + " 分历史数据无法从官方侧补回。");
-        coverageNotice.innerHTML = '⚠️ ' + escapeHtml(text) + ' 点击成员行中的「数据缺口」查看具体场次和原因。';
-        coverageNotice.classList.add("show");
+        var gapText = (data && data.coverage_summary) || ("有 " + ids.length + " 名成员共 " + formatScore(totalMissing) + " 分历史数据无法从官方侧补回。");
+        if (ids.length) {
+          coverageNotice.innerHTML = '⚠️ ' + escapeHtml(gapText) + ' 点击成员行中的「数据缺口」查看具体场次和原因。';
+          coverageNotice.classList.add("show");
+        } else {
+          coverageNotice.classList.remove("show"); coverageNotice.textContent = "";
+        }
+        if (provKeys.length) {
+          provenanceNotice.innerHTML = 'ℹ️ 其中 ' + escapeHtml(provParts.join("；")) +
+            ' 来自 gnz.hk 补录；成员名后的「GNZ补录」徽章和礼物明细会标出来源。';
+          provenanceNotice.classList.add("show");
+        } else {
+          provenanceNotice.classList.remove("show"); provenanceNotice.textContent = "";
+        }
       }
       function setLoginError(text) {
         loginError.textContent = text || "密码错误";
@@ -492,7 +519,10 @@
         if (teamSelect.value) parts.push(teamSelect.options[teamSelect.selectedIndex].text);
         if (memberInput.value.trim()) parts.push("成员：" + memberInput.value.trim());
         if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
-        if (sourceFilter !== "all") parts.push(sourceFilter === "room" ? "房间" : "直播");
+        if (sourceFilter !== "all") {
+          var sourceNames = { room: "房间", live: "直播", gnz: "GNZ补录" };
+          parts.push(sourceNames[sourceFilter] || sourceFilter);
+        }
         if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
         if (activeFiltersTop) activeFiltersTop.textContent = parts.join(" · ") || "全部成员";
       }
@@ -518,15 +548,17 @@
           var id = escapeHtml(row.member_id);
           var note = COVERAGE_NOTES[row.member_id];
           var gapBadge = note ? ' <button class="coverage-badge" type="button" data-gap-id="' + id + '">数据缺口 -' + escapeHtml(formatScore(note.missing)) + '</button>' : "";
+          var gnzBadge = Number(row.gnz_score || 0) > 0 ? ' <span class="provenance-badge">含 GNZ 补录 ' + escapeHtml(formatScore(row.gnz_score)) + ' 分</span>' : "";
           var detail = expanded[row.member_id] ?
             '<tr class="detail-row"><td colspan="8"><div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
             (row.gifts || []).map(function (gift) {
               return '<span class="gift-chip">' + escapeHtml(gift.gift_name || gift.gift_id) +
-                ' <strong>' + formatScore(gift.score) + '</strong> 分 · ' + formatNumber(gift.count) + ' 个</span>';
+                ' <strong>' + formatScore(gift.score) + '</strong> 分 · ' + formatNumber(gift.count) + ' 个' +
+                (Number(gift.gnz_score || 0) > 0 ? '<span class="provenance-inline">GNZ补录 ' + formatScore(gift.gnz_score) + ' 分</span>' : '') + '</span>';
             }).join("") + '</div></div></td></tr>' : "";
           return '<tr class="member-row" data-member-id="' + id + '">' +
             '<td class="num rank">' + escapeHtml(row.rank) + '</td>' +
-            '<td><div class="member-name">' + escapeHtml(row.member_name) + gapBadge + '</div><div class="member-sub">ID ' + id + (row.period_name ? " · " + escapeHtml(row.period_name) : "") + '</div></td>' +
+            '<td><div class="member-name">' + escapeHtml(row.member_name) + gapBadge + gnzBadge + '</div><div class="member-sub">ID ' + id + (row.period_name ? " · " + escapeHtml(row.period_name) : "") + '</div></td>' +
             '<td><span class="tag">' + escapeHtml(row.group || "-") + '</span> <span class="tag">' + escapeHtml(row.team_label || "未分组") + '</span></td>' +
             '<td class="num score-main">' + formatScore(row.total_score) + '</td>' +
             '<td class="num">' + formatScore(row.room_score) + '</td>' +
