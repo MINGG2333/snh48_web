@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-12 红蓝台账按条目导出：重复条目显示计分昵称、业务列固定破折号（双端已生效）
+
+- 需求：`/business/redblue2026` 导出“按条目”PNG 时，已标记重复的条目昵称列改用计分时的昵称（`raw_name`），方便和当时的礼物记录/代投明细核对；这些重复条目的业务列不再显示业务，统一显示破折号 `—`。
+- 代码（网站 `1814c3b`）：`website/redblue_export.py` 新增 `_entry_name()`（`duplicate=True` 时优先 `raw_name`，缺失回退 `fan_name`/`raw_name`/“未登记”），按条目导出的昵称绘制和定宽测量都改用它；`_business_text()` 对重复条目直接返回 `—`。普通条目仍显示当前口袋昵称和原业务列，按昵称汇总、页面表格和前端交互不变。`doc/website_pages.md` 同步说明，`tests/test_redblue_ledger_api.py` 新增 1 项覆盖重复条目昵称与业务列。
+- 验证：两端 `tests.test_redblue_ledger_api` 60 项通过。用生产台账真实数据只读渲染（198 条，其中 9 条重复）：`花甲鱼粉` 等计分昵称正确显示，`DZ封心锁爱版` 等当前昵称不再出现在重复行；所有重复行业务列均为 `—`，图片正常生成。
+- 部署：网站 `1814c3b` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 23:28:13 重启，MainPID `3116914`；阿里云 `snh48-aliyun.service` 23:29:02 重启，MainPID `2642988`；两端 active/running，`https://cjy.plus/business/redblue2026` 与 `https://cjy.我爱你/business/redblue2026` 均 200。
+
 ## 2026-11-12 导出图恢复单色 emoji 并修复昵称 kaomoji 丢字（双端已生效）
 
 - 现象：`/business/redblue2026` 导出的昵称 `炸毛小猫🐱⌯>ᴗo⌯ಣ` 少了 `ᴗ`，表情却从黑白线稿变成了彩色。
