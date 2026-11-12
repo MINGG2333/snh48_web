@@ -2432,9 +2432,9 @@
     if (autoSyncStarted) return;
     autoSyncStarted = true;
     setTimeout(function () { syncRoomLive(true).catch(function () {}); }, 100);
-    setTimeout(function () { syncWeidian(true).catch(function () {}); }, 1000);
+    setTimeout(function () { syncWeidian(true).catch(function () {}); }, 5000);
     setInterval(function () { if (!document.hidden) syncRoomLive(true).catch(function () {}); }, 1000);
-    setInterval(function () { if (!document.hidden) syncWeidian(true).catch(function () {}); }, 5000);
+    setInterval(function () { if (!document.hidden) syncWeidian(true).catch(function () {}); }, 60000);
   }
 
   async function shipOne(entryId) {
