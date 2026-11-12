@@ -1230,11 +1230,7 @@
 
     async function doLogin() {
       if (loginBusy) return;
-      if (!loginVerified) {
-        var value = passwordInput.value.trim();
-        if (!value) return;
-        password = value;
-      }
+      var value = passwordInput.value.trim();
       loginBusy = true;
       trackAdminEvent("login_attempt", { action: "score_gifts_login", result: "submitted" });
       if (value) {
