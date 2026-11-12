@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-13 红蓝台账条目编辑：修正来源显示并恢复保存（双端已生效）
+
+- 现象：`/business/redblue2026` 点“编辑”时，微店条目显示成「暗票·计分卡」；保存失败并提示“主节点暂时不可用”（阿里云）或“应援会来源条目不能标记重复”（腾讯云）。
+- 根因：①编辑弹窗的“类型”下拉只有 `manual` / `association_manual` 两项，`openEntryModal()` 把微店/房间/直播等来源强制改成 `manual`，所以微店鸡腿显示成暗票计分卡；②编辑表单每次都会提交 `duplicate` 复选框，即使没有改动也会带上 `false`，而 `_mutator_update()` 只要看到 `duplicate` 字段就拒绝应援会来源，导致所有微店/应援会手动条目无法保存；③副本节点把主节点返回的 422 校验错误统一包装成 `SharedStatePeerError`，页面只看到“主节点暂时不可用”。
+- 代码（网站 `8a19ab9`）：`website/templates/redblue_ledger_2026.html` 编辑时按条目真实来源和当前计分方式生成只读类型标签（如「微店·鸡腿」「房间·鸡腿」），新增时应援会条目隐藏重复勾选，已代投条目禁用重复勾选，编辑不再提交 `source`，只在可编辑时提交 `duplicate`，并把已投/已发货等异常状态补进状态下拉，避免保存时回退状态；`website/redblue_ledger_api.py` 的 `_mutator_update()` 仅在重复状态实际变化时才校验和拒绝；`script/shared_state_peer.py` 把主节点的 `ValueError` 标记为 422，`_mutate()` 收到 422 时透传业务提示，不再显示“主节点暂时不可用”。`doc/website_pages.md` 同步编辑行为说明。
+- 验证：两端 `tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 68 项通过（新增：应援会条目重复标记未变更时可保存、已投微店条目编辑保持状态、编辑弹窗显示真实来源、重复勾选在不可改时隐藏）。阿里云实测通过副本转发主节点：对应援会条目提交 `duplicate=true` 返回 422 `应援会来源条目不能标记重复`，不再误报主节点不可用；该请求在写入前被拒绝，生产台账未产生新 revision。
+- 部署：网站 `8a19ab9` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 00:25:42 重启，MainPID `3187523`；阿里云 `snh48-aliyun.service` 00:26:02 重启，MainPID `2738760`；两端 active/running，`https://cjy.plus/business/redblue2026` 与 `https://cjy.我爱你/business/redblue2026` 均 200。
+
 ## 2026-11-12 红蓝台账按条目导出：重复条目显示计分昵称、业务列固定破折号（双端已生效）
 
 - 需求：`/business/redblue2026` 导出“按条目”PNG 时，已标记重复的条目昵称列改用计分时的昵称（`raw_name`），方便和当时的礼物记录/代投明细核对；这些重复条目的业务列不再显示业务，统一显示破折号 `—`。
