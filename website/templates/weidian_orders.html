@@ -67,6 +67,12 @@
     .statusbar { color:var(--muted); font-size:12px; min-height:18px; margin-left:6px; }
     .multi-group { color:var(--muted); font-size:12px; font-weight:600; padding:6px 6px 2px; }
     .job { color:var(--muted); font-size:12px; }
+    .history-overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(17,24,39,.35); }
+    .history-box { width:min(720px,100%); max-height:80vh; overflow:auto; background:var(--card); border-radius:12px; padding:18px; box-shadow:0 18px 50px rgba(0,0,0,.2); }
+    .history-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; }
+    .history-head h1 { font-size:18px; margin:0; }
+    .history-row { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:10px 0; border-bottom:1px solid var(--line); }
+    .history-row:last-child { border-bottom:0; }
     th input[type=checkbox], td input[type=checkbox] { width:15px; height:15px; accent-color:var(--pink); vertical-align:middle; }
     @media (max-width: 900px) { th:nth-child(2), td:nth-child(2) { display:none; } }
   </style>
@@ -101,6 +107,7 @@
       <button class="btn" id="shipSelectedBtn" disabled>批量无需物流发货</button>
       <button class="btn" id="noteFilteredBtn" disabled>备注筛选结果</button>
       <button class="btn" id="noteSelectedBtn" disabled>备注勾选</button>
+      <button class="btn" id="notesHistoryBtn">备注历史</button>
       <button class="btn" id="exportOrdersBtn">导出筛选图片</button>
       <details class="multi" id="statusMenu">
         <summary id="statusSummary">全部状态</summary>
@@ -155,6 +162,16 @@
 </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="history-overlay hidden" id="historyOverlay">
+  <div class="history-box">
+    <div class="history-head">
+      <h1>备注历史</h1>
+      <button class="btn mini" id="historyClose">关闭</button>
+    </div>
+    <div class="sub">每次写备注前自动保存上一版，最多保留 50 版；恢复前会先备份当前备注。</div>
+    <div id="historyList"><div class="muted">加载中…</div></div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -657,9 +674,17 @@
       if (!note) {
         if (!window.confirm("确认清空该订单的本地备注？")) return;
       } else if (!window.confirm("确认保存该订单的本地备注？\n" + note)) return;
+    } else if (note) {
+      if (!window.confirm("确认给 " + rows.length + " 笔订单追加备注「" + note + "」？")) return;
     } else {
-      var verb = note ? "追加备注「" + note + "」" : "清空本地备注";
-      if (!window.confirm("确认" + verb + "？共 " + rows.length + " 笔订单。")) return;
+      var typed = window.prompt(
+        "即将清空 " + rows.length + " 笔订单的本地备注。\n如确认，请输入「清空」：",
+        ""
+      );
+      if (typed !== "清空") {
+        toast("已取消清空", true);
+        return;
+      }
     }
     try {
       var result = await api("/api/weidian-orders/notes", {
@@ -675,6 +700,47 @@
       await loadData();
     } catch (error) {
       toast(error.message || "备注保存失败", true);
+    }
+  }
+
+  async function openNotesHistory() {
+    var overlay = $("historyOverlay"), list = $("historyList");
+    overlay.classList.remove("hidden");
+    list.innerHTML = '<div class="muted">加载中…</div>';
+    try {
+      var data = await api("/api/weidian-orders/notes/history?limit=30");
+      var versions = data.versions || [];
+      if (!versions.length) {
+        list.innerHTML = '<div class="muted">还没有历史版本。写一次备注后就会开始保留。</div>';
+        return;
+      }
+      list.innerHTML = versions.map(function (item) {
+        var preview = (item.preview || []).map(function (line) {
+          return '<div class="raw">' + esc(line) + '</div>';
+        }).join("");
+        return '<div class="history-row"><div>' +
+          '<div class="name">' + esc(item.saved_at || item.version) + '</div>' +
+          '<div class="raw">' + esc(item.count) + ' 条备注</div>' + preview +
+          '</div><button class="btn mini" data-restore="' + esc(item.version) + '">恢复</button></div>';
+      }).join("");
+    } catch (error) {
+      list.innerHTML = '<div class="muted">' + esc(error.message || "加载失败") + '</div>';
+    }
+  }
+
+  async function restoreNotes(version) {
+    if (!window.confirm("确认恢复到 " + version + " 的备注版本？当前备注会先自动备份。")) return;
+    try {
+      var result = await api("/api/weidian-orders/notes/restore", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({version: version})
+      });
+      if (result.remote_synced === false) toast("已恢复，但对端同步失败：" + (result.remote_error || ""), true);
+      else toast("备注已恢复");
+      $("historyOverlay").classList.add("hidden");
+      await loadData();
+    } catch (error) {
+      toast(error.message || "恢复失败", true);
     }
   }
 
@@ -810,6 +876,7 @@
       var noteRow = allOrders.filter(function (item) { return item.order_id === target.dataset.note; })[0];
       editNotes(noteRow ? [noteRow] : [], "replace", target.dataset.current);
     }
+    else if (target.dataset.restore) restoreNotes(target.dataset.restore);
     else if (target.dataset.rebroadcast) rebroadcastOrder(target.dataset.rebroadcast, target.dataset.current);
     else if (target.dataset.ship) shipOrder(target.dataset.ship, target.dataset.item);
   });
@@ -819,6 +886,13 @@
   });
   $("noteSelectedBtn").addEventListener("click", function () {
     editNotes(checkedRows(allOrders, selectedOrders), "append", "");
+  });
+  $("notesHistoryBtn").addEventListener("click", openNotesHistory);
+  $("historyClose").addEventListener("click", function () {
+    $("historyOverlay").classList.add("hidden");
+  });
+  $("historyOverlay").addEventListener("click", function (event) {
+    if (event.target === $("historyOverlay")) $("historyOverlay").classList.add("hidden");
   });
   $("selectAll").addEventListener("change", function (event) {
     var rows = filteredRows().filter(isCheckable);

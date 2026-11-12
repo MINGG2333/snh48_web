@@ -75,7 +75,17 @@ def main() -> int:
         response = {"ok": True, "event_id": installed.get("event_id", "")}
     elif command == "weidian-admin":
         action = str(payload.get("action") or "")
-        if action not in {"snapshot", "job-submit", "job-result", "set-name", "set-notes", "redblue-cache"}:
+        if action not in {
+            "snapshot",
+            "job-submit",
+            "job-result",
+            "set-name",
+            "set-notes",
+            "notes-history",
+            "notes-restore",
+            "notes-import",
+            "redblue-cache",
+        }:
             raise SharedStateError("unsupported weidian admin action")
         cli = "/home/snh48-fan-hub/scripts/weidian/order_admin.py"
         python = "/home/snh48-fan-hub/venv/bin/python3"

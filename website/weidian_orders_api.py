@@ -331,6 +331,49 @@ def set_weidian_order_notes(
     }
 
 
+NOTES_VERSION_RE = re.compile(r"^\d{8}T\d{6}_\d{6}$")
+
+
+@router.get("/notes/history")
+def weidian_order_notes_history(
+    limit: int = 30,
+    _=Depends(verify_weidian_orders_password),
+):
+    try:
+        limit = max(1, min(int(limit), 50))
+    except (TypeError, ValueError):
+        limit = 30
+    return _call("notes-history", {"limit": limit})
+
+
+@router.post("/notes/restore")
+def restore_weidian_order_notes(
+    payload: dict[str, Any] = Body(default={}),
+    _=Depends(verify_weidian_orders_password),
+):
+    version = str(payload.get("version") or "").strip()
+    if not NOTES_VERSION_RE.fullmatch(version):
+        raise HTTPException(status_code=422, detail="无效的备注历史版本")
+    result = _call("notes-restore", {"version": version})
+    notes = result.get("notes") if isinstance(result, dict) else None
+    mirror_error = ""
+    try:
+        if _primary():
+            _peer("notes-import", {"notes": notes or {}})
+        else:
+            _run_local("notes-import", {"notes": notes or {}})
+    except HTTPException as exc:
+        mirror_error = str(exc.detail)
+    _clear_cache()
+    if isinstance(result, dict):
+        result.pop("notes", None)
+    return {
+        "result": result,
+        "remote_synced": not mirror_error,
+        "remote_error": mirror_error,
+    }
+
+
 @router.post("/name")
 def set_weidian_order_name(
     payload: dict[str, Any] = Body(default={}),

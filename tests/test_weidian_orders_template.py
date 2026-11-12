@@ -104,6 +104,23 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertIn("本地：", self.template)
         self.assertNotIn('id="noteInput"', self.template)
 
+    def test_notes_history_and_hard_clear_confirmation(self) -> None:
+        for marker in (
+            'id="notesHistoryBtn"',
+            'id="historyOverlay"',
+            'id="historyList"',
+            'id="historyClose"',
+            "/api/weidian-orders/notes/history",
+            "/api/weidian-orders/notes/restore",
+            "data-restore",
+            "function openNotesHistory",
+            "function restoreNotes",
+            "请输入「清空」",
+            'typed !== "清空"',
+            "最多保留 50 版",
+        ):
+            self.assertIn(marker, self.template)
+
     def test_item_filter_is_a_multi_select(self) -> None:
         for marker in (
             'id="itemMenu"',
