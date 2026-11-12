@@ -538,6 +538,7 @@ def get_live_danmu(response: Response, live_id: str = Query(..., min_length=1)):
 TYPE_LABEL_MAP = {
     "公演": "公演",
     "Live": "Live",
+    "直播活动": "直播活动",
     "外务": "外务",
     "见面会": "见面会",
     "里程碑": "里程碑",
@@ -604,6 +605,10 @@ def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> L
 
             # Optional enhanced fields from CSV
             location = (row.get("location") or "").strip()
+            location_display = (row.get("location_display") or "").strip() or location
+            ticket_info = (row.get("ticket_info") or "").strip()
+            call_words = (row.get("call_words") or "").strip()
+            updated_at = (row.get("updated_at") or "").strip()
             cover_url_src = (row.get("cover_url") or "").strip()
             source_url = (row.get("source_url") or "").strip()
             csv_desc = (row.get("description") or "").strip()
@@ -629,8 +634,8 @@ def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> L
             desc_parts = [f"📅 {date_str}"]
             if time_str:
                 desc_parts.append(f"🕐 {time_str}")
-            if location:
-                desc_parts.append(f"📍 {location}")
+            if location_display:
+                desc_parts.append(f"📍 {location_display}")
             if csv_desc:
                 desc_parts.append(f"\n\n{csv_desc}")
             else:
@@ -644,6 +649,7 @@ def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> L
                 icon = {
                     "公演": "fa-music",
                     "Live": "fa-microphone",
+                    "直播活动": "fa-video",
                     "外务": "fa-plane",
                     "见面会": "fa-handshake",
                     "里程碑": "fa-star",
@@ -667,6 +673,10 @@ def _parse_schedule_csv(csv_path: Path, force_event_category: bool = False) -> L
                 "cover_url": cover_url,
                 "icon": icon,
                 "location": location,
+                "location_display": location_display,
+                "ticket_info": ticket_info,
+                "call_words": call_words,
+                "updated_at": updated_at,
                 "source_url": source_url,
                 "image_urls": all_images,
                 "event_link": event_link,
@@ -758,9 +768,11 @@ def get_schedule(response: Response):
     """Return schedule records as timeline-ready event list."""
     response.headers["Cache-Control"] = "no-store"
     records = read_schedule()
+    updated_at = max((str(r.get("updated_at") or "") for r in records), default="")
     return {
         "success": True,
         "data": records,
         "total": len(records),
         "member": MEMBER_NAME,
+        "updated_at": updated_at,
     }

@@ -8,7 +8,7 @@
 const BADGE_CLASS_MAP = {
   milestone: 'milestone', tour: 'tour', show: 'show',
   event: 'event', external: 'external', live: 'event',
-  公演: 'show', Live: 'event', 外务: 'external', 见面会: 'event', 其他: 'event',
+  公演: 'show', Live: 'event', 直播活动: 'event', 外务: 'external', 见面会: 'event', 其他: 'event',
   里程碑: 'milestone', 日常: 'event', 微博: 'weibo', 抖音: 'douyin',
   weibo: 'weibo', douyin: 'douyin',
 };
@@ -20,6 +20,7 @@ let activeSources = new Set(['all']); // one visible category at a time
 let allLiveEvents = [];   // fetched from API
 let allScheduleEvents = []; // fetched from schedule API
 let allSocialEvents = []; // fetched from fan-hub social timeline dataset
+let searchQuery = ''; // timeline search keywords (lowercased, whitespace-split)
 
 // ── Format date (top-level so data can reference it) ──
 function formatDate(dateInput) {
@@ -55,6 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const dateInput = document.getElementById('timelineDateInput');
   const dateJumpBtn = document.getElementById('timelineDateJump');
   const filterBtns = document.querySelectorAll('.timeline-filter-btn');
+  const searchInput = document.getElementById('timelineSearchInput');
+  const searchClear = document.getElementById('timelineSearchClear');
+  const searchCount = document.getElementById('timelineSearchCount');
+  const dataUpdatedEl = document.getElementById('timelineDataUpdated');
 
   let scale = 1;
   const MIN_SCALE = 0.5;
@@ -105,6 +110,32 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
+  // ── Search ──
+  function eventSearchText(ev) {
+    return [
+      ev.title, ev.type, ev.typeLabel, ev.location, ev.location_display,
+      ev.description, ev.date, ev.datetime, ev.show_no, ev.ticket_info,
+      ev.name,
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function matchesSearch(ev) {
+    if (!searchQuery) return true;
+    const haystack = eventSearchText(ev);
+    return searchQuery.split(/\s+/).filter(Boolean).every(token => haystack.includes(token));
+  }
+
+  function updateSearchCount(total) {
+    if (!searchCount) return;
+    if (!searchQuery) {
+      searchCount.textContent = '';
+      searchCount.hidden = true;
+      return;
+    }
+    searchCount.hidden = false;
+    searchCount.textContent = total > 0 ? `${total} 条` : '无匹配';
+  }
+
   // ── Get filtered event list ──
   function getFilteredEvents() {
     let list = [];
@@ -118,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (showAll || activeSources.has('room')) list = list.concat(allLiveEvents);
     if (showAll || activeSources.has('weibo')) list = list.concat(allSocialEvents.filter(ev => ev.platform === 'weibo'));
     if (showAll || activeSources.has('douyin')) list = list.concat(allSocialEvents.filter(ev => ev.platform === 'douyin'));
+    list = list.filter(matchesSearch);
     list.sort((a, b) => a.date.localeCompare(b.date) || (a.datetime || '').localeCompare(b.datetime || ''));
     return list;
   }
@@ -125,6 +157,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Render events (grouped by date) ──
   function renderTimeline(eventList) {
     trackInner.innerHTML = '';
+    if (!eventList.length) {
+      trackInner.innerHTML = `
+        <div class="timeline-empty">
+          <i class="fas fa-search"></i>
+          <p>没有找到匹配的内容</p>
+          <span>试试其他关键词，或切换筛选条件</span>
+        </div>
+      `;
+      return;
+    }
     const groups = groupByDate(eventList);
 
     groups.forEach(([dateStr, events], groupIdx) => {
@@ -157,13 +199,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgClass = hasCover ? 'timeline-card-img loading' : 'timeline-card-img-placeholder';
         const keywordBadge = secondaryPerformanceBadge(ev);
         cardsHtml += `
-          <div class="timeline-card" data-event-id="${eventId}">
-            ${hasCover ? `<img class="${imgClass}" src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">` : imgHtml}
+          <div class="timeline-card" data-event-id="${eventId}" tabindex="0" role="button" aria-label="${titleText}">
+            ${hasCover ? `<img class="${imgClass}" data-fallback-icon="${iconClass}" src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')">` : imgHtml}
             <div class="timeline-card-body">
               <div class="timeline-card-date">${escapeHtml(formatDate(ev.date))}${eventTime}</div>
               <div class="timeline-card-title">${titleText}</div>
               <span class="timeline-card-badge ${badgeClass}">${typeLabelText}</span>
               ${ev.show_no ? `<span class="timeline-card-badge showno" style="margin-left:4px;">第${escapeHtml(String(ev.show_no))}场</span>` : ''}
+              ${ev.ticket_info ? '<span class="timeline-card-badge ticket" style="margin-left:4px;"><i class="fas fa-ticket-alt"></i> 票务</span>' : ''}
               ${keywordBadge ? `<span class="timeline-card-badge ${keywordBadge.split('|')[0]}" style="margin-left:4px;">${keywordBadge.split('|')[1]}</span>` : ''}
               ${ev.source === 'room' ? `<span class="timeline-card-badge danmu ${ev.has_danmu ? 'available' : 'missing'}" style="margin-left:4px;">${ev.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
               ${ev.content_type === 'live' ? '<span class="timeline-card-badge live" style="margin-left:4px;">直播</span>' : ''}
@@ -208,6 +251,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isPinching) return;
           if (!wrapper.classList.contains('dragging')) openModal(ev);
         });
+        cardEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openModal(ev);
+          }
+        });
       });
 
       trackInner.appendChild(col);
@@ -230,15 +279,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Refresh timeline, optionally preserving current center ──
-  function refreshTimeline(preserveCenter) {
+  function refreshTimeline(preserveCenter, centerDate = null) {
     // Use the date input as the authoritative center reference
     const prevDate = preserveCenter && dateInput && dateInput.value ? dateInput.value : null;
     mergedEvents = getFilteredEvents();
     renderTimeline(mergedEvents);
+    updateSearchCount(mergedEvents.length);
     requestAnimationFrame(() => {
       // Force layout so newly rendered elements have valid positions
       void wrapper.offsetHeight;
-      if (prevDate) {
+      if (centerDate) {
+        centerOnDate(centerDate);
+      } else if (prevDate) {
         centerOnDate(prevDate);
       } else {
         // Initial load: center on today's date
@@ -482,6 +534,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ── Search box ──
+  let searchTimer = null;
+  function applySearch(value) {
+    searchQuery = String(value || '').trim().toLowerCase();
+    if (searchClear) searchClear.hidden = !searchQuery;
+    const matches = getFilteredEvents();
+    const centerDate = searchQuery
+      ? (matches.length ? matches[0].date : null)
+      : formatDateInput(TODAY);
+    refreshTimeline(true, centerDate);
+  }
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => applySearch(searchInput.value), 160);
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        applySearch('');
+      }
+    });
+  }
+  if (searchClear) {
+    searchClear.addEventListener('click', () => {
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+      }
+      applySearch('');
+    });
+  }
+
   // ── Collapsible filter bar ──
   const filterHeader = document.getElementById('timelineFilterHeader');
   const filterOptions = document.getElementById('timelineFilterOptions');
@@ -522,6 +607,10 @@ document.addEventListener('DOMContentLoaded', () => {
           ...ev,
           source: 'assistant',
         }));
+        if (dataUpdatedEl && data.updated_at) {
+          dataUpdatedEl.textContent = `行程数据更新于 ${data.updated_at}`;
+          dataUpdatedEl.hidden = false;
+        }
       }
     } catch (err) {
       console.warn('[timeline] Failed to fetch schedule events:', err);
@@ -763,6 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
       milestone: 'milestone', tour: 'tour', show: 'show',
       event: 'event', external: 'external', live: 'event',
       里程碑: 'milestone', 日常: 'event', 微博: 'weibo', 抖音: 'douyin',
+      公演: 'show', Live: 'event', 直播活动: 'event', 外务: 'external', 见面会: 'event', 其他: 'event',
       weibo: 'weibo', douyin: 'douyin',
     };
     const badgeClass = badgeClassMap[event.type] || 'event';
@@ -777,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Build cover/gallery: if multiple images, show scrollable gallery; else single cover
     let coverHtml = '';
+    const fallbackIcon = safeIcon(event.icon);
     // Check manual event images first, then schedule images
     const imgList = event.images || event.image_urls || [];
     if (imgList.length > 1) {
@@ -784,7 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
       imgList.forEach(url => {
         const safeSrc = safeUrl(url);
         if (safeSrc) {
-          coverHtml += `<img src="${safeSrc}" alt="" class="loading" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading');this.style.display='none'">`;
+          coverHtml += `<img src="${safeSrc}" alt="" class="loading" data-fallback-icon="${fallbackIcon}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')">`;
         }
       });
       coverHtml += '</div>';
@@ -792,8 +883,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Single cover (from cover_url or first image/imgList item or placeholder)
       const coverSrc = safeUrl(event.cover_url || (imgList.length > 0 ? imgList[0] : '') || event.image || '');
       coverHtml = coverSrc
-        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${escapeHtml(event.title || '')}" referrerpolicy="no-referrer" onload="this.classList.remove('loading')" onerror="this.classList.remove('loading')">`
-        : `<div class="timeline-modal-img-placeholder"><i class="fas ${safeIcon(event.icon)}"></i></div>`;
+        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${escapeHtml(event.title || '')}" data-fallback-icon="${fallbackIcon}" referrerpolicy="no-referrer" onload="this.classList.remove('loading')">`
+        : `<div class="timeline-modal-img-placeholder"><i class="fas ${fallbackIcon}"></i></div>`;
     }
 
     // Build B站 links
@@ -823,17 +914,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const modalTimeText = event.datetime && !String(event.datetime).endsWith('00:00:00') ? ' ' + String(event.datetime).slice(11).trim() : '';
+    const ticketInfo = String(event.ticket_info || '').trim();
+    const ticketHtml = ticketInfo
+      ? `<div class="timeline-modal-info timeline-ticket-info"><i class="fas fa-ticket-alt"></i> <span><strong>票务：</strong>${escapeHtml(ticketInfo)}</span></div>`
+      : '';
+    const callWords = String(event.call_words || '').trim();
+    const callWordsHtml = callWords
+      ? `<details class="timeline-modal-callwords"><summary><i class="fas fa-bullhorn"></i> Call 词</summary><pre>${escapeHtml(callWords)}</pre></details>`
+      : '';
     modalContent.innerHTML = `
       ${coverHtml}
       <div class="timeline-modal-body">
         <div class="timeline-modal-date">${escapeHtml(formatDate(event.date))}${escapeHtml(modalTimeText)}</div>
         <div class="timeline-modal-title">${escapeHtml(event.title || '')}</div>
         <span class="timeline-modal-badge ${badgeClass}">${escapeHtml(event.typeLabel || '')}</span>
+        ${event.show_no ? `<span class="timeline-modal-badge showno" style="margin-left:0;">第${escapeHtml(String(event.show_no))}场</span>` : ''}
         ${modalKeywordBadge ? `<span class="timeline-modal-badge ${modalKeywordBadge.split('|')[0]}" style="margin-left:0;">${modalKeywordBadge.split('|')[1]}</span>` : ''}
         ${event.source === 'room' ? `<span class="timeline-modal-badge danmu ${event.has_danmu ? 'available' : 'missing'}" style="margin-left:0;">${event.has_danmu ? '<i class="fas fa-comment-dots"></i> 有弹幕' : '<i class="fas fa-comment-slash"></i> 无弹幕'}</span>` : ''}
         ${event.content_type === 'live' ? '<span class="timeline-modal-badge live" style="margin-left:0;">直播</span>' : ''}
         ${buildLocationMapLinks(event.location)}
+        ${ticketHtml}
         <div class="timeline-modal-desc">${descHtml}</div>
+        ${callWordsHtml}
         ${event.has_replay && event.replay_url ? `<a href="/replay/${encodeURIComponent(String(event.id || '').replace(/^live_/, ''))}" target="_blank" rel="noopener" class="timeline-modal-replay-btn"><i class="fas ${event.is_radio ? 'fa-headphones' : 'fa-play'}"></i> ${event.is_radio ? '收听回放' : '观看回放'}</a>` : ''}
         ${buildSourceLinks(event)}
         ${biliHtml}
@@ -1146,6 +1248,21 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPinchDist = dist;
     }
   }, { passive: false });
+
+  // ── Image error fallback: show type icon instead of a blank card/modal ──
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const inGallery = !!img.closest('.timeline-modal-gallery');
+    if (!img.classList.contains('timeline-card-img') && !img.classList.contains('timeline-modal-img') && !inGallery) return;
+    const icon = img.dataset.fallbackIcon || 'fa-calendar';
+    const ph = document.createElement('div');
+    ph.className = (inGallery || img.classList.contains('timeline-modal-img'))
+      ? 'timeline-modal-img-placeholder'
+      : 'timeline-card-img-placeholder';
+    ph.innerHTML = `<i class="fas ${icon}"></i>`;
+    img.replaceWith(ph);
+  }, true);
 
   // ── Initialize: wait for all data, then render once ──
   const loadingEl = document.getElementById('timelineLoading');

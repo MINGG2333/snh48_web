@@ -347,7 +347,7 @@
 .timeline-modal-badge.tour { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.2); }
 .timeline-card-badge.show,
 .timeline-modal-badge.show { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.2); }
-.timeline-card-badge.showno { background: rgba(244, 114, 182, 0.13); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.25); }
+.timeline-card-badge.showno, .timeline-modal-badge.showno { background: rgba(244, 114, 182, 0.13); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.25); }
 .timeline-card-badge.event,
 .timeline-modal-badge.event { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.2); }
 .timeline-card-badge.external,
@@ -499,6 +499,121 @@
   background: linear-gradient(135deg, rgba(255, 107, 157, 0.2), rgba(192, 132, 252, 0.2));
   border-color: rgba(255, 107, 157, 0.3);
   color: var(--text);
+}
+
+/* ── Search box ── */
+.timeline-search {
+  position: absolute;
+  top: calc(20px + var(--nav-height));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(360px, calc(100vw - 360px));
+  min-width: 220px;
+  padding: 6px 10px;
+  border-radius: 18px;
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-dim);
+}
+.timeline-search i.fa-search { font-size: 0.78rem; flex: none; }
+.timeline-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+.timeline-search input::placeholder { color: var(--text-dim); }
+.timeline-search input::-webkit-search-cancel-button { display: none; }
+.timeline-search button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.75rem;
+}
+.timeline-search button:hover { color: var(--text); }
+.timeline-search-count {
+  flex: none;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.timeline-data-updated {
+  position: absolute;
+  left: 24px;
+  bottom: 12px;
+  z-index: 1001;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* ── Empty state ── */
+.timeline-empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+}
+.timeline-empty i { font-size: 1.6rem; opacity: 0.5; }
+.timeline-empty p { margin: 0; font-size: 0.95rem; color: var(--text); }
+.timeline-empty span { font-size: 0.75rem; opacity: 0.7; }
+
+/* ── Ticket / call words in modal ── */
+.timeline-ticket-info {
+  color: var(--text);
+  background: rgba(244, 114, 182, 0.08);
+  border: 1px solid rgba(244, 114, 182, 0.2);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.timeline-ticket-info i { color: #f472b6; }
+.timeline-modal-callwords {
+  margin-top: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.timeline-modal-callwords summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.timeline-modal-callwords pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.timeline-card-badge.ticket {
+  background: rgba(244, 114, 182, 0.13);
+  color: #f472b6;
+  border: 1px solid rgba(244, 114, 182, 0.25);
 }
 
 
@@ -1093,6 +1208,9 @@
   .timeline-hint { top: calc(50% + 235px); font-size: 0.7rem; }
   .timeline-filter-bar { top: calc(10px + var(--nav-height)); left: 8px; padding: 3px 8px; gap: 4px; }
   .timeline-filter-btn { font-size: 0.68rem; padding: 3px 7px; }
+  .timeline-search { top: calc(56px + var(--nav-height)); left: 8px; right: 8px; transform: none; width: auto; min-width: 0; padding: 5px 8px; }
+  .timeline-search input { font-size: 0.74rem; }
+  .timeline-data-updated { left: 8px; bottom: 6px; font-size: 0.62rem; max-width: calc(100vw - 16px); }
 
   .timeline-zoom-controls { top: calc(10px + var(--nav-height)); right: 8px; gap: 4px; }
   .timeline-date-jump-wrap { margin-left: 2px; padding-left: 4px; }
@@ -1203,6 +1321,17 @@
                 <button class="timeline-filter-btn" data-source="room">直播</button>
             </div>
         </div>
+
+        <!-- Search box -->
+        <div class="timeline-search" id="timelineSearch">
+            <i class="fas fa-search" aria-hidden="true"></i>
+            <input id="timelineSearchInput" type="search" placeholder="搜索活动、地点、日期…" autocomplete="off" aria-label="搜索时光轴">
+            <button id="timelineSearchClear" type="button" aria-label="清空搜索" hidden><i class="fas fa-times"></i></button>
+            <span id="timelineSearchCount" class="timeline-search-count" hidden></span>
+        </div>
+
+        <!-- Data freshness -->
+        <div class="timeline-data-updated" id="timelineDataUpdated" hidden></div>
 
         <!-- Zoom controls + date jump -->
         <div class="timeline-zoom-controls">
