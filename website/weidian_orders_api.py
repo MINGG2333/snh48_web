@@ -286,6 +286,54 @@ def get_weidian_order_job(job_id: str, _=Depends(verify_weidian_orders_password)
     return result
 
 
+MAX_NOTE_ORDERS = 500
+MAX_NOTE_CHARS = 200
+NOTE_MODES = {"append", "replace", "clear"}
+
+
+@router.post("/notes")
+def set_weidian_order_notes(
+    payload: dict[str, Any] = Body(default={}),
+    _=Depends(verify_weidian_orders_password),
+):
+    order_ids: list[str] = []
+    seen: set[str] = set()
+    raw_ids = payload.get("order_ids") if isinstance(payload.get("order_ids"), list) else []
+    for value in raw_ids:
+        order_id = str(value or "").strip()
+        if ORDER_ID_RE.fullmatch(order_id) and order_id not in seen:
+            seen.add(order_id)
+            order_ids.append(order_id)
+    if not order_ids:
+        raise HTTPException(status_code=422, detail="请先选择要写备注的订单")
+    if len(order_ids) > MAX_NOTE_ORDERS:
+        raise HTTPException(status_code=422, detail=f"单次最多处理 {MAX_NOTE_ORDERS} 单")
+    note = str(payload.get("note") or "").strip()
+    if len(note) > MAX_NOTE_CHARS:
+        raise HTTPException(status_code=422, detail=f"备注最长 {MAX_NOTE_CHARS} 字")
+    mode = str(payload.get("mode") or "append").strip()
+    if mode not in NOTE_MODES:
+        raise HTTPException(status_code=422, detail="不支持的备注写入方式")
+    body = {"order_ids": order_ids, "note": note, "mode": mode}
+    # The primary node owns the notes file used by the snapshot; mirror to the
+    # other node best-effort so both copies stay consistent.
+    result = _call("set-notes", body)
+    mirror_error = ""
+    try:
+        if _primary():
+            _peer("set-notes", body)
+        else:
+            _run_local("set-notes", body)
+    except HTTPException as exc:
+        mirror_error = str(exc.detail)
+    _clear_cache()
+    return {
+        "result": result,
+        "remote_synced": not mirror_error,
+        "remote_error": mirror_error,
+    }
+
+
 @router.post("/name")
 def set_weidian_order_name(
     payload: dict[str, Any] = Body(default={}),

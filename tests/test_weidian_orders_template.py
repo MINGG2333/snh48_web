@@ -82,6 +82,28 @@ class WeidianOrdersTemplateTests(unittest.TestCase):
         self.assertNotIn("filter_text", self.template)
         self.assertNotIn("buildFilterText", self.template)
 
+    def test_local_note_batch_and_filter_controls(self) -> None:
+        for marker in (
+            'id="noteFilteredBtn"',
+            'id="noteSelectedBtn"',
+            'id="noteFilter"',
+            'id="onlyNoted"',
+            "本地备注包含",
+            "仅有本地备注",
+            "/api/weidian-orders/notes",
+            "function editNotes",
+            "data-note",
+            "row.local_note",
+            "function isCheckable",
+            "function checkedRows",
+            "note: $(\"noteFilter\").value.trim()",
+            "onlyNoted: $(\"onlyNoted\").checked",
+            "mode: mode",
+        ):
+            self.assertIn(marker, self.template)
+        self.assertIn("本地：", self.template)
+        self.assertNotIn('id="noteInput"', self.template)
+
     def test_item_filter_is_a_multi_select(self) -> None:
         for marker in (
             'id="itemMenu"',

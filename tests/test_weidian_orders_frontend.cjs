@@ -39,6 +39,7 @@ function row(overrides) {
       receiver_name: "",
       buyer_note: "",
       seller_note: "",
+      local_note: "",
       item_name: "百场应援",
       sku_title: ""
     },
@@ -47,8 +48,8 @@ function row(overrides) {
 }
 
 const rows = [
-  row({ order_id: "o1", buyer_id: "2068326847", buyer_phone_masked: "177****4879", display_name: "徐某人", receiver_name: "徐某人" }),
-  row({ order_id: "o2", item_name: "补邮", status_kind: "shipped", buyer_id: "2111166808", buyer_phone_masked: "852****0725", display_name: "ama", receiver_name: "ama" }),
+  row({ order_id: "o1", buyer_id: "2068326847", buyer_phone_masked: "177****4879", display_name: "徐某人", receiver_name: "徐某人", local_note: "已补邮；合影业务" }),
+  row({ order_id: "o2", item_name: "补邮", status_kind: "shipped", buyer_id: "2111166808", buyer_phone_masked: "852****0725", display_name: "ama", receiver_name: "ama", local_note: "待核对" }),
   row({ order_id: "o3", item_id: "I2", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "真实买家", receiver_name: "真实买家" }),
   row({ order_id: "o4", item_id: "I2", display_name: "旧订单", receiver_name: "旧订单" }),
   row({ order_id: "o5", status_kind: "closed", buyer_id: "9999999999", buyer_phone_masked: "138****0000", display_name: "已关闭", receiver_name: "已关闭" }),
@@ -62,7 +63,7 @@ function match(overrides) {
     .filter(item =>
       context.orderMatchesFilters(
         item,
-        Object.assign({ statuses: {}, items: {}, keyword: "", accounts: {} }, overrides || {})
+        Object.assign({ statuses: {}, items: {}, keyword: "", note: "", onlyNoted: false, accounts: {} }, overrides || {})
       )
     )
     .map(item => item.order_id);
@@ -78,7 +79,7 @@ assert.deepEqual(match({ accounts: { "2111166808": true } }), ["o2", "o6"], "sin
 assert.deepEqual(match({ accounts: { __unknown__: true } }), ["o4"], "unknown account bucket");
 assert.deepEqual(match({ keyword: "2111166808" }), ["o2", "o6"], "keyword matches buyer id");
 assert.deepEqual(match({ keyword: "177****4879" }), ["o1"], "keyword matches masked phone");
-assert.deepEqual(match({ keyword: "补邮" }), ["o2"], "keyword still matches item name");
+assert.deepEqual(match({ keyword: "补邮" }), ["o1", "o2"], "keyword matches item name and local note");
 assert.deepEqual(match({ statuses: { awaiting_shipment: true } }), ["o1", "o3", "o4"], "awaiting filter");
 assert.deepEqual(match({ statuses: { shipped: true } }), ["o2"], "shipped filter");
 assert.deepEqual(match({ statuses: { awaiting_shipment: true, shipped: true } }), ["o1", "o2", "o3", "o4"], "status multi-select union");
@@ -91,6 +92,11 @@ assert.deepEqual(match({ statuses: { refunding: true, refunded_only: true } }), 
 assert.deepEqual(match({ items: { I2: true } }), ["o3", "o4"], "item filter still works");
 assert.deepEqual(match({ items: { I2: true }, accounts: { __unknown__: true } }), ["o4"], "filters combine");
 assert.deepEqual(match({ items: { I1: true, I2: true } }), ["o1", "o2", "o3", "o4", "o5", "o6", "o7", "o8"], "item multi-select union");
+assert.deepEqual(match({ note: "补邮" }), ["o1"], "note filter matches local note text");
+assert.deepEqual(match({ note: "待核对" }), ["o2"], "note filter matches another note");
+assert.deepEqual(match({ note: "不存在的备注" }), [], "note filter excludes non matches");
+assert.deepEqual(match({ onlyNoted: true }), ["o1", "o2"], "only-noted keeps rows with local note");
+assert.deepEqual(match({ keyword: "合影" }), ["o1"], "keyword search includes local note");
 
 assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunding: true }), true);
 assert.equal(context.statusMatches({ status_kind: "refunded", refund_state: "refunding" }, { refunded_only: true }), false);
@@ -114,6 +120,8 @@ const bulkContext = {};
 vm.createContext(bulkContext);
 vm.runInContext(
   template.slice(bulkStart + bulkStartMarker.length, bulkEnd) + `
+    this.isCheckable = isCheckable;
+    this.checkedRows = checkedRows;
     this.isSelectable = isSelectable;
     this.selectableRows = selectableRows;
     this.selectedShipRows = selectedShipRows;
@@ -141,6 +149,12 @@ assert.deepEqual(
   bulkContext.selectedShipRows(bulkRows, { b1: true, b3: true, b5: true }).map(item => item.order_id),
   ["b1", "b5"],
   "selected set is intersected with selectable rows"
+);
+assert.equal(bulkContext.isCheckable(bulkRows[3]), true, "refunding rows are checkable for notes");
+assert.deepEqual(
+  bulkContext.checkedRows(bulkRows, { b2: true, b3: true, b4: true }).map(item => item.order_id),
+  ["b2", "b3", "b4"],
+  "checked rows include any status"
 );
 
 const exportStartMarker = "// WEIDIAN_EXPORT_PURE_START";

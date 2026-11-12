@@ -99,6 +99,8 @@
     <div class="toolbar">
       <button class="btn primary" id="refreshBtn">立即刷新订单</button>
       <button class="btn" id="shipSelectedBtn" disabled>批量无需物流发货</button>
+      <button class="btn" id="noteFilteredBtn" disabled>备注筛选结果</button>
+      <button class="btn" id="noteSelectedBtn" disabled>备注勾选</button>
       <button class="btn" id="exportOrdersBtn">导出筛选图片</button>
       <details class="multi" id="statusMenu">
         <summary id="statusSummary">全部状态</summary>
@@ -131,6 +133,8 @@
         </div>
       </details>
       <input type="text" id="keyword" placeholder="订单号 / 昵称 / 账号 / 备注 / 商品">
+      <input type="text" id="noteFilter" placeholder="本地备注包含…" style="min-width:150px;">
+      <label class="chk"><input type="checkbox" id="onlyNoted"> 仅有本地备注</label>
       <label class="chk"><input type="checkbox" id="maskNames"> 播报名匿名打码</label>
       <span class="summary" id="filterSummary">筛选 0 单 · 合计 ¥0.00</span>
       <span class="statusbar" id="statusBar"></span>
@@ -139,7 +143,7 @@
       <table>
         <thead>
           <tr>
-            <th style="width:34px;"><input type="checkbox" id="selectAll" aria-label="全选当前可发货订单" title="全选当前可发货订单"></th>
+            <th style="width:34px;"><input type="checkbox" id="selectAll" aria-label="全选当前筛选订单" title="全选当前筛选订单"></th>
             <th>时间</th><th>订单号</th><th>商品</th><th>状态</th><th>播报名 / 收货人</th>
             <th>备注</th><th>金额 / 计分</th><th>发货</th><th>自动播报</th><th>操作</th>
           </tr>
@@ -247,12 +251,12 @@
     try {
       var data = await api("/api/weidian-orders/data");
       allOrders = data.orders || [];
-      var stillSelectable = {};
+      var existing = {};
       allOrders.forEach(function (order) {
-        if (isSelectable(order)) stillSelectable[order.order_id] = true;
+        if (order.order_id) existing[order.order_id] = true;
       });
       Object.keys(selectedOrders).forEach(function (orderId) {
-        if (!stillSelectable[orderId]) delete selectedOrders[orderId];
+        if (!existing[orderId]) delete selectedOrders[orderId];
       });
       renderItems();
       renderAccounts();
@@ -379,14 +383,28 @@
     if (accountKeys.length && accountKeys.indexOf(accountKey(row)) === -1) return false;
     var keyword = (filters.keyword || "").toLowerCase();
     if (keyword) {
-      var hay = [row.order_id, row.display_name, row.receiver_name, row.buyer_id, row.buyer_phone_masked, row.buyer_note, row.seller_note, row.item_name, row.sku_title].join(" ").toLowerCase();
+      var hay = [row.order_id, row.display_name, row.receiver_name, row.buyer_id, row.buyer_phone_masked, row.local_note, row.buyer_note, row.seller_note, row.item_name, row.sku_title].join(" ").toLowerCase();
       if (hay.indexOf(keyword) === -1) return false;
     }
+    var noteKeyword = (filters.note || "").toLowerCase();
+    if (noteKeyword && String(row.local_note || "").toLowerCase().indexOf(noteKeyword) === -1) return false;
+    if (filters.onlyNoted && !String(row.local_note || "").trim()) return false;
     return true;
   }
   // WEIDIAN_ACCOUNT_FILTER_PURE_END
 
   // WEIDIAN_BULK_SHIP_PURE_START
+  function isCheckable(row) {
+    return Boolean(row) && Boolean(row.order_id);
+  }
+
+  function checkedRows(rows, selected) {
+    var picked = selected || {};
+    return (rows || []).filter(function (row) {
+      return isCheckable(row) && Boolean(picked[row.order_id]);
+    });
+  }
+
   function isSelectable(row) {
     return Boolean(row) && !row.shipped && row.status_kind === "awaiting_shipment";
   }
@@ -472,14 +490,30 @@
   }
 
   function updateSelectAll(rows) {
-    var eligible = selectableRows(rows);
-    var picked = selectedShipRows(rows, selectedOrders);
+    var eligible = (rows || []).filter(isCheckable);
+    var picked = checkedRows(rows, selectedOrders);
     var box = $("selectAll");
     if (!box) return;
     box.disabled = !eligible.length;
     box.checked = Boolean(eligible.length) && picked.length === eligible.length;
     box.indeterminate = picked.length > 0 && picked.length < eligible.length;
+    updateSelectionButtons(rows);
+  }
+
+  function updateSelectionButtons(rows) {
     updateShipSelectedButton();
+    var noteButton = $("noteSelectedBtn");
+    if (noteButton) {
+      var checkedCount = checkedRows(allOrders, selectedOrders).length;
+      noteButton.disabled = !checkedCount;
+      noteButton.textContent = checkedCount ? ("备注勾选（" + checkedCount + "）") : "备注勾选";
+    }
+    var filteredButton = $("noteFilteredBtn");
+    if (filteredButton) {
+      var filteredCount = (rows || []).filter(isCheckable).length;
+      filteredButton.disabled = !filteredCount;
+      filteredButton.textContent = filteredCount ? ("备注筛选结果（" + filteredCount + "）") : "备注筛选结果";
+    }
   }
 
   function updateShipSelectedButton() {
@@ -495,6 +529,8 @@
       statuses: selectedStatuses,
       items: selectedItems,
       keyword: $("keyword").value.trim(),
+      note: $("noteFilter").value.trim(),
+      onlyNoted: $("onlyNoted").checked,
       accounts: selectedAccounts
     };
     return allOrders.filter(function (row) { return orderMatchesFilters(row, filters); });
@@ -512,6 +548,7 @@
     }
     $("rows").innerHTML = rows.map(function (row) {
       var notes = [];
+      if (row.local_note) notes.push("本地：" + row.local_note);
       if (row.seller_note) notes.push("商家：" + row.seller_note);
       if (row.buyer_note) notes.push("买家：" + row.buyer_note);
       var displayName = masked ? maskName(row.display_name) : (row.display_name || "");
@@ -523,8 +560,7 @@
         : (row.status_kind === "awaiting_shipment" ? '<span class="pill awaiting">待发货</span>' : '<span class="muted">-</span>');
       var shipBtn = (!row.shipped && row.status_kind === "awaiting_shipment")
         ? '<button class="btn mini" data-ship="' + esc(row.order_id) + '" data-item="' + esc(row.item_id) + '">发货</button>' : "";
-      var selectable = isSelectable(row);
-      var checkbox = selectable
+      var checkbox = isCheckable(row)
         ? '<input type="checkbox" data-select="' + esc(row.order_id) + '"' + (selectedOrders[row.order_id] ? " checked" : "") + ' aria-label="选择订单 ' + esc(row.order_id) + '">'
         : "";
       return '<tr>' +
@@ -540,6 +576,7 @@
         '<td>' + broadcastText(row) + '</td>' +
         '<td><div class="actions">' +
           '<button class="btn mini" data-name="' + esc(row.order_id) + '" data-current="' + esc(row.display_name || "") + '">改名</button>' +
+          '<button class="btn mini" data-note="' + esc(row.order_id) + '" data-current="' + esc(row.local_note || "") + '">备注</button>' +
           '<button class="btn mini" data-rebroadcast="' + esc(row.order_id) + '" data-current="' + esc(row.display_name || "") + '">重播</button>' +
           shipBtn +
         '</div></td>' +
@@ -598,6 +635,46 @@
       await loadData();
     } catch (error) {
       toast(error.message || "改名失败", true);
+    }
+  }
+
+  async function editNotes(rows, mode, current) {
+    if (!rows || !rows.length) {
+      toast("请先筛选或勾选订单", true);
+      return;
+    }
+    var message = mode === "replace"
+      ? "订单本地备注（留空=清空备注；最多 200 字）"
+      : ("给 " + rows.length + " 笔订单追加本地备注（已有备注用「；」连接；留空=清空这些订单的本地备注）");
+    var note = window.prompt(message, current || "");
+    if (note == null) return;
+    note = note.trim();
+    if (note.length > 200) {
+      toast("备注最长 200 字", true);
+      return;
+    }
+    if (mode === "replace") {
+      if (!note) {
+        if (!window.confirm("确认清空该订单的本地备注？")) return;
+      } else if (!window.confirm("确认保存该订单的本地备注？\n" + note)) return;
+    } else {
+      var verb = note ? "追加备注「" + note + "」" : "清空本地备注";
+      if (!window.confirm("确认" + verb + "？共 " + rows.length + " 笔订单。")) return;
+    }
+    try {
+      var result = await api("/api/weidian-orders/notes", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          order_ids: rows.map(function (row) { return row.order_id; }),
+          note: note,
+          mode: mode
+        })
+      });
+      if (result.remote_synced === false) toast("本机已保存，但对端同步失败：" + (result.remote_error || ""), true);
+      else toast(note ? "备注已保存" : "备注已清空");
+      await loadData();
+    } catch (error) {
+      toast(error.message || "备注保存失败", true);
     }
   }
 
@@ -729,12 +806,22 @@
     var target = event.target;
     if (!target || !target.dataset) return;
     if (target.dataset.name) renameOrder(target.dataset.name, target.dataset.current);
+    else if (target.dataset.note) {
+      var noteRow = allOrders.filter(function (item) { return item.order_id === target.dataset.note; })[0];
+      editNotes(noteRow ? [noteRow] : [], "replace", target.dataset.current);
+    }
     else if (target.dataset.rebroadcast) rebroadcastOrder(target.dataset.rebroadcast, target.dataset.current);
     else if (target.dataset.ship) shipOrder(target.dataset.ship, target.dataset.item);
   });
   $("shipSelectedBtn").addEventListener("click", shipSelectedOrders);
+  $("noteFilteredBtn").addEventListener("click", function () {
+    editNotes(filteredRows().filter(isCheckable), "append", "");
+  });
+  $("noteSelectedBtn").addEventListener("click", function () {
+    editNotes(checkedRows(allOrders, selectedOrders), "append", "");
+  });
   $("selectAll").addEventListener("change", function (event) {
-    var rows = selectableRows(filteredRows());
+    var rows = filteredRows().filter(isCheckable);
     rows.forEach(function (row) {
       if (event.target.checked) selectedOrders[row.order_id] = true;
       else delete selectedOrders[row.order_id];
@@ -823,6 +910,8 @@
     });
   });
   $("keyword").addEventListener("input", render);
+  $("noteFilter").addEventListener("input", render);
+  $("onlyNoted").addEventListener("change", render);
   $("loginBtn").addEventListener("click", doLogin);
   $("passwordInput").addEventListener("keydown", function (event) {
     if (event.key === "Enter") doLogin();
