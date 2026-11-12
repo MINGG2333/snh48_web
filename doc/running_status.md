@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-13 时光轴搜索、票务/Call词、直播活动与展示列（双端已生效）
+
+- 需求：粉丝视角补时光轴搜索、票务信息、Call 词、第N场、数据更新时间；所有展示内容落到 fan-hub CSV 列（`ticket_info`、`location_display`、`call_words`、`show_no`、`updated_at`），网站只读不解析 `remark`；行程直播类型改为 `直播活动`，与房间直播筛选区分。
+- 代码（网站 `a190d69`/`b7a602a`/`77c8f15`）：`timeline.js` 新增关键词搜索（活动/地点/日期/票务，清空回今天、结果计数、无结果空状态）、详情展示 `ticket_info`/`call_words`/`show_no`/`location_display`、卡片和弹窗图片失败回退类型图标、卡片键盘 Enter/Space 打开；`timeline.html` 新增搜索框/更新时间/空状态样式；`timeline_api/router.py` 输出新列并返回 `updated_at`，支持 `直播活动` 类型。已运行 `script/obfuscate_js.cjs` 同配置重建 `website/static/js-dist/timeline.js`。
+- 数据（fan-hub）：CSV 新增 `ticket_info`、`location_display`；11/13、10/31 的 `直播` 改为 `直播活动`；11/15 首演、11/21 广州站补官方海报/简介，12/05 北京巡演补占位。
+- 验证：Playwright 桌面/移动实测搜索、清空回今天、无结果、键盘打开、票务/Call词/第102场、11/15 粉丝服务与 12/05 地点占位；两端 API 176 条且 11/15 `show_no=102`；无 console/page error。
+- 部署：网站 `a190d69`/`b7a602a`/`77c8f15`、fan-hub `a281be8a5`/`d18aaf2e9`/`35397f34d` 已推 GitHub，两端 `git pull --ff-only`。腾讯云 `snh48-web.service` 03:55:09 重启 MainPID `3508845`；阿里云 `snh48-aliyun.service` 03:53:48 重启 MainPID `3191498`；两端 active。
+
 ## 2026-11-13 红蓝台账条目编辑：修正来源显示并恢复保存（双端已生效）
 
 - 现象：`/business/redblue2026` 点“编辑”时，微店条目显示成「暗票·计分卡」；保存失败并提示“主节点暂时不可用”（阿里云）或“应援会来源条目不能标记重复”（腾讯云）。
