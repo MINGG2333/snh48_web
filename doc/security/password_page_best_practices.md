@@ -27,8 +27,8 @@
 
 ### 1.2 当前页面归属（2026-11-09）
 
-- **模式 A**：`/radio`（上麦回放）、`/business/redblue2026`、`/weidian-orders`、`/social-credentials-admin`、`/scroller-admin`、`/room/messenger`（房间信使）
-- **模式 B**：`/room`（房间消息）、`/gift-replies`、计分页、`/business-admin`、`/ob`、记忆页、QA
+- **模式 A**：`/radio`（上麦回放）、`/business/redblue2026`、`/weidian-orders`、`/social-credentials-admin`、`/scroller-admin`、`/room/messenger`（房间信使）、`/score/2026-summer`、`/score/2026-winter`、`/score/all-members`（2026-11-13 起）
+- **模式 B**：`/room`（房间消息）、`/gift-replies`、`/business-admin`、`/ob`、记忆页、QA
 - **模式 C**：`/flip`、`/flip-cards`
 
 ### 1.3 三种模式的共同底线
