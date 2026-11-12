@@ -154,7 +154,7 @@ if [ "$sync_derived" -eq 1 ]; then
   # D4. score_gifts（排除可写业务状态与采集锁：live_business_fulfillments.json
   # 走腾讯云权威版本化复制，不随本组回流）
   sync_dir_from_aliyun /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts /home/snh48-fan-hub/room_record/陈嘉仪_161808449/score_gifts \
-    --exclude='.*.lock' --exclude='live_business_fulfillments.json'
+    --exclude='.*.lock' --exclude='live_business_fulfillments.json' --exclude='score_gifts_winter.json' --exclude='summary_winter.json'
   echo "$LOG_TAG score_gifts done"
 
   # D5. pk_scores（房间计分 PK 派生小数据）
