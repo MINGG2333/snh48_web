@@ -349,7 +349,7 @@
       <div class="field" id="entryStatusField"><label>状态</label><select id="entryStatus"></select></div>
       <div class="field" id="entrySettledField"><label>状态</label><label class="check"><input id="entrySettled" type="checkbox" checked> 已投（计入已投合计）</label></div>
       <div class="field full"><label>备注</label><textarea id="entryNote" placeholder="可选"></textarea></div>
-      <div class="field full"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
+      <div class="field full" id="entryDuplicateField"><label class="check"><input id="entryDuplicate" type="checkbox"> 标记为重复 / 不计入合计</label></div>
     </div>
     <div class="modal-actions">
       <button class="btn" data-close="entryModal">取消</button>
@@ -1500,12 +1500,25 @@
     return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
+  function entryEditSourceLabel(entry) {
+    var base = {manual:"暗票",weidian:"微店",association_manual:"应援会（手动）",weidian_manual:"应援会（手动）",room:"房间",live:"直播"}[entry.source] || entry.source_label || entry.source || "-";
+    var method = entry.scoring_method || "";
+    return method ? base + "·" + method : base;
+  }
+
   function openEntryModal(entry, source) {
     editingId = entry ? entry.id : "";
     var chosen = source || (entry && entry.source) || "manual";
     if (chosen !== "association_manual") chosen = "manual";
-    $("entrySource").value = chosen;
-    $("entrySource").disabled = Boolean(entry);
+    if (entry) {
+      $("entrySource").innerHTML = '<option value="' + esc(entry.source || "manual") + '">' + esc(entryEditSourceLabel(entry)) + '</option>';
+      $("entrySource").value = entry.source || "manual";
+      $("entrySource").disabled = true;
+    } else {
+      $("entrySource").innerHTML = '<option value="manual">暗票·计分卡</option><option value="association_manual">应援会·鸡腿（手动）</option>';
+      $("entrySource").value = chosen;
+      $("entrySource").disabled = false;
+    }
     $("entryTime").disabled = Boolean(entry);
     $("entryTime").value = entry
       ? (entry.source_time || entry.created_at || "").replace(" ", "T").slice(0, 16)
@@ -1526,6 +1539,10 @@
     var statusSource = entry ? entry.source : chosen;
     var statusOptions = associationStatuses[statusSource];
     if (statusOptions) {
+      statusOptions = statusOptions.slice();
+      if (entry && entry.status && !statusOptions.some(function (item) { return item[0] === entry.status; })) {
+        statusOptions.push([entry.status, ENTRY_STATUS_LABELS[entry.status] || entry.status]);
+      }
       $("entryStatusField").classList.remove("hidden");
       $("entrySettledField").classList.add("hidden");
       $("entryStatus").innerHTML = statusOptions.map(function (item) {
@@ -1540,7 +1557,17 @@
       $("entrySettled").checked = entry ? Boolean(entry.settled) : true;
     }
     $("entryNote").value = entry ? (entry.note || "") : "";
+    var associationEntry = entry
+      ? Boolean(entry.is_association || {weidian:1, association_manual:1, weidian_manual:1}[entry.source])
+      : chosen === "association_manual";
+    var proxyLocked = Boolean(entry && entry.proxy_settlement && entry.proxy_settlement.method);
+    var duplicateLocked = associationEntry || proxyLocked;
+    $("entryDuplicateField").classList.toggle("hidden", duplicateLocked);
+    $("entryDuplicate").disabled = duplicateLocked;
     $("entryDuplicate").checked = entry ? Boolean(entry.duplicate) : false;
+    $("entryDuplicate").title = associationEntry
+      ? "应援会来源条目不能标记重复"
+      : (proxyLocked ? "已代投的条目不能修改重复状态" : "");
     $("entryModal").classList.remove("hidden");
     setTimeout(function () { $("entryName").focus(); }, 30);
   }
@@ -1549,15 +1576,16 @@
     var source = $("entrySource").value;
     var timeValue = $("entryTime").value || "";
     var payload = {
-      source: source,
       source_time: timeValue ? timeValue.replace("T", " ") + ":00" : "",
       raw_name: $("entryName").value.trim(),
       raw_id: $("entryId").value.trim(),
       score: Number($("entryScore").value || 0),
-      note: $("entryNote").value.trim(),
-      duplicate: $("entryDuplicate").checked
+      note: $("entryNote").value.trim()
     };
-    if (source === "association_manual") {
+    if (!editingId) {
+      payload.source = source;
+    }
+    if (source === "association_manual" && !editingId) {
       payload.weidian = {sku_title: payload.score + "分（手动）", status: "手动登记"};
     }
     if (!$("entryStatusField").classList.contains("hidden")) {
@@ -1565,6 +1593,9 @@
     }
     if (!$("entrySettledField").classList.contains("hidden")) {
       payload.settled = $("entrySettled").checked;
+    }
+    if (!$("entryDuplicateField").classList.contains("hidden")) {
+      payload.duplicate = $("entryDuplicate").checked;
     }
     if (!payload.raw_name && !payload.raw_id) { showToast("请填写口袋48昵称或 ID", true); return; }
     if (!(payload.score > 0)) { showToast("分数必须大于 0", true); return; }

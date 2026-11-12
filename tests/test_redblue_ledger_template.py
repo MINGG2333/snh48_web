@@ -37,6 +37,26 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn('$("proxyTitle").textContent = "代投明细（合计）";', self.source)
         self.assertIn('$("proxyConfirmBtn").classList.add("hidden");', self.source)
 
+    def test_entry_edit_shows_actual_source_and_scoring(self) -> None:
+        self.assertIn("function entryEditSourceLabel(entry)", self.source)
+        self.assertIn('return method ? base + "·" + method : base;', self.source)
+        self.assertIn(
+            '$("entrySource").innerHTML = \'<option value="\' + esc(entry.source || "manual") + \'">\' + esc(entryEditSourceLabel(entry)) + \'</option>\';',
+            self.source,
+        )
+
+    def test_entry_edit_skips_invalid_duplicate_toggle(self) -> None:
+        self.assertIn('id="entryDuplicateField"', self.source)
+        self.assertIn(
+            "var duplicateLocked = associationEntry || proxyLocked;",
+            self.source,
+        )
+        self.assertIn(
+            'if (!$("entryDuplicateField").classList.contains("hidden")) {\n      payload.duplicate = $("entryDuplicate").checked;\n    }',
+            self.source,
+        )
+        self.assertIn("if (!editingId) {\n      payload.source = source;\n    }", self.source)
+
 
 if __name__ == "__main__":
     unittest.main()

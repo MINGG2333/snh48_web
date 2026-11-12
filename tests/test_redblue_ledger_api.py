@@ -513,6 +513,48 @@ class RedblueLedgerApiTests(unittest.TestCase):
         )
         self.assertEqual(toggle.status_code, 422)
 
+    def test_editing_association_entry_succeeds_when_duplicate_unchanged(self):
+        entry = self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"source": "association_manual", "raw_name": "Alice", "score": 2},
+        ).json()["result"]
+        updated = self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={
+                "source": "manual",
+                "raw_name": "Alice",
+                "score": 3,
+                "note": "edited",
+                "duplicate": False,
+                "status": "paid",
+            },
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        result = updated.json()["result"]
+        self.assertEqual(result["source"], "association_manual")
+        self.assertEqual(result["score"], 3.0)
+        self.assertEqual(result["note"], "edited")
+        self.assertFalse(result["duplicate"])
+        rejected = self.client.patch(
+            f"/api/redblue/entries/{entry['id']}",
+            headers=self.headers,
+            json={"duplicate": True},
+        )
+        self.assertEqual(rejected.status_code, 422)
+
+    def test_editing_settled_association_entry_preserves_status(self):
+        self._write_single_entry(status="settled", settled=True)
+        updated = self.client.patch(
+            "/api/redblue/entries/w1",
+            headers=self.headers,
+            json={"note": "kept", "status": "settled", "duplicate": False},
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["result"]["status"], "settled")
+        self.assertEqual(updated.json()["result"]["note"], "kept")
+
 
     def test_business_redemption_splits_and_marks_first_entry(self):
         self._write_business_ledger()

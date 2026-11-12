@@ -2393,11 +2393,13 @@ def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
     if payload.get("settled") is not None and source not in ASSOCIATION_SOURCES:
         entry["settled"] = _to_bool(payload.get("settled"), bool(entry.get("settled")))
     if payload.get("duplicate") is not None:
-        if source in ASSOCIATION_SOURCES:
-            raise ValueError("应援会来源条目不能标记重复")
-        if entry.get("proxy_settlement"):
-            raise ValueError("已代投的条目不能通过编辑修改重复状态")
-        entry["duplicate"] = _to_bool(payload.get("duplicate"), bool(entry.get("duplicate")))
+        target_duplicate = _to_bool(payload.get("duplicate"), bool(entry.get("duplicate")))
+        if target_duplicate != bool(entry.get("duplicate")):
+            if source in ASSOCIATION_SOURCES:
+                raise ValueError("应援会来源条目不能标记重复")
+            if entry.get("proxy_settlement"):
+                raise ValueError("已代投的条目不能通过编辑修改重复状态")
+            entry["duplicate"] = target_duplicate
     if payload.get("duplicate_note") is not None:
         entry["duplicate_note"] = _clean(payload.get("duplicate_note"))
     if payload.get("business_done") is not None:
@@ -3245,6 +3247,11 @@ def _mutate(operation: str, payload: dict[str, Any], request: Request) -> dict[s
         result = execute_mutation(RESOURCE, operation, payload, operation_id=operation_id)
     except SharedStatePeerError as exc:
         logger.warning("redblue mutation peer failed: %s", exc)
+        if exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=exc.detail or "操作失败，请检查输入",
+            ) from exc
         raise HTTPException(status_code=503, detail="主节点暂时不可用，请稍后重试") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=_public_detail(exc, "操作失败，请检查输入")) from exc

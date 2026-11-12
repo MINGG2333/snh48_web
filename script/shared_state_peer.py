@@ -127,7 +127,10 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as exc:
         detail = getattr(exc, "detail", None) or str(exc) or exc.__class__.__name__
-        status_code = int(getattr(exc, "status_code", 503) or 503)
+        status_code = int(
+            getattr(exc, "status_code", 0)
+            or (422 if isinstance(exc, ValueError) else 503)
+        )
         sys.stderr.write(json.dumps(
             {"ok": False, "error": str(detail), "status_code": status_code},
             ensure_ascii=False,
