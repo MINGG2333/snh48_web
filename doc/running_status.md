@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-13 红蓝按条目导出：兑换备注颜色与业务名一致（双端已生效）
+
+- 需求：上一版兑换备注用灰色显示，与业务名颜色不一致；希望备注和业务名同色。
+- 代码（网站 `3159a43`）：`website/redblue_export.py` 按条目导出时备注的 `fill` 从 `MUTED` 改为与业务名相同的 `SUBTITLE`，字号、位置和连接规则不变。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 69 项通过；本地渲染样例确认备注与业务名同色。
+- 部署：网站 `3159a43` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启，MainPID `612255`；阿里云 `snh48-aliyun.service` 重启，MainPID `1395902`；两端 active/running、`NRestarts=0`，`https://cjy.plus/business/redblue2026` 与 `https://cjy.xn--6qq986b3xl/business/redblue2026` 均 200。
+
 ## 2026-11-13 红蓝台账按条目导出：兑换备注作为业务名下方第二行（双端已生效）
 
 - 需求：`/business/redblue2026` 登记兑换时可填写备注（如“刘瑞琦的《两三句》”），导出“按条目”PNG 时希望备注跟在业务名下方显示，方便区分同一业务的具体要求；没有备注的条目保持一行。
