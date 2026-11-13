@@ -58,5 +58,19 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn("if (!editingId) {\n      payload.source = source;\n    }", self.source)
 
 
+    def test_status_filter_groups_and_hides_abnormal_checkbox(self) -> None:
+        self.assertNotIn('<option value="normal">', self.source)
+        self.assertNotIn(">正常<", self.source)
+        self.assertIn('<optgroup label="投送状态">', self.source)
+        self.assertIn('<optgroup label="订单状态">', self.source)
+        self.assertIn('<optgroup label="异常">', self.source)
+        self.assertIn('id="hideAbnormal"', self.source)
+        self.assertIn(
+            'params.set("hide_abnormal", $("hideAbnormal").checked ? "true" : "false");',
+            self.source,
+        )
+        self.assertIn('"includeDuplicate","hideAbnormal"', self.source)
+
+
 if __name__ == "__main__":
     unittest.main()

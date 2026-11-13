@@ -265,13 +265,14 @@
       </div>
       <div class="filters">
         <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="association_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
-        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><option value="normal">正常</option><option value="pending">待投</option><option value="settled">已投</option><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="paid">已付款</option><option value="warning">身份待确认</option><option value="duplicate">重复</option></select></div>
+        <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><optgroup label="投送状态"><option value="pending">待投</option><option value="settled">已投</option></optgroup><optgroup label="订单状态"><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="paid">已付款</option></optgroup><optgroup label="异常"><option value="warning">身份待确认</option><option value="duplicate">重复</option></optgroup></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
         <div class="field"><label>开始日期</label><input id="dateFrom" type="date"></div>
         <div class="field"><label>结束日期</label><input id="dateTo" type="date"></div>
         <div class="field"><label>排序</label><select id="sortFilter"><option value="time_asc">时间正序</option><option value="time_desc">时间倒序</option></select></div>
         <div class="field"><label>&nbsp;</label><label class="check"><input id="includeDuplicate" type="checkbox" checked> 显示重复</label></div>
+        <div class="field"><label>&nbsp;</label><label class="check" title="排除「身份待确认」和「重复」条目，只看身份已确认的正常记录"><input id="hideAbnormal" type="checkbox"> 隐藏异常条目</label></div>
       </div>
     </section>
 
@@ -666,6 +667,7 @@
     params.set("date_to", $("dateTo").value);
     params.set("sort", $("sortFilter").value);
     params.set("include_duplicate", $("includeDuplicate").checked ? "true" : "false");
+    params.set("hide_abnormal", $("hideAbnormal").checked ? "true" : "false");
     if (selectedScores.size) {
       params.set("scores", Array.from(selectedScores).sort(function (a, b) { return a - b; }).join(","));
     }
@@ -1858,7 +1860,7 @@
   }
 
   function redemptionFullQuery() {
-    return "/api/redblue/data?source=all&status=all&keyword=&date_from=&date_to=&sort=time_asc&include_duplicate=true";
+    return "/api/redblue/data?source=all&status=all&keyword=&date_from=&date_to=&sort=time_asc&include_duplicate=true&hide_abnormal=false";
   }
 
   function redemptionById(id) {
@@ -3029,8 +3031,16 @@
     $("shipSelectedBtn").addEventListener("click", shipSelected);
     $("proxyConfirmBtn").addEventListener("click", confirmProxySettlement);
     $("proxyBatchBtn").addEventListener("click", openProxyBatch);
-    ["sourceFilter","statusFilter","sortFilter","includeDuplicate","dateFrom","dateTo"].forEach(function (id) {
-      $(id).addEventListener("change", function () { loadData().catch(function () {}); });
+    ["sourceFilter","statusFilter","sortFilter","includeDuplicate","hideAbnormal","dateFrom","dateTo"].forEach(function (id) {
+      $(id).addEventListener("change", function () {
+        // 「隐藏异常条目」与「身份待确认/重复」互斥，避免必然为空的组合。
+        if (id === "hideAbnormal" && $("hideAbnormal").checked) {
+          if (["warning", "duplicate"].indexOf($("statusFilter").value) >= 0) $("statusFilter").value = "all";
+        } else if (id === "statusFilter" && ["warning", "duplicate"].indexOf($("statusFilter").value) >= 0) {
+          $("hideAbnormal").checked = false;
+        }
+        loadData().catch(function () {});
+      });
     });
     $("scoreFilterToggle").addEventListener("click", function (event) {
       event.stopPropagation();
