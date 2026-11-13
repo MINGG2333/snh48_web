@@ -339,7 +339,7 @@ def _draw_entries(
                     _display_text(business_note, business_note_font, business_note_fallback),
                     business_note_font,
                     business_note_fallback,
-                    fill=MUTED,
+                    fill=SUBTITLE,
                     anchor="rm",
                 )
 
