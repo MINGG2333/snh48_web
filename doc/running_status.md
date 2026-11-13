@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-14 红蓝台账状态筛选：移除「正常」，异常条目改为独立开关（双端已生效）
+
+- 需求：`/business/redblue2026` 状态筛选里的「正常」让人看不懂——它其实是「既非身份待确认、也非重复」，却和待投/已投等并列显示，像是第三种投送状态。
+- 代码（网站 `f5240a9`）：状态下拉用 `optgroup` 分为「投送状态（待投/已投）」「订单状态（未发货/已发货/已付款）」「异常（身份待确认/重复）」，删除 `normal` 选项；新增「隐藏异常条目」复选框（`hide_abnormal`），`website/redblue_ledger_api.py` 的 `_filter_entries`/`_load_filtered`/`/data` 与两个导出接口统一支持该参数，导出图例追加「已隐藏异常条目」；前端把「隐藏异常条目」与「身份待确认/重复」做互斥处理，避免必然为空的组合。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 71 项通过（新增 `test_hide_abnormal_drops_warning_and_duplicate_entries` 与模板断言）；`node --check` 通过页面内联脚本。
+- 部署：网站 `f5240a9` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启，MainPID `1148038`；阿里云 `snh48-aliyun.service` 重启，MainPID `2124646`；两端 active，页面 200、未登录 `/api/redblue/data` 401，`https://cjy.plus/business/redblue2026` 与 `https://cjy.xn--6qq986b3xl/business/redblue2026` 均 200。
+
 ## 2026-11-13 红蓝按条目导出：兑换备注颜色与业务名一致（双端已生效）
 
 - 需求：上一版兑换备注用灰色显示，与业务名颜色不一致；希望备注和业务名同色。
