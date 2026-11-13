@@ -4,6 +4,7 @@
 浅紫底、白色卡片、紫色标题、单栏时间线；按昵称汇总按最长昵称动态定宽，按条目按最长昵称/业务名动态定宽（最小 820px），正文 20–27px。
 未登记口袋48昵称的条目不再标红，昵称统一颜色，只在名字后保留一个低对比度 ! 标记。
 按条目导出最后一列显示选定业务名，仅业务名，多个业务用 + 连接；业务名固定显示在该笔兑换最早的分摊条目（第 1 条记录）上。
+登记兑换时填写了备注的，备注紧跟在业务名下方作为第二行显示（右对齐、字号更小），与业务名同一条记录；未填写备注时仍只显示一行。
 已标记重复的条目在按条目导出时，昵称列使用计分时的昵称（`raw_name`），方便与当时的礼物记录和代投明细核对；这些条目的业务列固定显示破折号。
 """
 from __future__ import annotations
@@ -207,6 +208,26 @@ def _business_text(row: dict[str, Any]) -> str:
     return "+".join(names)
 
 
+def _business_note(row: dict[str, Any]) -> str:
+    """登记兑换时填写的备注，显示在业务名下方。
+
+    业务名只在分摊记录的最早条目（`display_entry_id`）上显示，备注同样只跟随
+    该条目；多个兑换落在同一条目时用「；」连接，重复去重。已标记重复的条目
+    业务列固定为破折号，不显示备注。
+    """
+    if row.get("duplicate"):
+        return ""
+    notes = row.get("business_display_notes")
+    if not isinstance(notes, list):
+        return ""
+    cleaned: list[str] = []
+    for value in notes:
+        text = " ".join(str(value or "").split())
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return "；".join(cleaned)
+
+
 def _entry_name(row: dict[str, Any]) -> str:
     """按条目导出使用的昵称。
 
@@ -256,6 +277,8 @@ def _draw_entries(
     score_font = _font(22)
     business_font = _font(18)
     business_fallback = _fallback_for(business_font)
+    business_note_font = _font(16)
+    business_note_fallback = _fallback_for(business_note_font)
     for day, rows in groups.items():
         try:
             weekday = week[dt.datetime.strptime(day, "%Y-%m-%d").weekday()]
@@ -298,14 +321,25 @@ def _draw_entries(
                 anchor="lm",
             )
             business = _business_text(row)
+            business_note = _business_note(row) if business and business != "—" else ""
             if business:
                 _draw_text_fallback(
                     draw,
-                    (right, center_y),
+                    (right, center_y - 9 if business_note else center_y),
                     _display_text(business, business_font, business_fallback),
                     business_font,
                     business_fallback,
                     fill=SUBTITLE,
+                    anchor="rm",
+                )
+            if business_note:
+                _draw_text_fallback(
+                    draw,
+                    (right, center_y + 11),
+                    _display_text(business_note, business_note_font, business_note_fallback),
+                    business_note_font,
+                    business_note_fallback,
+                    fill=MUTED,
                     anchor="rm",
                 )
 
@@ -403,6 +437,8 @@ def render_entries_png(
     score_font = _font(22)
     business_font = _font(18)
     business_fallback = _fallback_for(business_font)
+    business_note_font = _font(16)
+    business_note_fallback = _fallback_for(business_note_font)
     max_name_width = 0
     for item in items:
         name = _entry_name(item)
@@ -417,16 +453,27 @@ def render_entries_png(
     width = ENTRIES_WIDTH
     for item in items:
         business = _business_text(item)
-        business_width = (
-            _text_width_fallback(
-                measure,
-                _display_text(business, business_font, business_fallback),
-                business_font,
-                business_fallback,
+        business_note = _business_note(item) if business and business != "—" else ""
+        widths = []
+        if business:
+            widths.append(
+                _text_width_fallback(
+                    measure,
+                    _display_text(business, business_font, business_fallback),
+                    business_font,
+                    business_fallback,
+                )
             )
-            if business
-            else 0
-        )
+        if business_note:
+            widths.append(
+                _text_width_fallback(
+                    measure,
+                    _display_text(business_note, business_note_font, business_note_fallback),
+                    business_note_font,
+                    business_note_fallback,
+                )
+            )
+        business_width = max(widths, default=0)
         score_text = f"送出了 {_score(item.get('score'))} 分"
         required = (
             204

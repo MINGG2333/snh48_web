@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from website import config as cfg
 from website import identity_index
 from website import redblue_ledger_api as api
-from website.redblue_export import _business_text, _entry_name
+from website.redblue_export import _business_note, _business_text, _entry_name
 from website.redblue_ledger_api import _weidian_changed, _weidian_order_score, router
 
 
@@ -561,12 +561,18 @@ class RedblueLedgerApiTests(unittest.TestCase):
         response = self.client.post(
             "/api/redblue/redemptions",
             headers=self.headers,
-            json={"fan_id": "1001", "fan_name": "Alice", "business": "6-点唱整首"},
+            json={
+                "fan_id": "1001",
+                "fan_name": "Alice",
+                "business": "6-点唱整首",
+                "note": "要点：唱《两三句》",
+            },
         )
         self.assertEqual(response.status_code, 200, response.text)
         redemption = response.json()["result"]["redemption"]
         self.assertEqual(redemption["completion_entry_id"], "e2")
         self.assertEqual(redemption["display_entry_id"], "e1")
+        self.assertEqual(redemption["note"], "要点：唱《两三句》")
         self.assertEqual(
             [(item["entry_id"], item["score"]) for item in redemption["allocations"]],
             [("e1", 5.0), ("e2", 1.0)],
@@ -575,9 +581,11 @@ class RedblueLedgerApiTests(unittest.TestCase):
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         entries = {entry["id"]: entry for entry in data["entries"]}
         self.assertEqual(entries["e1"]["business_display_labels"], ["点唱整首"])
+        self.assertEqual(entries["e1"]["business_display_notes"], ["要点：唱《两三句》"])
         self.assertEqual(entries["e1"]["business_allocations"][0]["score"], 5.0)
         self.assertEqual(entries["e1"]["business_remaining_score"], 0.0)
         self.assertEqual(entries["e2"]["business_display_labels"], [])
+        self.assertEqual(entries["e2"]["business_display_notes"], [])
         self.assertEqual(entries["e2"]["business_allocations"][0]["score"], 1.0)
         self.assertEqual(entries["e2"]["business_remaining_score"], 2.0)
         fan = next(item for item in data["fan_summary"] if item["fan_id"] == "1001")
@@ -1916,6 +1924,25 @@ class RedblueLedgerApiTests(unittest.TestCase):
             ),
             "点唱整首+查水表",
         )
+
+    def test_export_business_note_uses_redemption_remark(self):
+        self.assertEqual(
+            _business_note({"business_display_notes": ["刘瑞琦的《两三句》"]}),
+            "刘瑞琦的《两三句》",
+        )
+        self.assertEqual(
+            _business_note({"business_display_notes": ["要点 A", "要点 A", "要点 B"]}),
+            "要点 A；要点 B",
+        )
+        self.assertEqual(
+            _business_note({"business_display_notes": [" 第一行\n第二行 "]}),
+            "第一行 第二行",
+        )
+        self.assertEqual(
+            _business_note({"duplicate": True, "business_display_notes": ["备注"]}),
+            "",
+        )
+        self.assertEqual(_business_note({}), "")
 
     def test_export_duplicate_entry_uses_scoring_name_and_dash(self):
         self.assertEqual(
