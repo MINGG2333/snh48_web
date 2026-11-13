@@ -262,7 +262,7 @@
             <tbody id="memberRows"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
-        <div class="pagination"><span id="pageMeta">-</span><div class="actions"><button class="btn" id="prevBtn" type="button">上一页</button><button class="btn" id="nextBtn" type="button">下一页</button></div></div>
+        <div class="pagination" style="display:none"><span id="pageMeta">-</span><div class="actions"><button class="btn" id="prevBtn" type="button">上一页</button><button class="btn" id="nextBtn" type="button">下一页</button></div></div>
       </section>
     </main>
     <div class="footer">{{ site_title }} · 仅限管理员访问</div>
@@ -314,7 +314,7 @@
       var loginBusy = false;
       var data = null;
       var page = 1;
-      var pageSize = 100;
+      var pageSize = 1000;
       var totalPages = 1;
       var sourceFilter = "all";
       var expanded = {};
@@ -528,6 +528,7 @@
         if (activeFiltersTop) activeFiltersTop.textContent = parts.join(" · ") || "全部成员";
       }
       var memberNodeMap = {};
+      var lastRowOrder = "";
       var lastFacetSignature = "";
       var lastSummarySignature = "";
 
@@ -608,13 +609,19 @@
         if (!rows || !rows.length) {
           memberRows.innerHTML = '<tr><td colspan="8" class="empty">当前筛选条件下没有计分记录</td></tr>';
           memberNodeMap = {};
+          lastRowOrder = "";
           return;
         }
+        var orderKey = rows.map(function (row) { return String(row.member_id); }).join(",");
+        var orderChanged = orderKey !== lastRowOrder;
+        lastRowOrder = orderKey;
         var previousTops = {};
-        Object.keys(memberNodeMap).forEach(function (id) {
-          var node = memberNodeMap[id];
-          previousTops[id] = node.rowEl.getBoundingClientRect().top;
-        });
+        if (orderChanged) {
+          Object.keys(memberNodeMap).forEach(function (id) {
+            var node = memberNodeMap[id];
+            previousTops[id] = node.rowEl.getBoundingClientRect().top;
+          });
+        }
         var nextMap = {};
         rows.forEach(function (row) {
           var id = String(row.member_id);
@@ -639,21 +646,23 @@
             node.detailEl.style.display = "none";
           }
         });
-        Object.keys(memberNodeMap).forEach(function (id) {
-          if (!nextMap[id]) {
-            var node = memberNodeMap[id];
-            node.rowEl.remove();
-            node.detailEl.remove();
-          }
-        });
-        rows.forEach(function (row) {
-          var id = String(row.member_id);
-          var node = nextMap[id];
-          memberRows.appendChild(node.rowEl);
-          memberRows.appendChild(node.detailEl);
-        });
+        if (orderChanged) {
+          Object.keys(memberNodeMap).forEach(function (id) {
+            if (!nextMap[id]) {
+              var node = memberNodeMap[id];
+              node.rowEl.remove();
+              node.detailEl.remove();
+            }
+          });
+          rows.forEach(function (row) {
+            var id = String(row.member_id);
+            var node = nextMap[id];
+            memberRows.appendChild(node.rowEl);
+            memberRows.appendChild(node.detailEl);
+          });
+        }
         memberNodeMap = nextMap;
-        if (animate) {
+        if (animate && orderChanged) {
           window.requestAnimationFrame(function () {
             rows.forEach(function (row) {
               var id = String(row.member_id);

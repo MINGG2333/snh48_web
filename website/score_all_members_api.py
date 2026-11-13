@@ -406,7 +406,7 @@ def get_score_all_members_data(
     date_to: str = Query(""),
     sort: str = Query("score_desc"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=500),
+    page_size: int = Query(100, ge=1, le=2000),
     _=Depends(verify_score_gifts_password),
 ):
     response.headers["Cache-Control"] = "no-store"
