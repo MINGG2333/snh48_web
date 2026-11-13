@@ -56,6 +56,7 @@
 | P0 | `danmu_url` SSRF/大响应 | 代码库已加入危险地址拦截、非标准端口拦截、响应大小上限、本地 URL 缓存和白名单灰度告警；默认不强制域名白名单 | 本地弹幕、远程兜底弹幕都能加载；远程失败时视频播放不失败 |
 | P1 | DeepSeek QA 被刷 | 已有密码、限速、日配额、并发限制和余额缓存 | 观察日志和额度消耗；暂不加验证码 |
 | P1 | 腾讯云到阿里云运行数据同步产生高频出站特征 | 已停用腾讯云侧自动推送；阿里云 cron 每分钟运行 `sync-from-tencent-if-changed.sh`，只有腾讯云源数据变化时调用 `sync-from-tencent.sh` 主动拉取对应分组；2026-10-16 起新增反向：腾讯云 cron 每分钟运行 `sync-from-aliyun-if-changed.sh` 拉取阿里云产出的派生数据 | 腾讯云 `crontab -l` 无未注释的 `sync-to-aliyun*` 自动任务，旧推送日志不持续更新；阿里云 cron 有 `sync-from-tencent-if-changed.sh`，腾讯云 cron 有 `sync-from-aliyun-if-changed.sh`；同步日志没有 15 秒连续触发。动态/派生小数据持续更新时，每分钟 `source changed groups=dynamic, pulling...` 或反向 `groups=derived` 可以是正常现象，长期多组同时持续触发需要排查 |
+| P1 | 腾讯云被云安全判定对外 TCP:22 攻击 | 2026-11-13 腾讯云通知称 124.222.72.203 对其它服务器 22 端口有攻击行为。核对阿里云 `auth.log`：来自腾讯云的 SSH accepted 约 4.8k/天，11-13 因新增 `score-gift-sync.service` 每 5 秒两条 rsync 升到约 11k/天；腾讯云无 syn-sent、`known_hosts` 仅已知主机、进程只有到阿里云的 rsync。判定为同步方式导致的误报：腾讯云反向外推过频。已停止/disable 腾讯云 `score-gift-sync.service`，改为阿里云 `score-gift-pull.service` 每 5 秒主动拉取，使用 SSH ControlMaster + ControlPersist=120，约每 2 分钟一条 TCP 连接 | 腾讯云 `ss` 不再有到阿里云 22 的常驻连接；阿里云 `score-gift-pull` active、单条持久连接；不要再在腾讯云增加秒级/分钟级反向 SSH 推送；如云安全仍要求整改，将腾讯云出站 22 限制到 8.210.188.184 |
 | P1 | CSV 任意 HTTPS 图片/链接/HLS | 仍处于兼容模式，暂不强制白名单，避免旧内容失败 | 后续先统计历史域名，再告警，最后按字段拦截 |
 | P2 | CDN/外部脚本供应链 | 回放已固定 `hls.js@1.7.1` 并启用 SRI；其他历史 CDN 仍按外部资源清单维护 | 后续可继续自托管并收窄 CSP |
 | P1 | 网站进程以 root 运行 | 两个生产节点均已切换为专用 `snh48-web` 非 root 账号和 systemd 沙箱；阿里云跨云密钥另有强制命令 | 线上已生效；维护 ACL、unit 和专用 SSH key，改运行方式时重做文档影响检查 |
