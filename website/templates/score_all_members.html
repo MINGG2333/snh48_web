@@ -538,7 +538,8 @@
         var prev = el.dataset.value !== undefined ? Number(el.dataset.value) : next;
         el.dataset.value = String(next);
         if (!animate || !isFinite(prev) || prev === next) {
-          el.textContent = formatter(next);
+          var text = formatter(next);
+          if (el.textContent !== text) el.textContent = text;
           return;
         }
         var started = performance.now();
@@ -696,7 +697,7 @@
         if (!data) return;
         COVERAGE_NOTES = data.coverage_notes || {};
         renderCoverageNotice();
-        generatedAt.textContent = "生成时间：" + (data.generated_at || "-");
+        setText(generatedAt, "生成时间：" + (data.generated_at || "-"));
         var summary = data.summary || {};
         animateNumber(document.getElementById("kpiScore"), summary.total_score, formatScore, options.animate);
         animateNumber(document.getElementById("kpiScoreSub"), summary.total_count, function (v) { return "礼物数 " + formatNumber(Math.round(v)); }, options.animate);
