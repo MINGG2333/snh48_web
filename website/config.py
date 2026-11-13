@@ -495,7 +495,7 @@ REDBLUE_WEIDIAN_ITEM_IDS = [
     value.strip()
     for value in os.getenv(
         "REDBLUE_WEIDIAN_ITEM_IDS",
-        f"{REDBLUE_WEIDIAN_ITEM_ID},7889970560",
+        f"{REDBLUE_WEIDIAN_ITEM_ID},7889970560,7898427979",
     ).split(",")
     if value.strip()
 ]
