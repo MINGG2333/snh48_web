@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-13 红蓝台账按条目导出：兑换备注作为业务名下方第二行（双端已生效）
+
+- 需求：`/business/redblue2026` 登记兑换时可填写备注（如“刘瑞琦的《两三句》”），导出“按条目”PNG 时希望备注跟在业务名下方显示，方便区分同一业务的具体要求；没有备注的条目保持一行。
+- 代码（网站 `ab4e382`）：`website/redblue_ledger_api.py` 的 `_attach_business_allocations()` 在生成 `business_display_labels` 的同时按展示条目汇总 `business_display_notes`（备注去空、跟随最早分摊条目，和业务名同一条记录）；`website/redblue_export.py` 新增 `_business_note()`（重复条目不显示备注，多个兑换落在同一条目时用「；」连接并去重，换行压成空格），按条目导出的定宽测量把备注计入，绘制时业务名上移 9px、备注以 16px 字号右对齐画在下方；没有备注时版式不变。`doc/website_pages.md` 同步说明，`tests/test_redblue_ledger_api.py` 新增备注覆盖并扩展兑换分摊用例。
+- 验证：网站 `tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 69 项通过；阿里云用生产台账真实数据（205 条、33 笔兑换）只读渲染，命中 1 条备注 `刘瑞琦的《两三句》`，业务列显示 `点唱半首+方言盲盒` 两行，肉眼确认备注在业务名下方、其他条目版式不变；单测覆盖无备注、重复条目和多备注连接。
+- 部署：网站 `ab4e382` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启，MainPID `598832`；阿里云 `snh48-aliyun.service` 重启，MainPID `1375988`；两端 active/running、`NRestarts=0`，`https://cjy.plus/business/redblue2026` 与 `https://cjy.xn--6qq986b3xl/business/redblue2026` 均 200，未登录 `/api/redblue/export/entries.png` 401。
+
 ## 2026-11-13 05:00 时光轴票务区增加分团官方竞价/票务入口（双端已生效）
 
 - 需求：票务区显示对应分团的官方竞价页/票务页通用入口，不放具体商品链接。
