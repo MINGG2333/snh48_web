@@ -464,7 +464,9 @@
         options = options || {};
         page = targetPage || 1;
         var scrollY = window.scrollY || 0;
-        memberRows.innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
+        if (!data) {
+          memberRows.innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
+        }
         var resp = await fetch("/api/score-all-members/data?" + buildQuery(page), {
           credentials: "same-origin", cache: "no-store"
         });
