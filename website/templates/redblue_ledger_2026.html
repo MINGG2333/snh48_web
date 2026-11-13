@@ -272,7 +272,6 @@
         <div class="field"><label>结束日期</label><input id="dateTo" type="date"></div>
         <div class="field"><label>排序</label><select id="sortFilter"><option value="time_asc">时间正序</option><option value="time_desc">时间倒序</option></select></div>
         <div class="field"><label>&nbsp;</label><label class="check"><input id="includeDuplicate" type="checkbox" checked> 显示重复</label></div>
-        <div class="field"><label>&nbsp;</label><label class="check" title="排除「身份待确认」和「重复」条目，只看身份已确认的正常记录"><input id="hideAbnormal" type="checkbox"> 隐藏异常条目</label></div>
       </div>
     </section>
 
@@ -667,7 +666,6 @@
     params.set("date_to", $("dateTo").value);
     params.set("sort", $("sortFilter").value);
     params.set("include_duplicate", $("includeDuplicate").checked ? "true" : "false");
-    params.set("hide_abnormal", $("hideAbnormal").checked ? "true" : "false");
     if (selectedScores.size) {
       params.set("scores", Array.from(selectedScores).sort(function (a, b) { return a - b; }).join(","));
     }
@@ -1860,7 +1858,7 @@
   }
 
   function redemptionFullQuery() {
-    return "/api/redblue/data?source=all&status=all&keyword=&date_from=&date_to=&sort=time_asc&include_duplicate=true&hide_abnormal=false";
+    return "/api/redblue/data?source=all&status=all&keyword=&date_from=&date_to=&sort=time_asc&include_duplicate=true";
   }
 
   function redemptionById(id) {
@@ -3031,16 +3029,8 @@
     $("shipSelectedBtn").addEventListener("click", shipSelected);
     $("proxyConfirmBtn").addEventListener("click", confirmProxySettlement);
     $("proxyBatchBtn").addEventListener("click", openProxyBatch);
-    ["sourceFilter","statusFilter","sortFilter","includeDuplicate","hideAbnormal","dateFrom","dateTo"].forEach(function (id) {
-      $(id).addEventListener("change", function () {
-        // 「隐藏异常条目」与「身份待确认/重复」互斥，避免必然为空的组合。
-        if (id === "hideAbnormal" && $("hideAbnormal").checked) {
-          if (["warning", "duplicate"].indexOf($("statusFilter").value) >= 0) $("statusFilter").value = "all";
-        } else if (id === "statusFilter" && ["warning", "duplicate"].indexOf($("statusFilter").value) >= 0) {
-          $("hideAbnormal").checked = false;
-        }
-        loadData().catch(function () {});
-      });
+    ["sourceFilter","statusFilter","sortFilter","includeDuplicate","dateFrom","dateTo"].forEach(function (id) {
+      $(id).addEventListener("change", function () { loadData().catch(function () {}); });
     });
     $("scoreFilterToggle").addEventListener("click", function (event) {
       event.stopPropagation();

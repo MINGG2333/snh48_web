@@ -371,68 +371,6 @@ class RedblueLedgerApiTests(unittest.TestCase):
         paid = self.client.get("/api/redblue/data?status=paid", headers=self.headers).json()
         self.assertEqual([entry["source"] for entry in paid["entries"]], ["association_manual"])
 
-    def test_hide_abnormal_drops_warning_and_duplicate_entries(self):
-        entries = [
-            {
-                "id": "n1",
-                "fan_id": "1001",
-                "fan_name": "Alice",
-                "raw_name": "Alice",
-                "raw_id": "1001",
-                "score": 2.0,
-                "source": "manual",
-                "source_time": "2026-11-01 10:00:00",
-                "created_at": "2026-11-01 10:00:00",
-                "settled": True,
-                "duplicate": False,
-            },
-            {
-                "id": "d1",
-                "fan_id": "1001",
-                "fan_name": "Alice",
-                "raw_name": "Alice",
-                "raw_id": "1001",
-                "score": 2.0,
-                "source": "manual",
-                "source_time": "2026-11-01 11:00:00",
-                "created_at": "2026-11-01 11:00:00",
-                "settled": True,
-                "duplicate": True,
-            },
-            {
-                "id": "w1",
-                "fan_id": "",
-                "fan_name": "",
-                "raw_name": "Nobody",
-                "raw_id": "",
-                "score": 1.0,
-                "source": "manual",
-                "source_time": "2026-11-01 12:00:00",
-                "created_at": "2026-11-01 12:00:00",
-                "settled": False,
-                "duplicate": False,
-                "warning": True,
-                "warning_reason": "口袋48 ID 未找到",
-            },
-        ]
-        (self.tmp / "ledger.json").write_text(
-            json.dumps({"version": 1, "entries": entries, "aliases": []}, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        full = self.client.get("/api/redblue/data", headers=self.headers).json()
-        self.assertEqual({entry["id"] for entry in full["entries"]}, {"n1", "d1", "w1"})
-        self.assertEqual({entry["id"] for entry in full["entries"] if entry["warning"]}, {"w1"})
-        hidden = self.client.get(
-            "/api/redblue/data?hide_abnormal=true", headers=self.headers
-        ).json()
-        self.assertEqual([entry["id"] for entry in hidden["entries"]], ["n1"])
-        self.assertTrue(hidden["filters"]["hide_abnormal"])
-        self.assertEqual(hidden["summary"]["warning_count"], 0)
-        exported = self.client.get(
-            "/api/redblue/export/entries.png?hide_abnormal=true", headers=self.headers
-        )
-        self.assertEqual(exported.status_code, 200)
-
     def test_shipped_weidian_entry_still_counts_as_pending(self):
         self._apply_weidian_orders(
             [self._weidian_order(status="已发货", shipped=True, shipped_at="2026-10-25 09:00:00")]

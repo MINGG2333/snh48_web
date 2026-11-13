@@ -1920,7 +1920,6 @@ def _filter_entries(
     date_from: str = "",
     date_to: str = "",
     include_duplicate: bool = True,
-    hide_abnormal: bool = False,
     scores: set[float] | None = None,
     aliases: Iterable[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
@@ -1948,8 +1947,6 @@ def _filter_entries(
         if status_filter == "warning" and not item["warning"]:
             continue
         if status_filter == "duplicate" and not item["duplicate"]:
-            continue
-        if hide_abnormal and (item["warning"] or item["duplicate"]):
             continue
         day = (item["source_time"] or item["created_at"])[:10]
         if date_from and day < date_from:
@@ -2167,7 +2164,6 @@ def _load_filtered(
     date_to: str,
     sort: str,
     include_duplicate: bool,
-    hide_abnormal: bool = False,
     scores: set[float] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
@@ -2183,7 +2179,6 @@ def _load_filtered(
         date_from=date_from,
         date_to=date_to,
         include_duplicate=include_duplicate,
-        hide_abnormal=hide_abnormal,
         scores=scores,
         aliases=doc.get("aliases") or [],
     )
@@ -3055,7 +3050,6 @@ def get_redblue_data(
     date_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
-    hide_abnormal: bool = Query(False),
     scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
@@ -3071,7 +3065,6 @@ def get_redblue_data(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
-        hide_abnormal=hide_abnormal,
         scores=parsed_scores,
     )
     raw_entries = doc.get("entries") or []
@@ -3108,7 +3101,6 @@ def get_redblue_data(
             "date_to": date_to,
             "sort": _clean(sort, 20),
             "include_duplicate": include_duplicate,
-            "hide_abnormal": hide_abnormal,
             "scores": sorted(parsed_scores),
         },
     }
@@ -3123,7 +3115,6 @@ def _export_context(
     date_to: str,
     sort: str,
     include_duplicate: bool,
-    hide_abnormal: bool = False,
     scores: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str]:
     date_from = _norm_date(date_from)
@@ -3137,7 +3128,6 @@ def _export_context(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
-        hide_abnormal=hide_abnormal,
         scores=parsed_scores,
     )
     redemptions = _normalise_redemptions(doc.get("business_redemptions") or [], doc.get("entries") or [])
@@ -3165,8 +3155,6 @@ def _export_context(
         filters.append("分数：" + "、".join(_format_score(value) for value in sorted(parsed_scores)))
     if not include_duplicate:
         filters.append("不含重复")
-    if hide_abnormal:
-        filters.append("已隐藏异常条目")
     updated = max((item.get("source_time") or item.get("created_at") or "" for item in entries), default="")[:16]
     return entries, _summary(entries), period, " · ".join(filters), updated
 
@@ -3191,7 +3179,6 @@ def export_redblue_summary(
     date_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
-    hide_abnormal: bool = Query(False),
     scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
@@ -3203,7 +3190,6 @@ def export_redblue_summary(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
-        hide_abnormal=hide_abnormal,
         scores=scores,
     )
     from website.redblue_export import render_summary_png
@@ -3229,7 +3215,6 @@ def export_redblue_entries(
     date_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
-    hide_abnormal: bool = Query(False),
     scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
@@ -3241,7 +3226,6 @@ def export_redblue_entries(
         date_to=date_to,
         sort=sort,
         include_duplicate=include_duplicate,
-        hide_abnormal=hide_abnormal,
         scores=scores,
     )
     from website.redblue_export import render_entries_png

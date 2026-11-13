@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-14 红蓝状态筛选去掉「隐藏异常条目」，只保留「显示重复」（双端已生效）
+
+- 需求：用户确认筛选区不需要额外的「隐藏异常条目」开关，已有「显示重复」复选框足够。
+- 代码（网站 `9e9faa5`）：删除该复选框及前端 `hide_abnormal` 参数，`website/redblue_ledger_api.py` 的 `_filter_entries`/`_load_filtered`/`/data` 与两个导出接口回退到只有 `include_duplicate`；保留上一版的状态筛选 `optgroup` 分组（投送状态/订单状态/异常）和删除「正常」选项的改动。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 70 项通过；模板断言确认页面不再出现 `hideAbnormal`/`hide_abnormal`，`node --check` 通过内联脚本。
+- 部署：网站提交已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`；腾讯云 `snh48-web.service`、阿里云 `snh48-aliyun.service` 重启后 active，页面 200、未登录 `/api/redblue/data` 401。
+
 ## 2026-11-14 红蓝台账状态筛选：移除「正常」，异常条目改为独立开关（双端已生效）
 
 - 需求：`/business/redblue2026` 状态筛选里的「正常」让人看不懂——它其实是「既非身份待确认、也非重复」，却和待投/已投等并列显示，像是第三种投送状态。
