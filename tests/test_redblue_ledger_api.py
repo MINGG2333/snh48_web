@@ -139,6 +139,126 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.SHARED_STATE_IS_PRIMARY = self._old["primary"]
         identity_index.clear_cache()
 
+    def _write_batch_redemption_ledger(self) -> None:
+        entries = [
+            {
+                "id": "b1",
+                "fan_id": "1001",
+                "fan_name": "Alice",
+                "raw_name": "Alice",
+                "raw_id": "1001",
+                "score": 5.0,
+                "source": "manual",
+                "source_time": "2026-11-02 10:00:00",
+                "created_at": "2026-11-02 10:00:00",
+                "settled": True,
+                "duplicate": False,
+                "scoring_method": "计分卡",
+            },
+            {
+                "id": "b2",
+                "fan_id": "1002",
+                "fan_name": "Bob",
+                "raw_name": "Bob",
+                "raw_id": "1002",
+                "score": 6.0,
+                "source": "association_manual",
+                "source_time": "2026-11-03 10:00:00",
+                "created_at": "2026-11-03 10:00:00",
+                "settled": True,
+                "duplicate": False,
+                "scoring_method": "鸡腿",
+            },
+            {
+                "id": "b3",
+                "fan_id": "1002",
+                "fan_name": "Bob",
+                "raw_name": "Bob",
+                "raw_id": "1002",
+                "score": 2.0,
+                "source": "manual",
+                "source_time": "2026-11-04 10:00:00",
+                "created_at": "2026-11-04 10:00:00",
+                "settled": True,
+                "duplicate": False,
+                "scoring_method": "计分卡",
+            },
+        ]
+        (self.tmp / "ledger.json").write_text(
+            json.dumps({"version": 1, "entries": entries, "aliases": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def test_batch_redemption_creates_one_record_per_selected_entry(self):
+        self._write_batch_redemption_ledger()
+        response = self.client.post(
+            "/api/redblue/redemptions/batch",
+            headers=self.headers,
+            json={
+                "entry_ids": ["b1", "b2", "b2"],
+                "business": "3-点歌盲盒",
+                "status": "done",
+                "note": "批量备注",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()["result"]
+        self.assertEqual(result["created"], 2)
+        self.assertEqual(len({item["id"] for item in result["redemptions"]}), 2)
+        self.assertTrue(all(item["note"] == "批量备注" for item in result["redemptions"]))
+        self.assertTrue(all(item["status"] == "done" for item in result["redemptions"]))
+        self.assertEqual(
+            sorted((item["allocations"][0]["entry_id"], item["scoring_method"], item["allocations"][0]["score"])
+                   for item in result["redemptions"]),
+            [("b1", "计分卡", 3.0), ("b2", "鸡腿", 3.0)],
+        )
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entries = {entry["id"]: entry for entry in data["entries"]}
+        self.assertEqual(entries["b1"]["business_remaining_score"], 2.0)
+        self.assertEqual(entries["b2"]["business_remaining_score"], 3.0)
+        self.assertEqual(entries["b1"]["business_display_notes"], ["批量备注"])
+        self.assertEqual(len(data["business_redemptions"]), 2)
+
+    def test_batch_redemption_rejects_when_any_entry_lacks_score(self):
+        self._write_batch_redemption_ledger()
+        response = self.client.post(
+            "/api/redblue/redemptions/batch",
+            headers=self.headers,
+            json={
+                "entry_ids": ["b1", "b3"],
+                "business": "3-点歌盲盒",
+                "note": "不应写入",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        self.assertEqual(data["business_redemptions"], [])
+        self.assertEqual({entry["id"]: entry["business_allocated_score"] for entry in data["entries"]}, {"b1": 0.0, "b2": 0.0, "b3": 0.0})
+
+    def test_batch_redemption_bonus_requires_chicken_entries(self):
+        self._write_batch_redemption_ledger()
+        response = self.client.post(
+            "/api/redblue/redemptions/batch",
+            headers=self.headers,
+            json={
+                "entry_ids": ["b1"],
+                "business": "3-点歌盲盒",
+                "bonus_business": "3-方言盲盒",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        chicken = self.client.post(
+            "/api/redblue/redemptions/batch",
+            headers=self.headers,
+            json={
+                "entry_ids": ["b2"],
+                "business": "3-点歌盲盒",
+                "bonus_business": "3-方言盲盒",
+            },
+        )
+        self.assertEqual(chicken.status_code, 200, chicken.text)
+        self.assertEqual(chicken.json()["result"]["redemptions"][0]["bonus_business"], "3-方言盲盒")
+
     def _write_business_ledger(self) -> None:
         entries = [
             {

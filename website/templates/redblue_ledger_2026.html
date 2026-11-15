@@ -256,6 +256,7 @@
         <button class="btn pink" id="syncWeidianBtn">立即同步微店</button>
         <button class="btn gold" id="aiResolveBtn">AI 识别未登记</button>
         <button class="btn" id="businessRedeemBtn">业务兑换</button>
+        <button class="btn" id="batchRedemptionBtn">批量兑换业务</button>
         <button class="btn gold" id="scoringOverrideBtn">计分方式更正</button>
         <button class="btn gold" id="batchScoringBtn">批量改判/凭证</button>
         <button class="btn gold" id="proxyBatchBtn">批量代投明细</button>
@@ -452,6 +453,31 @@
   </div>
 </div>
 
+<div class="modal hidden" id="batchRedemptionModal">
+  <div class="modal-backdrop" data-close="batchRedemptionModal"></div>
+  <div class="modal-card wide">
+    <h2>批量兑换业务</h2>
+    <div class="sub" id="batchRedemptionSub">勾选多个条目后，每条各生成一笔兑换；业务分值不能超过该条目的可用分。</div>
+    <div class="form-grid">
+      <div class="field"><label>业务</label><select id="batchRedemptionBusiness"></select></div>
+      <div class="field"><label>加赠业务（仅鸡腿条目）</label><select id="batchRedemptionBonus"></select></div>
+      <div class="field"><label>状态</label><select id="batchRedemptionStatus"><option value="pending">兑换中</option><option value="done">已兑换</option></select></div>
+      <div class="field"><label>备注</label><input id="batchRedemptionNote" placeholder="会写入每一笔兑换"></div>
+    </div>
+    <div class="redemption-summary" id="batchRedemptionSummary"></div>
+    <div class="table-wrap" style="max-height:320px;overflow:auto;">
+      <table class="redemption-table">
+        <thead><tr><th>条目时间</th><th>昵称 / ID</th><th>来源</th><th>计分方式</th><th>条目分数</th><th>可用</th><th>兑换后剩余</th><th>状态</th></tr></thead>
+        <tbody id="batchRedemptionBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close="batchRedemptionModal">取消</button>
+      <button class="btn primary" id="saveBatchRedemptionBtn" disabled>批量兑换</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal hidden" id="dailyModal">
   <div class="modal-backdrop" data-close="dailyModal"></div>
   <div class="modal-card wide daily-modal-card">
@@ -519,6 +545,7 @@
   var businessOptions = [];
   var redemptionData = null;
   var editingRedemptionId = "";
+  var batchRedemptionEntries = [];
   var pollTimer = null;
   var confirmAction = null;
 
@@ -2232,6 +2259,117 @@
     });
   }
 
+  function batchEntryAvailable(entry) {
+    var remaining = entry.business_remaining_score;
+    if (remaining !== undefined && remaining !== null) return Math.max(0, Number(remaining || 0));
+    return Math.max(0, Number(entry.score || 0) - Number(entry.business_allocated_score || 0));
+  }
+
+  function openBatchRedemptionModal() {
+    var ids = Array.from(selected);
+    if (!ids.length) { showToast("请先勾选要兑换的条目", true); return; }
+    var entries = [];
+    var skippedDuplicate = 0;
+    ids.forEach(function (id) {
+      var entry = (data.entries || []).find(function (row) { return row.id === id; });
+      if (!entry) return;
+      if (entry.duplicate) { skippedDuplicate += 1; return; }
+      entries.push(entry);
+    });
+    if (!entries.length) { showToast("所选条目均已标记重复，不能兑换", true); return; }
+    entries.sort(function (left, right) {
+      return String(left.source_time || left.created_at || "").localeCompare(String(right.source_time || right.created_at || ""));
+    });
+    batchRedemptionEntries = entries;
+    $("batchRedemptionBusiness").innerHTML = businessOptionsMarkup("", "");
+    $("batchRedemptionBonus").innerHTML = businessOptionsMarkup("", "bonus");
+    $("batchRedemptionStatus").value = "pending";
+    $("batchRedemptionNote").value = "";
+    $("batchRedemptionSub").textContent = "已勾选 " + entries.length + " 条，每条各生成一笔兑换；业务分值不能超过该条目的可用分。" +
+      (skippedDuplicate ? " 已忽略 " + skippedDuplicate + " 条重复条目。" : "");
+    renderBatchRedemption();
+    $("batchRedemptionModal").classList.remove("hidden");
+  }
+
+  function updateBatchBonusAvailability() {
+    var allChicken = batchRedemptionEntries.length > 0 && batchRedemptionEntries.every(function (entry) {
+      return entry.scoring_method === "鸡腿";
+    });
+    $("batchRedemptionBonus").disabled = !allChicken;
+    if (!allChicken) $("batchRedemptionBonus").value = "";
+  }
+
+  function renderBatchRedemption() {
+    var cost = businessCost($("batchRedemptionBusiness").value);
+    var okCount = 0;
+    var total = 0;
+    $("batchRedemptionBody").innerHTML = batchRedemptionEntries.map(function (entry) {
+      var available = batchEntryAvailable(entry);
+      var enough = cost > 0 && available + 0.0001 >= cost;
+      if (enough) { okCount += 1; total += cost; }
+      var status = !cost
+        ? '<span class="notice">待选业务</span>'
+        : (enough ? '<span class="pill ok">可兑换</span>' : '<span class="pill dup">分数不足</span>');
+      return '<tr' + (cost > 0 && !enough ? ' style="background:rgba(210,50,50,.06);"' : '') + '>' +
+        '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0, 16)) + '</td>' +
+        '<td>' + esc(entry.fan_name || entry.raw_name || "未登记") +
+          (entry.fan_id ? '<div class="notice">ID ' + esc(entry.fan_id) + '</div>' : '') + '</td>' +
+        '<td>' + esc(entry.source_label || sourceDisplay(entry.source)) + '</td>' +
+        '<td>' + esc(entry.scoring_method || "-") + '</td>' +
+        '<td>' + score(entry.score) + '</td>' +
+        '<td>' + score(available) + '</td>' +
+        '<td>' + (enough ? score(available - cost) : "-") + '</td>' +
+        '<td>' + status + '</td>' +
+      '</tr>';
+    }).join("");
+    updateBatchBonusAvailability();
+    var parts = [];
+    if (!batchRedemptionEntries.length) {
+      parts.push("没有可兑换条目");
+    } else if (!cost) {
+      parts.push("共 " + batchRedemptionEntries.length + " 条");
+      parts.push("请选择业务");
+    } else {
+      parts.push("共 " + batchRedemptionEntries.length + " 条");
+      parts.push("可兑换 " + okCount + " 条");
+      if (okCount < batchRedemptionEntries.length) parts.push("分数不足 " + (batchRedemptionEntries.length - okCount) + " 条");
+      parts.push("合计 " + score(total) + " 分");
+    }
+    $("batchRedemptionSummary").textContent = parts.join(" · ");
+    $("saveBatchRedemptionBtn").disabled = !cost || !batchRedemptionEntries.length || okCount !== batchRedemptionEntries.length;
+  }
+
+  async function saveBatchRedemption() {
+    var cost = businessCost($("batchRedemptionBusiness").value);
+    if (!cost) { showToast("请选择业务", true); return; }
+    if (!batchRedemptionEntries.length) { showToast("请先勾选要兑换的条目", true); return; }
+    var bad = batchRedemptionEntries.filter(function (entry) { return batchEntryAvailable(entry) + 0.0001 < cost; });
+    if (bad.length) { showToast(bad.length + " 条可用分数不足，未提交", true); return; }
+    var payload = {
+      entry_ids: batchRedemptionEntries.map(function (entry) { return entry.id; }),
+      business: $("batchRedemptionBusiness").value,
+      bonus_business: $("batchRedemptionBonus").value,
+      status: $("batchRedemptionStatus").value,
+      note: $("batchRedemptionNote").value.trim()
+    };
+    $("saveBatchRedemptionBtn").disabled = true;
+    try {
+      var response = await api("/api/redblue/redemptions/batch", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      var created = Number((response.result || {}).created || 0);
+      $("batchRedemptionModal").classList.add("hidden");
+      batchRedemptionEntries = [];
+      await loadData(true);
+      showToast("已批量兑换 " + created + " 条");
+    } catch (error) {
+      showToast(error.message || "批量兑换失败", true);
+      $("saveBatchRedemptionBtn").disabled = false;
+    }
+  }
+
   async function toggleEntryRedemptions(entryId) {
     var entry = (data.entries || []).find(function (row) { return row.id === entryId; });
     if (!entry) return;
@@ -3002,6 +3140,9 @@
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null, "manual"); });
     $("addWeidianManualBtn").addEventListener("click", function () { openEntryModal(null, "association_manual"); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });
+    $("batchRedemptionBtn").addEventListener("click", openBatchRedemptionModal);
+    $("batchRedemptionBusiness").addEventListener("change", renderBatchRedemption);
+    $("saveBatchRedemptionBtn").addEventListener("click", saveBatchRedemption);
     $("scoringOverrideBtn").addEventListener("click", function () { openScoringOverrideModal(null); });
     $("batchScoringBtn").addEventListener("click", openBatchScoringModal);
     $("previewOverrideBtn").addEventListener("click", previewScoringOverride);

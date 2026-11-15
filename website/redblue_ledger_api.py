@@ -2608,6 +2608,77 @@ def _mutator_upsert_redemption(doc: dict[str, Any], payload: dict[str, Any]):
     return doc, {"redemption": _normalise_redemption(record, entry_map), "created": existing is None}
 
 
+def _mutator_upsert_redemptions_batch(doc: dict[str, Any], payload: dict[str, Any]):
+    """按勾选条目批量兑换：每个条目各生成一笔业务兑换，共用业务、状态和备注。"""
+    raw_ids = payload.get("entry_ids")
+    if not isinstance(raw_ids, list):
+        raise ValueError("请选择要兑换的条目")
+    entry_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for value in raw_ids:
+        entry_id = _clean(value, 80)
+        if entry_id and entry_id not in seen_ids:
+            seen_ids.add(entry_id)
+            entry_ids.append(entry_id)
+    if not entry_ids:
+        raise ValueError("请选择要兑换的条目")
+    business = _clean(payload.get("business"), 80)
+    option = BUSINESS_OPTION_MAP.get(business)
+    if option is None:
+        raise ValueError("请选择有效业务")
+    cost = round(_to_float(option.get("score"), 0.0), 4)
+    if cost <= 0:
+        raise ValueError("业务分值无效")
+    bonus_business = _clean(payload.get("bonus_business"), 80)
+    bonus_option = BONUS_OPTION_MAP.get(bonus_business) if bonus_business else None
+    if bonus_business and bonus_option is None:
+        raise ValueError("加赠业务无效")
+    status = _redemption_status(payload.get("status"))
+    note = _clean(payload.get("note"))
+    entries = [item for item in doc.get("entries") or [] if isinstance(item, dict)]
+    entry_map = {_clean(item.get("id"), 80): item for item in entries if _clean(item.get("id"), 80)}
+    used = _entry_used_scores(doc.get("business_redemptions") or [])
+    prepared: list[tuple[str, str]] = []
+    for index, entry_id in enumerate(entry_ids, start=1):
+        entry = entry_map.get(entry_id)
+        if entry is None:
+            raise ValueError(f"第 {index} 条条目不存在")
+        if entry.get("duplicate"):
+            raise ValueError(f"第 {index} 条已标记重复，不能兑换")
+        method = _entry_scoring_method(entry)
+        if method not in SCORING_METHODS:
+            raise ValueError(f"第 {index} 条计分方式无效")
+        if bonus_option is not None and method != "鸡腿":
+            raise ValueError(f"第 {index} 条不是鸡腿计分，不能叠加加赠业务")
+        available = round(_to_float(entry.get("score"), 0.0) - used.get(entry_id, 0.0), 4)
+        if available + 0.0001 < cost:
+            name = _entry_fan_name(entry) or "未登记"
+            raise ValueError(
+                f"第 {index} 条（{name}）可用 {available:g} 分，不足业务所需 {cost:g} 分"
+            )
+        prepared.append((entry_id, method))
+    created = []
+    for entry_id, method in prepared:
+        doc, result = _mutator_upsert_redemption(
+            doc,
+            {
+                "business": business,
+                "bonus_business": bonus_option["value"] if bonus_option else "",
+                "scoring_method": method,
+                "status": status,
+                "note": note,
+                "allocations": [{"entry_id": entry_id, "score": cost}],
+            },
+        )
+        created.append(result["redemption"])
+    return doc, {
+        "created": len(created),
+        "business": business,
+        "score": cost,
+        "redemptions": created,
+    }
+
+
 def _mutator_delete_redemption(doc: dict[str, Any], payload: dict[str, Any]):
     redemption_id = _clean(payload.get("id"), 80)
     redemptions = doc.get("business_redemptions") if isinstance(doc.get("business_redemptions"), list) else []
@@ -2932,6 +3003,7 @@ register_mutator(RESOURCE, "upsert_weidian", _mutator_upsert_weidian)
 register_mutator(RESOURCE, "rename_weidian", _mutator_rename_weidian)
 register_mutator(RESOURCE, "mark_shipped", _mutator_mark_shipped)
 register_mutator(RESOURCE, "upsert_redemption", _mutator_upsert_redemption)
+register_mutator(RESOURCE, "upsert_redemptions_batch", _mutator_upsert_redemptions_batch)
 register_mutator(RESOURCE, "delete_redemption", _mutator_delete_redemption)
 register_mutator(RESOURCE, "migrate_legacy_business", _mutator_migrate_legacy_business)
 register_mutator(RESOURCE, "override_scoring", _mutator_override_scoring)
@@ -3417,6 +3489,11 @@ def get_scoring_evidence(filename: str, _=Depends(verify_redblue_password)):
 @router.post("/redemptions")
 def add_redemption(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
     return _mutate("upsert_redemption", payload, request)
+
+
+@router.post("/redemptions/batch")
+def add_redemptions_batch(request: Request, payload: dict[str, Any] = Body(...), _=Depends(verify_redblue_password)):
+    return _mutate("upsert_redemptions_batch", payload, request)
 
 
 @router.patch("/redemptions/{redemption_id}")

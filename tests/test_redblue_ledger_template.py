@@ -37,6 +37,15 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn('$("proxyTitle").textContent = "代投明细（合计）";', self.source)
         self.assertIn('$("proxyConfirmBtn").classList.add("hidden");', self.source)
 
+    def test_batch_redemption_entry_points_exist(self) -> None:
+        self.assertIn('id="batchRedemptionBtn"', self.source)
+        self.assertIn('id="batchRedemptionModal"', self.source)
+        self.assertIn('$("batchRedemptionBtn").addEventListener("click", openBatchRedemptionModal);', self.source)
+        self.assertIn("function openBatchRedemptionModal()", self.source)
+        self.assertIn("function renderBatchRedemption()", self.source)
+        self.assertIn('"/api/redblue/redemptions/batch"', self.source)
+        self.assertIn("每条各生成一笔兑换", self.source)
+
     def test_entry_edit_shows_actual_source_and_scoring(self) -> None:
         self.assertIn("function entryEditSourceLabel(entry)", self.source)
         self.assertIn('return method ? base + "·" + method : base;', self.source)
