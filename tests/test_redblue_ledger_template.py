@@ -37,6 +37,21 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn('$("proxyTitle").textContent = "代投明细（合计）";', self.source)
         self.assertIn('$("proxyConfirmBtn").classList.add("hidden");', self.source)
 
+    def test_selected_nickname_export_entry_points_exist(self) -> None:
+        self.assertIn('id="exportSelectedNicknamesBtn"', self.source)
+        self.assertIn('$("exportSelectedNicknamesBtn").addEventListener("click", exportSelectedNicknames);', self.source)
+        self.assertIn("function exportSelectedNicknames()", self.source)
+        self.assertIn('link.download = "红蓝计分_选中昵称_"', self.source)
+        self.assertIn('names.join("\\r\\n")', self.source)
+
+    def test_date_filters_include_time_inputs(self) -> None:
+        self.assertIn('id="timeFrom" type="time" step="60"', self.source)
+        self.assertIn('id="timeTo" type="time" step="60"', self.source)
+        self.assertIn('params.set("time_from", $("timeFrom").value);', self.source)
+        self.assertIn('params.set("time_to", $("timeTo").value);', self.source)
+        self.assertIn("function syncTimeFilterInputs()", self.source)
+        self.assertIn('$("timeFrom").title = hasFrom ? "不填则从 00:00 开始" : "先选开始日期";', self.source)
+
     def test_batch_redemption_entry_points_exist(self) -> None:
         self.assertIn('id="batchRedemptionBtn"', self.source)
         self.assertIn('id="batchRedemptionModal"', self.source)

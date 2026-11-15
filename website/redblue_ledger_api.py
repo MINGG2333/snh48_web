@@ -486,6 +486,18 @@ def _norm_date(value: str) -> str:
         raise HTTPException(status_code=422, detail="日期格式应为 YYYY-MM-DD")
 
 
+def _norm_time(value: str) -> str:
+    value = _clean(value, 8)
+    if not value:
+        return ""
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt).strftime(fmt)
+        except ValueError:
+            continue
+    raise HTTPException(status_code=422, detail="时间格式应为 HH:MM")
+
+
 def _valid_job_id(value: str) -> str:
     value = _clean(value, 64)
     if not JOB_ID_RE.fullmatch(value):
@@ -1942,6 +1954,8 @@ def _filter_entries(
     keyword: str = "",
     date_from: str = "",
     date_to: str = "",
+    time_from: str = "",
+    time_to: str = "",
     include_duplicate: bool = True,
     scores: set[float] | None = None,
     aliases: Iterable[dict[str, Any]] = (),
@@ -1971,11 +1985,23 @@ def _filter_entries(
             continue
         if status_filter == "duplicate" and not item["duplicate"]:
             continue
-        day = (item["source_time"] or item["created_at"])[:10]
-        if date_from and day < date_from:
-            continue
-        if date_to and day > date_to:
-            continue
+        moment = (item["source_time"] or item["created_at"])[:19]
+        if len(moment) == 10:
+            moment += " 00:00:00"
+        elif len(moment) == 16:
+            moment += ":00"
+        if date_from:
+            start = f"{date_from} {time_from or '00:00:00'}"
+            if len(start) == 16:
+                start += ":00"
+            if not moment or moment < start:
+                continue
+        if date_to:
+            end = f"{date_to} {time_to or '23:59:59'}"
+            if len(end) == 16:
+                end += ":59"
+            if not moment or moment > end:
+                continue
         if keyword:
             haystack = " ".join(
                 [
@@ -2185,6 +2211,8 @@ def _load_filtered(
     keyword: str,
     date_from: str,
     date_to: str,
+    time_from: str,
+    time_to: str,
     sort: str,
     include_duplicate: bool,
     scores: set[float] | None = None,
@@ -2201,6 +2229,8 @@ def _load_filtered(
         keyword=keyword,
         date_from=date_from,
         date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
         include_duplicate=include_duplicate,
         scores=scores,
         aliases=doc.get("aliases") or [],
@@ -3146,6 +3176,8 @@ def get_redblue_data(
     keyword: str = Query(""),
     date_from: str = Query(""),
     date_to: str = Query(""),
+    time_from: str = Query(""),
+    time_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
     scores: str = Query(""),
@@ -3154,6 +3186,8 @@ def get_redblue_data(
     response.headers["Cache-Control"] = "no-store"
     date_from = _norm_date(date_from)
     date_to = _norm_date(date_to)
+    time_from = _norm_time(time_from)
+    time_to = _norm_time(time_to)
     parsed_scores = _parse_scores(scores)
     doc, entries = _load_filtered(
         source=source,
@@ -3161,6 +3195,8 @@ def get_redblue_data(
         keyword=keyword,
         date_from=date_from,
         date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
         sort=sort,
         include_duplicate=include_duplicate,
         scores=parsed_scores,
@@ -3197,6 +3233,8 @@ def get_redblue_data(
             "keyword": _clean(keyword, 120),
             "date_from": date_from,
             "date_to": date_to,
+            "time_from": time_from,
+            "time_to": time_to,
             "sort": _clean(sort, 20),
             "include_duplicate": include_duplicate,
             "scores": sorted(parsed_scores),
@@ -3211,12 +3249,16 @@ def _export_context(
     keyword: str,
     date_from: str,
     date_to: str,
+    time_from: str,
+    time_to: str,
     sort: str,
     include_duplicate: bool,
     scores: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str]:
     date_from = _norm_date(date_from)
     date_to = _norm_date(date_to)
+    time_from = _norm_time(time_from)
+    time_to = _norm_time(time_to)
     parsed_scores = _parse_scores(scores)
     doc, entries = _load_filtered(
         source=source,
@@ -3224,6 +3266,8 @@ def _export_context(
         keyword=keyword,
         date_from=date_from,
         date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
         sort=sort,
         include_duplicate=include_duplicate,
         scores=parsed_scores,
@@ -3237,10 +3281,12 @@ def _export_context(
             status_code=413,
             detail=f"筛选结果 {len(entries)} 条，单张图最多 {cfg.REDBLUE_IMAGE_EXPORT_MAX_ROWS} 条，请缩小范围",
         )
+    start_label = f"{date_from} {time_from}".strip() if date_from else ""
+    end_label = f"{date_to} {time_to}".strip() if date_to else ""
     period = (
-        f"{date_from} 至 {date_to}"
-        if date_from and date_to
-        else (f"{date_from} 起" if date_from else (f"截至 {date_to}" if date_to else "全部时间"))
+        f"{start_label} 至 {end_label}"
+        if start_label and end_label
+        else (f"{start_label} 起" if start_label else (f"截至 {end_label}" if end_label else "全部时间"))
     )
     filters = []
     if source != "all":
@@ -3275,6 +3321,8 @@ def export_redblue_summary(
     keyword: str = Query(""),
     date_from: str = Query(""),
     date_to: str = Query(""),
+    time_from: str = Query(""),
+    time_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
     scores: str = Query(""),
@@ -3286,6 +3334,8 @@ def export_redblue_summary(
         keyword=keyword,
         date_from=date_from,
         date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
         sort=sort,
         include_duplicate=include_duplicate,
         scores=scores,
@@ -3311,6 +3361,8 @@ def export_redblue_entries(
     keyword: str = Query(""),
     date_from: str = Query(""),
     date_to: str = Query(""),
+    time_from: str = Query(""),
+    time_to: str = Query(""),
     sort: str = Query("time_asc"),
     include_duplicate: bool = Query(True),
     scores: str = Query(""),
@@ -3322,6 +3374,8 @@ def export_redblue_entries(
         keyword=keyword,
         date_from=date_from,
         date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
         sort=sort,
         include_duplicate=include_duplicate,
         scores=scores,

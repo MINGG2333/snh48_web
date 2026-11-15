@@ -259,6 +259,63 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(chicken.status_code, 200, chicken.text)
         self.assertEqual(chicken.json()["result"]["redemptions"][0]["bonus_business"], "3-方言盲盒")
 
+    def test_time_filter_narrows_within_selected_dates(self):
+        entries = []
+        for entry_id, moment in (
+            ("t1", "2026-11-10 10:00:00"),
+            ("t2", "2026-11-10 15:30:00"),
+            ("t3", "2026-11-10 20:00:00"),
+            ("t4", "2026-11-11 09:00:00"),
+        ):
+            entries.append(
+                {
+                    "id": entry_id,
+                    "fan_id": "1001",
+                    "fan_name": "Alice",
+                    "raw_name": "Alice",
+                    "raw_id": "1001",
+                    "score": 1.0,
+                    "source": "manual",
+                    "source_time": moment,
+                    "created_at": moment,
+                    "settled": True,
+                    "duplicate": False,
+                }
+            )
+        (self.tmp / "ledger.json").write_text(
+            json.dumps({"version": 1, "entries": entries, "aliases": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        base = (
+            "/api/redblue/data?source=all&status=all&keyword=&sort=time_asc"
+            "&include_duplicate=true"
+        )
+
+        def ids(query: str) -> list[str]:
+            response = self.client.get(base + query, headers=self.headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            return [entry["id"] for entry in response.json()["entries"]]
+
+        self.assertEqual(ids("&date_from=2026-11-10&date_to=2026-11-10"), ["t1", "t2", "t3"])
+        self.assertEqual(
+            ids(
+                "&date_from=2026-11-10&date_to=2026-11-10"
+                "&time_from=14:00&time_to=18:00"
+            ),
+            ["t2"],
+        )
+        self.assertEqual(ids("&date_from=2026-11-10&time_from=19:30"), ["t3", "t4"])
+        invalid = self.client.get(base + "&date_from=2026-11-10&time_from=25:00", headers=self.headers)
+        self.assertEqual(invalid.status_code, 422)
+        exported = self.client.get(
+            "/api/redblue/export/entries.png?source=all&status=all&keyword=&sort=time_asc"
+            "&include_duplicate=true&date_from=2026-11-10&date_to=2026-11-10"
+            "&time_from=14:00&time_to=18:00",
+            headers=self.headers,
+        )
+        self.assertEqual(exported.status_code, 200, exported.text)
+        self.assertTrue(exported.content.startswith(b"\x89PNG"))
+
     def _write_business_ledger(self) -> None:
         entries = [
             {
