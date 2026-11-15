@@ -686,6 +686,9 @@
           lastRowOrder = "";
           return;
         }
+        // 首次渲染时清掉 tbody 里的“加载中…”占位行；否则它会一直留在表格顶部。
+        var emptyCell = memberRows.querySelector("td.empty");
+        if (emptyCell && emptyCell.parentElement) emptyCell.parentElement.remove();
         var orderKey = rows.map(function (row) { return String(row.member_id); }).join(",");
         var orderChanged = orderKey !== lastRowOrder;
         lastRowOrder = orderKey;

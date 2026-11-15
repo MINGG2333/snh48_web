@@ -251,6 +251,24 @@ def _aggregate(
     team_distribution: dict[tuple[str, str], dict[str, Any]] = {}
     daily_distribution: dict[str, dict[str, Any]] = {}
 
+    # Some older room events carry giftName but no giftId. Normalize them to
+    # the known gift id so the page shows one "琴音生花" row instead of two.
+    gift_name_to_id: dict[str, str] = {}
+    for entry in board.get("gift_authority") or []:
+        if not isinstance(entry, dict):
+            continue
+        known_id = str(entry.get("gift_id") or "").strip()
+        known_name = str(entry.get("gift_name") or "").strip()
+        if known_id and known_name:
+            gift_name_to_id.setdefault(known_name, known_id)
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        known_id = str(cell.get("gift_id") or "").strip()
+        known_name = str(cell.get("gift_name") or "").strip()
+        if known_id and known_name:
+            gift_name_to_id.setdefault(known_name, known_id)
+
     for cell in cells:
         member_id = str(cell.get("member_id") or "")
         meta = members.get(member_id, {})
@@ -262,8 +280,10 @@ def _aggregate(
         count = int(cell.get("count") or 0)
         records = int(cell.get("records") or 0)
         source = str(cell.get("source") or "")
-        gift_id = str(cell.get("gift_id") or "")
-        gift_name = str(cell.get("gift_name") or "")
+        gift_id = str(cell.get("gift_id") or "").strip()
+        gift_name = str(cell.get("gift_name") or "").strip()
+        if not gift_id and gift_name:
+            gift_id = gift_name_to_id.get(gift_name, "")
 
         row = by_member.setdefault(
             member_id,
@@ -444,6 +464,21 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
     teams: dict[tuple[str, str], dict[str, str]] = {}
     member_ids: set[str] = set()
     gift_keys: set[str] = set()
+    gift_name_to_id: dict[str, str] = {}
+    for entry in board.get("gift_authority") or []:
+        if not isinstance(entry, dict):
+            continue
+        known_id = str(entry.get("gift_id") or "").strip()
+        known_name = str(entry.get("gift_name") or "").strip()
+        if known_id and known_name:
+            gift_name_to_id.setdefault(known_name, known_id)
+    for cell in board.get("cells") or []:
+        if not isinstance(cell, dict) or cell.get("season") != season:
+            continue
+        known_id = str(cell.get("gift_id") or "").strip()
+        known_name = str(cell.get("gift_name") or "").strip()
+        if known_id and known_name:
+            gift_name_to_id.setdefault(known_name, known_id)
     for cell in board.get("cells") or []:
         if not isinstance(cell, dict) or cell.get("season") != season:
             continue
@@ -462,7 +497,11 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
                 "team": team,
                 "team_label": str(meta.get("team_label") or team),
             }
-        gift_keys.add(str(cell.get("gift_id") or cell.get("gift_name") or ""))
+        gift_id = str(cell.get("gift_id") or "").strip()
+        gift_name = str(cell.get("gift_name") or "").strip()
+        if not gift_id and gift_name:
+            gift_id = gift_name_to_id.get(gift_name, "")
+        gift_keys.add(gift_id or gift_name)
     gifts = []
     for entry in board.get("gift_authority") or []:
         if not isinstance(entry, dict):

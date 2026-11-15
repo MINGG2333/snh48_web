@@ -291,6 +291,37 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         )
         self.assertEqual(summer_cells, [])
 
+    def test_missing_gift_id_merges_by_gift_name(self) -> None:
+        board = dict(BOARD)
+        board["cells"] = list(BOARD["cells"]) + [
+            {
+                "season": "2026-winter",
+                "date": "2026-10-26",
+                "source": "room",
+                "member_id": "1",
+                "gift_id": "",
+                "gift_name": "弦月回响",
+                "count": 1,
+                "score": 1.0,
+                "records": 1,
+            }
+        ]
+        cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+        )
+        result = _aggregate(board, cells, season="2026-winter")
+        matching = [gift for gift in result["gift_distribution"] if gift["gift_name"] == "弦月回响"]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["score"], 11.0)
+
     def test_gift_and_team_facets(self) -> None:
         facets = _facets(BOARD, "2026-winter")
         self.assertEqual(facets["groups"], ["SNH48"])
