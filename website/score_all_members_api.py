@@ -626,17 +626,24 @@ def get_score_all_members_data(
     qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
     qualification_season = str(qualification_doc.get("season") or "")
     qualification_for_season = not qualification_season or qualification_season == key
-    if not (gift_name or date_from or date_to or source != "all") and qualification_for_season:
+    if not (gift_name or date_from or date_to or source != "all"):
+        members_index = _member_index(board, key)
         qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
         participant_ids = {str(value) for value in qualification_doc.get("participant_ids") or []}
-        if qualification == "qualified":
+        has_scope_filter = bool(group or team or member)
+        if qualification_for_season and qualification == "qualified":
             seed_ids = qualified_ids
-        elif qualification == "not_qualified":
+        elif qualification_for_season and qualification == "not_qualified":
             seed_ids = participant_ids - qualified_ids
-        elif qualification == "all":
+        elif qualification_for_season and qualification == "not_participant":
+            seed_ids = set(members_index) - participant_ids
+        elif has_scope_filter:
+            # When filtering by group/team/member, include zero-score members too
+            # so IDFT and other non-scoring members are visible with their official team.
+            seed_ids = set(members_index)
+        elif qualification_for_season:
             seed_ids = participant_ids
-        if seed_ids and (group or team or member):
-            members_index = _member_index(board, key)
+        if seed_ids and has_scope_filter:
             member_query = member.strip().lower()
             filtered: set[str] = set()
             for member_id in seed_ids:
