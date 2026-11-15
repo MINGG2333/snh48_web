@@ -169,7 +169,11 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
                 meta["team"] = str(official["team"])
             if official.get("team_label"):
                 meta["team_label"] = str(official["team_label"])
+            if meta.get("team") == "IDFT":
+                meta["team_label"] = "IDFT"
             meta["official_team"] = True
+        elif meta.get("team") == "IDFT":
+            meta["team_label"] = "IDFT"
         if qualification_available:
             if member_id in qualified_ids:
                 meta["qualification"] = "qualified"
