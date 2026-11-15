@@ -291,8 +291,11 @@
             ? (S.binding.nickname || (account && account.nickname) || ("个人号 " + bound))
             : "未登录个人账号";
         var invalid = bound && S.accountValid === false;
+        var role = currentAccountRole();
         $("accountMeta").textContent = bound
-            ? (invalid ? "Token 已失效，请重新登录" : ("绑定个人号 · " + bound))
+            ? (invalid
+                ? "Token 已失效，请重新登录"
+                : ("绑定个人号 · " + bound + (role === "small" ? " · 小号" : role === "big" ? " · 大号" : "")))
             : "登录后即可发送房间消息";
         $("accountLoginBtn").innerHTML = invalid
             ? '<i class="fas fa-key"></i> 重新登录'
@@ -300,6 +303,40 @@
         $("accountProbeBtn").hidden = !bound;
         $("accountUnbindBtn").hidden = !bound;
         $("tokenWarning").hidden = !invalid;
+        updateAccountRoleWarnings();
+    }
+
+    function currentAccountRole() {
+        var accountId = String((S.binding || {}).account_id || "");
+        if (!accountId) return "";
+        var row = (S.bigSmall || []).find(function (item) {
+            return String(item.user_id || "") === accountId;
+        });
+        if (row) return row.role === "small" ? "small" : "big";
+        var cached = (S.binding || {}).role;
+        return cached === "small" || cached === "big" ? cached : "";
+    }
+
+    function renderRoleWarning(id) {
+        var el = $(id);
+        if (!el) return;
+        var accountId = String((S.binding || {}).account_id || "");
+        if (!accountId || currentAccountRole() !== "big") {
+            el.hidden = true;
+            el.innerHTML = "";
+            return;
+        }
+        var name = (S.binding || {}).nickname || accountId;
+        el.innerHTML =
+            '<i class="fas fa-triangle-exclamation"></i>' +
+            '<span>当前是<b>大号</b>（' + escapeHtml(name) + '），消息会以大号身份发出。' +
+            '<button type="button" class="rm-btn rm-btn-small rm-btn-ghost" data-role-switch="1">去切换小号</button></span>';
+        el.hidden = false;
+    }
+
+    function updateAccountRoleWarnings() {
+        renderRoleWarning("sendAccountWarning");
+        renderRoleWarning("scheduleAccountWarning");
     }
 
     function renderAccountList() {
@@ -334,6 +371,8 @@
             closeModal("accountModal");
             toast("已绑定个人账号", "success");
             track("admin_update", { page: "room_messenger", action: "bind_account" });
+            probeAccount(true);
+            loadJobs();
         }).catch(function (error) {
             showError($("accountFormError"), error.message);
         });
@@ -454,8 +493,20 @@
             S.binding = data.binding || {};
             S.loginSession = null;
             closeModal("accountModal");
-            toast("个人账号已绑定", "success");
+            var auto = data.auto_switch || {};
+            if (auto.switched) {
+                toast("已自动切换到小号：" + (auto.nickname || auto.to_user_id || ""), "success");
+            } else if (auto.skipped === "already_small") {
+                toast("当前登录的已是小号：" + ((S.binding || {}).nickname || ""), "success");
+            } else if (auto.error) {
+                toast("未能自动切换到小号：" + auto.error, "error");
+            } else {
+                toast("个人账号已绑定", "success");
+            }
             track("admin_update", { page: "room_messenger", action: "login_success" });
+            if (auto.switched) {
+                track("admin_update", { page: "room_messenger", action: "auto_switch_small" });
+            }
             loadAccount();
             loadRecent();
         }).catch(function (error) {
@@ -473,6 +524,9 @@
                 var wasValid = S.accountValid;
                 S.accountValid = Boolean(data.valid);
                 S.bigSmall = Array.isArray(data.big_small) ? data.big_small : [];
+                if (data.role === "small" || data.role === "big") {
+                    S.binding.role = data.role;
+                }
                 if (data.valid && !S.binding.nickname && data.nickname) {
                     S.binding.nickname = data.nickname;
                 }
@@ -999,6 +1053,7 @@
         $("confirmWordLabel").textContent = S.limits.confirm_word || "确认发送";
         $("confirmWordInput").value = "";
         showError($("sendModalError"), "");
+        updateAccountRoleWarnings();
         openModal("sendModal");
         setTimeout(function () { $("confirmWordInput").focus(); }, 40);
         track("admin_modal", { page: "room_messenger", action: "send_confirm" });
@@ -1293,6 +1348,7 @@
         $("schedulePreview").textContent = "";
         showError($("scheduleError"), "");
         syncJitterLimit();
+        updateAccountRoleWarnings();
         openModal("scheduleModal");
         track("admin_modal", { page: "room_messenger", action: "edit_job" });
     }
@@ -1315,6 +1371,7 @@
         $("jobConfirm").checked = false;
         $("schedulePreview").textContent = "";
         showError($("scheduleError"), "");
+        updateAccountRoleWarnings();
         openModal("scheduleModal");
         track("admin_modal", { page: "room_messenger", action: "schedule_open" });
     }
@@ -1720,6 +1777,17 @@
         $("smsBtn").addEventListener("click", sendSms);
         $("securityBtn").addEventListener("click", submitSecurity);
         $("verifyBtn").addEventListener("click", verifyCode);
+        ["sendAccountWarning", "scheduleAccountWarning"].forEach(function (id) {
+            var el = $(id);
+            if (!el) return;
+            el.addEventListener("click", function (event) {
+                var button = event.target.closest("[data-role-switch]");
+                if (!button) return;
+                var modal = el.closest(".rm-modal");
+                if (modal) closeModal(modal.id);
+                openAccountModal();
+            });
+        });
 
         Array.prototype.forEach.call(document.querySelectorAll(".rm-tab"), function (button) {
             button.addEventListener("click", function () { setTab(button.dataset.tab); });

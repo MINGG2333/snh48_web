@@ -26,6 +26,8 @@ class RoomMessengerTemplateTests(unittest.TestCase):
         self.assertIn("deleteModal", source)
         self.assertIn("switchAccountWrap", source)
         self.assertIn("tokenWarning", source)
+        self.assertIn("sendAccountWarning", source)
+        self.assertIn("scheduleAccountWarning", source)
         self.assertNotIn("个人号专用", source)
         self.assertNotIn("HttpOnly", source)
 
@@ -43,6 +45,9 @@ class RoomMessengerTemplateTests(unittest.TestCase):
         self.assertIn("selectedIds: new Set()", source)
         self.assertIn("selectMode: false", source)
         self.assertIn("deleteTargets: []", source)
+        self.assertIn("auto_switch", source)
+        self.assertIn("sendAccountWarning", source)
+        self.assertIn("去切换小号", source)
 
     def test_mobile_and_accessibility_hooks_exist(self) -> None:
         source = TEMPLATE.read_text(encoding="utf-8")

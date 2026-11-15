@@ -334,12 +334,14 @@ def _binding() -> dict[str, Any]:
     return payload
 
 
-def _set_binding(account_id: str, nickname: str) -> dict[str, Any]:
+def _set_binding(account_id: str, nickname: str, role: str = "") -> dict[str, Any]:
     payload = {
         "account_id": account_id,
         "nickname": nickname,
         "bound_at": _now_iso(),
     }
+    if role in ("big", "small"):
+        payload["role"] = role
     _write_json(_binding_path(), payload)
     return payload
 
@@ -361,6 +363,96 @@ def _resolve_account_id(account_id: str | None) -> str:
     if not binding:
         raise HTTPException(status_code=409, detail="请先登录并绑定个人账号")
     return str(binding["account_id"])
+
+
+def _account_role(rows: Any, account_id: str) -> str:
+    if not isinstance(rows, list) or not account_id:
+        return ""
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("user_id") or "") != account_id:
+            continue
+        return "small" if row.get("role") == "small" else "big"
+    return ""
+
+
+def _auto_switch_to_small(account_id: str) -> dict[str, Any]:
+    """登录后默认切到同一手机号下的小号。
+
+    只在能明确识别出大号/小号时切换；失败不阻断登录，返回原因由页面提示。
+    """
+    result: dict[str, Any] = {
+        "attempted": False,
+        "switched": False,
+        "from_user_id": "",
+        "to_user_id": "",
+        "nickname": "",
+        "skipped": "",
+        "error": "",
+    }
+    if not account_id:
+        result["skipped"] = "no_account"
+        return result
+    try:
+        probe = _run_bridge("messenger-probe", {"account_id": account_id})
+    except (BridgeUnavailable, BridgeError) as exc:
+        result["error"] = _safe_error(str(exc), "读取大小号失败")
+        return result
+    rows = probe.get("big_small") if isinstance(probe.get("big_small"), list) else []
+    current_id = str(probe.get("userId") or "") or next(
+        (
+            str(row.get("user_id") or "")
+            for row in rows
+            if isinstance(row, dict) and row.get("current")
+        ),
+        "",
+    )
+    current_role = _account_role(rows, current_id)
+    binding = _binding()
+    if (
+        current_role
+        and binding
+        and str(binding.get("account_id")) == account_id
+        and binding.get("role") != current_role
+    ):
+        _set_binding(account_id, str(binding.get("nickname") or ""), role=current_role)
+    smalls = [
+        row
+        for row in rows
+        if isinstance(row, dict) and row.get("role") == "small" and str(row.get("user_id") or "")
+    ]
+    if current_role == "small":
+        result["skipped"] = "already_small"
+        return result
+    if not smalls:
+        result["skipped"] = "no_small"
+        return result
+    if current_role != "big":
+        result["skipped"] = "unknown_role"
+        return result
+    target = smalls[0]
+    result["attempted"] = True
+    result["from_user_id"] = current_id
+    try:
+        data = _run_bridge(
+            "messenger-switch",
+            {"account_id": account_id, "target_user_id": str(target.get("user_id"))},
+        )
+    except (BridgeUnavailable, BridgeError) as exc:
+        result["error"] = _safe_error(str(exc), "自动切换到小号失败")
+        return result
+    account = data.get("account") if isinstance(data.get("account"), dict) else {}
+    new_id = str(account.get("id") or target.get("user_id") or "")
+    if not new_id:
+        result["error"] = "切换小号未返回账号"
+        return result
+    nickname = str(account.get("nickname") or target.get("nickname") or "")
+    _set_binding(new_id, nickname, role="small")
+    result["switched"] = True
+    result["to_user_id"] = new_id
+    result["nickname"] = nickname
+    return result
 
 
 @router.get("/account")
@@ -468,9 +560,15 @@ def account_verify_code(payload: CodeRequest, request: Request, response: Respon
     account = data.get("account") if isinstance(data.get("account"), dict) else {}
     account_id = str(account.get("id") or "")
     nickname = str(account.get("nickname") or "")
+    auto_switch: dict[str, Any] = {}
     if account_id:
         _set_binding(account_id, nickname)
-    return {"account": account, "binding": _binding() if account_id else {}}
+        auto_switch = _auto_switch_to_small(account_id)
+    return {
+        "account": account,
+        "binding": _binding() if account_id else {},
+        "auto_switch": auto_switch,
+    }
 
 
 class ProbeRequest(BaseModel):
@@ -511,11 +609,25 @@ def account_probe(payload: ProbeRequest, request: Request, response: Response, _
     _no_store(response)
     account_id = _resolve_account_id(payload.account_id)
     try:
-        return _run_bridge("messenger-probe", {"account_id": account_id})
+        data = _run_bridge("messenger-probe", {"account_id": account_id})
     except BridgeUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except BridgeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    if isinstance(data, dict):
+        rows = data.get("big_small") if isinstance(data.get("big_small"), list) else []
+        current_id = str(data.get("userId") or account_id)
+        role = _account_role(rows, current_id) or _account_role(rows, account_id)
+        if role:
+            data["role"] = role
+            binding = _binding()
+            if (
+                binding
+                and str(binding.get("account_id")) == account_id
+                and binding.get("role") != role
+            ):
+                _set_binding(account_id, str(binding.get("nickname") or ""), role=role)
+    return data
 
 
 # ── Member catalog ────────────────────────────────────────────────────────

@@ -806,6 +806,11 @@ a { color: var(--primary); }
     font-size: 0.78rem;
     line-height: 1.5;
 }
+.rm-warning .rm-btn {
+    margin-left: 8px;
+    flex-shrink: 0;
+    vertical-align: baseline;
+}
 .rm-check { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0; font-size: 0.8rem; color: var(--text-dim); }
 .rm-check input { margin-top: 3px; accent-color: var(--primary); }
 

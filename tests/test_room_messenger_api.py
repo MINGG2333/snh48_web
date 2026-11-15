@@ -270,6 +270,141 @@ class RoomMessengerApiTests(unittest.TestCase):
         self.assertEqual(result.status_code, 200, result.text)
         self.assertEqual(bridge.call_args.args[0], "messenger-delete")
 
+    def test_verify_code_auto_switches_to_small_account(self) -> None:
+        self._login()
+        calls = []
+
+        def bridge(command, payload):
+            calls.append((command, payload))
+            if command == "verify-code":
+                return {"account": {"id": "111111111", "nickname": "大号"}}
+            if command == "messenger-probe":
+                return {
+                    "ok": True,
+                    "valid": True,
+                    "userId": "111111111",
+                    "big_small": [
+                        {"user_id": "111111111", "nickname": "大号", "role": "big", "current": True},
+                        {"user_id": "222222222", "nickname": "小号", "role": "small"},
+                    ],
+                }
+            if command == "messenger-switch":
+                return {
+                    "ok": True,
+                    "switched": True,
+                    "account": {"id": "222222222", "nickname": "小号"},
+                }
+            raise AssertionError(command)
+
+        with patch.object(api, "_run_bridge", side_effect=bridge):
+            result = self.client.post(
+                "/api/room-messenger/account/verify-code",
+                headers={"Origin": "http://testserver"},
+                json={"session_id": "session-1", "code": "123456"},
+            )
+        self.assertEqual(result.status_code, 200, result.text)
+        data = result.json()
+        self.assertEqual(data["binding"]["account_id"], "222222222")
+        self.assertTrue(data["auto_switch"]["switched"])
+        self.assertEqual(data["auto_switch"]["from_user_id"], "111111111")
+        self.assertEqual(data["auto_switch"]["to_user_id"], "222222222")
+        self.assertEqual(
+            [item[0] for item in calls],
+            ["verify-code", "messenger-probe", "messenger-switch"],
+        )
+        self.assertEqual(calls[2][1]["target_user_id"], "222222222")
+        self.assertEqual(api._binding().get("role"), "small")
+
+    def test_verify_code_keeps_binding_when_auto_switch_fails(self) -> None:
+        self._login()
+
+        def bridge(command, payload):
+            if command == "verify-code":
+                return {"account": {"id": "111111111", "nickname": "大号"}}
+            if command == "messenger-probe":
+                return {
+                    "ok": True,
+                    "valid": True,
+                    "userId": "111111111",
+                    "big_small": [
+                        {"user_id": "111111111", "nickname": "大号", "role": "big", "current": True},
+                        {"user_id": "222222222", "nickname": "小号", "role": "small"},
+                    ],
+                }
+            if command == "messenger-switch":
+                raise api.BridgeError("切换过于频繁，请稍后再试")
+            raise AssertionError(command)
+
+        with patch.object(api, "_run_bridge", side_effect=bridge):
+            result = self.client.post(
+                "/api/room-messenger/account/verify-code",
+                headers={"Origin": "http://testserver"},
+                json={"session_id": "session-2", "code": "123456"},
+            )
+        self.assertEqual(result.status_code, 200, result.text)
+        data = result.json()
+        self.assertEqual(data["binding"]["account_id"], "111111111")
+        self.assertTrue(data["auto_switch"]["attempted"])
+        self.assertFalse(data["auto_switch"]["switched"])
+        self.assertIn("频繁", data["auto_switch"]["error"])
+
+    def test_verify_code_skips_switch_when_already_small(self) -> None:
+        self._login()
+        calls = []
+
+        def bridge(command, payload):
+            calls.append(command)
+            if command == "verify-code":
+                return {"account": {"id": "222222222", "nickname": "小号"}}
+            if command == "messenger-probe":
+                return {
+                    "ok": True,
+                    "valid": True,
+                    "userId": "222222222",
+                    "big_small": [
+                        {"user_id": "111111111", "nickname": "大号", "role": "big"},
+                        {"user_id": "222222222", "nickname": "小号", "role": "small", "current": True},
+                    ],
+                }
+            raise AssertionError(command)
+
+        with patch.object(api, "_run_bridge", side_effect=bridge):
+            result = self.client.post(
+                "/api/room-messenger/account/verify-code",
+                headers={"Origin": "http://testserver"},
+                json={"session_id": "session-3", "code": "123456"},
+            )
+        self.assertEqual(result.status_code, 200, result.text)
+        data = result.json()
+        self.assertEqual(data["binding"]["account_id"], "222222222")
+        self.assertEqual(data["auto_switch"]["skipped"], "already_small")
+        self.assertNotIn("messenger-switch", calls)
+
+    def test_probe_persists_big_small_role_on_binding(self) -> None:
+        self._login()
+        self._bind()
+        with patch.object(
+            api,
+            "_run_bridge",
+            return_value={
+                "ok": True,
+                "valid": True,
+                "userId": "3001",
+                "big_small": [
+                    {"user_id": "3001", "nickname": "大号", "role": "big", "current": True},
+                    {"user_id": "3002", "nickname": "小号", "role": "small"},
+                ],
+            },
+        ):
+            result = self.client.post(
+                "/api/room-messenger/account/probe",
+                headers={"Origin": "http://testserver"},
+                json={"account_id": "3001"},
+            )
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["role"], "big")
+        self.assertEqual(api._binding().get("role"), "big")
+
     def test_switch_account_updates_binding(self) -> None:
         self._login()
         self._bind()
