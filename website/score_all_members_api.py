@@ -475,12 +475,22 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
             continue
         gifts.append(entry)
     qualification_counts = {"qualified": 0, "not_qualified": 0, "not_participant": 0, "unknown": 0}
-    for member_id in member_ids:
-        status = str((members.get(member_id) or {}).get("qualification") or "")
-        if status in qualification_counts:
-            qualification_counts[status] += 1
-        else:
-            qualification_counts["unknown"] += 1
+    qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+    qualification_season = str(qualification_doc.get("season") or "")
+    qualification_for_season = not qualification_season or qualification_season == season
+    qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
+    participant_ids = {str(value) for value in qualification_doc.get("participant_ids") or []}
+    if qualification_for_season and (qualified_ids or participant_ids):
+        qualification_counts["qualified"] = len(qualified_ids)
+        qualification_counts["not_qualified"] = len(participant_ids - qualified_ids)
+        qualification_counts["not_participant"] = len(member_ids - participant_ids)
+    else:
+        for member_id in member_ids:
+            status = str((members.get(member_id) or {}).get("qualification") or "")
+            if status in qualification_counts:
+                qualification_counts[status] += 1
+            else:
+                qualification_counts["unknown"] += 1
     return {
         "groups": sorted(groups),
         "teams": sorted(teams.values(), key=lambda item: (item["group"], item["team"])),
