@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-15 红蓝选中昵称改为弹窗查看并复制（双端已生效）
+
+- 需求：不再下载 TXT，点击后弹窗展示选中条目的昵称，方便直接复制。
+- 代码（网站 `4f627a2`）：右上按钮改为“查看选中昵称”；点击打开 `nicknameModal`，按条目顺序把勾选条目昵称写入只读文本域（每行一个、不去重）并自动全选，提供“复制”按钮；复制优先用 `navigator.clipboard`，失败回退 `execCommand`。原 Blob/下载逻辑移除。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 79 项通过；`node --check`、`git diff --check` 通过。腾讯云生产 Playwright 勾选第 1/2/3 行及第二条同名条目（“深宅不露Zzzz”出现两次），弹窗与剪贴板均为 `Young / 深宅不露Zzzz / Miyosa / 深宅不露Zzzz`，顺序一致、保留重复，无 JS pageerror。
+- 部署：网站 `4f627a2` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`；仅模板/测试/文档变更，未重启服务，线上页面已按新模板返回。
+
 ## 2026-11-15 红蓝选中昵称导出改为按条目顺序且不去重（双端已生效）
 
 - 需求：上一版昵称导出会去重并按名称排序，用户要求按条目表顺序逐条导出，不去重。
