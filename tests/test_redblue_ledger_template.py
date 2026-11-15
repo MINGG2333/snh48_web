@@ -43,6 +43,9 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn("function exportSelectedNicknames()", self.source)
         self.assertIn('link.download = "红蓝计分_选中昵称_"', self.source)
         self.assertIn('names.join("\\r\\n")', self.source)
+        self.assertIn("if (!selected.has(entry.id)) return;", self.source)
+        self.assertNotIn("seen.has(name)", self.source)
+        self.assertNotIn('names.sort(function (left, right)', self.source)
 
     def test_date_filters_include_time_inputs(self) -> None:
         self.assertIn('id="timeFrom" type="time" step="60"', self.source)

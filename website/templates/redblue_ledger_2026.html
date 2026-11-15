@@ -240,7 +240,7 @@
       <div class="topbar-actions">
         <button class="btn" id="refreshBtn">刷新</button>
         <button class="btn" id="exportEntriesBtn">导出按条目</button>
-        <button class="btn" id="exportSelectedNicknamesBtn" title="导出当前勾选条目的昵称，去重后每行一个">导出选中昵称</button>
+        <button class="btn" id="exportSelectedNicknamesBtn" title="按条目顺序导出当前勾选条目的昵称，每行一个，不去重">导出选中昵称</button>
         <button class="btn" id="logoutBtn">退出</button>
       </div>
     </div>
@@ -2611,18 +2611,14 @@
 
   function exportSelectedNicknames() {
     var entries = (data && data.entries) || [];
-    var seen = new Set();
     var names = [];
-    Array.from(selected).forEach(function (id) {
-      var entry = entries.find(function (row) { return row.id === id; });
-      if (!entry) return;
+    entries.forEach(function (entry) {
+      if (!selected.has(entry.id)) return;
       var name = String(entry.fan_name || entry.raw_name || "").trim();
-      if (!name || seen.has(name)) return;
-      seen.add(name);
+      if (!name) return;
       names.push(name);
     });
     if (!names.length) { showToast("请先勾选要导出的条目", true); return; }
-    names.sort(function (left, right) { return left.localeCompare(right, "zh-Hans-CN"); });
     var blob = new Blob([names.join("\r\n") + "\r\n"], {type: "text/plain;charset=utf-8"});
     var url = URL.createObjectURL(blob);
     var link = document.createElement("a");
