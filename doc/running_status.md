@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-15 红蓝台账支持按勾选条目批量兑换业务（双端已生效）
+
+- 需求：`/business/redblue2026` 台账只能逐条或按粉丝打开“业务兑换”，希望勾选多个条目后一次设置兑换业务和备注；确认语义为“每个条目各建一笔兑换”。
+- 代码（网站 `860ecc5`）：新增 `POST /api/redblue/redemptions/batch` 与 `upsert_redemptions_batch` mutator——按 `entry_ids` 去重后逐条校验（存在、非重复、计分方式有效、可用分不少于业务分值、加赠仅限鸡腿），全部通过才在同一共享状态事务内为每条生成一笔兑换，共用 `business`/`bonus_business`/`status`/`note`；任一条不满足则整批 422，不产生部分写入。页面工具栏新增“批量兑换业务”，弹窗按所选条目展示条目分/可用分/兑换后剩余/状态并实时汇总，可兑换才允许提交。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 76 项通过（新增批量成功、任一不足整批拒绝、加赠仅鸡腿 3 项）；`tests.test_password_page_security` 3 项通过；`py_compile` 与页面内联脚本 `node --check` 通过。腾讯云生产 Playwright 登录后勾选 2 条打开弹窗，确认仅展示所选 2 条、选择业务后显示“分数不足 2 条”并禁用提交、关闭无 JS pageerror；未提交任何真实批量兑换。
+- 部署：网站 `860ecc5` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启后 active，MainPID `24381`（12:53:42 CST）；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2250912`（12:53:45 CST）。两端页面 200 且含批量按钮，带密码 `/api/redblue/data` 200（276 条条目 / 36 笔兑换），空 `entry_ids` 批量接口返回 422“请选择要兑换的条目”。
+
 ## 2026-11-14 红蓝状态筛选去掉「隐藏异常条目」，只保留「显示重复」（双端已生效）
 
 - 需求：用户确认筛选区不需要额外的「隐藏异常条目」开关，已有「显示重复」复选框足够。
