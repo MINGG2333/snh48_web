@@ -22,35 +22,63 @@ BJ_TZ = timezone(timedelta(hours=8))
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VALID_SOURCES = {"all", "room", "live", "gnz", "xox", "third_party"}
 VALID_SORTS = {"score_desc", "name_asc", "team_asc"}
+VALID_QUALIFICATIONS = {"all", "qualified", "not_qualified", "not_participant"}
+QUALIFICATION_FILENAME = "redblue_stage1_qualification.json"
+OFFICIAL_TEAMS_FILENAME = "official_member_teams.json"
 
 _cache_lock = threading.Lock()
 _cache_path = ""
 _cache_mtime_ns = -1
 _cache_overlay_mtime_ns = -1
+_cache_qualification_mtime_ns = -1
+_cache_official_teams_mtime_ns = -1
 _cache_doc: dict[str, Any] = {}
 
 
+def _load_json_if_exists(path: Path) -> dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
 def _load_board() -> dict[str, Any]:
-    global _cache_path, _cache_mtime_ns, _cache_overlay_mtime_ns, _cache_doc
+    global _cache_path, _cache_mtime_ns, _cache_overlay_mtime_ns
+    global _cache_qualification_mtime_ns, _cache_official_teams_mtime_ns, _cache_doc
     path = Path(cfg.SCORE_ALL_MEMBERS_DATA_PATH)
     overlay_path = path.parent / "realtime_cells.json"
+    qualification_path = path.parent / QUALIFICATION_FILENAME
+    official_teams_path = path.parent / OFFICIAL_TEAMS_FILENAME
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="全员计分数据未生成")
+
+    def _mtime(candidate: Path) -> int:
+        return candidate.stat().st_mtime_ns if candidate.exists() else 0
+
     stat = path.stat()
-    overlay_mtime = overlay_path.stat().st_mtime_ns if overlay_path.exists() else 0
+    overlay_mtime = _mtime(overlay_path)
+    qualification_mtime = _mtime(qualification_path)
+    official_teams_mtime = _mtime(official_teams_path)
     if (
         _cache_path == str(path)
         and _cache_mtime_ns == stat.st_mtime_ns
         and _cache_overlay_mtime_ns == overlay_mtime
+        and _cache_qualification_mtime_ns == qualification_mtime
+        and _cache_official_teams_mtime_ns == official_teams_mtime
     ):
         return _cache_doc
     with _cache_lock:
         stat = path.stat()
-        overlay_mtime = overlay_path.stat().st_mtime_ns if overlay_path.exists() else 0
+        overlay_mtime = _mtime(overlay_path)
+        qualification_mtime = _mtime(qualification_path)
+        official_teams_mtime = _mtime(official_teams_path)
         if (
             _cache_path == str(path)
             and _cache_mtime_ns == stat.st_mtime_ns
             and _cache_overlay_mtime_ns == overlay_mtime
+            and _cache_qualification_mtime_ns == qualification_mtime
+            and _cache_official_teams_mtime_ns == official_teams_mtime
         ):
             return _cache_doc
         try:
@@ -79,9 +107,13 @@ def _load_board() -> dict[str, Any]:
                 ] + overlay_cells
                 if str(overlay.get("generated_at") or "") > str(doc.get("generated_at") or ""):
                     doc["generated_at"] = str(overlay.get("generated_at"))
+        doc["qualification"] = _load_json_if_exists(qualification_path)
+        doc["official_teams"] = _load_json_if_exists(official_teams_path)
         _cache_path = str(path)
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_overlay_mtime_ns = overlay_mtime
+        _cache_qualification_mtime_ns = qualification_mtime
+        _cache_official_teams_mtime_ns = official_teams_mtime
         _cache_doc = doc
         return _cache_doc
 
@@ -105,10 +137,50 @@ def _season_key(board: dict[str, Any], requested: str) -> str:
 
 
 def _member_index(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Merge board metadata with Pocket48 official teams and stage qualification.
+
+    ``board["official_teams"]`` and ``board["qualification"]`` are loaded by
+    ``_load_board`` from files in the same directory as ``score_board.json``.
+    Tests may inject the same keys directly into a board fixture.
+    """
+    qualification = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+    official_teams = board.get("official_teams") if isinstance(board.get("official_teams"), dict) else {}
+    qualification_members = qualification.get("members") if isinstance(qualification.get("members"), dict) else {}
+    qualified_ids = {str(value) for value in qualification.get("qualified_ids") or []}
+    participant_ids = {str(value) for value in qualification.get("participant_ids") or []}
+    team_members = official_teams.get("members") if isinstance(official_teams.get("members"), dict) else {}
+    qualification_available = bool(qualified_ids or participant_ids)
     index: dict[str, dict[str, Any]] = {}
     for item in board.get("members") or []:
-        if isinstance(item, dict) and item.get("member_id"):
-            index[str(item["member_id"])] = item
+        if not isinstance(item, dict) or not item.get("member_id"):
+            continue
+        member_id = str(item["member_id"])
+        meta = dict(item)
+        official = team_members.get(member_id)
+        if isinstance(official, dict):
+            if official.get("group"):
+                meta["group"] = str(official["group"])
+            if official.get("team"):
+                meta["team"] = str(official["team"])
+            if official.get("team_label"):
+                meta["team_label"] = str(official["team_label"])
+            meta["official_team"] = True
+        if qualification_available:
+            if member_id in qualified_ids:
+                meta["qualification"] = "qualified"
+            elif member_id in participant_ids:
+                meta["qualification"] = "not_qualified"
+            else:
+                meta["qualification"] = "not_participant"
+            meta["qualified"] = meta["qualification"] == "qualified"
+            q_member = qualification_members.get(member_id) if isinstance(qualification_members, dict) else {}
+            if isinstance(q_member, dict):
+                meta["qualification_song"] = str(q_member.get("song") or "")
+                meta["qualification_gift"] = str(q_member.get("gift_name") or "")
+        else:
+            meta["qualification"] = ""
+            meta["qualified"] = False
+        index[member_id] = meta
     return index
 
 
@@ -123,6 +195,7 @@ def _filter_cells(
     source: str,
     date_from: str,
     date_to: str,
+    qualification: str = "all",
 ) -> list[dict[str, Any]]:
     group = group.strip()
     team = team.strip()
@@ -144,6 +217,8 @@ def _filter_cells(
             haystack = f"{meta.get('member_name') or cell.get('member_name') or ''} {cell.get('member_id') or ''}".lower()
             if member not in haystack:
                 continue
+        if qualification != "all" and str(meta.get("qualification") or "") != qualification:
+            continue
         if gift_name and str(cell.get("gift_name") or "") != gift_name:
             continue
         cell_source = str(cell.get("source") or "")
@@ -161,6 +236,8 @@ def _filter_cells(
 def _aggregate(
     board: dict[str, Any],
     cells: list[dict[str, Any]],
+    *,
+    seed_member_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     members = _member_index(board)
     by_member: dict[str, dict[str, Any]] = {}
@@ -192,6 +269,10 @@ def _aggregate(
                 "team_label": team_lbl,
                 "period_name": str(meta.get("period_name") or ""),
                 "status": str(meta.get("status") or ""),
+                "qualification": str(meta.get("qualification") or ""),
+                "qualified": bool(meta.get("qualified")),
+                "qualification_song": str(meta.get("qualification_song") or ""),
+                "qualification_gift": str(meta.get("qualification_gift") or ""),
                 "total_score": 0.0,
                 "room_score": 0.0,
                 "live_score": 0.0,
@@ -258,6 +339,36 @@ def _aggregate(
             daily["count"] += count
             daily["records"] += records
 
+    for member_id in seed_member_ids or set():
+        if member_id in by_member:
+            continue
+        meta = members.get(member_id, {})
+        if not meta:
+            continue
+        by_member[member_id] = {
+            "member_id": member_id,
+            "member_name": str(meta.get("member_name") or member_id),
+            "group": str(meta.get("group") or ""),
+            "team": str(meta.get("team") or ""),
+            "team_label": str(meta.get("team_label") or meta.get("team") or "未分组"),
+            "period_name": str(meta.get("period_name") or ""),
+            "status": str(meta.get("status") or ""),
+            "qualification": str(meta.get("qualification") or ""),
+            "qualified": bool(meta.get("qualified")),
+            "qualification_song": str(meta.get("qualification_song") or ""),
+            "qualification_gift": str(meta.get("qualification_gift") or ""),
+            "total_score": 0.0,
+            "room_score": 0.0,
+            "live_score": 0.0,
+            "gnz_score": 0.0,
+            "third_party_score": 0.0,
+            "total_count": 0,
+            "records": 0,
+            "gifts": {},
+            "first_event_date": "",
+            "latest_event_date": "",
+        }
+
     member_rows: list[dict[str, Any]] = []
     for row in by_member.values():
         gifts = sorted(row["gifts"].values(), key=lambda item: (-float(item["score"]), str(item["gift_name"])))
@@ -306,6 +417,10 @@ def _aggregate(
             "total_count": sum(int(row["total_count"]) for row in member_rows),
             "records": sum(int(row["records"]) for row in member_rows),
             "members": len(member_rows),
+            "qualified_members": sum(1 for row in member_rows if row["qualification"] == "qualified"),
+            "participant_members": sum(1 for row in member_rows if row["qualification"] in {"qualified", "not_qualified"}),
+            "not_qualified_members": sum(1 for row in member_rows if row["qualification"] == "not_qualified"),
+            "not_participant_members": sum(1 for row in member_rows if row["qualification"] == "not_participant"),
             "gift_kinds": len(gift_rows),
             "first_event_date": min((row["first_event_date"] for row in member_rows if row["first_event_date"]), default=""),
             "latest_event_date": max((row["latest_event_date"] for row in member_rows if row["latest_event_date"]), default=""),
@@ -353,11 +468,23 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
         if seasons and season not in seasons:
             continue
         gifts.append(entry)
+    qualification_counts = {"qualified": 0, "not_qualified": 0, "not_participant": 0, "unknown": 0}
+    for member_id in member_ids:
+        status = str((members.get(member_id) or {}).get("qualification") or "")
+        if status in qualification_counts:
+            qualification_counts[status] += 1
+        else:
+            qualification_counts["unknown"] += 1
     return {
         "groups": sorted(groups),
         "teams": sorted(teams.values(), key=lambda item: (item["group"], item["team"])),
         "gifts": gifts,
         "members": len(member_ids),
+        "qualification_counts": qualification_counts,
+        "qualification_available": bool(
+            (board.get("qualification") or {}).get("qualified_ids")
+            or (board.get("qualification") or {}).get("participant_ids")
+        ),
     }
 
 
@@ -389,6 +516,7 @@ def get_score_all_members_summary(
         "coverage_notes": board.get("coverage_notes") or {},
         "coverage_summary": str(board.get("coverage_summary", "")),
         "provenance_summary": board.get("provenance_summary") or {},
+        "qualification": board.get("qualification") or {},
         "facets": _facets(board, key),
     }
 
@@ -404,6 +532,7 @@ def get_score_all_members_data(
     source: str = Query("all"),
     date_from: str = Query(""),
     date_to: str = Query(""),
+    qualification: str = Query("all"),
     sort: str = Query("score_desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=2000),
@@ -412,10 +541,13 @@ def get_score_all_members_data(
     response.headers["Cache-Control"] = "no-store"
     source = source.strip().lower()
     sort = sort.strip().lower()
+    qualification = qualification.strip().lower()
     if source not in VALID_SOURCES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的数据来源")
     if sort not in VALID_SORTS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的排序方式")
+    if qualification not in VALID_QUALIFICATIONS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的红蓝晋级筛选")
     _validate_date("date_from", date_from)
     _validate_date("date_to", date_to)
     if date_from and date_to and date_from > date_to:
@@ -433,8 +565,36 @@ def get_score_all_members_data(
         source=source,
         date_from=date_from,
         date_to=date_to,
+        qualification=qualification,
     )
-    aggregated = _aggregate(board, cells)
+    seed_ids: set[str] = set()
+    if not (gift_name or date_from or date_to or source != "all"):
+        qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+        qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
+        participant_ids = {str(value) for value in qualification_doc.get("participant_ids") or []}
+        if qualification == "qualified":
+            seed_ids = qualified_ids
+        elif qualification == "not_qualified":
+            seed_ids = participant_ids - qualified_ids
+        elif qualification == "all":
+            seed_ids = participant_ids
+        if seed_ids and (group or team or member):
+            members_index = _member_index(board)
+            member_query = member.strip().lower()
+            filtered: set[str] = set()
+            for member_id in seed_ids:
+                meta = members_index.get(member_id) or {}
+                if group and str(meta.get("group") or "") != group.strip():
+                    continue
+                if team and str(meta.get("team") or "") != team.strip():
+                    continue
+                if member_query:
+                    haystack = f"{meta.get('member_name') or ''} {member_id}".lower()
+                    if member_query not in haystack:
+                        continue
+                filtered.add(member_id)
+            seed_ids = filtered
+    aggregated = _aggregate(board, cells, seed_member_ids=seed_ids)
     rows = aggregated["members"]
     if sort == "name_asc":
         rows.sort(key=lambda item: (str(item["group"]), str(item["team"]), str(item["member_name"])))
@@ -457,6 +617,7 @@ def get_score_all_members_data(
         "coverage_notes": board.get("coverage_notes") or {},
         "coverage_summary": str(board.get("coverage_summary", "")),
         "provenance_summary": board.get("provenance_summary") or {},
+        "qualification": board.get("qualification") or {},
         "facets": _facets(board, key),
         "summary": aggregated["summary"],
         "members": rows[start:end],

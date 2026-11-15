@@ -221,6 +221,60 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         self.assertEqual(today[0]["score"], 5.0)
         self.assertEqual(loaded["generated_at"], "2026-11-13 10:00:05")
 
+    def test_qualification_filter_and_official_team_overlay(self) -> None:
+        board = {
+            **BOARD,
+            "qualification": {
+                "qualified_ids": ["1"],
+                "participant_ids": ["1", "2"],
+                "members": {"1": {"song": "迭代（THE GHOST）"}},
+            },
+            "official_teams": {
+                "members": {
+                    "1": {"group": "SNH48", "team": "HII", "team_label": "HII队"},
+                    "2": {"group": "SNH48", "team": "预备生", "team_label": "预备生"},
+                }
+            },
+        }
+        qualified_cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+            qualification="qualified",
+        )
+        self.assertEqual({cell["member_id"] for cell in qualified_cells}, {"1"})
+        qualified = _aggregate(board, qualified_cells)["members"][0]
+        self.assertEqual(qualified["qualification"], "qualified")
+        self.assertEqual(qualified["qualification_song"], "迭代（THE GHOST）")
+        self.assertEqual(qualified["team_label"], "HII队")
+
+        not_qualified_cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="预备生",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+            qualification="not_qualified",
+        )
+        self.assertEqual([cell["member_id"] for cell in not_qualified_cells], ["2"])
+        not_qualified = _aggregate(board, not_qualified_cells)["members"][0]
+        self.assertEqual(not_qualified["qualification"], "not_qualified")
+        self.assertEqual(not_qualified["team"], "预备生")
+
+        facets = _facets(board, "2026-winter")
+        self.assertEqual(facets["qualification_counts"]["qualified"], 1)
+        self.assertEqual(facets["qualification_counts"]["not_qualified"], 1)
+
     def test_gift_and_team_facets(self) -> None:
         facets = _facets(BOARD, "2026-winter")
         self.assertEqual(facets["groups"], ["SNH48"])
