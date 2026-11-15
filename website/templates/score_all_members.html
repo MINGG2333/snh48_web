@@ -544,11 +544,15 @@
           if (el.textContent !== text) el.textContent = text;
           return;
         }
+        // 两端都是整数时按整数补间，避免动画帧显示 102.261704 这类小数。
+        var integerTween = Number.isInteger(prev) && Number.isInteger(next);
         var started = performance.now();
         function frame(now) {
           var progress = Math.min(1, (now - started) / 420);
           var eased = 1 - Math.pow(1 - progress, 3);
-          el.textContent = formatter(prev + (next - prev) * eased);
+          var current = prev + (next - prev) * eased;
+          if (integerTween) current = Math.round(current);
+          el.textContent = formatter(current);
           if (progress < 1) {
             window.requestAnimationFrame(frame);
           } else {

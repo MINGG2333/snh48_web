@@ -1228,6 +1228,17 @@
       if (!resp.ok) throw new Error(await readError(resp) || "密码验证失败");
     }
 
+    async function loginWithPassword(value) {
+      var resp = await fetch("/api/score-gifts/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: value }),
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      if (!resp.ok) throw new Error(await readError(resp) || "密码错误");
+    }
+
     async function doLogin() {
       if (loginBusy) return;
       var value = passwordInput.value.trim();

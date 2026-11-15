@@ -70,6 +70,19 @@ class PasswordLoginFeedbackTests(unittest.TestCase):
         self.assertIn("error.status === 401 || error.status === 403", flip)
         self.assertIn('showLogin("")', flip)
 
+    def test_templates_define_login_with_password_before_calling_it(self) -> None:
+        """调用 loginWithPassword 的模板必须自己定义它，避免运行时 ReferenceError。"""
+        for template in sorted((ROOT / "website" / "templates").glob("*.html")):
+            source = template.read_text(encoding="utf-8")
+            if "loginWithPassword(" not in source:
+                continue
+            with self.subTest(template=template.name):
+                self.assertIn("async function loginWithPassword(", source)
+
+    def test_score_gifts_page_posts_password_to_cookie_login(self) -> None:
+        source = self.read("website/templates/score_gifts.html")
+        self.assertIn('fetch("/api/score-gifts/login"', source)
+
 
 if __name__ == "__main__":
     unittest.main()
