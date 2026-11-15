@@ -499,6 +499,15 @@ REDBLUE_WEIDIAN_ITEM_IDS = [
     ).split(",")
     if value.strip()
 ]
+# 微店计分商品默认计分方式：弦月回响是计分卡，其余计分商品默认鸡腿。
+REDBLUE_WEIDIAN_CARD_ITEM_IDS = os.getenv(
+    "REDBLUE_WEIDIAN_CARD_ITEM_IDS",
+    "7898427979",
+)
+REDBLUE_WEIDIAN_CARD_ITEM_KEYWORDS = os.getenv(
+    "REDBLUE_WEIDIAN_CARD_ITEM_KEYWORDS",
+    "弦月回响",
+)
 REDBLUE_WEIDIAN_UNIT_PRICE = float(os.getenv("REDBLUE_WEIDIAN_UNIT_PRICE", "26.25"))
 REDBLUE_WEIDIAN_ORDERS_PATH = os.getenv(
     "REDBLUE_WEIDIAN_ORDERS_PATH",

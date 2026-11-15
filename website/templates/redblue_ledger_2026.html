@@ -708,7 +708,7 @@
     } else if (ws.status === "running") {
       weidianText = " · 微店同步进行中";
     }
-    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 7 类计分来源（房间/直播 × 计分卡/鸡腿、应援会（微店）、手动、暗票） · 按时间正序" + weidianText;
+    $("metaLine").textContent = "更新 " + (data.generated_at || "-") + " · 8 类计分来源（房间/直播 × 计分卡/鸡腿、应援会（微店）× 计分卡/鸡腿、手动、暗票） · 按时间正序" + weidianText;
     $("metaLine").title = ws.last_error || ws.note || "";
     hideDailyTooltip();
     if (!$("dailyModal").classList.contains("hidden")) renderDailyModal();
@@ -735,7 +735,9 @@
 
   function sourceScoringLabel(key) {
     var base = {manual:"暗票",weidian:"应援会（微店）",association_manual:"手动",room:"房间",live:"直播"}[key] || key;
-    var method = {manual:"计分卡",weidian:"鸡腿",association_manual:"鸡腿",room:"计分卡",live:"计分卡"}[key] || "";
+    var parts = String(key || "").split("|");
+    var source = parts[0] || "";
+    var method = parts[1] || {manual:"计分卡",association_manual:"鸡腿",room:"计分卡",live:"计分卡"}[source] || "";
     return method ? base + "·" + method : base;
   }
 
@@ -744,6 +746,7 @@
     {source:"room", method:"鸡腿", label:"房间·鸡腿", cls:"leg"},
     {source:"live", method:"计分卡", label:"直播·计分卡", cls:"card"},
     {source:"live", method:"鸡腿", label:"直播·鸡腿", cls:"leg"},
+    {source:"weidian", method:"计分卡", label:"应援会·计分卡（微店）", cls:"card"},
     {source:"weidian", method:"鸡腿", label:"应援会·鸡腿（微店）", cls:"leg"},
     {source:"association_manual", method:"鸡腿", label:"应援会·鸡腿（手动）", cls:"leg"},
     {source:"manual", method:"计分卡", label:"暗票·计分卡", cls:"card"}
@@ -753,6 +756,7 @@
     "room|鸡腿": "#e87da7",
     "live|计分卡": "#41b9aa",
     "live|鸡腿": "#f0b84b",
+    "weidian|计分卡": "#7b8fd4",
     "weidian|鸡腿": "#8b6cc9",
     "association_manual|鸡腿": "#c084d8",
     "manual|计分卡": "#e36f6f"
@@ -760,7 +764,7 @@
   var DAILY_SOURCE_DEFS = [
     {key:"room", label:"房间", color:"#67a8ff", parts:["room|计分卡", "room|鸡腿"]},
     {key:"live", label:"直播", color:"#41b9aa", parts:["live|计分卡", "live|鸡腿"]},
-    {key:"weidian", label:"应援会（微店）", color:"#8b6cc9", parts:["weidian|鸡腿"]},
+    {key:"weidian", label:"应援会（微店）", color:"#8b6cc9", parts:["weidian|计分卡", "weidian|鸡腿"]},
     {key:"association_manual", label:"手动", color:"#c084d8", parts:["association_manual|鸡腿"]},
     {key:"manual", label:"暗票", color:"#e36f6f", parts:["manual|计分卡"]}
   ];

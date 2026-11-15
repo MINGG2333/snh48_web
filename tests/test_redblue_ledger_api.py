@@ -1221,6 +1221,43 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(labels["weidian"], "应援会（微店）·鸡腿")
         self.assertEqual(labels["manual"], "暗票·计分卡")
 
+    def test_weidian_xuanyue_item_is_card_and_override_survives_sync(self):
+        order = {
+            "order_id": "O9",
+            "item_id": "7898427979",
+            "item_name": "【陈嘉仪·红蓝歌会】红蓝1分弦月回响礼物（第一阶段）",
+            "sku_title": "18分",
+            "add_time": "2026-11-14 09:21:59",
+            "status": "待发货",
+            "buyer_name": "Alice",
+            "buyer_note": "",
+            "seller_note": "",
+            "quantity": 1,
+            "score": 18,
+            "amount": "288.00",
+            "shipped": False,
+            "shipped_at": "",
+        }
+        api.execute_mutation(api.RESOURCE, "upsert_weidian", {"orders": [order]})
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["scoring_method"], "计分卡")
+        self.assertEqual(entry["source_scoring_label"], "应援会（微店）·计分卡")
+
+        api.execute_mutation(
+            api.RESOURCE,
+            "set_scoring_method",
+            {
+                "entry_ids": [entry["id"]],
+                "method": "鸡腿",
+                "note": "鸡腿消耗截图",
+            },
+        )
+        api.execute_mutation(api.RESOURCE, "upsert_weidian", {"orders": [order]})
+        data = self.client.get("/api/redblue/data", headers=self.headers).json()
+        entry = next(item for item in data["entries"] if item["source"] == "weidian")
+        self.assertEqual(entry["scoring_method"], "鸡腿")
+
     def test_manual_weidian_entry_is_chicken_leg_and_separate_source(self):
         response = self.client.post(
             "/api/redblue/entries",
@@ -1262,7 +1299,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(daily["start"], "2026-10-24")
         self.assertEqual(
             [item["key"] for item in daily["categories"]],
-            ["room|计分卡", "room|鸡腿", "live|计分卡", "live|鸡腿", "weidian|鸡腿", "association_manual|鸡腿", "manual|计分卡"],
+            ["room|计分卡", "room|鸡腿", "live|计分卡", "live|鸡腿", "weidian|计分卡", "weidian|鸡腿", "association_manual|鸡腿", "manual|计分卡"],
         )
         first = daily["days"][0]
         self.assertEqual(first["date"], "2026-10-24")
@@ -1655,6 +1692,33 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(_weidian_order_score({**order, "score": 99}), 99.0)
         self.assertEqual(_weidian_order_score({**order, "amount": "26.25"}), 1.0)
         self.assertEqual(_weidian_order_score({"order_id": "O3", "quantity": 5}), 5.0)
+
+    def test_weidian_scoring_method_defaults_by_item(self):
+        self.assertEqual(
+            api._weidian_scoring_method(
+                {
+                    "item_id": "7898427979",
+                    "item_name": "【陈嘉仪·红蓝歌会】红蓝1分弦月回响礼物（第一阶段）",
+                }
+            ),
+            "计分卡",
+        )
+        self.assertEqual(
+            api._weidian_scoring_method(
+                {"item_name": "【陈嘉仪·红蓝歌会】红蓝1分弦月回响礼物（第一阶段）"}
+            ),
+            "计分卡",
+        )
+        self.assertEqual(
+            api._weidian_scoring_method(
+                {"item_id": "7879362063", "item_name": "【陈嘉仪·红蓝歌会】红蓝1分鸡腿礼物"}
+            ),
+            "鸡腿",
+        )
+        self.assertEqual(
+            api._weidian_scoring_method({"item_name": "其他商品", "scoring_method": "计分卡"}),
+            "计分卡",
+        )
 
     def test_weidian_score_change_is_detected(self):
         doc = {

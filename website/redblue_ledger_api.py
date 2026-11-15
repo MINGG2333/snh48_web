@@ -107,6 +107,7 @@ DAILY_SCORING_CATEGORIES = (
     {"key": "room|鸡腿", "label": "房间·鸡腿", "source": "room", "method": "鸡腿"},
     {"key": "live|计分卡", "label": "直播·计分卡", "source": "live", "method": "计分卡"},
     {"key": "live|鸡腿", "label": "直播·鸡腿", "source": "live", "method": "鸡腿"},
+    {"key": "weidian|计分卡", "label": "应援会·计分卡（微店）", "source": "weidian", "method": "计分卡"},
     {"key": "weidian|鸡腿", "label": "应援会·鸡腿（微店）", "source": "weidian", "method": "鸡腿"},
     {"key": "association_manual|鸡腿", "label": "应援会·鸡腿（手动）", "source": "association_manual", "method": "鸡腿"},
     {"key": "manual|计分卡", "label": "暗票·计分卡", "source": "manual", "method": "计分卡"},
@@ -1699,6 +1700,28 @@ def _gift_scoring_method(gift_name: str, source: str, gift_id: str = "") -> str:
     return DEFAULT_SCORING_METHODS.get(_clean(source, 20), "计分卡")
 
 
+def _weidian_scoring_method(order: dict[str, Any]) -> str:
+    """Return the default scoring method for a Weidian order.
+
+    Weidian is not uniformly chicken-leg: the 弦月回响 product is a scoring-card
+    product. Prefer an explicit method, then item ID/keyword, then chicken-leg.
+    """
+    explicit = _clean(order.get("scoring_method"), 10)
+    if explicit in SCORING_METHODS:
+        return explicit
+    item_id = _clean(order.get("item_id"), 40)
+    card_ids = _name_set(getattr(cfg, "REDBLUE_WEIDIAN_CARD_ITEM_IDS", "7898427979"))
+    if item_id and item_id in card_ids:
+        return "计分卡"
+    item_name = _clean(order.get("item_name"), 160)
+    keywords = _name_set(
+        getattr(cfg, "REDBLUE_WEIDIAN_CARD_ITEM_KEYWORDS", "弦月回响")
+    )
+    if any(keyword in item_name for keyword in keywords):
+        return "计分卡"
+    return "鸡腿"
+
+
 def _entry_scoring_method(entry: dict[str, Any]) -> str:
     method = _clean(entry.get("scoring_method"), 10)
     if method in SCORING_METHODS:
@@ -2023,7 +2046,7 @@ def _daily_record(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _daily_scoring(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """全部条目按天汇总 6 类计分来源，从最早记录连续补到今天。"""
+    """全部条目按天汇总 8 类计分来源，从最早记录连续补到今天。"""
     buckets: dict[str, dict[str, float]] = {}
     counts: dict[str, int] = {}
     records: dict[str, list[dict[str, Any]]] = {}
@@ -2814,8 +2837,11 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
             status="shipped" if shipped else "unshipped",
             note=note,
             weidian=weidian,
+            scoring_method=_weidian_scoring_method(order),
         )
         existing = _find_entry(doc, "weidian", order_id)
+        if existing is not None and existing.get("scoring_method_overridden_at"):
+            candidate["scoring_method"] = _entry_scoring_method(existing)
         if existing is not None and _entry_status(existing) == "settled":
             candidate["status"] = "settled"
         if existing is not None and existing.get("identity_locked"):
