@@ -275,6 +275,22 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         self.assertEqual(facets["qualification_counts"]["qualified"], 1)
         self.assertEqual(facets["qualification_counts"]["not_qualified"], 1)
 
+        # Qualification is season-scoped: the summer view must not inherit the winter badge.
+        winter_only = {**board, "qualification": {**board["qualification"], "season": "2026-winter"}}
+        summer_cells = _filter_cells(
+            winter_only,
+            season="2026-summer",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+            qualification="qualified",
+        )
+        self.assertEqual(summer_cells, [])
+
     def test_gift_and_team_facets(self) -> None:
         facets = _facets(BOARD, "2026-winter")
         self.assertEqual(facets["groups"], ["SNH48"])

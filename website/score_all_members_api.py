@@ -136,12 +136,14 @@ def _season_key(board: dict[str, Any], requested: str) -> str:
     return next(iter(seasons), "")
 
 
-def _member_index(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str, Any]]:
     """Merge board metadata with Pocket48 official teams and stage qualification.
 
     ``board["official_teams"]`` and ``board["qualification"]`` are loaded by
     ``_load_board`` from files in the same directory as ``score_board.json``.
-    Tests may inject the same keys directly into a board fixture.
+    Tests may inject the same keys directly into a board fixture. Qualification
+    is only applied to its declared season, so the summer view never shows the
+    winter red-blue stage badge.
     """
     qualification = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
     official_teams = board.get("official_teams") if isinstance(board.get("official_teams"), dict) else {}
@@ -149,7 +151,10 @@ def _member_index(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
     qualified_ids = {str(value) for value in qualification.get("qualified_ids") or []}
     participant_ids = {str(value) for value in qualification.get("participant_ids") or []}
     team_members = official_teams.get("members") if isinstance(official_teams.get("members"), dict) else {}
-    qualification_available = bool(qualified_ids or participant_ids)
+    qualification_season = str(qualification.get("season") or "")
+    qualification_available = bool(qualified_ids or participant_ids) and (
+        not qualification_season or not season or qualification_season == season
+    )
     index: dict[str, dict[str, Any]] = {}
     for item in board.get("members") or []:
         if not isinstance(item, dict) or not item.get("member_id"):
@@ -201,7 +206,7 @@ def _filter_cells(
     team = team.strip()
     member = member.strip().lower()
     gift_name = gift_name.strip()
-    members = _member_index(board)
+    members = _member_index(board, season)
     cells: list[dict[str, Any]] = []
     for cell in board.get("cells") or []:
         if not isinstance(cell, dict) or cell.get("season") != season:
@@ -237,9 +242,10 @@ def _aggregate(
     board: dict[str, Any],
     cells: list[dict[str, Any]],
     *,
+    season: str = "",
     seed_member_ids: set[str] | None = None,
 ) -> dict[str, Any]:
-    members = _member_index(board)
+    members = _member_index(board, season)
     by_member: dict[str, dict[str, Any]] = {}
     gift_distribution: dict[tuple[str, str], dict[str, Any]] = {}
     team_distribution: dict[tuple[str, str], dict[str, Any]] = {}
@@ -433,7 +439,7 @@ def _aggregate(
 
 
 def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
-    members = _member_index(board)
+    members = _member_index(board, season)
     groups: set[str] = set()
     teams: dict[tuple[str, str], dict[str, str]] = {}
     member_ids: set[str] = set()
@@ -568,8 +574,10 @@ def get_score_all_members_data(
         qualification=qualification,
     )
     seed_ids: set[str] = set()
-    if not (gift_name or date_from or date_to or source != "all"):
-        qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+    qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+    qualification_season = str(qualification_doc.get("season") or "")
+    qualification_for_season = not qualification_season or qualification_season == key
+    if not (gift_name or date_from or date_to or source != "all") and qualification_for_season:
         qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
         participant_ids = {str(value) for value in qualification_doc.get("participant_ids") or []}
         if qualification == "qualified":
@@ -579,7 +587,7 @@ def get_score_all_members_data(
         elif qualification == "all":
             seed_ids = participant_ids
         if seed_ids and (group or team or member):
-            members_index = _member_index(board)
+            members_index = _member_index(board, key)
             member_query = member.strip().lower()
             filtered: set[str] = set()
             for member_id in seed_ids:
@@ -594,7 +602,7 @@ def get_score_all_members_data(
                         continue
                 filtered.add(member_id)
             seed_ids = filtered
-    aggregated = _aggregate(board, cells, seed_member_ids=seed_ids)
+    aggregated = _aggregate(board, cells, season=key, seed_member_ids=seed_ids)
     rows = aggregated["members"]
     if sort == "name_asc":
         rows.sort(key=lambda item: (str(item["group"]), str(item["team"]), str(item["member_name"])))
