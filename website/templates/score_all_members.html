@@ -268,7 +268,14 @@
       </section>
 
       <section class="table-panel">
-        <div class="table-head"><h2>成员排名</h2><span class="active-filters" id="activeFiltersTop">全部成员</span><span class="meta" id="tableMeta">-</span></div>
+        <div class="table-head">
+          <h2>成员排名</h2>
+          <span class="active-filters" id="activeFiltersTop">全部成员</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="meta" id="tableMeta">-</span>
+            <button class="btn filter-trigger" type="button" data-open-filters>筛选</button>
+          </div>
+        </div>
         <div style="overflow-x:auto;">
           <table>
             <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
@@ -941,6 +948,9 @@
         });
       }
       openFiltersBtn.addEventListener("click", openFiltersModal);
+      document.querySelectorAll("[data-open-filters]").forEach(function (btn) {
+        btn.addEventListener("click", openFiltersModal);
+      });
       closeFiltersBtn.addEventListener("click", closeFiltersModal);
       filtersModalBackdrop.addEventListener("click", closeFiltersModal);
       closeGapBtn.addEventListener("click", closeGapModal);

@@ -664,6 +664,7 @@ async def score_all_members_page(request: Request):
             "site_police_icp_code": cfg.SITE_POLICE_ICP_CODE,
             "static_version": static_version,
         },
+        headers={"Cache-Control": "no-store"},
     )
 
 
