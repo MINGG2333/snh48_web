@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-15 红蓝台账新增选中昵称导出与日期时间筛选（双端已生效）
+
+- 需求：`/business/redblue2026` 支持导出当前勾选条目的昵称名单；开始/结束日期旁增加开始/结束时间选择。
+- 代码（网站 `6e795d3`）：右上新增“导出选中昵称”，把当前勾选条目的 `fan_name || raw_name` 去重、排序后下载为 UTF-8 `红蓝计分_选中昵称_YYYY-MM-DD.txt`；筛选区新增“开始时间/结束时间”（`type=time`，需先选对应日期，未选日期时禁用并清空），`filterQuery` 和导出 PNG 均带 `time_from`/`time_to`。后端 `_filter_entries` 按完整时间比较：只选日期时开始日 00:00:00、结束日 23:59:59，带时间时按所选时分；`/data`、两个导出接口和 `/data` 的 `filters` 均新增时间参数，导出图的时间段标题同步显示时分。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` + `tests.test_password_page_security` 82 项通过（新增同日内 14:00–18:00 仅命中 1 条、只设开始时间跨日命中、非法时间 422、带时间参数导出 200，以及模板时间/昵称导出断言）；`py_compile`、页面内联脚本 `node --check`、`git diff --check` 通过。腾讯云生产 Playwright 实测勾选 3 条导出 TXT，内容为对应 3 个昵称且无重复；选 2026-11-15 全天 31 条，加 12:00–13:00 后 26 条，时间输入按日期启用、无 JS pageerror。
+- 部署：网站 `6e795d3` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启后 active，MainPID `46678`（13:09:06 CST）；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2282528`（13:09:11 CST）。两端页面 200 且含时间输入和昵称导出按钮，带密码 `/api/redblue/data` 200；2026-11-15 全天 29 条、12:00–13:00 19 条（接口验证时点），带时间参数导出 PNG 200。
+
 ## 2026-11-15 红蓝台账支持按勾选条目批量兑换业务（双端已生效）
 
 - 需求：`/business/redblue2026` 台账只能逐条或按粉丝打开“业务兑换”，希望勾选多个条目后一次设置兑换业务和备注；确认语义为“每个条目各建一笔兑换”。
