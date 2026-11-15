@@ -236,6 +236,15 @@ class ScoreAllMembersApiTests(unittest.TestCase):
             with self.assertRaises(HTTPException):
                 _data_path("2025-spring")
 
+    def test_score_pages_format_at_most_one_decimal(self) -> None:
+        """计分数据最多一位小数，页面不应格式化出更多小数位。"""
+        templates = Path(__file__).resolve().parents[1] / "website" / "templates"
+        for name in ("score_all_members.html", "score_gifts.html"):
+            with self.subTest(template=name):
+                source = (templates / name).read_text(encoding="utf-8")
+                self.assertIn("maximumFractionDigits: 1", source)
+                self.assertNotIn("maximumFractionDigits: 6", source)
+
 
 if __name__ == "__main__":
     unittest.main()

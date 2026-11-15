@@ -353,7 +353,7 @@
       function formatScore(value) {
         var n = Number(value || 0);
         if (!isFinite(n)) return "0";
-        return n.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+        return n.toLocaleString("zh-CN", { maximumFractionDigits: 1 });
       }
       function formatNumber(value) {
         return Number(value || 0).toLocaleString("zh-CN");
