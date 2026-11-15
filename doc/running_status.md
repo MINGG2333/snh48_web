@@ -1,5 +1,12 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-15 红蓝选中昵称导出改为按条目顺序且不去重（双端已生效）
+
+- 需求：上一版昵称导出会去重并按名称排序，用户要求按条目表顺序逐条导出，不去重。
+- 代码（网站 `943270f`）：`exportSelectedNicknames()` 不再使用 `Set` 和 `sort`，改为遍历当前 `data.entries`（即条目表顺序），只取勾选条目并逐条写入昵称；按钮提示同步改为“按条目顺序…每行一个，不去重”。模板和说明文档同步。
+- 验证：`tests.test_redblue_ledger_api` + `tests.test_redblue_ledger_template` 79 项通过；页面内联脚本 `node --check`、`git diff --check` 通过。腾讯云生产 Playwright 勾选第 1/2/3/50 行（第 2 和第 50 行昵称同为“深宅不露Zzzz”），导出 TXT 为 `Young / 深宅不露Zzzz / Miyosa / 深宅不露Zzzz`，与表格顺序完全一致且保留重复，无 JS pageerror。
+- 部署：网站 `943270f` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`；仅模板/测试/文档变更，未重启服务，线上页面已按新模板返回。
+
 ## 2026-11-15 红蓝台账新增选中昵称导出与日期时间筛选（双端已生效）
 
 - 需求：`/business/redblue2026` 支持导出当前勾选条目的昵称名单；开始/结束日期旁增加开始/结束时间选择。
