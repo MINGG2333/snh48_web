@@ -240,7 +240,7 @@
       <div class="topbar-actions">
         <button class="btn" id="refreshBtn">刷新</button>
         <button class="btn" id="exportEntriesBtn">导出按条目</button>
-        <button class="btn" id="exportSelectedNicknamesBtn" title="按条目顺序导出当前勾选条目的昵称，每行一个，不去重">导出选中昵称</button>
+        <button class="btn" id="exportSelectedNicknamesBtn" title="查看并复制当前勾选条目的昵称，按条目顺序，每行一个，不去重">查看选中昵称</button>
         <button class="btn" id="logoutBtn">退出</button>
       </div>
     </div>
@@ -477,6 +477,19 @@
     <div class="modal-actions">
       <button class="btn" data-close="batchRedemptionModal">取消</button>
       <button class="btn primary" id="saveBatchRedemptionBtn" disabled>批量兑换</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="nicknameModal">
+  <div class="modal-backdrop" data-close="nicknameModal"></div>
+  <div class="modal-card">
+    <h2>选中条目昵称</h2>
+    <div class="sub" id="nicknameModalSub">按条目顺序，每行一个，不去重。</div>
+    <textarea id="nicknameText" readonly rows="14" spellcheck="false" style="width:100%;min-height:260px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical;"></textarea>
+    <div class="modal-actions">
+      <button class="btn" data-close="nicknameModal">关闭</button>
+      <button class="btn primary" id="copyNicknamesBtn">复制</button>
     </div>
   </div>
 </div>
@@ -2609,7 +2622,7 @@
     await shipSelected();
   }
 
-  function exportSelectedNicknames() {
+  function selectedNicknameLines() {
     var entries = (data && data.entries) || [];
     var names = [];
     entries.forEach(function (entry) {
@@ -2618,17 +2631,38 @@
       if (!name) return;
       names.push(name);
     });
-    if (!names.length) { showToast("请先勾选要导出的条目", true); return; }
-    var blob = new Blob([names.join("\r\n") + "\r\n"], {type: "text/plain;charset=utf-8"});
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement("a");
-    link.href = url;
-    link.download = "红蓝计分_选中昵称_" + new Date().toISOString().slice(0, 10) + ".txt";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-    showToast("已导出 " + names.length + " 个昵称");
+    return names;
+  }
+
+  function openNicknameModal() {
+    var names = selectedNicknameLines();
+    if (!names.length) { showToast("请先勾选要查看的条目", true); return; }
+    $("nicknameText").value = names.join("\n");
+    $("nicknameModalSub").textContent = "已选 " + names.length + " 条，按条目顺序，每行一个，不去重。";
+    $("nicknameModal").classList.remove("hidden");
+    $("nicknameText").focus();
+    $("nicknameText").select();
+  }
+
+  async function copyNicknames() {
+    var text = $("nicknameText").value;
+    if (!text) { showToast("暂无昵称", true); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("已复制昵称");
+      return;
+    } catch (error) {
+      // 非 HTTPS 或未授权时回退到 execCommand。
+    }
+    var node = $("nicknameText");
+    node.focus();
+    node.select();
+    try {
+      document.execCommand("copy");
+      showToast("已复制昵称");
+    } catch (error) {
+      showToast("复制失败，请手动选择文本", true);
+    }
   }
 
   async function exportImage(kind) {
@@ -3175,7 +3209,8 @@
     $("openFanModalBtn").addEventListener("click", openFanModal);
     $("fanMoreBar").addEventListener("click", openFanModal);
     $("exportEntriesBtn").addEventListener("click", function () { exportImage("entries"); });
-    $("exportSelectedNicknamesBtn").addEventListener("click", exportSelectedNicknames);
+    $("exportSelectedNicknamesBtn").addEventListener("click", openNicknameModal);
+    $("copyNicknamesBtn").addEventListener("click", copyNicknames);
     $("addManualBtn").addEventListener("click", function () { openEntryModal(null, "manual"); });
     $("addWeidianManualBtn").addEventListener("click", function () { openEntryModal(null, "association_manual"); });
     $("businessRedeemBtn").addEventListener("click", function () { openRedemptionModal("", ""); });

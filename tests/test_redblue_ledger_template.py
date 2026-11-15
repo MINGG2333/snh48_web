@@ -37,15 +37,19 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn('$("proxyTitle").textContent = "代投明细（合计）";', self.source)
         self.assertIn('$("proxyConfirmBtn").classList.add("hidden");', self.source)
 
-    def test_selected_nickname_export_entry_points_exist(self) -> None:
+    def test_selected_nickname_modal_entry_points_exist(self) -> None:
         self.assertIn('id="exportSelectedNicknamesBtn"', self.source)
-        self.assertIn('$("exportSelectedNicknamesBtn").addEventListener("click", exportSelectedNicknames);', self.source)
-        self.assertIn("function exportSelectedNicknames()", self.source)
-        self.assertIn('link.download = "红蓝计分_选中昵称_"', self.source)
-        self.assertIn('names.join("\\r\\n")', self.source)
+        self.assertIn('$("exportSelectedNicknamesBtn").addEventListener("click", openNicknameModal);', self.source)
+        self.assertIn('id="nicknameModal"', self.source)
+        self.assertIn('id="nicknameText"', self.source)
+        self.assertIn('id="copyNicknamesBtn"', self.source)
+        self.assertIn("function openNicknameModal()", self.source)
+        self.assertIn("async function copyNicknames()", self.source)
+        self.assertIn('$("nicknameText").value = names.join("\\n");', self.source)
         self.assertIn("if (!selected.has(entry.id)) return;", self.source)
         self.assertNotIn("seen.has(name)", self.source)
         self.assertNotIn('names.sort(function (left, right)', self.source)
+        self.assertNotIn('link.download = "红蓝计分_选中昵称_', self.source)
 
     def test_date_filters_include_time_inputs(self) -> None:
         self.assertIn('id="timeFrom" type="time" step="60"', self.source)
