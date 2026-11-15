@@ -122,6 +122,8 @@
     .member-name { font-weight: 650; }
     .member-sub { color: var(--faint); font-size: 11px; margin-top: 2px; }
     .tag { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; }
+    button.tag-link { background: transparent; cursor: pointer; }
+    button.tag-link:hover, button.tag-link:focus-visible { border-color: var(--teal); background: rgba(65,185,170,.1); color: var(--teal); outline: none; }
     .qual-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
     .qual-badge.qualified { border-color: #8a6420; background: rgba(240,184,75,.16); color: var(--gold); }
     .qual-badge.not-qualified { border-color: #4a596d; background: rgba(149,164,182,.08); color: var(--muted); }
@@ -649,7 +651,17 @@
         return '<div class="member-name">' + escapeHtml(row.member_name) + gapBadge + '</div><div class="member-sub">ID ' + id + (row.period_name ? " · " + escapeHtml(row.period_name) : "") + '</div>';
       }
       function rowTeamHtml(row) {
-        return '<span class="tag">' + escapeHtml(row.group || "-") + '</span> <span class="tag">' + escapeHtml(row.team_label || "未分组") + '</span>';
+        var group = row.group || "";
+        var team = row.team || "";
+        var groupText = group || "-";
+        var teamText = row.team_label || team || "未分组";
+        var groupTitle = group ? ("只看 " + group + " 的全体成员") : "只看未分组人员";
+        var teamTitle = team ? ("只看 " + (group ? group + " · " : "") + teamText) : "只看未分组人员";
+        var groupBtn = '<button class="tag tag-link" type="button" data-filter-group="' + escapeHtml(group) + '" title="' + escapeHtml(groupTitle) + '">' + escapeHtml(groupText) + '</button>';
+        var teamBtn = '<button class="tag tag-link" type="button" data-filter-group="' + escapeHtml(group) + '"' +
+          (team ? ' data-filter-team="' + escapeHtml(team) + '"' : '') +
+          ' title="' + escapeHtml(teamTitle) + '">' + escapeHtml(teamText) + '</button>';
+        return groupBtn + " " + teamBtn;
       }
       function detailHtml(row) {
         return '<div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
@@ -815,7 +827,28 @@
         renderMemberRows(data.members || [], Boolean(options.animate));
         renderFacetOptions();
       }
+      function applyGroupTeamFilter(group, team) {
+        groupSelect.value = group || "";
+        teamSelect.value = "";
+        renderFacetOptions(true);
+        if (team) {
+          var exists = false;
+          Array.prototype.forEach.call(teamSelect.options, function (opt) {
+            if (opt.value === team) exists = true;
+          });
+          teamSelect.value = exists ? team : "";
+        }
+        expanded = {};
+        updateActiveFilters();
+        reload();
+      }
       memberRows.addEventListener("click", function (event) {
+        var tag = event.target.closest("[data-filter-group]");
+        if (tag) {
+          event.stopPropagation();
+          applyGroupTeamFilter(tag.getAttribute("data-filter-group") || "", tag.getAttribute("data-filter-team") || "");
+          return;
+        }
         var gap = event.target.closest("[data-gap-id]");
         if (gap) { event.stopPropagation(); showGapModal(gap.getAttribute("data-gap-id")); return; }
         var tr = event.target.closest("tr.member-row");
@@ -824,10 +857,10 @@
         expanded[id] = !expanded[id];
         renderMemberRows(data.members || [], false);
       });
-      function renderFacetOptions() {
+      function renderFacetOptions(force) {
         var facets = data.facets || {};
         var signature = JSON.stringify(facets);
-        if (signature === lastFacetSignature) return;
+        if (!force && signature === lastFacetSignature) return;
         lastFacetSignature = signature;
         var currentGroup = groupSelect.value;
         var currentTeam = teamSelect.value;
