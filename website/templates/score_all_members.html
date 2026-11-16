@@ -698,7 +698,10 @@
         if (row.affiliation_team) {
           affiliationTag = '<span class="tag-affil" title="官方赛制页：预备生阶段一计分按该队伍归类（仅限本次红蓝大对决）">挂靠 ' + escapeHtml(row.affiliation_label || (row.affiliation_team + "队")) + '</span>';
         } else if (row.trainee) {
-          affiliationTag = '<span class="tag-affil unlisted" title="官方赛制页未给该预备生指定队伍，或该团预备生不参与队伍归类">预备生·未挂靠</span>';
+          var groupOnlyTrainee = ["BEJ48", "CKG48", "CGT48"].indexOf(group) >= 0;
+          affiliationTag = groupOnlyTrainee
+            ? '<span class="tag-affil unlisted" title="官方规则：该团预备生不参与队伍归类，只按团统计">预备生·团内统计</span>'
+            : '<span class="tag-affil unlisted" title="官方赛制页未给该预备生指定队伍">预备生·未挂靠</span>';
         }
         return groupBtn + " " + teamBtn + affiliationTag;
       }
