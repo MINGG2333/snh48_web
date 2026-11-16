@@ -291,6 +291,97 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         )
         self.assertEqual(summer_cells, [])
 
+    def test_affiliation_overlay_and_unit_filter(self) -> None:
+        board = {
+            **BOARD,
+            "qualification": {
+                "qualified_ids": ["1", "2"],
+                "participant_ids": ["1", "2", "3"],
+                "members": {},
+            },
+            "official_teams": {
+                "members": {
+                    "1": {"group": "SNH48", "team": "预备生", "team_label": "预备生"},
+                    "2": {"group": "SNH48", "team": "SII", "team_label": "SII队"},
+                    "3": {"group": "GNZ48", "team": "G", "team_label": "G队"},
+                }
+            },
+            "affiliation": {
+                "season": "2026-winter",
+                "stage_label": "红蓝歌会第一阶段",
+                "units": [
+                    {"key": "SNH-HII", "label": "SNH48 TEAM HII", "group": "SNH48", "slots": 8, "qualified": 1, "participants": 1, "qualified_trainees": 0},
+                    {"key": "SNH-SII", "label": "SNH48 TEAM SII", "group": "SNH48", "slots": 8, "qualified": 1, "participants": 1, "qualified_trainees": 0},
+                ],
+                "members": {
+                    "1": {
+                        "trainee": True,
+                        "affiliation_team": "HII",
+                        "affiliation_label": "HII队",
+                        "unit": "SNH-HII",
+                        "unit_label": "SNH48 TEAM HII",
+                    },
+                    "2": {"trainee": False, "affiliation_team": "", "affiliation_label": "", "unit": "SNH-SII", "unit_label": "SNH48 TEAM SII"},
+                    "3": {"trainee": False, "affiliation_team": "", "affiliation_label": "", "unit": "", "unit_label": ""},
+                },
+            },
+        }
+        cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+            unit="SNH-HII",
+        )
+        self.assertEqual({cell["member_id"] for cell in cells}, {"1"})
+        row = _aggregate(board, cells)["members"][0]
+        self.assertTrue(row["trainee"])
+        self.assertEqual(row["affiliation_team"], "HII")
+        self.assertEqual(row["affiliation_label"], "HII队")
+        self.assertEqual(row["affiliation_status"], "official")
+        self.assertEqual(row["unit"], "SNH-HII")
+        self.assertEqual(row["unit_label"], "SNH48 TEAM HII")
+        # 官方所属仍是「预备生」，不被挂靠改写
+        self.assertEqual(row["team"], "预备生")
+
+        facets = _facets(board, "2026-winter")
+        self.assertTrue(facets["affiliation_available"])
+        self.assertEqual([unit["key"] for unit in facets["units"]], ["SNH-HII", "SNH-SII"])
+
+        # 挂靠与晋级单元只属于 2026-winter，夏季视图不继承
+        summer = _facets(board, "2026-summer")
+        self.assertEqual(summer["units"], [])
+        self.assertFalse(summer["affiliation_available"])
+
+    def test_affiliation_marks_unlisted_trainee(self) -> None:
+        board = {
+            **BOARD,
+            "affiliation": {
+                "season": "2026-winter",
+                "members": {"2": {"trainee": True, "affiliation_team": "", "unit": "BEJ48", "unit_label": "BEJ48"}},
+            },
+        }
+        cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="SII",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+        )
+        row = _aggregate(board, cells)["members"][0]
+        self.assertTrue(row["trainee"])
+        self.assertEqual(row["affiliation_status"], "unlisted")
+        self.assertEqual(row["unit"], "BEJ48")
+
     def test_missing_gift_id_merges_by_gift_name(self) -> None:
         board = dict(BOARD)
         board["cells"] = list(BOARD["cells"]) + [

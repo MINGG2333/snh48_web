@@ -24,6 +24,7 @@ VALID_SOURCES = {"all", "room", "live", "gnz", "xox", "third_party"}
 VALID_SORTS = {"score_desc", "name_asc", "team_asc"}
 VALID_QUALIFICATIONS = {"all", "qualified", "not_qualified", "not_participant"}
 QUALIFICATION_FILENAME = "redblue_stage1_qualification.json"
+AFFILIATION_FILENAME = "redblue_affiliation.json"
 OFFICIAL_TEAMS_FILENAME = "official_member_teams.json"
 
 _cache_lock = threading.Lock()
@@ -31,6 +32,7 @@ _cache_path = ""
 _cache_mtime_ns = -1
 _cache_overlay_mtime_ns = -1
 _cache_qualification_mtime_ns = -1
+_cache_affiliation_mtime_ns = -1
 _cache_official_teams_mtime_ns = -1
 _cache_doc: dict[str, Any] = {}
 
@@ -45,10 +47,12 @@ def _load_json_if_exists(path: Path) -> dict[str, Any]:
 
 def _load_board() -> dict[str, Any]:
     global _cache_path, _cache_mtime_ns, _cache_overlay_mtime_ns
-    global _cache_qualification_mtime_ns, _cache_official_teams_mtime_ns, _cache_doc
+    global _cache_qualification_mtime_ns, _cache_affiliation_mtime_ns
+    global _cache_official_teams_mtime_ns, _cache_doc
     path = Path(cfg.SCORE_ALL_MEMBERS_DATA_PATH)
     overlay_path = path.parent / "realtime_cells.json"
     qualification_path = path.parent / QUALIFICATION_FILENAME
+    affiliation_path = path.parent / AFFILIATION_FILENAME
     official_teams_path = path.parent / OFFICIAL_TEAMS_FILENAME
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="全员计分数据未生成")
@@ -59,12 +63,14 @@ def _load_board() -> dict[str, Any]:
     stat = path.stat()
     overlay_mtime = _mtime(overlay_path)
     qualification_mtime = _mtime(qualification_path)
+    affiliation_mtime = _mtime(affiliation_path)
     official_teams_mtime = _mtime(official_teams_path)
     if (
         _cache_path == str(path)
         and _cache_mtime_ns == stat.st_mtime_ns
         and _cache_overlay_mtime_ns == overlay_mtime
         and _cache_qualification_mtime_ns == qualification_mtime
+        and _cache_affiliation_mtime_ns == affiliation_mtime
         and _cache_official_teams_mtime_ns == official_teams_mtime
     ):
         return _cache_doc
@@ -72,12 +78,14 @@ def _load_board() -> dict[str, Any]:
         stat = path.stat()
         overlay_mtime = _mtime(overlay_path)
         qualification_mtime = _mtime(qualification_path)
+        affiliation_mtime = _mtime(affiliation_path)
         official_teams_mtime = _mtime(official_teams_path)
         if (
             _cache_path == str(path)
             and _cache_mtime_ns == stat.st_mtime_ns
             and _cache_overlay_mtime_ns == overlay_mtime
             and _cache_qualification_mtime_ns == qualification_mtime
+            and _cache_affiliation_mtime_ns == affiliation_mtime
             and _cache_official_teams_mtime_ns == official_teams_mtime
         ):
             return _cache_doc
@@ -108,11 +116,13 @@ def _load_board() -> dict[str, Any]:
                 if str(overlay.get("generated_at") or "") > str(doc.get("generated_at") or ""):
                     doc["generated_at"] = str(overlay.get("generated_at"))
         doc["qualification"] = _load_json_if_exists(qualification_path)
+        doc["affiliation"] = _load_json_if_exists(affiliation_path)
         doc["official_teams"] = _load_json_if_exists(official_teams_path)
         _cache_path = str(path)
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_overlay_mtime_ns = overlay_mtime
         _cache_qualification_mtime_ns = qualification_mtime
+        _cache_affiliation_mtime_ns = affiliation_mtime
         _cache_official_teams_mtime_ns = official_teams_mtime
         _cache_doc = doc
         return _cache_doc
@@ -146,14 +156,20 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
     winter red-blue stage badge.
     """
     qualification = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
     official_teams = board.get("official_teams") if isinstance(board.get("official_teams"), dict) else {}
     qualification_members = qualification.get("members") if isinstance(qualification.get("members"), dict) else {}
+    affiliation_members = affiliation.get("members") if isinstance(affiliation.get("members"), dict) else {}
     qualified_ids = {str(value) for value in qualification.get("qualified_ids") or []}
     participant_ids = {str(value) for value in qualification.get("participant_ids") or []}
     team_members = official_teams.get("members") if isinstance(official_teams.get("members"), dict) else {}
     qualification_season = str(qualification.get("season") or "")
+    affiliation_season = str(affiliation.get("season") or "")
     qualification_available = bool(qualified_ids or participant_ids) and (
         not qualification_season or not season or qualification_season == season
+    )
+    affiliation_available = bool(affiliation_members) and (
+        not affiliation_season or not season or affiliation_season == season
     )
     index: dict[str, dict[str, Any]] = {}
     for item in board.get("members") or []:
@@ -189,6 +205,23 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
         else:
             meta["qualification"] = ""
             meta["qualified"] = False
+        meta["trainee"] = False
+        meta["affiliation_team"] = ""
+        meta["affiliation_label"] = ""
+        meta["affiliation_status"] = ""
+        meta["unit"] = ""
+        meta["unit_label"] = ""
+        aff_member = affiliation_members.get(member_id) if affiliation_available else None
+        if isinstance(aff_member, dict):
+            meta["trainee"] = bool(aff_member.get("trainee"))
+            meta["affiliation_team"] = str(aff_member.get("affiliation_team") or "")
+            meta["affiliation_label"] = str(aff_member.get("affiliation_label") or "")
+            meta["unit"] = str(aff_member.get("unit") or "")
+            meta["unit_label"] = str(aff_member.get("unit_label") or "")
+            if meta["affiliation_team"]:
+                meta["affiliation_status"] = "official"
+            elif meta["trainee"]:
+                meta["affiliation_status"] = "unlisted"
         index[member_id] = meta
     return index
 
@@ -205,9 +238,11 @@ def _filter_cells(
     date_from: str,
     date_to: str,
     qualification: str = "all",
+    unit: str = "",
 ) -> list[dict[str, Any]]:
     group = group.strip()
     team = team.strip()
+    unit = unit.strip()
     member = member.strip().lower()
     gift_name = gift_name.strip()
     members = _member_index(board, season)
@@ -227,6 +262,8 @@ def _filter_cells(
             if member not in haystack:
                 continue
         if qualification != "all" and str(meta.get("qualification") or "") != qualification:
+            continue
+        if unit and str(meta.get("unit") or "") != unit:
             continue
         if gift_name and str(cell.get("gift_name") or "") != gift_name:
             continue
@@ -303,6 +340,12 @@ def _aggregate(
                 "qualified": bool(meta.get("qualified")),
                 "qualification_song": str(meta.get("qualification_song") or ""),
                 "qualification_gift": str(meta.get("qualification_gift") or ""),
+                "trainee": bool(meta.get("trainee")),
+                "affiliation_team": str(meta.get("affiliation_team") or ""),
+                "affiliation_label": str(meta.get("affiliation_label") or ""),
+                "affiliation_status": str(meta.get("affiliation_status") or ""),
+                "unit": str(meta.get("unit") or ""),
+                "unit_label": str(meta.get("unit_label") or ""),
                 "total_score": 0.0,
                 "room_score": 0.0,
                 "live_score": 0.0,
@@ -387,6 +430,12 @@ def _aggregate(
             "qualified": bool(meta.get("qualified")),
             "qualification_song": str(meta.get("qualification_song") or ""),
             "qualification_gift": str(meta.get("qualification_gift") or ""),
+            "trainee": bool(meta.get("trainee")),
+            "affiliation_team": str(meta.get("affiliation_team") or ""),
+            "affiliation_label": str(meta.get("affiliation_label") or ""),
+            "affiliation_status": str(meta.get("affiliation_status") or ""),
+            "unit": str(meta.get("unit") or ""),
+            "unit_label": str(meta.get("unit_label") or ""),
             "total_score": 0.0,
             "room_score": 0.0,
             "live_score": 0.0,
@@ -519,6 +568,11 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
         gifts.append(entry)
     qualification_counts = {"qualified": 0, "not_qualified": 0, "not_participant": 0, "unknown": 0}
     qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
+    affiliation_doc = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
+    affiliation_season = str(affiliation_doc.get("season") or "")
+    affiliation_for_season = bool(affiliation_doc) and (
+        not affiliation_season or affiliation_season == season
+    )
     qualification_season = str(qualification_doc.get("season") or "")
     qualification_for_season = not qualification_season or qualification_season == season
     qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
@@ -544,6 +598,20 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
             (board.get("qualification") or {}).get("qualified_ids")
             or (board.get("qualification") or {}).get("participant_ids")
         ),
+        "units": [
+            {
+                "key": str(unit.get("key")),
+                "label": str(unit.get("label") or unit.get("key")),
+                "group": str(unit.get("group") or ""),
+                "slots": int(unit.get("slots") or 0),
+                "qualified": int(unit.get("qualified") or 0),
+                "participants": int(unit.get("participants") or 0),
+                "qualified_trainees": int(unit.get("qualified_trainees") or 0),
+            }
+            for unit in (affiliation_doc.get("units") or [])
+            if affiliation_for_season and isinstance(unit, dict) and unit.get("key")
+        ],
+        "affiliation_available": affiliation_for_season,
     }
 
 
@@ -576,6 +644,13 @@ def get_score_all_members_summary(
         "coverage_summary": str(board.get("coverage_summary", "")),
         "provenance_summary": board.get("provenance_summary") or {},
         "qualification": board.get("qualification") or {},
+        "affiliation": {
+            "generated_at": str((board.get("affiliation") or {}).get("generated_at") or ""),
+            "season": str((board.get("affiliation") or {}).get("season") or ""),
+            "stage_label": str((board.get("affiliation") or {}).get("stage_label") or ""),
+            "source": (board.get("affiliation") or {}).get("source") or {},
+            "units": (board.get("affiliation") or {}).get("units") or [],
+        },
         "facets": _facets(board, key),
     }
 
@@ -592,6 +667,7 @@ def get_score_all_members_data(
     date_from: str = Query(""),
     date_to: str = Query(""),
     qualification: str = Query("all"),
+    unit: str = Query(""),
     sort: str = Query("score_desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=2000),
@@ -601,6 +677,7 @@ def get_score_all_members_data(
     source = source.strip().lower()
     sort = sort.strip().lower()
     qualification = qualification.strip().lower()
+    unit = unit.strip()
     if source not in VALID_SOURCES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的数据来源")
     if sort not in VALID_SORTS:
@@ -625,6 +702,7 @@ def get_score_all_members_data(
         date_from=date_from,
         date_to=date_to,
         qualification=qualification,
+        unit=unit,
     )
     seed_ids: set[str] = set()
     qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
@@ -634,7 +712,7 @@ def get_score_all_members_data(
         members_index = _member_index(board, key)
         qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
         participant_ids = {str(value) for value in qualification_doc.get("participant_ids") or []}
-        has_scope_filter = bool(group or team or member)
+        has_scope_filter = bool(group or team or member or unit)
         if qualification_for_season and qualification == "qualified":
             seed_ids = qualified_ids
         elif qualification_for_season and qualification == "not_qualified":
@@ -655,6 +733,8 @@ def get_score_all_members_data(
                 if group and str(meta.get("group") or "") != group.strip():
                     continue
                 if team and str(meta.get("team") or "") != team.strip():
+                    continue
+                if unit and str(meta.get("unit") or "") != unit:
                     continue
                 if member_query:
                     haystack = f"{meta.get('member_name') or ''} {member_id}".lower()
@@ -686,6 +766,13 @@ def get_score_all_members_data(
         "coverage_summary": str(board.get("coverage_summary", "")),
         "provenance_summary": board.get("provenance_summary") or {},
         "qualification": board.get("qualification") or {},
+        "affiliation": {
+            "generated_at": str((board.get("affiliation") or {}).get("generated_at") or ""),
+            "season": str((board.get("affiliation") or {}).get("season") or ""),
+            "stage_label": str((board.get("affiliation") or {}).get("stage_label") or ""),
+            "source": (board.get("affiliation") or {}).get("source") or {},
+            "units": (board.get("affiliation") or {}).get("units") or [],
+        },
         "facets": _facets(board, key),
         "summary": aggregated["summary"],
         "members": rows[start:end],

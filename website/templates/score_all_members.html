@@ -134,6 +134,12 @@
     .qualification-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
     .qualification-actions button { min-height: 28px; padding: 0 10px; border: 1px solid #8a6420; border-radius: 999px; background: rgba(240,184,75,.12); color: #f2d38b; font-size: 12px; }
     .qualification-actions button:hover, .qualification-actions button.active { background: var(--gold); color: var(--ink); }
+    .tag-affil { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(120,190,255,.45); background: rgba(80,150,230,.14); color: #9fd0ff; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+    .tag-affil.unlisted { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: var(--muted); }
+    .qual-unit { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .unit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .unit-chip { padding: 3px 9px; border: 1px solid rgba(240,184,75,.35); border-radius: 999px; background: rgba(240,184,75,.07); color: #f2d38b; font-size: 12px; cursor: pointer; }
+    .unit-chip:hover, .unit-chip.active { background: var(--gold); color: var(--ink); }
     tbody tr.member-row.qualified { box-shadow: inset 3px 0 var(--gold); }
     .qual-song { color: var(--faint); font-size: 11px; margin-top: 3px; }
     .score-main { color: var(--gold); font-weight: 760; }
@@ -280,7 +286,7 @@
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
+            <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
             <tbody id="memberRows"><tr><td colspan="9" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
@@ -306,6 +312,7 @@
           <div class="field"><label for="memberInput">成员</label><input id="memberInput" type="search" placeholder="昵称或 ID"></div>
           <div class="field"><label for="giftSelect">礼物</label><select id="giftSelect"><option value="">全部计分礼物</option></select></div>
           <div class="field"><label for="qualificationSelect">红蓝晋级</label><select id="qualificationSelect"><option value="all">全部状态</option><option value="qualified">已晋级</option><option value="not_qualified">未晋级</option><option value="not_participant">非参赛</option></select></div>
+          <div class="field"><label for="unitSelect">晋级单元</label><select id="unitSelect"><option value="">全部单元</option></select></div>
           <div class="field"><label>来源</label><div class="segment" id="sourceSegment"><button type="button" data-source="all" class="active">全部</button><button type="button" data-source="room">房间</button><button type="button" data-source="live">直播</button></div></div>
           <div class="field"><label for="dateFromInput">开始日期</label><input id="dateFromInput" type="date"></div>
           <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
@@ -355,6 +362,7 @@
       var memberInput = document.getElementById("memberInput");
       var giftSelect = document.getElementById("giftSelect");
       var qualificationSelect = document.getElementById("qualificationSelect");
+      var unitSelect = document.getElementById("unitSelect");
       var dateFromInput = document.getElementById("dateFromInput");
       var dateToInput = document.getElementById("dateToInput");
       var sortSelect = document.getElementById("sortSelect");
@@ -436,6 +444,7 @@
       }
       function renderQualificationNotice() {
         var q = (data && data.qualification) || {};
+        var aff = (data && data.affiliation) || {};
         var counts = q.counts || {};
         var qualified = Number(counts.qualified || 0);
         var participants = Number(counts.participants || 0);
@@ -445,10 +454,21 @@
           return;
         }
         var caveat = (q.source && q.source.caveat) || "接口侧推断，以官方公布为准";
+        var units = aff.units || [];
+        var unitChips = units.map(function (unit) {
+          return '<button type="button" class="unit-chip" data-unit-quick="' + escapeHtml(unit.key) + '" title="' +
+            escapeHtml((unit.label || unit.key) + "：晋级 " + unit.qualified + "/" + unit.slots + "，预备生 " + unit.qualified_trainees) + '">' +
+            escapeHtml(unit.label || unit.key) + ' ' + formatNumber(unit.qualified) + '/' + formatNumber(unit.slots) + '</button>';
+        }).join("");
+        var affNote = units.length
+          ? '<div>晋级单元按官方赛制：SNH48 四队各 8 人；GNZ48 广州原番（NIII）与广州联合（G+Z）各 8 人；BEJ48、川渝联队各取全团前八。SNH48 / GNZ48 预备生按官方挂靠名单归队（仅限本次红蓝大对决）。</div>'
+          : "";
         qualificationNotice.innerHTML =
-          '<strong>' + escapeHtml(q.stage_label || "红蓝歌会第一阶段") + '：已晋级 ' + formatNumber(qualified) +
+          '<strong>' + escapeHtml(q.stage_label || aff.stage_label || "红蓝歌会第一阶段") + '：已晋级 ' + formatNumber(qualified) +
           ' 人 / 参赛 ' + formatNumber(participants) + ' 人</strong>' +
-          '<div>' + escapeHtml(caveat) + ' · 官方所属来自口袋48</div>' +
+          affNote +
+          '<div>' + escapeHtml(caveat) + ' · 官方所属来自口袋48' + (units.length ? ' · 挂靠依据：官方赛制页' : '') + '</div>' +
+          (unitChips ? '<div class="unit-chips">' + unitChips + '</div>' : '') +
           '<div class="qualification-actions">' +
           '<button type="button" data-qualification-quick="all">全部状态</button>' +
           '<button type="button" data-qualification-quick="qualified">只看晋级</button>' +
@@ -460,6 +480,17 @@
           btn.classList.toggle("active", btn.getAttribute("data-qualification-quick") === qualificationSelect.value);
           btn.addEventListener("click", function () {
             qualificationSelect.value = btn.getAttribute("data-qualification-quick") || "all";
+            expanded = {};
+            updateActiveFilters();
+            renderQualificationNotice();
+            reload();
+          });
+        });
+        qualificationNotice.querySelectorAll("[data-unit-quick]").forEach(function (btn) {
+          var key = btn.getAttribute("data-unit-quick") || "";
+          btn.classList.toggle("active", key === unitSelect.value);
+          btn.addEventListener("click", function () {
+            unitSelect.value = key === unitSelect.value ? "" : key;
             expanded = {};
             updateActiveFilters();
             renderQualificationNotice();
@@ -502,6 +533,7 @@
         params.set("member", memberInput.value.trim());
         params.set("gift_name", giftSelect.value || "");
         params.set("qualification", qualificationSelect.value || "all");
+        params.set("unit", unitSelect.value || "");
         params.set("source", sourceFilter);
         params.set("date_from", dateFromInput.value || "");
         params.set("date_to", dateToInput.value || "");
@@ -587,6 +619,7 @@
         if (qualificationSelect.value && qualificationSelect.value !== "all") {
           parts.push(qualificationSelect.options[qualificationSelect.selectedIndex].text);
         }
+        if (unitSelect.value) parts.push(unitSelect.options[unitSelect.selectedIndex].text);
         if (sourceFilter !== "all") parts.push(sourceFilter === "room" ? "房间" : "直播");
         if (dateFromInput.value || dateToInput.value) parts.push((dateFromInput.value || "开始") + " 至 " + (dateToInput.value || "结束"));
         if (activeFiltersTop) activeFiltersTop.textContent = parts.join(" · ") || "全部成员";
@@ -661,7 +694,13 @@
         var teamBtn = '<button class="tag tag-link" type="button" data-filter-group="' + escapeHtml(group) + '"' +
           (team ? ' data-filter-team="' + escapeHtml(team) + '"' : '') +
           ' title="' + escapeHtml(teamTitle) + '">' + escapeHtml(teamText) + '</button>';
-        return groupBtn + " " + teamBtn;
+        var affiliationTag = "";
+        if (row.affiliation_team) {
+          affiliationTag = '<span class="tag-affil" title="官方赛制页：预备生阶段一计分按该队伍归类（仅限本次红蓝大对决）">挂靠 ' + escapeHtml(row.affiliation_label || (row.affiliation_team + "队")) + '</span>';
+        } else if (row.trainee) {
+          affiliationTag = '<span class="tag-affil unlisted" title="官方赛制页未给该预备生指定队伍，或该团预备生不参与队伍归类">预备生·未挂靠</span>';
+        }
+        return groupBtn + " " + teamBtn + affiliationTag;
       }
       function detailHtml(row) {
         return '<div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
@@ -673,12 +712,15 @@
       }
       function rowQualificationHtml(row) {
         var status = row.qualification || "";
+        var unit = row.unit_label
+          ? '<div class="qual-unit" title="阶段一晋级单元">' + escapeHtml(row.unit_label) + (row.trainee ? ' · 预备生' : '') + '</div>'
+          : "";
         if (status === "qualified") {
           var song = row.qualification_song ? '<div class="qual-song">' + escapeHtml(row.qualification_song) + '</div>' : "";
-          return '<span class="qual-badge qualified">已晋级</span>' + song;
+          return '<span class="qual-badge qualified">已晋级</span>' + unit + song;
         }
         if (status === "not_qualified") {
-          return '<span class="qual-badge not-qualified">未晋级</span>';
+          return '<span class="qual-badge not-qualified">未晋级</span>' + unit;
         }
         if (status === "not_participant") {
           return '<span class="qual-badge not-participant">非参赛</span>';
@@ -880,6 +922,15 @@
         var exists = false;
         Array.prototype.forEach.call(teamSelect.options, function (opt) { if (opt.value === currentTeam) exists = true; });
         teamSelect.value = exists ? currentTeam : "";
+        var currentUnit = unitSelect.value;
+        var units = facets.units || [];
+        unitSelect.innerHTML = '<option value="">全部晋级单元</option>' + units.map(function (unit) {
+          var suffix = unit.slots ? (" " + unit.qualified + "/" + unit.slots) : "";
+          return '<option value="' + escapeHtml(unit.key) + '">' + escapeHtml(unit.label || unit.key) + suffix + '</option>';
+        }).join("");
+        var unitExists = false;
+        Array.prototype.forEach.call(unitSelect.options, function (opt) { if (opt.value === currentUnit) unitExists = true; });
+        unitSelect.value = unitExists ? currentUnit : "";
       }
       async function boot() {
         if (loginBusy) return;
@@ -945,6 +996,7 @@
         memberInput.value = "";
         giftSelect.value = "";
         qualificationSelect.value = "all";
+        unitSelect.value = "";
         groupSelect.value = "";
         teamSelect.value = "";
         dateFromInput.value = "";
@@ -960,6 +1012,7 @@
       groupSelect.addEventListener("change", function () { renderFacetOptions(); updateActiveFilters(); });
       teamSelect.addEventListener("change", updateActiveFilters);
       qualificationSelect.addEventListener("change", function () { updateActiveFilters(); renderQualificationNotice(); });
+      unitSelect.addEventListener("change", updateActiveFilters);
       seasonSelect.addEventListener("change", async function () {
         groupSelect.value = "";
         teamSelect.value = "";
