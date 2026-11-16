@@ -205,6 +205,13 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
         else:
             meta["qualification"] = ""
             meta["qualified"] = False
+        # 期数以官方参赛名单（pname）为准，覆盖 members_id.csv 的历史快照。
+        # 该字段与赛季无关，所以不放在 qualification_available 分支里。
+        q_member_all = qualification_members.get(member_id) if isinstance(qualification_members, dict) else None
+        if isinstance(q_member_all, dict):
+            official_period = str(q_member_all.get("official_event_period") or "").strip()
+            if official_period:
+                meta["period_name"] = official_period
         meta["trainee"] = False
         meta["affiliation_team"] = ""
         meta["affiliation_label"] = ""

@@ -490,6 +490,25 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         facets = _facets(board, "2026-winter")
         self.assertEqual(facets["units"][0]["official_order"], ["甲"])
 
+    def test_official_event_period_overrides_snapshot(self) -> None:
+        board = {
+            **BOARD,
+            "members": [
+                {**item, "period_name": "SNH48 一期生"} for item in BOARD["members"]
+            ],
+            "qualification": {
+                "members": {"1": {"official_event_period": "BEJ48 十九期生"}},
+            },
+        }
+        cells = _filter_cells(
+            board, season="2026-winter", group="", team="", member="", gift_name="",
+            source="all", date_from="", date_to="",
+        )
+        rows = {row["member_id"]: row for row in _aggregate(board, cells)["members"]}
+        self.assertEqual(rows["1"]["period_name"], "BEJ48 十九期生")
+        # 没有官方期数的成员继续使用快照值
+        self.assertEqual(rows["2"]["period_name"], "SNH48 一期生")
+
     def test_missing_gift_id_merges_by_gift_name(self) -> None:
         board = dict(BOARD)
         board["cells"] = list(BOARD["cells"]) + [
