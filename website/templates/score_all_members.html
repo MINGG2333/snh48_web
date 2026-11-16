@@ -134,8 +134,8 @@
     .qualification-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
     .qualification-actions button { min-height: 28px; padding: 0 10px; border: 1px solid #8a6420; border-radius: 999px; background: rgba(240,184,75,.12); color: #f2d38b; font-size: 12px; }
     .qualification-actions button:hover, .qualification-actions button.active { background: var(--gold); color: var(--ink); }
-    .tag-affil { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(120,190,255,.45); background: rgba(80,150,230,.14); color: #9fd0ff; font-size: 11px; line-height: 1.5; white-space: nowrap; }
-    .tag-affil.unlisted { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: var(--muted); }
+    .tag-participation { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(240,184,75,.45); background: rgba(240,184,75,.10); color: #f2d38b; font-size: 11px; line-height: 1.6; white-space: nowrap; }
+    .tag-participation:hover { background: rgba(240,184,75,.22); }
     .qual-unit { margin-top: 3px; color: var(--muted); font-size: 12px; }
     .qual-rank { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(240,184,75,.45); background: rgba(240,184,75,.12); color: #f2d38b; font-size: 11px; line-height: 1.5; white-space: nowrap; }
     .qualification-notice a { color: #f2d38b; text-decoration: underline; }
@@ -708,16 +708,18 @@
         var teamBtn = '<button class="tag tag-link" type="button" data-filter-group="' + escapeHtml(group) + '"' +
           (team ? ' data-filter-team="' + escapeHtml(team) + '"' : '') +
           ' title="' + escapeHtml(teamTitle) + '">' + escapeHtml(teamText) + '</button>';
-        var affiliationTag = "";
-        if (row.affiliation_team) {
-          affiliationTag = '<span class="tag-affil" title="官方赛制页：预备生阶段一计分按该队伍归类（仅限本次红蓝大对决）">挂靠 ' + escapeHtml(row.affiliation_label || (row.affiliation_team + "队")) + '</span>';
-        } else if (row.trainee) {
-          var groupOnlyTrainee = ["BEJ48", "CKG48", "CGT48"].indexOf(group) >= 0;
-          affiliationTag = groupOnlyTrainee
-            ? '<span class="tag-affil unlisted" title="官方规则：该团预备生不参与队伍归类，只按团统计">预备生·团内统计</span>'
-            : '<span class="tag-affil unlisted" title="官方赛制页未给该预备生指定队伍">预备生·未挂靠</span>';
+        var participationTag = "";
+        if (row.participation_team && row.participation_team_label) {
+          var participationKey = (group ? group + "|" : "") + row.participation_team;
+          var participationTitle = "只看本次红蓝大对决参赛队伍：" + row.participation_team_label;
+          if (row.trainee && row.affiliation_team) {
+            participationTitle += "（预备生按官方挂靠名单归入该队）";
+          }
+          participationTag = '<button class="tag tag-link tag-participation" type="button" data-filter-participation="' +
+            escapeHtml(participationKey) + '" title="' + escapeHtml(participationTitle) + '">参赛 · ' +
+            escapeHtml(row.participation_team_label) + '</button>';
         }
-        return groupBtn + " " + teamBtn + affiliationTag;
+        return groupBtn + " " + teamBtn + participationTag;
       }
       function detailHtml(row) {
         return '<div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
@@ -906,7 +908,31 @@
         updateActiveFilters();
         reload();
       }
+      function applyParticipationTeamFilter(key) {
+        var parts = String(key || "").split("|");
+        var group = parts[0] || "";
+        var team = parts[1] || "";
+        if (!group || !team) return;
+        groupSelect.value = group;
+        teamSelect.value = "";
+        participationTeamSelect.value = "";
+        renderFacetOptions(true);
+        var exists = false;
+        Array.prototype.forEach.call(participationTeamSelect.options, function (opt) {
+          if (opt.value === key) exists = true;
+        });
+        participationTeamSelect.value = exists ? key : "";
+        expanded = {};
+        updateActiveFilters();
+        reload();
+      }
       memberRows.addEventListener("click", function (event) {
+        var ptag = event.target.closest("[data-filter-participation]");
+        if (ptag) {
+          event.stopPropagation();
+          applyParticipationTeamFilter(ptag.getAttribute("data-filter-participation") || "");
+          return;
+        }
         var tag = event.target.closest("[data-filter-group]");
         if (tag) {
           event.stopPropagation();

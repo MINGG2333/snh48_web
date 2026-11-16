@@ -612,7 +612,7 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
                 continue
             p_team = str(aff.get("participation_team") or "")
             p_group = str(aff.get("official_group") or (members.get(str(aff_id)) or {}).get("group") or "")
-            if not p_team or not p_group or p_team == "预备生":
+            if not p_team or not p_group:
                 continue
             key = f"{p_group}|{p_team}"
             participation_teams.setdefault(
