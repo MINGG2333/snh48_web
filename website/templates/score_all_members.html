@@ -1031,7 +1031,7 @@
       });
       document.getElementById("prevBtn").addEventListener("click", function () { if (page > 1) { expanded = {}; fetchData(page - 1); } });
       document.getElementById("nextBtn").addEventListener("click", function () { if (page < totalPages) { expanded = {}; fetchData(page + 1); } });
-      groupSelect.addEventListener("change", function () { renderFacetOptions(); updateActiveFilters(); });
+      groupSelect.addEventListener("change", function () { renderFacetOptions(true); updateActiveFilters(); });
       teamSelect.addEventListener("change", updateActiveFilters);
       participationTeamSelect.addEventListener("change", updateActiveFilters);
       qualificationSelect.addEventListener("change", function () { updateActiveFilters(); renderQualificationNotice(); });
