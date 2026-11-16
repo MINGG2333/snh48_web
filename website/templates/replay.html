@@ -655,6 +655,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const replayUrl = {{ replay_url|tojson }};
     const liveId = {{ live_id|tojson }};
+    const replayTitle = {{ title|tojson }};
+    const replayCover = {{ (cover_url or '/static/images/favicons/favicon1.png')|tojson }};
+    const isRadioReplay = {{ is_radio|tojson }};
     const replaySubtitleTrack = document.getElementById("replaySubtitleTrack");
     if (replaySubtitleTrack && liveId) {
       replaySubtitleTrack.src = `/api/replay/${encodeURIComponent(liveId)}/subtitles.vtt`;
@@ -770,6 +773,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     let isPlaying = false;
+    // 后台续播状态：playIntent 表示用户希望继续播放；系统切后台导致的 pause 不改变它
+    let playIntent = false;
+    let backgroundResumeTimer = null;
+    let backgroundResumeAttempts = 0;
+    let backgroundAudioBlocked = false;
+    let frozenCheckTimer = null;
+    const MAX_BACKGROUND_RESUME_ATTEMPTS = 3;
     let isDraggingProgress = false;
     let danmuItems = [];
     let nextDanmuIndex = 0;
@@ -810,6 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updatePlayBtn() {
         playBtn.innerHTML = video.paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        updateMediaSessionPlaybackState();
     }
 
     function getDanmuSpeedLabel(value) {
@@ -1052,7 +1063,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!danmuItems.length || !video.duration) return;
         const current = video.currentTime;
 
-        if (current < lastDanmuSyncTime - 1) {
+        // 后台期间不渲染弹幕/消息，避免回到前台时把错过的内容一次性喷出
+        if (document.hidden) {
+            lastDanmuSyncTime = current;
+            return;
+        }
+
+        // 时间倒退或大幅前进（切后台、系统暂停后恢复）都直接对齐到当前位置
+        if (current < lastDanmuSyncTime - 1 || current > lastDanmuSyncTime + 3) {
             resetDanmuIndex();
         }
         lastDanmuSyncTime = current;
@@ -1064,17 +1082,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function requestPlayback() {
+        try {
+            const promise = video.play();
+            if (promise && typeof promise.catch === 'function') {
+                promise.catch(() => {});
+            }
+        } catch (_) {}
+    }
+
     // Play/Pause
     playBtn.addEventListener('click', () => {
         if (video.paused) {
-            video.play();
+            playIntent = true;
+            backgroundAudioBlocked = false;
+            requestPlayback();
         } else {
+            playIntent = false;
             video.pause();
         }
     });
 
-    video.addEventListener('play', updatePlayBtn);
-    video.addEventListener('pause', updatePlayBtn);
+    video.addEventListener('play', () => {
+        playIntent = true;
+        updatePlayBtn();
+    });
+    video.addEventListener('ended', () => {
+        playIntent = false;
+        clearBackgroundResume();
+        updatePlayBtn();
+    });
+    video.addEventListener('pause', () => {
+        updatePlayBtn();
+        // 系统因切后台暂停时，用户意图仍是播放；回到前台/后台音频由 visibilitychange 续上
+        if (document.hidden && playIntent && !backgroundAudioBlocked) {
+            attemptBackgroundResume();
+            scheduleBackgroundResume(350);
+        }
+    });
 
     // Use overlay instead of video to avoid native browser play/pause toggle
     clickOverlay.addEventListener('click', (e) => {
@@ -1083,7 +1128,14 @@ document.addEventListener('DOMContentLoaded', () => {
             showControls();
             return;
         }
-        if (video.paused) video.play(); else video.pause();
+        if (video.paused) {
+            playIntent = true;
+            backgroundAudioBlocked = false;
+            requestPlayback();
+        } else {
+            playIntent = false;
+            video.pause();
+        }
     });
     // Also handle touchend for instant response on mobile
     clickOverlay.addEventListener('touchend', (e) => {
@@ -1178,6 +1230,154 @@ document.addEventListener('DOMContentLoaded', () => {
             exitFullscreen();
         }
     });
+
+    // ── 后台续播 ──────────────────────────────────────────────────────────
+    // iOS Safari 切后台时会暂停 <video>。这里在页面隐藏时对同一个元素恢复播放，
+    // 让声音继续；回到前台后画面、字幕和弹幕按当前时间继续，不需要第二条音频流。
+    try {
+        // Safari 18.4+：声明为播放型音频会话，后台和静音拨片下更稳定
+        if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch (_) {}
+
+    function updateMediaSessionPlaybackState() {
+        if (!('mediaSession' in navigator)) return;
+        try {
+            navigator.mediaSession.playbackState = video.paused ? 'paused' : 'playing';
+        } catch (_) {}
+    }
+
+    function clearBackgroundResume() {
+        if (backgroundResumeTimer) {
+            clearTimeout(backgroundResumeTimer);
+            backgroundResumeTimer = null;
+        }
+    }
+
+    function setupMediaSession() {
+        if (!('mediaSession' in navigator)) return;
+        try {
+            if (typeof MediaMetadata !== 'undefined') {
+                const artwork = [];
+                try {
+                    artwork.push({
+                        src: new URL(replayCover, window.location.href).href,
+                        sizes: '512x512'
+                    });
+                } catch (_) {}
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: replayTitle || (isRadioReplay ? '电台回放' : '直播回放'),
+                    artist: '陈嘉仪',
+                    album: isRadioReplay ? '电台回放' : '直播回放',
+                    artwork: artwork
+                });
+            }
+        } catch (_) {}
+
+        const actions = {
+            play: () => {
+                playIntent = true;
+                backgroundAudioBlocked = false;
+                requestPlayback();
+            },
+            pause: () => {
+                playIntent = false;
+                clearBackgroundResume();
+                video.pause();
+            },
+            seekbackward: (details) => {
+                const offset = details && details.seekOffset ? details.seekOffset : 10;
+                video.currentTime = Math.max(0, video.currentTime - offset);
+            },
+            seekforward: (details) => {
+                const offset = details && details.seekOffset ? details.seekOffset : 10;
+                video.currentTime = Math.min(video.duration || video.currentTime + offset, video.currentTime + offset);
+            },
+            seekto: (details) => {
+                if (details && Number.isFinite(details.seekTime)) {
+                    video.currentTime = details.seekTime;
+                }
+            }
+        };
+        Object.keys(actions).forEach((action) => {
+            try { navigator.mediaSession.setActionHandler(action, actions[action]); } catch (_) {}
+        });
+        updateMediaSessionPlaybackState();
+    }
+
+    function attemptBackgroundResume() {
+        if (!document.hidden || !playIntent || backgroundAudioBlocked || !video.paused || video.ended) return;
+        if (backgroundResumeAttempts >= MAX_BACKGROUND_RESUME_ATTEMPTS) return;
+        backgroundResumeAttempts += 1;
+        try {
+            const promise = video.play();
+            if (promise && typeof promise.catch === 'function') {
+                promise.catch((error) => {
+                    if (error && error.name === 'NotAllowedError') {
+                        backgroundAudioBlocked = true;
+                        clearBackgroundResume();
+                    }
+                });
+            }
+        } catch (_) {
+            backgroundAudioBlocked = true;
+            clearBackgroundResume();
+        }
+    }
+
+    function scheduleBackgroundResume(delay) {
+        if (!playIntent || backgroundAudioBlocked || backgroundResumeAttempts >= MAX_BACKGROUND_RESUME_ATTEMPTS) return;
+        clearBackgroundResume();
+        backgroundResumeTimer = setTimeout(() => {
+            backgroundResumeTimer = null;
+            attemptBackgroundResume();
+        }, Math.max(0, delay || 0));
+    }
+
+    function nudgeFrozenPlayback() {
+        if (!playIntent || video.paused || document.hidden || video.ended) return;
+        if (video.seeking || video.readyState < 3) return;
+        const before = video.currentTime;
+        clearTimeout(frozenCheckTimer);
+        frozenCheckTimer = setTimeout(() => {
+            if (!playIntent || document.hidden || video.paused || video.ended) return;
+            if (video.seeking || video.readyState < 3) return;
+            if (Math.abs(video.currentTime - before) > 0.25) return;
+            // WebKit 已知问题：媒体元素显示为播放中但 currentTime 不前进，轻推一次
+            try {
+                const target = video.currentTime;
+                video.pause();
+                video.currentTime = target;
+                requestPlayback();
+            } catch (_) {}
+        }, 1200);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            backgroundResumeAttempts = 0;
+            backgroundAudioBlocked = false;
+            if (playIntent) {
+                // 系统暂停通常发生在 visibilitychange 之前；同步尝试恢复，避免后台暂停 JS 后定时器不执行
+                attemptBackgroundResume();
+                scheduleBackgroundResume(350);
+            }
+        } else {
+            clearBackgroundResume();
+            backgroundResumeAttempts = 0;
+            backgroundAudioBlocked = false;
+            if (playIntent && video.paused && !video.ended) {
+                requestPlayback();
+            }
+            // 从当前位置继续弹幕，不补发后台期间错过的内容
+            lastDanmuSyncTime = video.currentTime;
+            resetDanmuIndex();
+            syncDanmu();
+            updateProgress();
+            nudgeFrozenPlayback();
+        }
+    });
+
+    setupMediaSession();
 
     // iOS visualViewport: adjust dimensions in fullscreen mode
     if (window.visualViewport) {
