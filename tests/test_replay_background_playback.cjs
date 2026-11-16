@@ -38,6 +38,11 @@ assert.match(
 );
 assert.match(
   inlineScript,
+  /url\.includes\('\.m3u8'\) && !isIOSDevice && typeof Hls !== 'undefined' && Hls\.isSupported\(\)/,
+  "iOS should use native HLS instead of an MSE pipeline that stalls when background JS is suspended"
+);
+assert.match(
+  inlineScript,
   /navigator\.mediaSession\.setActionHandler\(action/,
   "player should expose media session actions for lock-screen controls"
 );

@@ -658,6 +658,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const replayTitle = {{ title|tojson }};
     const replayCover = {{ (cover_url or '/static/images/favicons/favicon1.png')|tojson }};
     const isRadioReplay = {{ is_radio|tojson }};
+    // iOS/iPadOS：优先使用系统原生 HLS，避免 MSE 在后台暂停 JS 后无法继续取流
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const replaySubtitleTrack = document.getElementById("replaySubtitleTrack");
     if (replaySubtitleTrack && liveId) {
       replaySubtitleTrack.src = `/api/replay/${encodeURIComponent(liveId)}/subtitles.vtt`;
@@ -886,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showVideoError('回放加载超时，请稍后重试');
         }, 20000);
 
-        if (url.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
+        if (url.includes('.m3u8') && !isIOSDevice && typeof Hls !== 'undefined' && Hls.isSupported()) {
             const hls = new Hls({ xhrSetup: (xhr) => {
                 xhr.withCredentials = false;
             }});
