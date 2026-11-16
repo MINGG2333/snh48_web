@@ -33,24 +33,47 @@ assert.match(
 );
 assert.match(
   inlineScript,
+  /if \(backgroundResumeSucceeded\) \{\s*playIntent = false;/,
+  "a second pause after background resume should be treated as a user pause"
+);
+assert.match(
+  inlineScript,
   /navigator\.audioSession\.type = 'playback'/,
   "player should request a playback audio session where supported"
 );
+
 assert.match(
   inlineScript,
-  /url\.includes\('\.m3u8'\) && !isIOSDevice && typeof Hls !== 'undefined' && Hls\.isSupported\(\)/,
-  "iOS should use native HLS instead of an MSE pipeline that stalls when background JS is suspended"
+  /function loadHlsLibrary\(\)/,
+  "hls.js should be loaded on demand instead of blocking every replay page"
 );
+assert.match(
+  inlineScript,
+  /if \(!url\.includes\('\.m3u8'\) \|\| isIOSDevice\) \{\s*\/\/ iOS 原生 HLS/,
+  "iOS should skip hls.js and use native HLS directly"
+);
+assert.doesNotMatch(
+  template,
+  /<script\s+src="[^"]*hls\.min\.js"/,
+  "the replay page should not synchronously load the 600KB hls.js bundle"
+);
+
 assert.match(
   inlineScript,
   /navigator\.mediaSession\.setActionHandler\(action/,
-  "player should expose media session actions for lock-screen controls"
+  "player should keep supported media session actions"
 );
-assert.match(
+assert.doesNotMatch(
   inlineScript,
-  /pause: \(\) => \{\s*playIntent = false;/,
-  "media session pause should clear playback intent so auto-resume does not fight the user"
+  /\n\s*play: \(\) =>/,
+  "play should be left to the native media session so lock-screen resume works"
 );
+assert.doesNotMatch(
+  inlineScript,
+  /\n\s*pause: \(\) =>/,
+  "pause should be left to the native media session so lock-screen controls stay native"
+);
+
 assert.match(
   inlineScript,
   /current > lastDanmuSyncTime \+ 3/,
@@ -60,6 +83,17 @@ assert.match(
   inlineScript,
   /if \(document\.hidden\) \{\s*lastDanmuSyncTime = current;\s*return;/,
   "danmu rendering should pause while the page is hidden"
+);
+
+assert.match(
+  template,
+  /<link rel="preconnect" href="https:\/\/idol-vod\.48\.cn" crossorigin>/,
+  "replay page should preconnect to the VOD host while the HTML is parsing"
+);
+assert.match(
+  template,
+  /<video id="replayVideo" playsinline preload="metadata"/,
+  "replay video should preload metadata"
 );
 
 console.log("replay background playback contract: ok");

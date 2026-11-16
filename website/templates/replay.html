@@ -3,6 +3,10 @@
 {% block title %}{{ '电台回放' if is_radio else '直播回放' }} - {{ site_title }}{% endblock %}
 
 {% block extra_head %}
+{% if replay_url %}
+<link rel="dns-prefetch" href="https://idol-vod.48.cn">
+<link rel="preconnect" href="https://idol-vod.48.cn" crossorigin>
+{% endif %}
 <style>
 .replay-page {
   padding-top: var(--nav-height);
@@ -541,7 +545,7 @@
 {% block content %}
 <main class="replay-page">
     <div class="player-container{% if is_radio %} radio-mode{% endif %}" id="playerContainer">
-        <video id="replayVideo" playsinline>
+        <video id="replayVideo" playsinline preload="metadata"{% if cover_url %} poster="{{ cover_url }}"{% endif %}>
             <track id="replaySubtitleTrack" kind="subtitles" srclang="zh" label="中文" default>
         </video>
         {% if is_radio %}
@@ -635,9 +639,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.1/dist/hls.min.js"
-        integrity="sha384-X6qxWXYhVZFp6V31bNDBz4eOoPnZloPbOdTcnhnvRJY2+2pDMrO7R4/1mXfJ9VXY"
-        crossorigin="anonymous"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('replayVideo');
@@ -782,6 +783,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let backgroundResumeAttempts = 0;
     let backgroundAudioBlocked = false;
     let frozenCheckTimer = null;
+    let hiddenAt = 0;
+    let backgroundResumeSucceeded = false;
     const MAX_BACKGROUND_RESUME_ATTEMPTS = 3;
     let isDraggingProgress = false;
     let danmuItems = [];
@@ -883,39 +886,83 @@ document.addEventListener('DOMContentLoaded', () => {
         if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
     }
 
+    const HLS_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.1/dist/hls.min.js';
+    const HLS_SCRIPT_INTEGRITY = 'sha384-X6qxWXYhVZFp6V31bNDBz4eOoPnZloPbOdTcnhnvRJY2+2pDMrO7R4/1mXfJ9VXY';
+    let hlsLibraryPromise = null;
+
+    // 只在非 iOS 需要时加载 hls.js；iOS 走系统原生 HLS，避免 600KB 脚本阻塞首帧
+    function loadHlsLibrary() {
+        if (typeof window.Hls !== 'undefined') return Promise.resolve(window.Hls);
+        if (hlsLibraryPromise) return hlsLibraryPromise;
+        hlsLibraryPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = HLS_SCRIPT_URL;
+            script.integrity = HLS_SCRIPT_INTEGRITY;
+            script.crossOrigin = 'anonymous';
+            script.onload = () => {
+                if (typeof window.Hls !== 'undefined') resolve(window.Hls);
+                else reject(new Error('hls.js unavailable'));
+            };
+            script.onerror = () => reject(new Error('hls.js load failed'));
+            document.head.appendChild(script);
+        });
+        return hlsLibraryPromise;
+    }
+
+    function attachHlsSource(url) {
+        const hls = new Hls({ xhrSetup: (xhr) => {
+            xhr.withCredentials = false;
+        }});
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
+            loadingOverlay.classList.add('hidden');
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+                showVideoError('回放加载失败，请稍后重试');
+            }
+        });
+    }
+
+    function attachDirectSource(url) {
+        video.src = url;
+        video.addEventListener('loadedmetadata', () => {
+            if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
+            loadingOverlay.classList.add('hidden');
+        }, { once: true });
+        video.addEventListener('error', () => {
+            showVideoError('回放加载失败，请稍后重试');
+        }, { once: true });
+    }
+
     function loadVideo(url) {
         // Timeout: show error if video doesn't load within 20 seconds
         loadTimeout = setTimeout(() => {
             showVideoError('回放加载超时，请稍后重试');
         }, 20000);
 
-        if (url.includes('.m3u8') && !isIOSDevice && typeof Hls !== 'undefined' && Hls.isSupported()) {
-            const hls = new Hls({ xhrSetup: (xhr) => {
-                xhr.withCredentials = false;
-            }});
-            hls.loadSource(url);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
-                loadingOverlay.classList.add('hidden');
-            });
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    showVideoError('回放加载失败，请稍后重试');
-                }
-            });
-        } else if (url) {
-            video.src = url;
-            video.addEventListener('loadedmetadata', () => {
-                if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
-                loadingOverlay.classList.add('hidden');
-            });
-            video.addEventListener('error', () => {
-                showVideoError('回放加载失败，请稍后重试');
-            });
-        } else {
+        if (!url) {
             showVideoError('回放链接不可用');
+            return;
         }
+
+        if (!url.includes('.m3u8') || isIOSDevice) {
+            // iOS 原生 HLS，或非 HLS 直链
+            attachDirectSource(url);
+            return;
+        }
+
+        loadHlsLibrary()
+            .then((HlsLib) => {
+                if (HlsLib && typeof HlsLib.isSupported === 'function' && HlsLib.isSupported()) {
+                    attachHlsSource(url);
+                } else {
+                    attachDirectSource(url);
+                }
+            })
+            .catch(() => attachDirectSource(url));
     }
 
     loadVideo(replayUrl);
@@ -1108,6 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     video.addEventListener('play', () => {
         playIntent = true;
+        if (document.hidden) backgroundResumeSucceeded = true;
         updatePlayBtn();
     });
     video.addEventListener('ended', () => {
@@ -1117,8 +1165,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     video.addEventListener('pause', () => {
         updatePlayBtn();
-        // 系统因切后台暂停时，用户意图仍是播放；回到前台/后台音频由 visibilitychange 续上
-        if (document.hidden && playIntent && !backgroundAudioBlocked) {
+        if (!document.hidden || !playIntent) return;
+        // 后台续播成功后再次暂停，通常是用户从锁屏/控制中心暂停，不再自动恢复
+        if (backgroundResumeSucceeded) {
+            playIntent = false;
+            clearBackgroundResume();
+            return;
+        }
+        if (Date.now() - hiddenAt <= 5000) {
             attemptBackgroundResume();
             scheduleBackgroundResume(350);
         }
@@ -1276,17 +1330,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (_) {}
 
+        // 刻意不注册 play/pause：让 iOS 走系统默认处理，锁屏暂停后按继续可直接作用于媒体元素。
+        // 页面内的播放/暂停仍由自定义按钮和 play/pause 事件维护 playIntent。
         const actions = {
-            play: () => {
-                playIntent = true;
-                backgroundAudioBlocked = false;
-                requestPlayback();
-            },
-            pause: () => {
-                playIntent = false;
-                clearBackgroundResume();
-                video.pause();
-            },
             seekbackward: (details) => {
                 const offset = details && details.seekOffset ? details.seekOffset : 10;
                 video.currentTime = Math.max(0, video.currentTime - offset);
@@ -1357,6 +1403,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
+            hiddenAt = Date.now();
+            backgroundResumeSucceeded = false;
             backgroundResumeAttempts = 0;
             backgroundAudioBlocked = false;
             if (playIntent) {
@@ -1368,6 +1416,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearBackgroundResume();
             backgroundResumeAttempts = 0;
             backgroundAudioBlocked = false;
+            backgroundResumeSucceeded = false;
             if (playIntent && video.paused && !video.ended) {
                 requestPlayback();
             }
