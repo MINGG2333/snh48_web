@@ -396,6 +396,8 @@ class ScoreAllMembersApiTests(unittest.TestCase):
                         "participation_team_label": "HII队",
                         "unit": "SNH-HII",
                         "unit_label": "SNH48 TEAM HII",
+                        "unit_rank": 3,
+                        "official_qualified": True,
                     },
                     "2": {
                         "trainee": False,
@@ -444,6 +446,49 @@ class ScoreAllMembersApiTests(unittest.TestCase):
             {item["key"] for item in facets["participation_teams"]},
             {"SNH48|HII", "SNH48|SII"},
         )
+
+    def test_official_rank_is_exposed_on_rows(self) -> None:
+        board = {
+            **BOARD,
+            "affiliation": {
+                "season": "2026-winter",
+                "official_result": {
+                    "announced_at": "2026-11-16 09:00",
+                    "post_url": "https://weibo.com/2689280541/5365803886053511",
+                    "order_note": "官方名单每个队伍从左到右为第一阶段队内计分由高到低",
+                    "units": {"SNH-HII": ["甲"]},
+                },
+                "members": {
+                    "1": {
+                        "unit": "SNH-HII",
+                        "unit_label": "SNH48 TEAM HII",
+                        "unit_rank": 5,
+                        "official_qualified": True,
+                    }
+                },
+                "units": [
+                    {
+                        "key": "SNH-HII",
+                        "label": "SNH48 TEAM HII",
+                        "group": "SNH48",
+                        "slots": 8,
+                        "qualified": 1,
+                        "participants": 1,
+                        "qualified_trainees": 0,
+                        "official_order": ["甲"],
+                    }
+                ],
+            },
+        }
+        cells = _filter_cells(
+            board, season="2026-winter", group="", team="HII", member="", gift_name="",
+            source="all", date_from="", date_to="",
+        )
+        row = _aggregate(board, cells)["members"][0]
+        self.assertEqual(row["unit_rank"], 5)
+        self.assertTrue(row["official_qualified"])
+        facets = _facets(board, "2026-winter")
+        self.assertEqual(facets["units"][0]["official_order"], ["甲"])
 
     def test_missing_gift_id_merges_by_gift_name(self) -> None:
         board = dict(BOARD)

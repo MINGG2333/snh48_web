@@ -137,6 +137,8 @@
     .tag-affil { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(120,190,255,.45); background: rgba(80,150,230,.14); color: #9fd0ff; font-size: 11px; line-height: 1.5; white-space: nowrap; }
     .tag-affil.unlisted { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: var(--muted); }
     .qual-unit { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .qual-rank { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(240,184,75,.45); background: rgba(240,184,75,.12); color: #f2d38b; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+    .qualification-notice a { color: #f2d38b; text-decoration: underline; }
     .unit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .unit-chip { padding: 3px 9px; border: 1px solid rgba(240,184,75,.35); border-radius: 999px; background: rgba(240,184,75,.07); color: #f2d38b; font-size: 12px; cursor: pointer; }
     .unit-chip:hover, .unit-chip.active { background: var(--gold); color: var(--ink); }
@@ -455,6 +457,15 @@
           return;
         }
         var caveat = (q.source && q.source.caveat) || "接口侧推断，以官方公布为准";
+        var official = aff.official_result || {};
+        var officialLine = escapeHtml(caveat);
+        if (official.announced_at) {
+          var postLink = official.post_url
+            ? ' · <a href="' + escapeHtml(official.post_url) + '" target="_blank" rel="noopener">官方微博</a>'
+            : "";
+          officialLine = '官方 64 人名单：' + escapeHtml(official.announced_at) + ' 公布 · ' +
+            escapeHtml(official.order_note || "队内顺序按第一阶段计分由高到低") + postLink;
+        }
         var units = aff.units || [];
         var unitChips = units.map(function (unit) {
           return '<button type="button" class="unit-chip" data-unit-quick="' + escapeHtml(unit.key) + '" title="' +
@@ -468,7 +479,7 @@
           '<strong>' + escapeHtml(q.stage_label || aff.stage_label || "红蓝歌会第一阶段") + '：已晋级 ' + formatNumber(qualified) +
           ' 人 / 参赛 ' + formatNumber(participants) + ' 人</strong>' +
           affNote +
-          '<div>' + escapeHtml(caveat) + ' · 官方所属来自口袋48' + (units.length ? ' · 挂靠依据：官方赛制页' : '') + '</div>' +
+          '<div>' + officialLine + ' · 官方所属来自口袋48' + (units.length ? ' · 挂靠依据：官方赛制页' : '') + '</div>' +
           (unitChips ? '<div class="unit-chips">' + unitChips + '</div>' : '') +
           '<div class="qualification-actions">' +
           '<button type="button" data-qualification-quick="all">全部状态</button>' +
@@ -721,9 +732,12 @@
         var unit = row.unit_label
           ? '<div class="qual-unit" title="阶段一晋级单元">' + escapeHtml(row.unit_label) + (row.trainee ? ' · 预备生' : '') + '</div>'
           : "";
+        var rank = Number(row.unit_rank || 0) > 0
+          ? '<span class="qual-rank" title="官方 64 人名单：队内第 ' + row.unit_rank + '（名单从左到右为第一阶段计分由高到低）">队内 #' + row.unit_rank + '</span>'
+          : "";
         if (status === "qualified") {
           var song = row.qualification_song ? '<div class="qual-song">' + escapeHtml(row.qualification_song) + '</div>' : "";
-          return '<span class="qual-badge qualified">已晋级</span>' + unit + song;
+          return '<span class="qual-badge qualified">已晋级</span>' + rank + unit + song;
         }
         if (status === "not_qualified") {
           return '<span class="qual-badge not-qualified">未晋级</span>' + unit;

@@ -213,6 +213,8 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
         meta["participation_team_label"] = ""
         meta["unit"] = ""
         meta["unit_label"] = ""
+        meta["unit_rank"] = 0
+        meta["official_qualified"] = False
         aff_member = affiliation_members.get(member_id) if affiliation_available else None
         if isinstance(aff_member, dict):
             meta["trainee"] = bool(aff_member.get("trainee"))
@@ -222,6 +224,11 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
             meta["participation_team_label"] = str(aff_member.get("participation_team_label") or "")
             meta["unit"] = str(aff_member.get("unit") or "")
             meta["unit_label"] = str(aff_member.get("unit_label") or "")
+            try:
+                meta["unit_rank"] = int(aff_member.get("unit_rank") or 0)
+            except (TypeError, ValueError):
+                meta["unit_rank"] = 0
+            meta["official_qualified"] = bool(aff_member.get("official_qualified"))
             if meta["affiliation_team"]:
                 meta["affiliation_status"] = "official"
             elif meta["trainee"]:
@@ -364,6 +371,8 @@ def _aggregate(
                 "unit_label": str(meta.get("unit_label") or ""),
                 "participation_team": str(meta.get("participation_team") or ""),
                 "participation_team_label": str(meta.get("participation_team_label") or ""),
+                "unit_rank": int(meta.get("unit_rank") or 0),
+                "official_qualified": bool(meta.get("official_qualified")),
                 "total_score": 0.0,
                 "room_score": 0.0,
                 "live_score": 0.0,
@@ -456,6 +465,8 @@ def _aggregate(
             "unit_label": str(meta.get("unit_label") or ""),
             "participation_team": str(meta.get("participation_team") or ""),
             "participation_team_label": str(meta.get("participation_team_label") or ""),
+            "unit_rank": int(meta.get("unit_rank") or 0),
+            "official_qualified": bool(meta.get("official_qualified")),
             "total_score": 0.0,
             "room_score": 0.0,
             "live_score": 0.0,
@@ -650,6 +661,9 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
                 "qualified": int(unit.get("qualified") or 0),
                 "participants": int(unit.get("participants") or 0),
                 "qualified_trainees": int(unit.get("qualified_trainees") or 0),
+                "official_order": [
+                    str(name) for name in (unit.get("official_order") or []) if str(name)
+                ],
             }
             for unit in (affiliation_doc.get("units") or [])
             if affiliation_for_season and isinstance(unit, dict) and unit.get("key")
@@ -693,6 +707,7 @@ def get_score_all_members_summary(
             "stage_label": str((board.get("affiliation") or {}).get("stage_label") or ""),
             "source": (board.get("affiliation") or {}).get("source") or {},
             "units": (board.get("affiliation") or {}).get("units") or [],
+            "official_result": (board.get("affiliation") or {}).get("official_result") or {},
         },
         "facets": _facets(board, key),
     }
@@ -832,6 +847,7 @@ def get_score_all_members_data(
             "stage_label": str((board.get("affiliation") or {}).get("stage_label") or ""),
             "source": (board.get("affiliation") or {}).get("source") or {},
             "units": (board.get("affiliation") or {}).get("units") or [],
+            "official_result": (board.get("affiliation") or {}).get("official_result") or {},
         },
         "facets": _facets(board, key),
         "summary": aggregated["summary"],
