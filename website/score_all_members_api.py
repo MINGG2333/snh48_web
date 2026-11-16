@@ -25,6 +25,7 @@ VALID_SORTS = {"score_desc", "name_asc", "team_asc"}
 VALID_QUALIFICATIONS = {"all", "qualified", "not_qualified", "not_participant"}
 QUALIFICATION_FILENAME = "redblue_stage1_qualification.json"
 AFFILIATION_FILENAME = "redblue_affiliation.json"
+FAN_SCORES_FILENAME = "member_fan_scores.json"
 OFFICIAL_TEAMS_FILENAME = "official_member_teams.json"
 
 _cache_lock = threading.Lock()
@@ -33,6 +34,7 @@ _cache_mtime_ns = -1
 _cache_overlay_mtime_ns = -1
 _cache_qualification_mtime_ns = -1
 _cache_affiliation_mtime_ns = -1
+_cache_fan_scores_mtime_ns = -1
 _cache_official_teams_mtime_ns = -1
 _cache_doc: dict[str, Any] = {}
 
@@ -48,11 +50,12 @@ def _load_json_if_exists(path: Path) -> dict[str, Any]:
 def _load_board() -> dict[str, Any]:
     global _cache_path, _cache_mtime_ns, _cache_overlay_mtime_ns
     global _cache_qualification_mtime_ns, _cache_affiliation_mtime_ns
-    global _cache_official_teams_mtime_ns, _cache_doc
+    global _cache_fan_scores_mtime_ns, _cache_official_teams_mtime_ns, _cache_doc
     path = Path(cfg.SCORE_ALL_MEMBERS_DATA_PATH)
     overlay_path = path.parent / "realtime_cells.json"
     qualification_path = path.parent / QUALIFICATION_FILENAME
     affiliation_path = path.parent / AFFILIATION_FILENAME
+    fan_scores_path = path.parent / FAN_SCORES_FILENAME
     official_teams_path = path.parent / OFFICIAL_TEAMS_FILENAME
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="全员计分数据未生成")
@@ -64,6 +67,7 @@ def _load_board() -> dict[str, Any]:
     overlay_mtime = _mtime(overlay_path)
     qualification_mtime = _mtime(qualification_path)
     affiliation_mtime = _mtime(affiliation_path)
+    fan_scores_mtime = _mtime(fan_scores_path)
     official_teams_mtime = _mtime(official_teams_path)
     if (
         _cache_path == str(path)
@@ -71,6 +75,7 @@ def _load_board() -> dict[str, Any]:
         and _cache_overlay_mtime_ns == overlay_mtime
         and _cache_qualification_mtime_ns == qualification_mtime
         and _cache_affiliation_mtime_ns == affiliation_mtime
+        and _cache_fan_scores_mtime_ns == fan_scores_mtime
         and _cache_official_teams_mtime_ns == official_teams_mtime
     ):
         return _cache_doc
@@ -79,6 +84,7 @@ def _load_board() -> dict[str, Any]:
         overlay_mtime = _mtime(overlay_path)
         qualification_mtime = _mtime(qualification_path)
         affiliation_mtime = _mtime(affiliation_path)
+        fan_scores_mtime = _mtime(fan_scores_path)
         official_teams_mtime = _mtime(official_teams_path)
         if (
             _cache_path == str(path)
@@ -86,6 +92,7 @@ def _load_board() -> dict[str, Any]:
             and _cache_overlay_mtime_ns == overlay_mtime
             and _cache_qualification_mtime_ns == qualification_mtime
             and _cache_affiliation_mtime_ns == affiliation_mtime
+            and _cache_fan_scores_mtime_ns == fan_scores_mtime
             and _cache_official_teams_mtime_ns == official_teams_mtime
         ):
             return _cache_doc
@@ -117,12 +124,14 @@ def _load_board() -> dict[str, Any]:
                     doc["generated_at"] = str(overlay.get("generated_at"))
         doc["qualification"] = _load_json_if_exists(qualification_path)
         doc["affiliation"] = _load_json_if_exists(affiliation_path)
+        doc["fan_scores"] = _load_json_if_exists(fan_scores_path)
         doc["official_teams"] = _load_json_if_exists(official_teams_path)
         _cache_path = str(path)
         _cache_mtime_ns = stat.st_mtime_ns
         _cache_overlay_mtime_ns = overlay_mtime
         _cache_qualification_mtime_ns = qualification_mtime
         _cache_affiliation_mtime_ns = affiliation_mtime
+        _cache_fan_scores_mtime_ns = fan_scores_mtime
         _cache_official_teams_mtime_ns = official_teams_mtime
         _cache_doc = doc
         return _cache_doc
@@ -144,6 +153,34 @@ def _season_key(board: dict[str, Any], requested: str) -> str:
     if latest in seasons:
         return latest
     return next(iter(seasons), "")
+
+
+def _fan_payload(board: dict[str, Any], season: str, member_id: str) -> dict[str, Any]:
+    doc = board.get("fan_scores") if isinstance(board.get("fan_scores"), dict) else {}
+    season_doc = (doc.get("seasons") or {}).get(season) if isinstance(doc.get("seasons"), dict) else {}
+    member = (season_doc or {}).get("members", {}).get(member_id) if isinstance(season_doc, dict) else None
+    payload: dict[str, Any] = {
+        "generated_at": str(doc.get("generated_at") or ""),
+        "season": season,
+        "fan_limit": int(doc.get("fan_limit") or 0),
+        "member_id": member_id,
+        "member_name": "",
+        "fan_count": 0,
+        "total_score": 0.0,
+        "fans": [],
+        "truncated": False,
+    }
+    if isinstance(member, dict):
+        payload.update(
+            {
+                "member_name": str(member.get("member_name") or ""),
+                "fan_count": int(member.get("fan_count") or 0),
+                "total_score": round(float(member.get("total_score") or 0), 6),
+                "fans": member.get("fans") if isinstance(member.get("fans"), list) else [],
+            }
+        )
+    payload["truncated"] = payload["fan_count"] > len(payload["fans"])
+    return payload
 
 
 def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str, Any]]:
@@ -718,6 +755,22 @@ def get_score_all_members_summary(
         },
         "facets": _facets(board, key),
     }
+
+
+@router.get("/member-fans")
+def get_member_fans(
+    response: Response,
+    season: str = Query(""),
+    member_id: str = Query(""),
+    _=Depends(verify_score_gifts_password),
+):
+    response.headers["Cache-Control"] = "no-store"
+    member_id = member_id.strip()
+    if not member_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少成员 ID")
+    board = _load_board()
+    key = _season_key(board, season)
+    return _fan_payload(board, key, member_id)
 
 
 @router.get("/data")

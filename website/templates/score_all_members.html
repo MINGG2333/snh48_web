@@ -139,6 +139,16 @@
     .qual-unit { margin-top: 3px; color: var(--muted); font-size: 12px; }
     .qual-rank { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(240,184,75,.45); background: rgba(240,184,75,.12); color: #f2d38b; font-size: 11px; line-height: 1.5; white-space: nowrap; }
     .qualification-notice a { color: #f2d38b; text-decoration: underline; }
+    .fan-dialog { max-width: 960px; width: 94vw; }
+    .fan-summary { margin-bottom: 10px; color: var(--muted); font-size: 13px; }
+    .fan-table-wrap { max-height: 62vh; overflow: auto; }
+    .fan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .fan-table th, .fan-table td { padding: 6px 9px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; vertical-align: top; }
+    .fan-table th { position: sticky; top: 0; background: #121722; z-index: 1; }
+    .fan-table td.num, .fan-table th.num { text-align: right; }
+    .fan-id { color: var(--muted); font-size: 11px; margin-left: 5px; }
+    .fan-gift-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .fan-gift-chip { padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted); font-size: 11px; white-space: nowrap; }
     .unit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .unit-chip { padding: 3px 9px; border: 1px solid rgba(240,184,75,.35); border-radius: 999px; background: rgba(240,184,75,.07); color: #f2d38b; font-size: 12px; cursor: pointer; }
     .unit-chip:hover, .unit-chip.active { background: var(--gold); color: var(--ink); }
@@ -288,7 +298,7 @@
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
+            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
             <tbody id="memberRows"><tr><td colspan="9" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
@@ -341,6 +351,17 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="fanModal" role="dialog" aria-modal="true" aria-labelledby="fanModalTitle">
+    <div class="modal-backdrop" id="fanModalBackdrop"></div>
+    <div class="modal-dialog fan-dialog">
+      <div class="modal-head">
+        <h2 id="fanModalTitle">粉丝计分</h2>
+        <button class="btn" id="closeFanBtn" type="button">关闭</button>
+      </div>
+      <div class="modal-body" id="fanModalBody"></div>
+    </div>
+  </div>
+
   <script>
     (function () {
       var password = "";
@@ -385,6 +406,12 @@
       var closeGapBtn = document.getElementById("closeGapBtn");
       var coverageNotice = document.getElementById("coverageNotice");
       var qualificationNotice = document.getElementById("qualificationNotice");
+      var fanModal = document.getElementById("fanModal");
+      var fanModalBackdrop = document.getElementById("fanModalBackdrop");
+      var fanModalBody = document.getElementById("fanModalBody");
+      var fanModalTitle = document.getElementById("fanModalTitle");
+      var closeFanBtn = document.getElementById("closeFanBtn");
+      var memberHeadRow = document.getElementById("memberHeadRow");
       var scoreNavSelect = document.getElementById("scoreNavSelect");
 
       function formatScore(value) {
@@ -438,6 +465,54 @@
           '</div>';
         gapModal.classList.remove("hidden");
       }
+      function closeFanModal() {
+        fanModal.classList.add("hidden");
+        fanModalBody.innerHTML = "";
+      }
+      function fanRowHtml(fan, index) {
+        var gifts = (fan.gifts || []).map(function (gift) {
+          return '<span class="fan-gift-chip">' + escapeHtml(gift.gift_name || gift.gift_id) + ' ×' + formatNumber(gift.count || 0) + '</span>';
+        }).join("");
+        return '<tr><td class="num">' + formatNumber(index + 1) + '</td><td>' + escapeHtml(fan.fan_name || "匿名") +
+          (fan.fan_id ? '<span class="fan-id">ID ' + escapeHtml(fan.fan_id) + '</span>' : '') +
+          '</td><td><div class="fan-gift-chips">' + (gifts || "—") + '</div></td>' +
+          '<td class="num">' + formatScore(fan.room_score) + '</td><td class="num">' + formatScore(fan.live_score) + '</td>' +
+          '<td class="num"><strong>' + formatScore(fan.score) + '</strong></td></tr>';
+      }
+      async function openFanModal(memberId, memberName) {
+        fanModal.classList.remove("hidden");
+        fanModalTitle.textContent = (memberName || "成员") + " · 粉丝计分";
+        fanModalBody.innerHTML = '<div class="empty">加载中…</div>';
+        try {
+          var params = new URLSearchParams();
+          params.set("season", (data && data.season) || "");
+          params.set("member_id", memberId);
+          var resp = await fetch("/api/score-all-members/member-fans?" + params.toString(), {
+            credentials: "same-origin", cache: "no-store"
+          });
+          if (resp.status === 401 || resp.status === 403) {
+            loginOverlay.classList.remove("hidden");
+            pageEl.classList.remove("ready");
+            setLoginError(await readError(resp) || "密码失效，请重新输入");
+            return;
+          }
+          if (!resp.ok) throw new Error(await readError(resp) || ("HTTP " + resp.status));
+          var payload = await resp.json();
+          var fans = payload.fans || [];
+          var summary = '总分 ' + formatScore(payload.total_score) + ' · 计分粉丝 ' + formatNumber(payload.fan_count) +
+            (payload.truncated ? ' · 仅显示前 ' + formatNumber(fans.length) : '');
+          if (!fans.length) {
+            fanModalBody.innerHTML = '<div class="fan-summary">' + summary + '</div><div class="empty">暂无粉丝计分明细</div>';
+            return;
+          }
+          fanModalBody.innerHTML = '<div class="fan-summary">' + summary + ' · 按粉丝计分从高到低</div>' +
+            '<div class="fan-table-wrap"><table class="fan-table"><thead><tr><th class="num">#</th><th>粉丝</th><th>礼物</th>' +
+            '<th class="num">房间分</th><th class="num">直播分</th><th class="num">分数</th></tr></thead><tbody>' +
+            fans.map(fanRowHtml).join("") + '</tbody></table></div>';
+        } catch (err) {
+          fanModalBody.innerHTML = '<div class="empty">' + escapeHtml(err.message || "粉丝明细加载失败") + '</div>';
+        }
+      }
       function renderCoverageNotice() {
         var ids = Object.keys(COVERAGE_NOTES || {});
         if (!ids.length) { coverageNotice.classList.remove("show"); coverageNotice.textContent = ""; return; }
@@ -468,6 +543,7 @@
             escapeHtml(official.order_note || "队内顺序按第一阶段计分由高到低") + postLink;
         }
         var units = aff.units || [];
+        var affSourceUrl = (aff.source && aff.source.official) || "https://redvsblue.ckg48.com/rewards.html";
         var unitChips = units.map(function (unit) {
           return '<button type="button" class="unit-chip" data-unit-quick="' + escapeHtml(unit.key) + '" title="' +
             escapeHtml((unit.label || unit.key) + "：晋级 " + unit.qualified + "/" + unit.slots + "，预备生 " + unit.qualified_trainees) + '">' +
@@ -480,7 +556,7 @@
           '<strong>' + escapeHtml(q.stage_label || aff.stage_label || "红蓝歌会第一阶段") + '：已晋级 ' + formatNumber(qualified) +
           ' 人 / 参赛 ' + formatNumber(participants) + ' 人</strong>' +
           affNote +
-          '<div>' + officialLine + ' · 官方所属来自口袋48' + (units.length ? ' · 挂靠依据：官方赛制页' : '') + '</div>' +
+          '<div>' + officialLine + ' · 官方所属来自口袋48' + (units.length ? ' · <a href="' + escapeHtml(affSourceUrl) + '" target="_blank" rel="noopener">挂靠依据：官方赛制页</a>' : '') + '</div>' +
           (unitChips ? '<div class="unit-chips">' + unitChips + '</div>' : '') +
           '<div class="qualification-actions">' +
           '<button type="button" data-qualification-quick="all">全部状态</button>' +
@@ -722,13 +798,35 @@
         }
         return groupBtn + " " + teamBtn + participationTag;
       }
-      function detailHtml(row) {
-        return '<div class="detail-box"><div class="detail-title">计分礼物明细</div><div class="gift-chips">' +
-          (row.gifts || []).map(function (gift) {
-            return '<span class="gift-chip">' + escapeHtml(gift.gift_name || gift.gift_id) +
-              ' <strong>' + formatScore(gift.score) + '</strong> 分 · ' + formatNumber(gift.count) + ' 个' +
-              (Number(gift.third_party_score || 0) > 0 ? '<span class="provenance-inline">' + thirdPartyLabel(gift.provenance) + ' ' + formatScore(gift.third_party_score) + ' 分</span>' : '') + '</span>';
-          }).join("") + '</div></div>';
+      var giftColumns = [];
+      var lastGiftSignature = "";
+      function giftKey(gift) {
+        return String(gift.gift_id || gift.gift_name || "");
+      }
+      function updateGiftColumns() {
+        var gifts = (data && data.gift_distribution) || [];
+        var columns = gifts.slice()
+          .sort(function (a, b) { return Number(b.score || 0) - Number(a.score || 0); })
+          .slice(0, 6)
+          .map(function (gift) { return { key: giftKey(gift), name: gift.gift_name || gift.gift_id || "礼物" }; });
+        var signature = JSON.stringify(columns);
+        if (signature === lastGiftSignature) return false;
+        lastGiftSignature = signature;
+        giftColumns = columns;
+        if (memberHeadRow) {
+          memberHeadRow.innerHTML =
+            '<th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th>' +
+            columns.map(function (column) {
+              return '<th class="num gift-col" title="' + escapeHtml(column.name) + ' 计分">' + escapeHtml(column.name) + '</th>';
+            }).join("") +
+            '<th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th>';
+        }
+        memberNodeMap = {};
+        lastRowOrder = "";
+        return true;
+      }
+      function memberColSpan() {
+        return 9 + giftColumns.length;
       }
       function rowQualificationHtml(row) {
         var status = row.qualification || "";
@@ -755,17 +853,14 @@
         rowEl.className = "member-row";
         rowEl.setAttribute("data-member-id", row.member_id);
         rowEl.innerHTML = '<td class="num rank"></td><td></td><td></td><td></td>' +
+          giftColumns.map(function () { return '<td class="num gift-cell"></td>'; }).join("") +
           '<td class="num score-main"></td><td class="num score-room"></td><td class="num score-live"></td>' +
           '<td class="num score-count"></td><td class="num col-records score-records"></td>';
-        var detailEl = document.createElement("tr");
-        detailEl.className = "detail-row";
-        detailEl.innerHTML = '<td colspan="9"></td>';
-        detailEl.style.display = "none";
-        return { rowEl: rowEl, detailEl: detailEl, nameSig: "", teamSig: "", qualificationSig: "", detailSig: "", qualified: false };
+        return { rowEl: rowEl, nameSig: "", teamSig: "", qualificationSig: "", qualified: false };
       }
       function renderMemberRows(rows, animate) {
         if (!rows || !rows.length) {
-          memberRows.innerHTML = '<tr><td colspan="9" class="empty">当前筛选条件下没有计分记录</td></tr>';
+          memberRows.innerHTML = '<tr><td colspan="' + memberColSpan() + '" class="empty">当前筛选条件下没有计分记录</td></tr>';
           memberNodeMap = {};
           lastRowOrder = "";
           return;
@@ -801,32 +896,33 @@
             node.rowEl.classList.toggle("qualified", isQualified);
             node.qualified = isQualified;
           }
-          animateNumber(cells[4], row.total_score, formatScore, animate);
-          animateNumber(cells[5], row.room_score, formatScore, animate);
-          animateNumber(cells[6], row.live_score, formatScore, animate);
-          animateNumber(cells[7], row.total_count, formatNumber, animate);
-          animateNumber(cells[8], row.records, formatNumber, animate);
-          if (expanded[id]) {
-            var html = detailHtml(row);
-            if (node.detailSig !== html) { node.detailEl.firstElementChild.innerHTML = html; node.detailSig = html; }
-            node.detailEl.style.display = "";
-          } else {
-            node.detailEl.style.display = "none";
-          }
+          var giftMap = {};
+          (row.gifts || []).forEach(function (gift) { giftMap[giftKey(gift)] = gift; });
+          giftColumns.forEach(function (column, index) {
+            var gift = giftMap[column.key] || {};
+            var cell = cells[4 + index];
+            var text = Number(gift.score || 0) > 0 ? formatScore(gift.score) : "—";
+            if (cell.textContent !== text) cell.textContent = text;
+            cell.title = (gift.gift_name || column.name) + "：" + formatNumber(gift.count || 0) + " 个";
+          });
+          var offset = 4 + giftColumns.length;
+          animateNumber(cells[offset], row.total_score, formatScore, animate);
+          animateNumber(cells[offset + 1], row.room_score, formatScore, animate);
+          animateNumber(cells[offset + 2], row.live_score, formatScore, animate);
+          animateNumber(cells[offset + 3], row.total_count, formatNumber, animate);
+          animateNumber(cells[offset + 4], row.records, formatNumber, animate);
         });
         if (orderChanged) {
           Object.keys(memberNodeMap).forEach(function (id) {
             if (!nextMap[id]) {
               var node = memberNodeMap[id];
               node.rowEl.remove();
-              node.detailEl.remove();
             }
           });
           rows.forEach(function (row) {
             var id = String(row.member_id);
             var node = nextMap[id];
             memberRows.appendChild(node.rowEl);
-            memberRows.appendChild(node.detailEl);
           });
         }
         memberNodeMap = nextMap;
@@ -839,20 +935,14 @@
               if (oldTop === undefined) return;
               var delta = oldTop - node.rowEl.getBoundingClientRect().top;
               if (Math.abs(delta) < 1) return;
-              [node.rowEl, node.detailEl].forEach(function (el) {
-                el.style.transition = "none";
-                el.style.transform = "translateY(" + delta + "px)";
-              });
+              node.rowEl.style.transition = "none";
+              node.rowEl.style.transform = "translateY(" + delta + "px)";
               window.requestAnimationFrame(function () {
-                [node.rowEl, node.detailEl].forEach(function (el) {
-                  el.style.transition = "transform .38s cubic-bezier(.2,.7,.3,1)";
-                  el.style.transform = "translateY(0)";
-                });
+                node.rowEl.style.transition = "transform .38s cubic-bezier(.2,.7,.3,1)";
+                node.rowEl.style.transform = "translateY(0)";
                 window.setTimeout(function () {
-                  [node.rowEl, node.detailEl].forEach(function (el) {
-                    el.style.transition = "";
-                    el.style.transform = "";
-                  });
+                  node.rowEl.style.transition = "";
+                  node.rowEl.style.transform = "";
                 }, 420);
               });
             });
@@ -889,6 +979,7 @@
         document.getElementById("pageMeta").textContent = "第 " + page + " / " + totalPages + " 页";
         document.getElementById("prevBtn").disabled = page <= 1;
         document.getElementById("nextBtn").disabled = page >= totalPages;
+        updateGiftColumns();
         renderMemberRows(data.members || [], Boolean(options.animate));
         renderFacetOptions();
       }
@@ -945,8 +1036,8 @@
         var tr = event.target.closest("tr.member-row");
         if (!tr) return;
         var id = tr.getAttribute("data-member-id");
-        expanded[id] = !expanded[id];
-        renderMemberRows(data.members || [], false);
+        var row = (data.members || []).find(function (item) { return String(item.member_id) === String(id); }) || {};
+        openFanModal(id, row.member_name || "");
       });
       function renderFacetOptions(force) {
         var facets = data.facets || {};
@@ -1106,9 +1197,12 @@
       filtersModalBackdrop.addEventListener("click", closeFiltersModal);
       closeGapBtn.addEventListener("click", closeGapModal);
       gapModalBackdrop.addEventListener("click", closeGapModal);
+      closeFanBtn.addEventListener("click", closeFanModal);
+      fanModalBackdrop.addEventListener("click", closeFanModal);
       document.addEventListener("keydown", function (event) {
         if (event.key !== "Escape") return;
-        if (!gapModal.classList.contains("hidden")) closeGapModal();
+        if (!fanModal.classList.contains("hidden")) closeFanModal();
+        else if (!gapModal.classList.contains("hidden")) closeGapModal();
         else if (!filtersModal.classList.contains("hidden")) closeFiltersModal();
       });
       sourceSegment.querySelectorAll("button").forEach(function (btn) {

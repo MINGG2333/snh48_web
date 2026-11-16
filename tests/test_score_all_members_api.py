@@ -12,6 +12,7 @@ from website import config as cfg
 from website.score_all_members_api import (
     _aggregate,
     _facets,
+    _fan_payload,
     _filter_cells,
     _load_board,
     _season_key,
@@ -508,6 +509,40 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         self.assertEqual(rows["1"]["period_name"], "BEJ48 十九期生")
         # 没有官方期数的成员继续使用快照值
         self.assertEqual(rows["2"]["period_name"], "SNH48 一期生")
+
+    def test_fan_payload_reads_member_detail(self) -> None:
+        board = {
+            **BOARD,
+            "fan_scores": {
+                "generated_at": "2026-11-16 10:22:00",
+                "fan_limit": 200,
+                "seasons": {
+                    "2026-winter": {
+                        "members": {
+                            "1": {
+                                "member_id": "1",
+                                "member_name": "甲",
+                                "fan_count": 2,
+                                "total_score": 12.0,
+                                "fans": [
+                                    {"fan_id": "f2", "fan_name": "乙", "score": 9.0, "count": 9, "records": 2, "room_score": 9.0, "live_score": 0.0, "gifts": []},
+                                    {"fan_id": "f1", "fan_name": "甲", "score": 3.0, "count": 3, "records": 1, "room_score": 3.0, "live_score": 0.0, "gifts": []},
+                                ],
+                            }
+                        }
+                    }
+                },
+            },
+        }
+        payload = _fan_payload(board, "2026-winter", "1")
+        self.assertEqual(payload["member_name"], "甲")
+        self.assertEqual(payload["fan_count"], 2)
+        self.assertEqual(payload["total_score"], 12.0)
+        self.assertEqual([fan["fan_id"] for fan in payload["fans"]], ["f2", "f1"])
+        self.assertFalse(payload["truncated"])
+        empty = _fan_payload(board, "2026-winter", "404")
+        self.assertEqual(empty["fans"], [])
+        self.assertEqual(empty["fan_count"], 0)
 
     def test_missing_gift_id_merges_by_gift_name(self) -> None:
         board = dict(BOARD)
