@@ -281,7 +281,6 @@
           <span class="active-filters" id="activeFiltersTop">全部成员</span>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <span class="meta" id="tableMeta">-</span>
-            <button class="btn filter-trigger" type="button" data-open-filters>筛选</button>
           </div>
         </div>
         <div style="overflow-x:auto;">
@@ -308,7 +307,8 @@
         <div class="toolbar-grid">
           <div class="field"><label for="seasonSelect">赛季</label><select id="seasonSelect"></select></div>
           <div class="field"><label for="groupSelect">团体</label><select id="groupSelect"><option value="">全部团体</option></select></div>
-          <div class="field"><label for="teamSelect">队伍</label><select id="teamSelect"><option value="">全部队伍</option></select></div>
+          <div class="field"><label for="teamSelect">队伍（口袋48官方）</label><select id="teamSelect"><option value="">全部队伍</option></select></div>
+          <div class="field"><label for="participationTeamSelect">参赛队伍</label><select id="participationTeamSelect"><option value="">全部参赛队伍</option></select></div>
           <div class="field"><label for="memberInput">成员</label><input id="memberInput" type="search" placeholder="昵称或 ID"></div>
           <div class="field"><label for="giftSelect">礼物</label><select id="giftSelect"><option value="">全部计分礼物</option></select></div>
           <div class="field"><label for="qualificationSelect">红蓝晋级</label><select id="qualificationSelect"><option value="all">全部状态</option><option value="qualified">已晋级</option><option value="not_qualified">未晋级</option><option value="not_participant">非参赛</option></select></div>
@@ -359,6 +359,7 @@
       var seasonSelect = document.getElementById("seasonSelect");
       var groupSelect = document.getElementById("groupSelect");
       var teamSelect = document.getElementById("teamSelect");
+      var participationTeamSelect = document.getElementById("participationTeamSelect");
       var memberInput = document.getElementById("memberInput");
       var giftSelect = document.getElementById("giftSelect");
       var qualificationSelect = document.getElementById("qualificationSelect");
@@ -530,6 +531,7 @@
         params.set("season", seasonSelect.value || "");
         params.set("group", groupSelect.value || "");
         params.set("team", teamSelect.value || "");
+        params.set("participation_team", participationTeamSelect.value || "");
         params.set("member", memberInput.value.trim());
         params.set("gift_name", giftSelect.value || "");
         params.set("qualification", qualificationSelect.value || "all");
@@ -614,6 +616,7 @@
         if (seasonOption && seasonOption.text) parts.push(seasonOption.text);
         if (groupSelect.value) parts.push(groupSelect.value);
         if (teamSelect.value) parts.push(teamSelect.options[teamSelect.selectedIndex].text);
+        if (participationTeamSelect.value) parts.push("参赛：" + participationTeamSelect.options[participationTeamSelect.selectedIndex].text);
         if (memberInput.value.trim()) parts.push("成员：" + memberInput.value.trim());
         if (giftSelect.value) parts.push("礼物：" + giftSelect.value);
         if (qualificationSelect.value && qualificationSelect.value !== "all") {
@@ -875,13 +878,15 @@
       function applyGroupTeamFilter(group, team) {
         groupSelect.value = group || "";
         teamSelect.value = "";
+        participationTeamSelect.value = "";
         renderFacetOptions(true);
         if (team) {
+          var key = (group ? group + "|" : "") + team;
           var exists = false;
           Array.prototype.forEach.call(teamSelect.options, function (opt) {
-            if (opt.value === team) exists = true;
+            if (opt.value === key) exists = true;
           });
-          teamSelect.value = exists ? team : "";
+          teamSelect.value = exists ? key : "";
         }
         expanded = {};
         updateActiveFilters();
@@ -909,8 +914,10 @@
         lastFacetSignature = signature;
         var currentGroup = groupSelect.value;
         var currentTeam = teamSelect.value;
+        var currentParticipationTeam = participationTeamSelect.value;
         var groups = facets.groups || [];
         var teams = facets.teams || [];
+        var participationTeams = facets.participation_teams || [];
         var groupHtml = '<option value="">全部团体</option>' + groups.map(function (g) {
           return '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>';
         }).join("");
@@ -919,12 +926,23 @@
         var teamHtml = '<option value="">全部队伍</option>' + teams.filter(function (item) {
           return !groupSelect.value || item.group === groupSelect.value;
         }).map(function (item) {
-          return '<option value="' + escapeHtml(item.team) + '">' + escapeHtml(item.team_label || item.team) + '</option>';
+          return '<option value="' + escapeHtml(item.key || (item.group + "|" + item.team)) + '">' +
+            escapeHtml((item.group ? item.group + " · " : "") + (item.team_label || item.team)) + '</option>';
         }).join("");
         teamSelect.innerHTML = teamHtml;
         var exists = false;
         Array.prototype.forEach.call(teamSelect.options, function (opt) { if (opt.value === currentTeam) exists = true; });
         teamSelect.value = exists ? currentTeam : "";
+        var participationTeamHtml = '<option value="">全部参赛队伍</option>' + participationTeams.filter(function (item) {
+          return !groupSelect.value || item.group === groupSelect.value;
+        }).map(function (item) {
+          return '<option value="' + escapeHtml(item.key || (item.group + "|" + item.team)) + '">' +
+            escapeHtml((item.group ? item.group + " · " : "") + (item.team_label || item.team)) + '</option>';
+        }).join("");
+        participationTeamSelect.innerHTML = participationTeamHtml;
+        var participationExists = false;
+        Array.prototype.forEach.call(participationTeamSelect.options, function (opt) { if (opt.value === currentParticipationTeam) participationExists = true; });
+        participationTeamSelect.value = participationExists ? currentParticipationTeam : "";
         var currentUnit = unitSelect.value;
         var units = facets.units || [];
         unitSelect.innerHTML = '<option value="">全部晋级单元</option>' + units.map(function (unit) {
@@ -1002,6 +1020,7 @@
         unitSelect.value = "";
         groupSelect.value = "";
         teamSelect.value = "";
+        participationTeamSelect.value = "";
         dateFromInput.value = "";
         dateToInput.value = "";
         sortSelect.value = "score_desc";
@@ -1014,11 +1033,13 @@
       document.getElementById("nextBtn").addEventListener("click", function () { if (page < totalPages) { expanded = {}; fetchData(page + 1); } });
       groupSelect.addEventListener("change", function () { renderFacetOptions(); updateActiveFilters(); });
       teamSelect.addEventListener("change", updateActiveFilters);
+      participationTeamSelect.addEventListener("change", updateActiveFilters);
       qualificationSelect.addEventListener("change", function () { updateActiveFilters(); renderQualificationNotice(); });
       unitSelect.addEventListener("change", updateActiveFilters);
       seasonSelect.addEventListener("change", async function () {
         groupSelect.value = "";
         teamSelect.value = "";
+        participationTeamSelect.value = "";
         giftSelect.value = "";
         try {
           var summaryData = await fetchSummary();

@@ -382,6 +382,69 @@ class ScoreAllMembersApiTests(unittest.TestCase):
         self.assertEqual(row["affiliation_status"], "unlisted")
         self.assertEqual(row["unit"], "BEJ48")
 
+    def test_composite_team_and_participation_team_filters(self) -> None:
+        board = {
+            **BOARD,
+            "affiliation": {
+                "season": "2026-winter",
+                "members": {
+                    "1": {
+                        "trainee": True,
+                        "affiliation_team": "HII",
+                        "affiliation_label": "HII队",
+                        "participation_team": "HII",
+                        "participation_team_label": "HII队",
+                        "unit": "SNH-HII",
+                        "unit_label": "SNH48 TEAM HII",
+                    },
+                    "2": {
+                        "trainee": False,
+                        "participation_team": "SII",
+                        "participation_team_label": "SII队",
+                        "unit": "SNH-SII",
+                        "unit_label": "SNH48 TEAM SII",
+                    },
+                },
+            },
+        }
+        # 不带团前缀的旧参数继续可用
+        self.assertEqual(
+            {c["member_id"] for c in _filter_cells(
+                board, season="2026-winter", group="", team="SII", member="", gift_name="",
+                source="all", date_from="", date_to="",
+            )},
+            {"2"},
+        )
+        # 复合值（团|队）消除不同团同名的「预备生」歧义
+        self.assertEqual(
+            {c["member_id"] for c in _filter_cells(
+                board, season="2026-winter", group="", team="SNH48|SII", member="", gift_name="",
+                source="all", date_from="", date_to="",
+            )},
+            {"2"},
+        )
+        self.assertEqual(
+            _filter_cells(
+                board, season="2026-winter", group="", team="GNZ48|SII", member="", gift_name="",
+                source="all", date_from="", date_to="",
+            ),
+            [],
+        )
+        # 参赛队伍按挂靠后的队伍归类
+        self.assertEqual(
+            {c["member_id"] for c in _filter_cells(
+                board, season="2026-winter", group="", team="", member="", gift_name="",
+                source="all", date_from="", date_to="", participation_team="SNH48|HII",
+            )},
+            {"1"},
+        )
+        facets = _facets(board, "2026-winter")
+        self.assertIn("SNH48|SII", {item["key"] for item in facets["teams"]})
+        self.assertEqual(
+            {item["key"] for item in facets["participation_teams"]},
+            {"SNH48|HII", "SNH48|SII"},
+        )
+
     def test_missing_gift_id_merges_by_gift_name(self) -> None:
         board = dict(BOARD)
         board["cells"] = list(BOARD["cells"]) + [
@@ -416,7 +479,10 @@ class ScoreAllMembersApiTests(unittest.TestCase):
     def test_gift_and_team_facets(self) -> None:
         facets = _facets(BOARD, "2026-winter")
         self.assertEqual(facets["groups"], ["SNH48"])
-        self.assertIn({"group": "SNH48", "team": "HII", "team_label": "HII队"}, facets["teams"])
+        self.assertIn(
+            {"key": "SNH48|HII", "group": "SNH48", "team": "HII", "team_label": "HII队"},
+            facets["teams"],
+        )
         self.assertEqual([gift["gift_name"] for gift in facets["gifts"]], ["弦月回响"])
 
     def test_score_gift_season_paths(self) -> None:

@@ -209,6 +209,8 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
         meta["affiliation_team"] = ""
         meta["affiliation_label"] = ""
         meta["affiliation_status"] = ""
+        meta["participation_team"] = ""
+        meta["participation_team_label"] = ""
         meta["unit"] = ""
         meta["unit_label"] = ""
         aff_member = affiliation_members.get(member_id) if affiliation_available else None
@@ -216,6 +218,8 @@ def _member_index(board: dict[str, Any], season: str = "") -> dict[str, dict[str
             meta["trainee"] = bool(aff_member.get("trainee"))
             meta["affiliation_team"] = str(aff_member.get("affiliation_team") or "")
             meta["affiliation_label"] = str(aff_member.get("affiliation_label") or "")
+            meta["participation_team"] = str(aff_member.get("participation_team") or "")
+            meta["participation_team_label"] = str(aff_member.get("participation_team_label") or "")
             meta["unit"] = str(aff_member.get("unit") or "")
             meta["unit_label"] = str(aff_member.get("unit_label") or "")
             if meta["affiliation_team"]:
@@ -239,9 +243,17 @@ def _filter_cells(
     date_to: str,
     qualification: str = "all",
     unit: str = "",
+    participation_team: str = "",
 ) -> list[dict[str, Any]]:
     group = group.strip()
     team = team.strip()
+    if "|" in team:
+        team_group, _, team_name = team.partition("|")
+        if group and group != team_group:
+            return []
+        group = team_group
+        team = team_name
+    participation_team = participation_team.strip()
     unit = unit.strip()
     member = member.strip().lower()
     gift_name = gift_name.strip()
@@ -265,6 +277,10 @@ def _filter_cells(
             continue
         if unit and str(meta.get("unit") or "") != unit:
             continue
+        if participation_team:
+            p_group, _, p_team = participation_team.partition("|")
+            if str(meta.get("group") or "") != p_group or str(meta.get("participation_team") or "") != p_team:
+                continue
         if gift_name and str(cell.get("gift_name") or "") != gift_name:
             continue
         cell_source = str(cell.get("source") or "")
@@ -346,6 +362,8 @@ def _aggregate(
                 "affiliation_status": str(meta.get("affiliation_status") or ""),
                 "unit": str(meta.get("unit") or ""),
                 "unit_label": str(meta.get("unit_label") or ""),
+                "participation_team": str(meta.get("participation_team") or ""),
+                "participation_team_label": str(meta.get("participation_team_label") or ""),
                 "total_score": 0.0,
                 "room_score": 0.0,
                 "live_score": 0.0,
@@ -436,6 +454,8 @@ def _aggregate(
             "affiliation_status": str(meta.get("affiliation_status") or ""),
             "unit": str(meta.get("unit") or ""),
             "unit_label": str(meta.get("unit_label") or ""),
+            "participation_team": str(meta.get("participation_team") or ""),
+            "participation_team_label": str(meta.get("participation_team_label") or ""),
             "total_score": 0.0,
             "room_score": 0.0,
             "live_score": 0.0,
@@ -546,6 +566,7 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
             groups.add(group)
         if team:
             teams[(group, team)] = {
+                "key": f"{group}|{team}",
                 "group": group,
                 "team": team,
                 "team_label": str(meta.get("team_label") or team),
@@ -573,6 +594,25 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
     affiliation_for_season = bool(affiliation_doc) and (
         not affiliation_season or affiliation_season == season
     )
+    participation_teams: dict[str, dict[str, str]] = {}
+    if affiliation_for_season:
+        for aff_id, aff in (affiliation_doc.get("members") or {}).items():
+            if not isinstance(aff, dict):
+                continue
+            p_team = str(aff.get("participation_team") or "")
+            p_group = str(aff.get("official_group") or (members.get(str(aff_id)) or {}).get("group") or "")
+            if not p_team or not p_group or p_team == "预备生":
+                continue
+            key = f"{p_group}|{p_team}"
+            participation_teams.setdefault(
+                key,
+                {
+                    "key": key,
+                    "group": p_group,
+                    "team": p_team,
+                    "team_label": str(aff.get("participation_team_label") or p_team),
+                },
+            )
     qualification_season = str(qualification_doc.get("season") or "")
     qualification_for_season = not qualification_season or qualification_season == season
     qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
@@ -591,6 +631,9 @@ def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
     return {
         "groups": sorted(groups),
         "teams": sorted(teams.values(), key=lambda item: (item["group"], item["team"])),
+        "participation_teams": sorted(
+            participation_teams.values(), key=lambda item: (item["group"], item["team"])
+        ),
         "gifts": gifts,
         "members": len(member_ids),
         "qualification_counts": qualification_counts,
@@ -668,6 +711,7 @@ def get_score_all_members_data(
     date_to: str = Query(""),
     qualification: str = Query("all"),
     unit: str = Query(""),
+    participation_team: str = Query(""),
     sort: str = Query("score_desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=2000),
@@ -678,6 +722,7 @@ def get_score_all_members_data(
     sort = sort.strip().lower()
     qualification = qualification.strip().lower()
     unit = unit.strip()
+    participation_team = participation_team.strip()
     if source not in VALID_SOURCES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效的数据来源")
     if sort not in VALID_SORTS:
@@ -703,6 +748,7 @@ def get_score_all_members_data(
         date_to=date_to,
         qualification=qualification,
         unit=unit,
+        participation_team=participation_team,
     )
     seed_ids: set[str] = set()
     qualification_doc = board.get("qualification") if isinstance(board.get("qualification"), dict) else {}
@@ -712,7 +758,7 @@ def get_score_all_members_data(
         members_index = _member_index(board, key)
         qualified_ids = {str(value) for value in qualification_doc.get("qualified_ids") or []}
         participant_ids = {str(value) for value in qualification_doc.get("participant_ids") or []}
-        has_scope_filter = bool(group or team or member or unit)
+        has_scope_filter = bool(group or team or member or unit or participation_team)
         if qualification_for_season and qualification == "qualified":
             seed_ids = qualified_ids
         elif qualification_for_season and qualification == "not_qualified":
@@ -727,14 +773,28 @@ def get_score_all_members_data(
             seed_ids = participant_ids
         if seed_ids and has_scope_filter:
             member_query = member.strip().lower()
+            seed_group = group.strip()
+            seed_team = team.strip()
+            if "|" in seed_team:
+                group_from_team, _, team_name = seed_team.partition("|")
+                seed_group = seed_group or group_from_team
+                if seed_group != group_from_team:
+                    seed_ids = set()
+                seed_team = team_name
+            seed_p_group, _, seed_p_team = participation_team.partition("|")
             filtered: set[str] = set()
             for member_id in seed_ids:
                 meta = members_index.get(member_id) or {}
-                if group and str(meta.get("group") or "") != group.strip():
+                if seed_group and str(meta.get("group") or "") != seed_group:
                     continue
-                if team and str(meta.get("team") or "") != team.strip():
+                if seed_team and str(meta.get("team") or "") != seed_team:
                     continue
                 if unit and str(meta.get("unit") or "") != unit:
+                    continue
+                if participation_team and (
+                    str(meta.get("group") or "") != seed_p_group
+                    or str(meta.get("participation_team") or "") != seed_p_team
+                ):
                     continue
                 if member_query:
                     haystack = f"{meta.get('member_name') or ''} {member_id}".lower()
