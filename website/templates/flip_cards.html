@@ -1328,6 +1328,15 @@
       return wrap;
     }
 
+    function attachMediaFallback(element, media) {
+      if (!media.fallback_url || media.fallback_url === media.url) return;
+      element.addEventListener("error", function handleMediaError() {
+        element.removeEventListener("error", handleMediaError);
+        element.src = media.fallback_url;
+        element.load();
+      });
+    }
+
     function createMedia(record) {
       const box = document.createElement("div");
       box.className = "media";
@@ -1338,6 +1347,7 @@
           audio.controls = true;
           audio.preload = "none";
           audio.src = media.url;
+          attachMediaFallback(audio, media);
           box.appendChild(audio);
           const transcript = createAudioTranscriptNode(record.audio_transcript, audio);
           if (transcript) box.appendChild(transcript);
@@ -1346,6 +1356,7 @@
           video.controls = true;
           video.preload = "metadata";
           video.src = media.url;
+          attachMediaFallback(video, media);
           box.appendChild(video);
         }
       } else {

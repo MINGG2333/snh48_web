@@ -22,6 +22,17 @@ let allScheduleEvents = []; // fetched from schedule API
 let allSocialEvents = []; // fetched from fan-hub social timeline dataset
 let searchQuery = ''; // timeline search keywords (lowercased, whitespace-split)
 
+// Live covers come from the official CDN first.  If that image fails, the
+// archive copy under /live-covers/ is used once before the normal placeholder.
+document.addEventListener('error', event => {
+  const img = event.target;
+  if (!img || img.tagName !== 'IMG') return;
+  const fallback = img.getAttribute('data-fallback-src');
+  if (!fallback || img.dataset.fallbackApplied === '1') return;
+  img.dataset.fallbackApplied = '1';
+  img.src = fallback;
+}, true);
+
 // ── Format date (top-level so data can reference it) ──
 function formatDate(dateInput) {
   const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
@@ -186,6 +197,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const badgeClass = BADGE_CLASS_MAP[ev.type] || 'event';
         const coverValue = Array.isArray(ev.cover_url) ? ev.cover_url[0] : ev.cover_url;
         const coverSrc = safeUrl(coverValue || ev.image);
+        const coverFallbackSrc = safeUrl(ev.cover_fallback_url);
+        const coverFallbackAttr = coverFallbackSrc && coverFallbackSrc !== coverSrc
+          ? ` data-fallback-src="${coverFallbackSrc}"`
+          : '';
         const hasCover = !!coverSrc;
         const titleText = escapeHtml(ev.title || '');
         const typeLabelText = escapeHtml(ev.typeLabel || '');
@@ -200,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const keywordBadge = secondaryPerformanceBadge(ev);
         cardsHtml += `
           <div class="timeline-card" data-event-id="${eventId}" tabindex="0" role="button" aria-label="${titleText}">
-            ${hasCover ? `<img class="${imgClass}" data-fallback-icon="${iconClass}" src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')">` : imgHtml}
+            ${hasCover ? `<img class="${imgClass}" data-fallback-icon="${iconClass}"${coverFallbackAttr} src="${coverSrc}" alt="${titleText}" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.remove('loading')">` : imgHtml}
             <div class="timeline-card-body">
               <div class="timeline-card-date">${escapeHtml(formatDate(ev.date))}${eventTime}</div>
               <div class="timeline-card-title">${titleText}</div>
@@ -886,8 +901,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // Single cover (from cover_url or first image/imgList item or placeholder)
       const coverSrc = safeUrl(event.cover_url || (imgList.length > 0 ? imgList[0] : '') || event.image || '');
+      const coverFallbackSrc = safeUrl(event.cover_fallback_url);
+      const coverFallbackAttr = coverFallbackSrc && coverFallbackSrc !== coverSrc
+        ? ` data-fallback-src="${coverFallbackSrc}"`
+        : '';
       coverHtml = coverSrc
-        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${escapeHtml(event.title || '')}" data-fallback-icon="${fallbackIcon}" referrerpolicy="no-referrer" onload="this.classList.remove('loading')">`
+        ? `<img class="timeline-modal-img loading" src="${coverSrc}" alt="${escapeHtml(event.title || '')}" data-fallback-icon="${fallbackIcon}"${coverFallbackAttr} referrerpolicy="no-referrer" onload="this.classList.remove('loading')">`
         : `<div class="timeline-modal-img-placeholder"><i class="fas ${fallbackIcon}"></i></div>`;
     }
 

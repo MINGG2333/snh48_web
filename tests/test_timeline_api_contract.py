@@ -57,6 +57,53 @@ class TimelineApiContractTests(unittest.TestCase):
             self.assertTrue(records[0]["has_replay"])
             self.assertTrue(records[0]["has_danmu"])
 
+    def test_live_cover_prefers_cdn_and_keeps_local_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            index = root / "live_index.csv"
+            fields = [
+                "live_id", "push_bj", "live_ctime_bj", "title", "live_type",
+                "live_cover_url", "cover_local_path", "official_replay_status",
+            ]
+            with index.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerow({
+                    "live_id": "explicit",
+                    "push_bj": "2026-09-09 22:33:24",
+                    "title": "显式本地封面",
+                    "live_type": "1",
+                    "live_cover_url": "/2026/0909/cdn-cover.jpg",
+                    "cover_local_path": "room_record/live_covers/explicit-cover.jpg",
+                })
+                writer.writerow({
+                    "live_id": "derived",
+                    "push_bj": "2026-09-10 22:33:24",
+                    "title": "时间戳本地封面",
+                    "live_type": "1",
+                    "live_cover_url": "/2026/0910/cdn-cover.jpg",
+                })
+            cover_dir = root / "陈嘉仪_161808449" / "live_covers"
+            cover_dir.mkdir(parents=True)
+            (cover_dir / "20260910_223324.jpg").write_bytes(b"jpg")
+            with mock.patch.object(router.cfg, "LIVE_PUSH_REPLAY_ROOT", temp), mock.patch.object(
+                router.cfg, "LIVE_RECORD_ROOT", temp
+            ):
+                records = {record["id"]: record for record in router.read_live_pushes()}
+
+        self.assertEqual(
+            records["live_explicit"]["cover_url"], "https://source3.48.cn/2026/0909/cdn-cover.jpg"
+        )
+        self.assertEqual(
+            records["live_explicit"]["cover_fallback_url"], "/live-covers/explicit-cover.jpg"
+        )
+        self.assertEqual(
+            records["live_derived"]["cover_url"], "https://source3.48.cn/2026/0910/cdn-cover.jpg"
+        )
+        self.assertEqual(
+            records["live_derived"]["cover_fallback_url"], "/live-covers/20260910_223324.jpg"
+        )
+
     def test_producer_relative_danmu_path_uses_local_file_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             replay_root = Path(temp) / "replays"
@@ -119,6 +166,43 @@ class TimelineApiContractTests(unittest.TestCase):
                     if is_radio:
                         self.assertIn('src="/live-covers/cover.jpg"', html)
                         self.assertIn("电台信息", html)
+
+    def test_replay_page_prefers_cdn_cover_and_renders_local_fallback(self) -> None:
+        from starlette.requests import Request
+        from website import main
+
+        with tempfile.TemporaryDirectory() as temp:
+            index = Path(temp) / "live_index.csv"
+            fields = [
+                "live_id", "push_bj", "title", "live_type",
+                "live_cover_url", "cover_local_path",
+                "official_replay_url", "official_replay_status",
+            ]
+            with index.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                for live_id, live_type in [("video", "1"), ("radio", "2")]:
+                    writer.writerow({
+                        "live_id": live_id,
+                        "push_bj": "2026-09-09 22:33:24",
+                        "title": "回放",
+                        "live_type": live_type,
+                        "live_cover_url": "/2026/0909/cdn-cover.jpg",
+                        "cover_local_path": "room_record/live_covers/cover.jpg",
+                        "official_replay_url": "https://example.com/replay.m3u8",
+                        "official_replay_status": "available",
+                    })
+            request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+            with mock.patch.object(main.cfg, "LIVE_PUSH_REPLAY_ROOT", temp), mock.patch.object(
+                main.cfg, "LIVE_RECORD_ROOT", temp
+            ):
+                video_html = asyncio.run(main.replay_page(request, "video")).body.decode()
+                radio_html = asyncio.run(main.replay_page(request, "radio")).body.decode()
+
+        self.assertIn('poster="https://source3.48.cn/2026/0909/cdn-cover.jpg"', video_html)
+        self.assertIn('const replayCoverFallback = "/live-covers/cover.jpg"', video_html)
+        self.assertIn('src="https://source3.48.cn/2026/0909/cdn-cover.jpg"', radio_html)
+        self.assertIn('data-fallback-src="/live-covers/cover.jpg"', radio_html)
 
     def test_replay_page_skips_stale_earlier_csv_and_reads_unified_index(self) -> None:
         from starlette.requests import Request

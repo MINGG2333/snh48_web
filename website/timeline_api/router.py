@@ -22,6 +22,7 @@ import re
 from fastapi import APIRouter, Query, Response
 
 from website import config as cfg
+from website import live_covers
 from website.debut_milestones import debut_date, milestone_date, timeline_milestone_days
 
 router = APIRouter(prefix="/api/timeline", tags=["时光轴"])
@@ -365,15 +366,8 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                 if not dt:
                     continue
 
-                # Cover: use local if available, else CDN
-                cover_url = ""
-                cover_local = (row.get("cover_local_path") or "").strip()
-                if cover_local:
-                    cover_url = f"/live-covers/{Path(cover_local).name}"
-                else:
-                    cdn = (row.get("live_cover_url") or "").strip()
-                    if cdn:
-                        cover_url = f"https://source3.48.cn{cdn}"
+                # Cover: official CDN first, local archive as fallback.
+                cover_url, cover_fallback_url = live_covers.cover_urls(row)
 
                 # Replay video URL (may be empty if not available)
                 replay_url = ""
@@ -414,6 +408,7 @@ def read_live_pushes(limit: int = 500) -> List[Dict[str, Any]]:
                     "source": "room",
                     "description": desc,
                     "cover_url": cover_url,
+                    "cover_fallback_url": cover_fallback_url,
                     "replay_url": replay_url,
                     "has_replay": bool(replay_url),
                     "has_danmu": has_danmu,

@@ -85,7 +85,7 @@
 - `/home/snh48_web/website/data/memories/memories.json`（记忆页运行数据；格式示例见 `website/data/memories/memories.example.json`）
 - `live_record/live_index.csv`（统一直播索引；网站按 `push_bj`、`live_ctime_bj`、`start_bj` 依次回退取开播时间）
 - `live_record/陈嘉仪_161808449/`（场次目录，含官方回放和弹幕）
-- `room_record/陈嘉仪_161808449/live_covers/`
+- `room_record/陈嘉仪_161808449/live_covers/`（本地封面兜底归档；页面优先使用 `live_index.csv` 中的官方 `live_cover_url`，本地文件继续由采集器下载保留）
 - `room_record/陈嘉仪_161808449/gift_replies/`
 - `room_record/陈嘉仪_161808449/metadata/messages.jsonl` 与 `metadata/messages_YYYY-MM.jsonl` 月封存文件（房间消息 jsonl 事实表，按 `room_type` / `room_label` 标识来源；2026-10-16 起替代已退役的 `messages_shards/` 分片）
 - `room_record/陈嘉仪_161808449/audio_transcripts/`
@@ -93,7 +93,7 @@
 - `room_record/陈嘉仪_161808449/score_gifts/`
 - `room_record/pk_scores/current.json`（房间计分 PK 派生小数据；首轮只供腾讯云 `/score-pk`，阿里云同步待用户验收后另行确认）
 - `flip_data/web/`（密码保护的脱敏账号清单、schema v4 账号数据和默认兼容副本）
-- `flip_data/audio/{account_id}/`、`flip_data/video/{account_id}/`（账号级本地播放依赖；不含 `metadata/`、Token 或登录状态）
+- `flip_data/audio/{account_id}/`、`flip_data/video/{account_id}/`（账号级本地播放兜底；页面优先播放记录中的 48 官方 `official_url`，本地文件继续下载保留；不含 `metadata/`、Token 或登录状态）
 - 图片通过网站 `/image-proxy/` 访问，不把 `schedule_record/images/` 作为阿里云常规同步项。
 
 数据同步脚本：
@@ -227,7 +227,7 @@ node script/obfuscate_js.cjs
 
 - 页面入口：`/flip-cards`，短入口：`/flip`
 - API：`/api/flip-cards/login`、`/status`、`/accounts`、`/data?account_id=...`、`/accounts/{account_id}/flip_data/{kind}/{filename}`、`/account-management/*`
-- 数据源：`FLIP_CARDS_ACCOUNTS_PATH` 默认 `/home/snh48-fan-hub/flip_data/web/accounts.json`；账号 JSON 位于 `web/accounts/`；`FLIP_CARDS_DATASET_PATH` 保留旧默认账号兼容；`FLIP_CARDS_DATA_DIR` 为媒体根目录
+- 数据源：`FLIP_CARDS_ACCOUNTS_PATH` 默认 `/home/snh48-fan-hub/flip_data/web/accounts.json`；账号 JSON 位于 `web/accounts/`；`FLIP_CARDS_DATASET_PATH` 保留旧默认账号兼容；`FLIP_CARDS_DATA_DIR` 为媒体根目录。每条媒体的 `official_url`（仅允许 HTTPS 的 `*.48.cn`）优先生效，本地 `audio|video` 文件作为 `fallback_url` 兜底；官方源不可用时前端自动切回本地签名 URL。
 - 鉴权：`FLIP_CARDS_PASSWORD`，默认复用 `OB_PASSWORD`；登录成功后使用仅限 API 路径的 HttpOnly Cookie，也可用 `X-Flip-Cards-Password`
 - 产物说明：`/home/snh48-fan-hub/doc/flip_artifacts.md`
 

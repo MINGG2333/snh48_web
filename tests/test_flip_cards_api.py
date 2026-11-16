@@ -106,6 +106,75 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         html = await self.client.get("/api/flip-cards/html")
         self.assertEqual(html.status_code, 404)
 
+    async def test_official_cdn_is_primary_and_local_archive_is_fallback(self) -> None:
+        self.dataset_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "member": "测试成员",
+                    "member_avatar_text": "嘉仪",
+                    "summary": {"total": 1, "answered": 1},
+                    "records": [
+                        {
+                            "question_id": "q-official",
+                            "status": "answered",
+                            "answer_type": "audio",
+                            "media": {
+                                "kind": "audio",
+                                "filename": "voice.mp3",
+                                "official_url": "https://mp4-new1.48.cn/2026/0410/demo.aac",
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        data = await self.client.get("/api/flip-cards/data", headers=self.auth_headers)
+        self.assertEqual(data.status_code, 200)
+        media = data.json()["records"][0]["media"]
+        self.assertEqual(media["url"], "https://mp4-new1.48.cn/2026/0410/demo.aac")
+        self.assertEqual(media["media_source"], "official")
+        self.assertTrue(
+            media["fallback_url"].startswith(
+                "/api/flip-cards/flip_data/audio/voice.mp3?mt="
+            )
+        )
+        fallback = await self.client.get(media["fallback_url"])
+        self.assertEqual(fallback.status_code, 200)
+        self.assertEqual(fallback.content, b"0123456789")
+
+        # 非 48 CDN 或不安全的官方地址不能成为主播放源。
+        self.dataset_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "member": "测试成员",
+                    "member_avatar_text": "嘉仪",
+                    "summary": {"total": 1, "answered": 1},
+                    "records": [
+                        {
+                            "question_id": "q-unsafe",
+                            "status": "answered",
+                            "answer_type": "audio",
+                            "media": {
+                                "kind": "audio",
+                                "filename": "voice.mp3",
+                                "official_url": "https://evil.example.com/demo.aac",
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        data = await self.client.get("/api/flip-cards/data", headers=self.auth_headers)
+        media = data.json()["records"][0]["media"]
+        self.assertTrue(media["url"].startswith("/api/flip-cards/flip_data/audio/voice.mp3?mt="))
+        self.assertEqual(media["media_source"], "local")
+
     async def test_selects_account_scoped_dataset_and_media_from_manifest(self) -> None:
         account_id = "172884074"
         (self.data_dir / "web" / "accounts").mkdir()

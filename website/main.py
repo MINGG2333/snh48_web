@@ -18,6 +18,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from website import audit_log
 from website import config as cfg
+from website import live_covers
 from website.debut_milestones import build_homepage_context
 
 app = FastAPI(
@@ -43,14 +44,8 @@ if cfg.USE_OBFUSCATED_JS:
 app.mount("/static", StaticFiles(directory=str(cfg.STATIC_DIR)), name="static")
 
 # ── Live Covers (mount for fast static serving) ───────────────────────────
-from pathlib import Path as _Path
-# Serve covers from the unified live_record tree, then fall back to room_record.
-_covers_candidates = [
-    _Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / "陈嘉仪_161808449" / "covers",
-    _Path(getattr(cfg, "LIVE_RECORD_ROOT", cfg.LIVE_PUSH_REPLAY_ROOT)) / "陈嘉仪_161808449" / "live_covers",
-    _Path("/home/snh48-fan-hub/room_record/陈嘉仪_161808449/live_covers"),
-]
-for _p in _covers_candidates:
+# Pages use the official CDN first; this mount only serves the local fallback.
+for _p in live_covers.cover_dirs():
     if _p.exists():
         app.mount("/live-covers", StaticFiles(directory=str(_p)), name="live_covers")
         break
@@ -312,6 +307,7 @@ async def replay_page(request: Request, live_id: str):
     date = ""
     is_radio = False
     cover_url = ""
+    cover_fallback_url = ""
     try:
         import csv
         from pathlib import Path
@@ -349,12 +345,7 @@ async def replay_page(request: Request, live_id: str):
                         or (row.get("live_ctime_bj") or "").strip()
                         or (row.get("start_bj") or "").strip()
                     )
-                    cover_local = (row.get("cover_local_path") or "").strip()
-                    cover_cdn = (row.get("live_cover_url") or "").strip()
-                    if cover_local:
-                        cover_url = f"/live-covers/{Path(cover_local).name}"
-                    elif cover_cdn:
-                        cover_url = f"https://source3.48.cn{cover_cdn}"
+                    cover_url, cover_fallback_url = live_covers.cover_urls(row)
                     matched = True
                     break
     except Exception:
@@ -375,6 +366,7 @@ async def replay_page(request: Request, live_id: str):
             "date": date,
             "is_radio": is_radio,
             "cover_url": cover_url,
+            "cover_fallback_url": cover_fallback_url,
         },
     )
 

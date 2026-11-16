@@ -556,7 +556,8 @@
         {% if is_radio %}
         <div class="radio-stage">
             <img class="radio-cover" src="{{ cover_url or '/static/images/favicons/favicon1.png' }}" alt="电台封面"
-                 onerror="this.onerror=null;this.src='/static/images/favicons/favicon1.png'">
+                 {% if cover_fallback_url and cover_fallback_url != cover_url %}data-fallback-src="{{ cover_fallback_url }}"{% endif %}
+                 onerror="if(this.dataset.fallbackSrc){this.dataset.fallbackApplied='1';this.src=this.dataset.fallbackSrc;this.removeAttribute('data-fallback-src');}else{this.onerror=null;this.src='/static/images/favicons/favicon1.png';}">
             <span class="radio-label"><i class="fas fa-headphones"></i> 电台回放</span>
             <span class="radio-hint">无画面直播 · 弹幕随声音同步播放</span>
         </div>
@@ -662,7 +663,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const replayUrl = {{ replay_url|tojson }};
     const liveId = {{ live_id|tojson }};
     const replayTitle = {{ title|tojson }};
-    const replayCover = {{ (cover_url or '/static/images/favicons/favicon1.png')|tojson }};
+    let replayCover = {{ (cover_url or '/static/images/favicons/favicon1.png')|tojson }};
+    const replayCoverFallback = {{ (cover_fallback_url or '')|tojson }};
+    if (replayCoverFallback && replayCoverFallback !== replayCover) {
+        const coverProbe = new Image();
+        coverProbe.onerror = function () {
+            replayCover = replayCoverFallback;
+            const video = document.getElementById('replayVideo');
+            if (video) video.poster = replayCoverFallback;
+            const radioCover = document.querySelector('.radio-cover');
+            if (radioCover && !radioCover.dataset.fallbackApplied) {
+                radioCover.dataset.fallbackApplied = '1';
+                radioCover.src = replayCoverFallback;
+            }
+        };
+        coverProbe.src = replayCover;
+    }
     const isRadioReplay = {{ is_radio|tojson }};
     // iOS/iPadOS：优先使用系统原生 HLS，避免 MSE 在后台暂停 JS 后无法继续取流
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent)

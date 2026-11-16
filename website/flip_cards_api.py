@@ -95,6 +95,45 @@ def _data_dir() -> Path:
     return Path(cfg.FLIP_CARDS_DATA_DIR)
 
 
+def _safe_official_media_url(value: object) -> str:
+    """Allow only the official Pocket48 media CDN over HTTPS."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return ""
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host:
+        return ""
+    if host != "48.cn" and not host.endswith(".48.cn"):
+        return ""
+    return text
+
+
+def _local_media_url(account_id: str, kind: str, filename: str) -> str:
+    """Return the signed local fallback URL when the archived file exists."""
+    try:
+        safe_name = _safe_media_filename(filename, kind)
+    except HTTPException:
+        return ""
+    directory = _data_dir() / kind
+    if account_id:
+        directory = directory / account_id
+    try:
+        if not (directory / safe_name).is_file():
+            return ""
+    except OSError:
+        return ""
+    if account_id:
+        return (
+            f"/api/flip-cards/accounts/{account_id}/flip_data/{kind}/{quote(safe_name)}"
+            f"?{_media_token_query()}"
+        )
+    return f"/api/flip-cards/flip_data/{kind}/{quote(safe_name)}?{_media_token_query()}"
+
+
 def _dataset_path() -> Path:
     return Path(cfg.FLIP_CARDS_DATASET_PATH)
 
@@ -349,15 +388,21 @@ async def flip_cards_data(response: Response, account_id: str = "", _=Depends(ve
         kind = str(media.get("kind") or "")
         filename = str(media.get("filename") or "")
         if kind in MEDIA_TYPES and filename:
-            if selected_account_id:
-                media["url"] = (
-                    f"/api/flip-cards/accounts/{selected_account_id}/flip_data/{kind}/{quote(filename)}"
-                    f"?{_media_token_query()}"
-                )
+            local_url = _local_media_url(selected_account_id, kind, filename)
+            official_url = _safe_official_media_url(media.get("official_url"))
+            if local_url:
+                media["fallback_url"] = local_url
             else:
-                media["url"] = (
-                    f"/api/flip-cards/flip_data/{kind}/{quote(filename)}?{_media_token_query()}"
-                )
+                media.pop("fallback_url", None)
+            if official_url:
+                media["url"] = official_url
+                media["media_source"] = "official"
+            elif local_url:
+                media["url"] = local_url
+                media["media_source"] = "local"
+            else:
+                media["url"] = ""
+                media["media_source"] = ""
 
     response.headers["Cache-Control"] = "private, no-store"
     return payload
