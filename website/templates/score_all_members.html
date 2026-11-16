@@ -125,6 +125,8 @@
     button.tag-link { background: transparent; cursor: pointer; }
     button.tag-link:hover, button.tag-link:focus-visible { border-color: var(--teal); background: rgba(65,185,170,.1); color: var(--teal); outline: none; }
     .qual-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .qual-badge-btn { font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .qual-badge-btn:hover, .qual-badge-btn:focus-visible { filter: brightness(1.25); outline: none; }
     .qual-badge.qualified { border-color: #8a6420; background: rgba(240,184,75,.16); color: var(--gold); }
     .qual-badge.not-qualified { border-color: #4a596d; background: rgba(149,164,182,.08); color: var(--muted); }
     .qual-badge.not-participant { border-color: #334154; background: transparent; color: var(--faint); }
@@ -137,6 +139,8 @@
     .tag-participation { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(240,184,75,.45); background: rgba(240,184,75,.10); color: #f2d38b; font-size: 11px; line-height: 1.6; white-space: nowrap; }
     .tag-participation:hover { background: rgba(240,184,75,.22); }
     .qual-unit { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .qual-unit-tag { margin-top: 4px; font-size: 11px; }
+    .qual-unit-tag:hover, .qual-unit-tag:focus-visible { background: rgba(240,184,75,.16); color: var(--gold); border-color: #8a6420; }
     .qual-rank { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(240,184,75,.45); background: rgba(240,184,75,.12); color: #f2d38b; font-size: 11px; line-height: 1.5; white-space: nowrap; }
     .qualification-notice a { color: #f2d38b; text-decoration: underline; }
     .fan-dialog { max-width: 960px; width: 94vw; }
@@ -816,10 +820,11 @@
         if (memberHeadRow) {
           memberHeadRow.innerHTML =
             '<th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th>' +
+            '<th class="num">总分</th>' +
             columns.map(function (column) {
               return '<th class="num gift-col" title="' + escapeHtml(column.name) + ' 计分">' + escapeHtml(column.name) + '</th>';
             }).join("") +
-            '<th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th>';
+            '<th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th>';
         }
         memberNodeMap = {};
         lastRowOrder = "";
@@ -831,20 +836,25 @@
       function rowQualificationHtml(row) {
         var status = row.qualification || "";
         var unit = row.unit_label
-          ? '<div class="qual-unit" title="阶段一晋级单元">' + escapeHtml(row.unit_label) + (row.trainee ? ' · 预备生' : '') + '</div>'
+          ? '<button class="tag tag-link qual-unit-tag" type="button" data-filter-unit="' + escapeHtml(row.unit || "") +
+            '" title="只看 ' + escapeHtml(row.unit_label) + ' 的参赛成员">' + escapeHtml(row.unit_label) + '</button>'
           : "";
         var rank = Number(row.unit_rank || 0) > 0
           ? '<span class="qual-rank" title="官方 64 人名单：队内第 ' + row.unit_rank + '（名单从左到右为第一阶段计分由高到低）">队内 #' + row.unit_rank + '</span>'
           : "";
+        function badge(value, label, className) {
+          return '<button class="qual-badge ' + className + ' qual-badge-btn" type="button" data-filter-qualification="' +
+            value + '" title="只看' + label + '">' + label + '</button>';
+        }
         if (status === "qualified") {
           var song = row.qualification_song ? '<div class="qual-song">' + escapeHtml(row.qualification_song) + '</div>' : "";
-          return '<span class="qual-badge qualified">已晋级</span>' + rank + unit + song;
+          return badge("qualified", "已晋级", "qualified") + rank + unit + song;
         }
         if (status === "not_qualified") {
-          return '<span class="qual-badge not-qualified">未晋级</span>' + unit;
+          return badge("not_qualified", "未晋级", "not-qualified") + unit;
         }
         if (status === "not_participant") {
-          return '<span class="qual-badge not-participant">非参赛</span>';
+          return badge("not_participant", "非参赛", "not-participant");
         }
         return '<span class="qual-badge not-participant">-</span>';
       }
@@ -853,8 +863,9 @@
         rowEl.className = "member-row";
         rowEl.setAttribute("data-member-id", row.member_id);
         rowEl.innerHTML = '<td class="num rank"></td><td></td><td></td><td></td>' +
+          '<td class="num score-main"></td>' +
           giftColumns.map(function () { return '<td class="num gift-cell"></td>'; }).join("") +
-          '<td class="num score-main"></td><td class="num score-room"></td><td class="num score-live"></td>' +
+          '<td class="num score-room"></td><td class="num score-live"></td>' +
           '<td class="num score-count"></td><td class="num col-records score-records"></td>';
         return { rowEl: rowEl, nameSig: "", teamSig: "", qualificationSig: "", qualified: false };
       }
@@ -900,17 +911,17 @@
           (row.gifts || []).forEach(function (gift) { giftMap[giftKey(gift)] = gift; });
           giftColumns.forEach(function (column, index) {
             var gift = giftMap[column.key] || {};
-            var cell = cells[4 + index];
+            var cell = cells[5 + index];
             var text = Number(gift.score || 0) > 0 ? formatScore(gift.score) : "—";
             if (cell.textContent !== text) cell.textContent = text;
             cell.title = (gift.gift_name || column.name) + "：" + formatNumber(gift.count || 0) + " 个";
           });
-          var offset = 4 + giftColumns.length;
-          animateNumber(cells[offset], row.total_score, formatScore, animate);
-          animateNumber(cells[offset + 1], row.room_score, formatScore, animate);
-          animateNumber(cells[offset + 2], row.live_score, formatScore, animate);
-          animateNumber(cells[offset + 3], row.total_count, formatNumber, animate);
-          animateNumber(cells[offset + 4], row.records, formatNumber, animate);
+          var offset = 5 + giftColumns.length;
+          animateNumber(cells[4], row.total_score, formatScore, animate);
+          animateNumber(cells[offset], row.room_score, formatScore, animate);
+          animateNumber(cells[offset + 1], row.live_score, formatScore, animate);
+          animateNumber(cells[offset + 2], row.total_count, formatNumber, animate);
+          animateNumber(cells[offset + 3], row.records, formatNumber, animate);
         });
         if (orderChanged) {
           Object.keys(memberNodeMap).forEach(function (id) {
@@ -1019,6 +1030,26 @@
         reload();
       }
       memberRows.addEventListener("click", function (event) {
+        var qtag = event.target.closest("[data-filter-qualification]");
+        if (qtag) {
+          event.stopPropagation();
+          qualificationSelect.value = qtag.getAttribute("data-filter-qualification") || "all";
+          expanded = {};
+          updateActiveFilters();
+          renderQualificationNotice();
+          reload();
+          return;
+        }
+        var utag = event.target.closest("[data-filter-unit]");
+        if (utag) {
+          event.stopPropagation();
+          unitSelect.value = utag.getAttribute("data-filter-unit") || "";
+          expanded = {};
+          updateActiveFilters();
+          renderQualificationNotice();
+          reload();
+          return;
+        }
         var ptag = event.target.closest("[data-filter-participation]");
         if (ptag) {
           event.stopPropagation();
