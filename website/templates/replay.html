@@ -393,6 +393,11 @@
   display: none;
 }
 
+/* 加载中允许用户直接点播放，避免移动端 Safari 忽略 preload 时一直等元数据 */
+#loadingOverlay {
+  pointer-events: none;
+}
+
 /* ── Info section below player ── */
 .replay-info {
   width: 100%;
@@ -545,7 +550,7 @@
 {% block content %}
 <main class="replay-page">
     <div class="player-container{% if is_radio %} radio-mode{% endif %}" id="playerContainer">
-        <video id="replayVideo" playsinline preload="metadata"{% if cover_url %} poster="{{ cover_url }}"{% endif %}>
+        <video id="replayVideo" playsinline preload="auto"{% if cover_url %} poster="{{ cover_url }}"{% endif %}>
             <track id="replaySubtitleTrack" kind="subtitles" srclang="zh" label="中文" default>
         </video>
         {% if is_radio %}

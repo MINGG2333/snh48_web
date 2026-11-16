@@ -92,8 +92,8 @@ assert.match(
 );
 assert.match(
   template,
-  /<video id="replayVideo" playsinline preload="metadata"/,
-  "replay video should preload metadata"
+  /<video id="replayVideo" playsinline preload="auto"/,
+  "replay video should preload ahead of the first tap"
 );
 
 console.log("replay background playback contract: ok");
