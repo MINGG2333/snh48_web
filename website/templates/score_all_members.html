@@ -474,7 +474,7 @@
           return '<span class="fan-gift-chip">' + escapeHtml(gift.gift_name || gift.gift_id) + ' ×' + formatNumber(gift.count || 0) + '</span>';
         }).join("");
         return '<tr><td class="num">' + formatNumber(index + 1) + '</td><td>' + escapeHtml(fan.fan_name || "匿名") +
-          (fan.fan_id ? '<span class="fan-id">ID ' + escapeHtml(fan.fan_id) + '</span>' : '') +
+          (fan.fan_id ? ' <span class="fan-id">ID ' + escapeHtml(fan.fan_id) + '</span>' : '') +
           '</td><td><div class="fan-gift-chips">' + (gifts || "—") + '</div></td>' +
           '<td class="num">' + formatScore(fan.room_score) + '</td><td class="num">' + formatScore(fan.live_score) + '</td>' +
           '<td class="num"><strong>' + formatScore(fan.score) + '</strong></td></tr>';
@@ -499,7 +499,7 @@
           if (!resp.ok) throw new Error(await readError(resp) || ("HTTP " + resp.status));
           var payload = await resp.json();
           var fans = payload.fans || [];
-          var summary = '总分 ' + formatScore(payload.total_score) + ' · 计分粉丝 ' + formatNumber(payload.fan_count) +
+          var summary = '粉丝合计 ' + formatScore(payload.total_score) + ' 分 · 计分粉丝 ' + formatNumber(payload.fan_count) + ' 人' +
             (payload.truncated ? ' · 仅显示前 ' + formatNumber(fans.length) : '');
           if (!fans.length) {
             fanModalBody.innerHTML = '<div class="fan-summary">' + summary + '</div><div class="empty">暂无粉丝计分明细</div>';
