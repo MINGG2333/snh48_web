@@ -804,15 +804,31 @@
       }
       var giftColumns = [];
       var lastGiftSignature = "";
+      var giftTotals = {};
+      var giftNames = {};
+      var lastGiftSeason = "";
       function giftKey(gift) {
         return String(gift.gift_id || gift.gift_name || "");
       }
       function updateGiftColumns() {
-        var gifts = (data && data.gift_distribution) || [];
-        var columns = gifts.slice()
-          .sort(function (a, b) { return Number(b.score || 0) - Number(a.score || 0); })
+        var seasonKey = (data && data.season) || "";
+        if (seasonKey !== lastGiftSeason) {
+          lastGiftSeason = seasonKey;
+          giftTotals = {};
+          giftNames = {};
+          lastGiftSignature = "";
+        }
+        ((data && data.gift_distribution) || []).forEach(function (gift) {
+          var key = giftKey(gift);
+          if (!key) return;
+          giftNames[key] = gift.gift_name || gift.gift_id || key;
+          giftTotals[key] = Math.max(Number(giftTotals[key] || 0), Number(gift.score || 0));
+        });
+        var columns = Object.keys(giftTotals)
+          .map(function (key) { return { key: key, name: giftNames[key] || key, total: Number(giftTotals[key] || 0) }; })
+          .sort(function (a, b) { return b.total - a.total || String(a.name).localeCompare(String(b.name), "zh-CN"); })
           .slice(0, 6)
-          .map(function (gift) { return { key: giftKey(gift), name: gift.gift_name || gift.gift_id || "礼物" }; });
+          .map(function (column) { return { key: column.key, name: column.name }; });
         var signature = JSON.stringify(columns);
         if (signature === lastGiftSignature) return false;
         lastGiftSignature = signature;
@@ -826,8 +842,10 @@
             }).join("") +
             '<th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th>';
         }
+        // 列结构变化时旧节点的单元格数量不匹配，必须清空重建，否则会残留旧行。
         memberNodeMap = {};
         lastRowOrder = "";
+        memberRows.innerHTML = "";
         return true;
       }
       function memberColSpan() {
