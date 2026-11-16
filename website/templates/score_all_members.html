@@ -159,6 +159,9 @@
     tbody tr.member-row.qualified { box-shadow: inset 3px 0 var(--gold); }
     .qual-song { color: var(--faint); font-size: 11px; margin-top: 3px; }
     .score-main { color: var(--gold); font-weight: 760; }
+    .score-estimate { color: #f2d38b; font-weight: 700; }
+    .score-dark { color: #c9a0ff; }
+    .col-derived { cursor: help; }
     .detail-row td { background: var(--panel-2); padding: 0; }
     .detail-box { padding: 12px 16px 16px; }
     .detail-title { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
@@ -271,7 +274,7 @@
 
     <main>
       <section class="kpi-grid" aria-label="全员计分统计">
-        <div class="kpi total"><div class="label">总分</div><div class="value" id="kpiScore">0</div><div class="sub" id="kpiScoreSub">礼物数 0</div></div>
+        <div class="kpi total"><div class="label">明票合计</div><div class="value" id="kpiScore">0</div><div class="sub" id="kpiScoreSub">礼物数 0</div></div>
         <div class="kpi"><div class="label">计分成员</div><div class="value" id="kpiMembers">0</div><div class="sub" id="kpiRecords">0 条记录</div></div>
         <div class="kpi room"><div class="label">房间分</div><div class="value" id="kpiRoom">0</div><div class="sub">成员房间消息</div></div>
         <div class="kpi live"><div class="label">直播分</div><div class="value" id="kpiLive">0</div><div class="sub">成员直播间</div></div>
@@ -302,8 +305,8 @@
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num">总分</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
-            <tbody id="memberRows"><tr><td colspan="9" class="empty">加载中…</td></tr></tbody>
+            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num col-derived" title="明票 + 最少暗票，用官方队内排名反推的最低真实分">总分（估计）</th><th class="num col-derived" title="除鸡腿礼物外的计分（EP 计分卡/星梦值/丝瓜会员分）；只有官方队内前 8 名能反推最小值">暗票</th><th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
+            <tbody id="memberRows"><tr><td colspan="11" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
         <div class="pagination" style="display:none"><span id="pageMeta">-</span><div class="actions"><button class="btn" id="prevBtn" type="button">上一页</button><button class="btn" id="nextBtn" type="button">下一页</button></div></div>
@@ -335,7 +338,7 @@
           <div class="field"><label for="dateToInput">结束日期</label><input id="dateToInput" type="date"></div>
         </div>
         <div class="toolbar-grid filter-actions-grid" style="margin-top:10px;">
-          <div class="field"><label for="sortSelect">排序</label><select id="sortSelect"><option value="score_desc">按总分</option><option value="team_asc">按队伍</option><option value="name_asc">按成员名</option></select></div>
+          <div class="field"><label for="sortSelect">排序</label><select id="sortSelect"><option value="estimate_desc">按总分（估计）</option><option value="score_desc">按明票</option><option value="team_asc">按队伍</option><option value="name_asc">按成员名</option></select></div>
           <div class="actions"><button class="btn primary" id="applyBtn" type="button">筛选</button></div>
         </div>
       </section>
@@ -631,7 +634,7 @@
         params.set("source", sourceFilter);
         params.set("date_from", dateFromInput.value || "");
         params.set("date_to", dateToInput.value || "");
-        params.set("sort", sortSelect.value || "score_desc");
+        params.set("sort", sortSelect.value || "estimate_desc");
         params.set("page", String(targetPage || 1));
         params.set("page_size", String(pageSize));
         return params.toString();
@@ -650,7 +653,7 @@
         page = targetPage || 1;
         var scrollY = window.scrollY || 0;
         if (!data) {
-          memberRows.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
+          memberRows.innerHTML = '<tr><td colspan="' + memberColSpan() + '" class="empty">加载中…</td></tr>';
         }
         var resp = await fetch("/api/score-all-members/data?" + buildQuery(page), {
           credentials: "same-origin", cache: "no-store"
@@ -836,7 +839,9 @@
         if (memberHeadRow) {
           memberHeadRow.innerHTML =
             '<th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th>' +
-            '<th class="num">总分</th>' +
+            '<th class="num col-derived" title="明票 + 最少暗票，用官方队内排名反推的最低真实分">总分（估计）</th>' +
+            '<th class="num col-derived" title="除鸡腿礼物外的计分（EP 计分卡/星梦值/丝瓜会员分）；只有官方队内前 8 名能反推最小值">暗票</th>' +
+            '<th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th>' +
             columns.map(function (column) {
               return '<th class="num gift-col" title="' + escapeHtml(column.name) + ' 计分">' + escapeHtml(column.name) + '</th>';
             }).join("") +
@@ -849,7 +854,7 @@
         return true;
       }
       function memberColSpan() {
-        return 9 + giftColumns.length;
+        return 11 + giftColumns.length;
       }
       function rowQualificationHtml(row) {
         var status = row.qualification || "";
@@ -881,7 +886,9 @@
         rowEl.className = "member-row";
         rowEl.setAttribute("data-member-id", row.member_id);
         rowEl.innerHTML = '<td class="num rank"></td><td></td><td></td><td></td>' +
-          '<td class="num score-main"></td>' +
+          '<td class="num score-estimate col-derived" title="明票 + 最少暗票"></td>' +
+          '<td class="num score-dark col-derived" title="最少暗票（只由官方队内排名反推，真实暗票可能更高）"></td>' +
+          '<td class="num score-main col-derived" title="鸡腿礼物折算的明票"></td>' +
           giftColumns.map(function () { return '<td class="num gift-cell"></td>'; }).join("") +
           '<td class="num score-room"></td><td class="num score-live"></td>' +
           '<td class="num score-count"></td><td class="num col-records score-records"></td>';
@@ -929,13 +936,27 @@
           (row.gifts || []).forEach(function (gift) { giftMap[giftKey(gift)] = gift; });
           giftColumns.forEach(function (column, index) {
             var gift = giftMap[column.key] || {};
-            var cell = cells[5 + index];
+            var cell = cells[7 + index];
             var text = Number(gift.score || 0) > 0 ? formatScore(gift.score) : "—";
             if (cell.textContent !== text) cell.textContent = text;
             cell.title = (gift.gift_name || column.name) + "：" + formatNumber(gift.count || 0) + " 个";
           });
-          var offset = 5 + giftColumns.length;
-          animateNumber(cells[4], row.total_score, formatScore, animate);
+          var offset = 7 + giftColumns.length;
+          animateNumber(cells[4], row.estimated_total_score, formatScore, animate);
+          var darkCell = cells[5];
+          if (row.dark_min_score === null || row.dark_min_score === undefined) {
+            darkCell.textContent = "—";
+            darkCell.dataset.value = "";
+            darkCell.title = row.qualification === "qualified"
+              ? "官方排名未提供该成员位次，无法反推最少暗票"
+              : "非参赛或缺少官方队内排名，无法反推最少暗票";
+          } else {
+            animateNumber(darkCell, row.dark_min_score, formatScore, animate);
+            darkCell.title = row.ranked_in_unit
+              ? "官方队内第 " + row.unit_rank + " 名反推的最少暗票（真实暗票可能更高）"
+              : "未进入官方前 8 名，没有排名约束，最少暗票为 0";
+          }
+          animateNumber(cells[6], row.total_score, formatScore, animate);
           animateNumber(cells[offset], row.room_score, formatScore, animate);
           animateNumber(cells[offset + 1], row.live_score, formatScore, animate);
           animateNumber(cells[offset + 2], row.total_count, formatNumber, animate);
@@ -1204,7 +1225,7 @@
         participationTeamSelect.value = "";
         dateFromInput.value = "";
         dateToInput.value = "";
-        sortSelect.value = "score_desc";
+        sortSelect.value = "estimate_desc";
         setSource("all");
         expanded = {};
         closeFiltersModal();

@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/score-all-members", tags=["全员计分榜"])
 BJ_TZ = timezone(timedelta(hours=8))
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VALID_SOURCES = {"all", "room", "live", "gnz", "xox", "third_party"}
-VALID_SORTS = {"score_desc", "name_asc", "team_asc"}
+VALID_SORTS = {"score_desc", "estimate_desc", "name_asc", "team_asc"}
 VALID_QUALIFICATIONS = {"all", "qualified", "not_qualified", "not_participant"}
 QUALIFICATION_FILENAME = "redblue_stage1_qualification.json"
 AFFILIATION_FILENAME = "redblue_affiliation.json"
@@ -586,6 +586,139 @@ def _aggregate(
     }
 
 
+def _season_visible_totals(board: dict[str, Any], season: str) -> dict[str, float]:
+    """按成员汇总赛季全部计分 cell（明票，与筛选条件无关）。"""
+    totals: dict[str, float] = {}
+    for cell in board.get("cells") or []:
+        if not isinstance(cell, dict) or cell.get("season") != season:
+            continue
+        member_id = str(cell.get("member_id") or "")
+        if not member_id:
+            continue
+        totals[member_id] = totals.get(member_id, 0.0) + float(cell.get("score") or 0)
+    return totals
+
+
+def _unit_rank_estimates(
+    board: dict[str, Any],
+    season: str,
+    visible_totals: dict[str, float],
+) -> dict[str, dict[str, Any]]:
+    """由官方队内排名反推每人「最少暗票」与「总分（估计）」。
+
+    真实分 s = 明票 g + 暗票 d。官方 64 人名单只给出每个晋级单元前 8 名的
+    队内顺序（阶段一计分由高到低），因此只有前 8 名有硬约束：
+
+    * s_i >= s_{i+1}（官方顺序，同分不排除，按 >= 处理）；
+    * 晋级末位 s_8 还要不低于该单元所有未晋级参赛者的真实分，而后者又至少等于
+      各自可见明票，所以 s_8 >= 未晋级成员的最高明票。
+
+    从末位往上扫，取 s_i = max(g_i, s_{i+1})，即可得到每个人在满足官方顺序
+    前提下的最小暗票（逐分量最小解）。未晋级成员没有可用的排名约束，最少暗票
+    记为 0。
+    """
+    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
+    affiliation_season = str(affiliation.get("season") or "")
+    if affiliation_season and season and affiliation_season != season:
+        return {}
+    members = affiliation.get("members") if isinstance(affiliation.get("members"), dict) else {}
+    if not members:
+        return {}
+    unit_labels: dict[str, str] = {}
+    for unit in affiliation.get("units") or []:
+        if isinstance(unit, dict) and unit.get("key"):
+            unit_labels[str(unit["key"])] = str(unit.get("label") or unit["key"])
+    by_unit: dict[str, list[tuple[int, str]]] = {}
+    for member_id, member in members.items():
+        if not isinstance(member, dict):
+            continue
+        unit = str(member.get("unit") or "")
+        if not unit:
+            continue
+        try:
+            rank = int(member.get("unit_rank") or 0)
+        except (TypeError, ValueError):
+            rank = 0
+        by_unit.setdefault(unit, []).append((rank, str(member_id)))
+
+    estimates: dict[str, dict[str, Any]] = {}
+    for unit, entries in by_unit.items():
+        ranked = sorted(
+            ((rank, member_id) for rank, member_id in entries if rank > 0),
+            key=lambda item: item[0],
+        )
+        if not ranked:
+            continue
+        unranked = [member_id for rank, member_id in entries if rank <= 0]
+        # 官方名单只覆盖晋级的前 8 名；同单元未晋级者的可见明票同样是晋级成员的
+        # 下界（他们一定排在晋级末位之后），用最高者收紧末位约束。
+        unqualified_floor = max(
+            (float(visible_totals.get(member_id) or 0.0) for member_id in unranked),
+            default=0.0,
+        )
+        boundary = unqualified_floor
+        for rank, member_id in reversed(ranked):
+            visible = float(visible_totals.get(member_id) or 0.0)
+            estimated = max(visible, boundary)
+            estimates[member_id] = {
+                "unit": unit,
+                "unit_label": unit_labels.get(unit, unit),
+                "unit_rank": rank,
+                "ranked_in_unit": True,
+                "visible_total_score": round(visible, 6),
+                "dark_min_score": round(estimated - visible, 6),
+                "estimated_total_score": round(estimated, 6),
+                "unqualified_floor": round(unqualified_floor, 6),
+            }
+            boundary = estimated
+        for member_id in unranked:
+            visible = float(visible_totals.get(member_id) or 0.0)
+            estimates[member_id] = {
+                "unit": unit,
+                "unit_label": unit_labels.get(unit, unit),
+                "unit_rank": 0,
+                "ranked_in_unit": False,
+                "visible_total_score": round(visible, 6),
+                "dark_min_score": 0.0,
+                "estimated_total_score": round(visible, 6),
+                "unqualified_floor": round(unqualified_floor, 6),
+            }
+    return estimates
+
+
+def _attach_dark_estimates(
+    board: dict[str, Any],
+    rows: list[dict[str, Any]],
+    season: str,
+) -> None:
+    """给成员行补上明票/最少暗票/总分（估计）。
+
+    明票、暗票与总分（估计）都以完整赛季的明票为基准，因此不受页面上的
+    日期/礼物/来源筛选影响（筛选项只改变表格里「明票」列的展示值）。
+    """
+    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
+    affiliation_season = str(affiliation.get("season") or "")
+    affiliation_available = bool(affiliation.get("members")) and not (
+        affiliation_season and season and affiliation_season != season
+    )
+    visible_totals = _season_visible_totals(board, season) if affiliation_available else {}
+    estimates = _unit_rank_estimates(board, season, visible_totals) if affiliation_available else {}
+    for row in rows:
+        member_id = str(row.get("member_id") or "")
+        estimate = estimates.get(member_id)
+        row["visible_total_score"] = round(
+            float(visible_totals.get(member_id, row.get("total_score") or 0.0)), 6
+        )
+        if estimate:
+            row["ranked_in_unit"] = bool(estimate.get("ranked_in_unit"))
+            row["dark_min_score"] = float(estimate["dark_min_score"])
+            row["estimated_total_score"] = float(estimate["estimated_total_score"])
+        else:
+            row["ranked_in_unit"] = False
+            row["dark_min_score"] = None
+            row["estimated_total_score"] = round(float(row.get("total_score") or 0.0), 6)
+
+
 def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
     members = _member_index(board, season)
     groups: set[str] = set()
@@ -879,10 +1012,22 @@ def get_score_all_members_data(
             seed_ids = filtered
     aggregated = _aggregate(board, cells, season=key, seed_member_ids=seed_ids)
     rows = aggregated["members"]
+    _attach_dark_estimates(board, rows, key)
     if sort == "name_asc":
         rows.sort(key=lambda item: (str(item["group"]), str(item["team"]), str(item["member_name"])))
     elif sort == "team_asc":
         rows.sort(key=lambda item: (str(item["group"]), str(item["team"]), -float(item["total_score"]), str(item["member_name"])))
+    elif sort == "estimate_desc":
+        # 同一单元内分数相同时按官方队内名次排，避免「第 3 名排在第 4 名之后」。
+        rows.sort(
+            key=lambda item: (
+                -float(item.get("estimated_total_score") or 0),
+                str(item.get("unit") or ""),
+                int(item.get("unit_rank") or 0) if item.get("unit_rank") else 10**6,
+                -float(item["total_score"]),
+                str(item["member_name"]),
+            )
+        )
     else:
         rows.sort(key=lambda item: (-float(item["total_score"]), str(item["member_name"])))
     for index, row in enumerate(rows, start=1):

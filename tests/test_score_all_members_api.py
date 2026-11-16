@@ -11,11 +11,14 @@ from fastapi import HTTPException
 from website import config as cfg
 from website.score_all_members_api import (
     _aggregate,
+    _attach_dark_estimates,
     _facets,
     _fan_payload,
     _filter_cells,
     _load_board,
     _season_key,
+    _season_visible_totals,
+    _unit_rank_estimates,
 )
 from website.score_gifts_api import _data_path
 
@@ -601,6 +604,101 @@ class ScoreAllMembersApiTests(unittest.TestCase):
                 source = (templates / name).read_text(encoding="utf-8")
                 self.assertIn("maximumFractionDigits: 1", source)
                 self.assertNotIn("maximumFractionDigits: 6", source)
+
+
+DARK_BOARD = {
+    "season": "2026-winter",
+    "cells": [
+        {"season": "2026-winter", "member_id": "1", "score": 100.0},
+        {"season": "2026-winter", "member_id": "2", "score": 60.0},
+        {"season": "2026-winter", "member_id": "3", "score": 40.0},
+        {"season": "2026-winter", "member_id": "4", "score": 30.0},
+        {"season": "2026-winter", "member_id": "5", "score": 90.0},
+        {"season": "2026-winter", "member_id": "6", "score": 40.0},
+        {"season": "2026-summer", "member_id": "1", "score": 999.0},
+    ],
+    "affiliation": {
+        "season": "2026-winter",
+        "members": {
+            "1": {"unit": "SNH-HII", "unit_rank": 1},
+            "2": {"unit": "SNH-HII", "unit_rank": 2},
+            "3": {"unit": "SNH-HII", "unit_rank": 3},
+            "4": {"unit": "SNH-HII", "unit_rank": 0},
+            "5": {"unit": "SNH-HII", "unit_rank": 0},
+            "6": {"unit": "", "unit_rank": 0},
+        },
+        "units": [{"key": "SNH-HII", "label": "SNH48 TEAM HII"}],
+    },
+}
+
+
+class DarkVoteEstimateTests(unittest.TestCase):
+    def test_season_visible_totals_ignore_other_seasons(self) -> None:
+        totals = _season_visible_totals(DARK_BOARD, "2026-winter")
+        self.assertEqual(totals["1"], 100.0)
+        self.assertNotIn(999.0, totals.values())
+
+    def test_unit_rank_estimates_walk_bottom_up(self) -> None:
+        totals = _season_visible_totals(DARK_BOARD, "2026-winter")
+        estimates = _unit_rank_estimates(DARK_BOARD, "2026-winter", totals)
+        # 未晋级最高明票 90 是晋级末位（第 3 名 40）的下界。
+        self.assertEqual(estimates["3"]["dark_min_score"], 50.0)
+        self.assertEqual(estimates["3"]["estimated_total_score"], 90.0)
+        # 第 2 名明票 60 低于第 3 名的估计 90，用暗票补到 90。
+        self.assertEqual(estimates["2"]["dark_min_score"], 30.0)
+        self.assertEqual(estimates["2"]["estimated_total_score"], 90.0)
+        # 第 1 名明票 100 已经高于下界，不需要暗票。
+        self.assertEqual(estimates["1"]["dark_min_score"], 0.0)
+        self.assertEqual(estimates["1"]["estimated_total_score"], 100.0)
+        self.assertTrue(estimates["3"]["ranked_in_unit"])
+        # 未晋级成员没有排名约束，最少暗票为 0。
+        self.assertFalse(estimates["4"]["ranked_in_unit"])
+        self.assertEqual(estimates["4"]["dark_min_score"], 0.0)
+        # 无参赛单元的成员不参与反推。
+        self.assertNotIn("6", estimates)
+
+    def test_unqualified_visible_score_lifts_qualified_floor(self) -> None:
+        board = {
+            **DARK_BOARD,
+            "cells": [
+                cell for cell in DARK_BOARD["cells"] if cell["member_id"] != "5"
+            ]
+            + [{"season": "2026-winter", "member_id": "5", "score": 260.0}],
+        }
+        totals = _season_visible_totals(board, "2026-winter")
+        estimates = _unit_rank_estimates(board, "2026-winter", totals)
+        # 未晋级成员最高明票 260，晋级末位（第 3 名 40）至少要 260。
+        self.assertEqual(estimates["3"]["estimated_total_score"], 260.0)
+        self.assertEqual(estimates["3"]["dark_min_score"], 220.0)
+        # 第 2 名、第 1 名被继续顶高。
+        self.assertEqual(estimates["2"]["estimated_total_score"], 260.0)
+        self.assertEqual(estimates["1"]["estimated_total_score"], 260.0)
+        self.assertEqual(estimates["1"]["dark_min_score"], 160.0)
+
+    def test_estimates_skip_other_seasons(self) -> None:
+        totals = _season_visible_totals(DARK_BOARD, "2026-winter")
+        self.assertEqual(
+            _unit_rank_estimates(DARK_BOARD, "2026-summer", totals),
+            {},
+        )
+
+    def test_attach_dark_estimates_adds_row_fields(self) -> None:
+        board = {**DARK_BOARD, "members": []}
+        cells = _filter_cells(
+            board, season="2026-winter", group="", team="", member="",
+            gift_name="", source="all", date_from="", date_to="",
+        )
+        rows = _aggregate(board, cells)["members"]
+        _attach_dark_estimates(board, rows, "2026-winter")
+        by_id = {row["member_id"]: row for row in rows}
+        self.assertEqual(by_id["1"]["dark_min_score"], 0.0)
+        self.assertEqual(by_id["1"]["estimated_total_score"], 100.0)
+        self.assertEqual(by_id["1"]["visible_total_score"], 100.0)
+        self.assertTrue(by_id["1"]["ranked_in_unit"])
+        # 无排名的非参赛成员：暗票未知（None），估计总分退化为明票。
+        self.assertIsNone(by_id["6"]["dark_min_score"])
+        self.assertEqual(by_id["6"]["estimated_total_score"], 40.0)
+        self.assertFalse(by_id["6"]["ranked_in_unit"])
 
 
 if __name__ == "__main__":
