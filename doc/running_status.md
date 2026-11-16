@@ -1,5 +1,13 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-17 直播封面与翻牌媒体改为官方外链优先、本地兜底（双端已生效）
+
+- 需求：网页媒体不再首先依赖服务器本地文件；直播封面和翻牌音视频优先使用 48 官方 URL，官方源不可用时再回退本地。媒体仍由 fan-hub 继续下载保留，本次不删除任何本地媒体。
+- 代码（网站 `c4f47bb`）：新增 `website/live_covers.py`，`main.py` 与 `timeline_api/router.py` 对直播封面统一返回 `cover_url`（`source3.48.cn` 优先）和 `cover_fallback_url`（CSV 显式本地路径或按开播时间匹配 `live_covers/YYYYMMDD_HHMMSS.jpg`）；回放页和时光轴在前端图片失败时自动切本地兜底。翻牌 `flip_cards_api.py` 仅接受 HTTPS 的 `*.48.cn` `official_url` 作为 `media.url`，本地签名 URL 改为 `media.fallback_url`，`flip_cards.html` 在媒体 error 时自动回退；本地 MP3/MP4 继续保留并由 fan-hub 下载。
+- 验证：腾讯云 `venv/bin/python -m unittest tests.test_flip_cards_api` 及新增的 `test_live_cover_prefers_cdn_and_keeps_local_fallback`、`test_replay_page_prefers_cdn_cover_and_renders_local_fallback` 共 10 项通过；本机前端 `node tests/test_flip_cards_frontend.cjs`、`node tests/test_timeline_badges_frontend.cjs`、`node tests/test_replay_background_playback.cjs`、`node --check website/static/js/timeline.js` 通过；全量本机测试仍有 4 个失败/4 个错误，均为既有环境问题（缺少网站 `venv`、真实里程碑 CSV 干扰、同步 shell 基线断言），与本次改动无关。
+- 部署：网站 `c4f47bb` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。腾讯云 `snh48-web.service` 重启后 active，MainPID `3395742`（03:53:06 CST）；阿里云 `snh48-aliyun.service` 重启后 active，MainPID `2637528`（03:54:07 CST）。两端 `/`、`/timeline`、`/flip-cards`、`/replay/1328881706418900992` 均 200；`/api/timeline/live-pushes` 返回 CDN 封面 + 本地兜底路径；翻牌 `/api/flip-cards/data` 腾讯云 480 条媒体、阿里云 467 条媒体全部 `media_source=official` 且带 `fallback_url`，本地兜底 Range 请求 206。
+- 数据：未删除、未移动任何 `live_covers/`、`flip_data/audio|video/` 或其它服务器媒体；fan-hub 下载逻辑不变。空间清理仍由用户确认后按归档流程执行。
+
 ## 2026-11-15 红蓝选中昵称改为弹窗查看并复制（双端已生效）
 
 - 需求：不再下载 TXT，点击后弹窗展示选中条目的昵称，方便直接复制。
