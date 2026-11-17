@@ -1,5 +1,16 @@
 # /home/snh48_web 后台运行与同步状态
 
+## 2026-11-18 红蓝台账导出修复与提速（双端已生效）
+
+- 需求：`/business/redblue2026` 页面卡；点击“管理兑换”和导出图片耗时较长；按条目导出的最后一行文字背景覆盖不全。
+- 修复：`redblue_export.py` 的按天分组卡片高度改为与实际绘制一致的 `46 + 行数 × 44 + 14`（旧版只按 12 计算，24 天时白色卡片少 34px，最后一行落到页面底色）；`estimated_height` 同步修正。
+- 提速：导出 PNG 压缩等级 6→3（约省 0.2s，体积略增）；`gift_reply_export.py` 缓存 `_display_text`/`_font_runs` 的字形分析结果；导出接口按“端点 + 筛选条件 + 台账 revision”做进程内 LRU 缓存（最多 6 张），同一版台账重复导出直接复用。
+- 管理兑换：默认全量视图直接复用页面已加载的 `data`，有筛选时只请求一次全量数据并缓存到下次台账更新；弹窗先打开并显示“正在加载兑换数据…”，不再等待请求返回才出现。
+- JSON gzip：新增 `website/json_gzip.py`，只压缩 `application/json`（PNG 等压缩格式透传），`/api/redblue/data` 从约 675KB 降到约 68KB；未改 nginx 配置。
+- 验证：`tests.test_redblue_ledger_api`、`tests.test_redblue_ledger_template`、`tests.test_json_gzip`、`tests.test_redblue_export_layout` 共 87 项通过；`py_compile` 通过。阿里云本机带 Cookie 实测：`/api/redblue/data` 67846 字节（gzip）、0.22s；按条目导出首次 2.35s，相同条件第二次 0.08s；本地用生产台账渲染确认最后一条分隔线在白色卡片内、卡片下方无残留分隔线。
+- 部署：网站 `56323c0` 已推 GitHub，腾讯云/阿里云均 `git pull --ff-only`。阿里云 `snh48-aliyun.service` 重启后 active，MainPID `949570`（01:33:21 CST）；腾讯云 `snh48-web.service` 重启后 active，MainPID `989394`（01:33:33 CST）。两端启动日志无异常；密码会话密钥为进程内随机值，网站重启后浏览器需重新输入一次密码。
+- 说明：首次导出仍需服务端排版一次（阿里云约 2.1–2.3s，进程内字形缓存热身后约 1.7s），重复导出走缓存；如需进一步压缩首次耗时，需要改成浏览器端 canvas 渲染，本次未改版式实现。
+
 ## 2026-11-17 直播封面与翻牌媒体改为官方外链优先、本地兜底（双端已生效）
 
 - 需求：网页媒体不再首先依赖服务器本地文件；直播封面和翻牌音视频优先使用 48 官方 URL，官方源不可用时再回退本地。媒体仍由 fan-hub 继续下载保留，本次不删除任何本地媒体。
