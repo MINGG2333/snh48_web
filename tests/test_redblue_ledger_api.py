@@ -122,6 +122,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         app.include_router(router)
         self.client = TestClient(app, base_url="https://testserver")
         self.headers = {"X-Redblue-Password": "testpass"}
+        api._EXPORT_CACHE.clear()
 
     def tearDown(self):
         cfg.REDBLUE_LEDGER_PASSWORD = self._old["password"]
@@ -2249,6 +2250,42 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertLess(images["summary"].size[0], 1000)
         self.assertGreater(images["summary"].size[0], 500)
         self.assertEqual(images["entries"].size[0], 820)
+
+    def test_entries_export_is_cached_per_revision(self):
+        from website import redblue_export
+
+        self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "Alice", "score": 1},
+        )
+        real = redblue_export.render_entries_png
+        with mock.patch.object(redblue_export, "render_entries_png", wraps=real) as render:
+            first = self.client.get("/api/redblue/export/entries.png", headers=self.headers)
+            second = self.client.get("/api/redblue/export/entries.png", headers=self.headers)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.content, first.content)
+        self.assertEqual(render.call_count, 1)
+
+        # 台账变化后 revision 改变，缓存自动失效。
+        self.client.post(
+            "/api/redblue/entries",
+            headers=self.headers,
+            json={"raw_name": "Bob", "score": 2},
+        )
+        with mock.patch.object(redblue_export, "render_entries_png", wraps=real) as render:
+            third = self.client.get("/api/redblue/export/entries.png", headers=self.headers)
+        self.assertEqual(third.status_code, 200)
+        self.assertEqual(render.call_count, 1)
+
+        # 不同筛选条件走各自的缓存键。
+        with mock.patch.object(redblue_export, "render_entries_png", wraps=real) as render:
+            filtered = self.client.get(
+                "/api/redblue/export/entries.png?keyword=Alice", headers=self.headers
+            )
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(render.call_count, 1)
 
     def test_entries_export_expands_for_full_business_name(self):
         import io

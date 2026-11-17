@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -3254,7 +3255,7 @@ def _export_context(
     sort: str,
     include_duplicate: bool,
     scores: str = "",
-) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str]:
+) -> tuple[list[dict[str, Any]], dict[str, Any], str, str, str, str]:
     date_from = _norm_date(date_from)
     date_to = _norm_date(date_to)
     time_from = _norm_time(time_from)
@@ -3300,7 +3301,40 @@ def _export_context(
     if not include_duplicate:
         filters.append("不含重复")
     updated = max((item.get("source_time") or item.get("created_at") or "" for item in entries), default="")[:16]
-    return entries, _summary(entries), period, " · ".join(filters), updated
+    revision = str(
+        (doc.get("_state") or {}).get("revision") or doc.get("updated_at") or ""
+    )
+    return entries, _summary(entries), period, " · ".join(filters), updated, revision
+
+
+# 导出 PNG 体积 3MB 左右、单张渲染 2 秒上下；相同筛选条件和同一版台账重复导出时
+# 直接复用上一次的图，避免每次都重新排版/编码。
+_EXPORT_CACHE_LOCK = threading.Lock()
+_EXPORT_CACHE: "OrderedDict[str, bytes]" = OrderedDict()
+_EXPORT_CACHE_LIMIT = 6
+
+
+def _export_cache_key(kind: str, revision: str, **params: Any) -> str:
+    parts = [kind, revision]
+    for key in sorted(params):
+        parts.append(f"{key}={params[key]}")
+    return "|".join(parts)
+
+
+def _export_cache_get(key: str) -> bytes | None:
+    with _EXPORT_CACHE_LOCK:
+        cached = _EXPORT_CACHE.get(key)
+        if cached is not None:
+            _EXPORT_CACHE.move_to_end(key)
+        return cached
+
+
+def _export_cache_put(key: str, png: bytes) -> None:
+    with _EXPORT_CACHE_LOCK:
+        _EXPORT_CACHE[key] = png
+        _EXPORT_CACHE.move_to_end(key)
+        while len(_EXPORT_CACHE) > _EXPORT_CACHE_LIMIT:
+            _EXPORT_CACHE.popitem(last=False)
 
 
 def _export_response(png: bytes, filename: str) -> Response:
@@ -3328,7 +3362,7 @@ def export_redblue_summary(
     scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
-    entries, summary, period, filter_text, updated = _export_context(
+    entries, summary, period, filter_text, updated, revision = _export_context(
         source=source,
         status_filter=status_filter,
         keyword=keyword,
@@ -3340,16 +3374,32 @@ def export_redblue_summary(
         include_duplicate=include_duplicate,
         scores=scores,
     )
-    from website.redblue_export import render_summary_png
-
-    png = render_summary_png(
-        entries,
-        summary=summary,
-        fan_summary=_fan_summary(entries),
-        period=period,
-        filter_text=filter_text,
-        updated=updated,
+    cache_key = _export_cache_key(
+        "summary",
+        revision,
+        source=source,
+        status=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
+        include_duplicate=include_duplicate,
+        scores=scores,
     )
+    png = _export_cache_get(cache_key)
+    if png is None:
+        from website.redblue_export import render_summary_png
+
+        png = render_summary_png(
+            entries,
+            summary=summary,
+            fan_summary=_fan_summary(entries),
+            period=period,
+            filter_text=filter_text,
+            updated=updated,
+        )
+        _export_cache_put(cache_key, png)
     stamp = datetime.now(BJ_TZ).strftime("%Y%m%d_%H%M")
     return _export_response(png, f"redblue_summary_{stamp}.png")
 
@@ -3368,7 +3418,7 @@ def export_redblue_entries(
     scores: str = Query(""),
     _=Depends(verify_redblue_password),
 ):
-    entries, summary, period, filter_text, updated = _export_context(
+    entries, summary, period, filter_text, updated, revision = _export_context(
         source=source,
         status_filter=status_filter,
         keyword=keyword,
@@ -3380,15 +3430,32 @@ def export_redblue_entries(
         include_duplicate=include_duplicate,
         scores=scores,
     )
-    from website.redblue_export import render_entries_png
-
-    png = render_entries_png(
-        entries,
-        summary=summary,
-        period=period,
-        filter_text=filter_text,
-        updated=updated,
+    cache_key = _export_cache_key(
+        "entries",
+        revision,
+        source=source,
+        status=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
+        sort=sort,
+        include_duplicate=include_duplicate,
+        scores=scores,
     )
+    png = _export_cache_get(cache_key)
+    if png is None:
+        from website.redblue_export import render_entries_png
+
+        png = render_entries_png(
+            entries,
+            summary=summary,
+            period=period,
+            filter_text=filter_text,
+            updated=updated,
+        )
+        _export_cache_put(cache_key, png)
     stamp = datetime.now(BJ_TZ).strftime("%Y%m%d_%H%M")
     return _export_response(png, f"redblue_entries_{stamp}.png")
 

@@ -258,7 +258,17 @@ def _pick_cluster_font(cluster: str, font, fallbacks):
 
 
 def _font_runs(text: str, font, fallback=None):
+    """把文本按“能用主字体渲染的连续片段”切分；结果按文本/字体缓存。
+
+    昵称、礼物名等文本在同一次导出里会重复出现多次（测量宽度 + 绘制 + 备用字体
+    判断），缓存字素簇的选字体结果能明显减少重复扫描。
+    """
     fallbacks = _fallback_list(fallback)
+    return [list(item) for item in _font_runs_cached(str(text), font, fallbacks)]
+
+
+@lru_cache(maxsize=16384)
+def _font_runs_cached(text: str, font, fallbacks: tuple):
     runs: list[list[Any]] = []
     for cluster in _clusters(text):
         use = _pick_cluster_font(cluster, font, fallbacks)
@@ -281,7 +291,7 @@ def _font_runs(text: str, font, fallback=None):
                 runs[-1][0] += piece
             else:
                 runs.append([piece, use])
-    return runs
+    return tuple((piece, use) for piece, use in runs)
 
 
 def _text_width_fallback(draw, text: str, font, fallback=None) -> float:
@@ -333,7 +343,11 @@ def _display_text(text: Any, font=None, fallback_font=None) -> str:
     变体选择符、肤色修饰符和 keycap 作为字素簇整体保留，交给字体塑形。
     """
     value = "" if text is None else str(text)
-    fallbacks = _fallback_list(fallback_font)
+    return _display_text_cached(value, font, _fallback_list(fallback_font))
+
+
+@lru_cache(maxsize=8192)
+def _display_text_cached(value: str, font, fallbacks: tuple) -> str:
     candidates = tuple(item for item in (font, *fallbacks) if item is not None)
     if not candidates:
         return "".join(ch for ch in value if unicodedata.category(ch) not in _SKIP_CATEGORIES)

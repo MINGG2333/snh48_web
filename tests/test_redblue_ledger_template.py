@@ -100,6 +100,12 @@ class RedblueLedgerTemplateTests(unittest.TestCase):
         self.assertIn('<option value="warning">身份待确认</option>', self.source)
         self.assertIn('<option value="duplicate">重复</option>', self.source)
         self.assertIn('id="includeDuplicate"', self.source)
+    def test_redemption_modal_reuses_loaded_data(self) -> None:
+        self.assertIn("function fullRedemptionView()", self.source)
+        self.assertIn("function redemptionPayload()", self.source)
+        self.assertIn("if (fullRedemptionView() && data && data.entries) {", self.source)
+        self.assertIn("redemptionCache = null;", self.source)
+        self.assertIn("正在加载兑换数据…", self.source)
 
 
 if __name__ == "__main__":

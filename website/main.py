@@ -20,6 +20,7 @@ from website import audit_log
 from website import config as cfg
 from website import live_covers
 from website.debut_milestones import build_homepage_context
+from website.json_gzip import JsonGZipMiddleware
 
 app = FastAPI(
     title=cfg.SITE_TITLE,
@@ -29,6 +30,7 @@ app = FastAPI(
     redoc_url="/redoc" if cfg.ENABLE_API_DOCS else None,
     openapi_url="/openapi.json" if cfg.ENABLE_API_DOCS else None,
 )
+app.add_middleware(JsonGZipMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(cfg.TRUSTED_HOSTS))
 
 # ── Static Files ───────────────────────────────────────────────────────────

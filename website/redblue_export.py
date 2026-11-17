@@ -45,6 +45,12 @@ FAN_NAME_SIZE = 22
 FAN_SCORE_SIZE = 28
 FAN_BADGE_SIZE = 18
 CARD_RADIUS = 14
+PNG_COMPRESS_LEVEL = 3
+# 按条目导出的行高/日期头高度/日期组底部间距。卡片高度必须按同一组常量累加，
+# 否则分组越多，白色卡片底部越早结束，最后一行会落到页面底色上。
+ENTRIES_ROW_HEIGHT = 44
+ENTRIES_DAY_HEIGHT = 46
+ENTRIES_DAY_GAP = 14
 SCORING_LABELS = {"计分卡": "计分卡", "鸡腿": "鸡腿"}
 SCORING_COLORS = {
     "计分卡": ((55, 115, 190), (228, 238, 255)),
@@ -256,9 +262,9 @@ def _draw_entries(
         return top
 
     section_top = top
-    row_h = 44
-    day_h = 46
-    content_height = sum(day_h + len(rows) * row_h + 12 for rows in groups.values())
+    row_h = ENTRIES_ROW_HEIGHT
+    day_h = ENTRIES_DAY_HEIGHT
+    content_height = sum(day_h + len(rows) * row_h + ENTRIES_DAY_GAP for rows in groups.values())
     section_bottom = section_top + 74 + content_height + 14
     draw.rounded_rectangle(
         [PAD, section_top, width - PAD, section_bottom], radius=CARD_RADIUS, fill=SECTION_BG
@@ -345,7 +351,7 @@ def _draw_entries(
 
             y += row_h
         draw.line([x0, y + 6, right, y + 6], fill=(240, 232, 245), width=1)
-        y += 14
+        y += ENTRIES_DAY_GAP
     return section_bottom + 12
 
 
@@ -379,7 +385,8 @@ def _render(title: str, body, *, period: str, filter_text: str, updated: str, es
     draw = ImageDraw.Draw(image)
     _footer(draw, content_height, width=width)
     buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=False)
+    # 长图体积大，压缩等级 3 与默认 6 视觉一致，编码耗时约省 1/4，体积只略增。
+    image.save(buffer, format="PNG", optimize=False, compress_level=PNG_COMPRESS_LEVEL)
     return buffer.getvalue()
 
 
@@ -496,7 +503,14 @@ def render_entries_png(
     for item in items:
         day = str(item.get("source_time") or item.get("created_at") or "")[:10] or "未标日期"
         day_rows[day] = day_rows.get(day, 0) + 1
-    estimated = 280 + sum(46 + count * 44 + 12 for count in day_rows.values()) + 80
+    estimated = (
+        280
+        + sum(
+            ENTRIES_DAY_HEIGHT + count * ENTRIES_ROW_HEIGHT + ENTRIES_DAY_GAP
+            for count in day_rows.values()
+        )
+        + 80
+    )
     return _render(
         title,
         body,

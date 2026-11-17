@@ -560,6 +560,7 @@
   var fanSummaryItems = [];
   var businessOptions = [];
   var redemptionData = null;
+  var redemptionCache = null;
   var editingRedemptionId = "";
   var batchRedemptionEntries = [];
   var pollTimer = null;
@@ -735,6 +736,7 @@
       var payload = await api("/api/redblue/data?" + filterQuery());
       if (seq !== loadSeq) return;
       data = payload;
+      redemptionCache = null;
       selected.clear();
       renderAll();
       setStatus("");
@@ -2153,10 +2155,41 @@
     renderRedemptionAllocations();
   }
 
+  function fullRedemptionView() {
+    return $("sourceFilter").value === "all"
+      && $("statusFilter").value === "all"
+      && !$("keywordInput").value.trim()
+      && !$("dateFrom").value
+      && !$("dateTo").value
+      && $("includeDuplicate").checked
+      && !selectedScores.size;
+  }
+
+  function redemptionPayload() {
+    if (fullRedemptionView() && data && data.entries) {
+      return Promise.resolve(data);
+    }
+    if (redemptionCache) {
+      return Promise.resolve(redemptionCache);
+    }
+    return api(redemptionFullQuery()).then(function (payload) {
+      redemptionCache = payload;
+      return payload;
+    });
+  }
+
   async function openRedemptionModal(fanKey, redemptionId) {
     editingRedemptionId = redemptionId || "";
+    var modal = $("redemptionModal");
+    var target = $("redemptionList");
+    modal.classList.remove("hidden");
+    $("redemptionFan").innerHTML = '<option value="">正在加载…</option>';
+    $("redemptionFan").disabled = true;
+    $("redemptionAllocBody").innerHTML = '<tr><td colspan="6" class="empty">正在加载兑换数据…</td></tr>';
+    $("redemptionSummary").textContent = "正在加载兑换数据…";
+    target.innerHTML = '<div class="notice">正在加载兑换数据…</div>';
     try {
-      redemptionData = await api(redemptionFullQuery());
+      redemptionData = await redemptionPayload();
       populateRedemptionFans(fanKey ? [fanKey] : []);
       $("redemptionFan").disabled = false;
       var redemption = editingRedemption();
@@ -2177,8 +2210,8 @@
         $("redemptionNote").value = "";
       }
       renderRedemptionAllocations();
-      $("redemptionModal").classList.remove("hidden");
     } catch (error) {
+      modal.classList.add("hidden");
       showToast(error.message || "兑换数据加载失败", true);
     }
   }
