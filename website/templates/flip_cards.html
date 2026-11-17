@@ -1392,7 +1392,8 @@
           box.appendChild(video);
         }
       } else {
-        appendText(box, "text", "[媒体不可用]");
+        appendText(box, "text", "[官方源和本地兜底均缺失，已请求从 NAS 补充]");
+        requestMediaRestore(record, media);
       }
       if (media.official_url) {
         const link = document.createElement("a");
