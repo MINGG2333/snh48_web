@@ -104,6 +104,9 @@ class RedblueLedgerApiTests(unittest.TestCase):
                             ],
                         }
                     ],
+                    "sale_overrides": {
+                        "OVR": {"amount": 100.0, "unit": 20.0, "note": "26.25→20，退差31.25"}
+                    },
                 },
                 ensure_ascii=False,
             ),
@@ -1941,6 +1944,19 @@ class RedblueLedgerApiTests(unittest.TestCase):
         price = api._entry_price(ordinary_gift)
         self.assertIsNone(price["sale_total"])
         self.assertIsNone(price["external_total"])
+
+    def test_sale_override_uses_actual_refunded_amount(self):
+        entry = {
+            "id": "s1",
+            "source": "weidian",
+            "score": 5,
+            "scoring_method": "鸡腿",
+            "weidian": {"order_id": "OVR", "amount": 131.25},
+        }
+        price = api._entry_price(entry)
+        self.assertEqual(price["sale_total"], 100.0)
+        self.assertEqual(price["sale_avg"], 20.0)
+        self.assertIn("退差31.25", price["sale_note"])
 
     def test_weidian_scoring_method_defaults_by_item(self):
         self.assertEqual(

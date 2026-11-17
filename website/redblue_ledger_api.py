@@ -1761,7 +1761,7 @@ def _supply_cost_index() -> dict[str, Any]:
     try:
         stat = path.stat()
     except OSError:
-        return {"entries": {}, "updated_at": ""}
+        return {"entries": {}, "sale_overrides": {}, "updated_at": ""}
     signature = (str(path), stat.st_mtime_ns, stat.st_size)
     cached = _SUPPLY_COST_CACHE.get("value")
     if cached is not None and _SUPPLY_COST_CACHE.get("signature") == signature:
@@ -1791,8 +1791,25 @@ def _supply_cost_index() -> dict[str, Any]:
                 "unit": round(item_unit, 4),
                 "lot": label,
             }
+    sale_overrides: dict[str, dict[str, Any]] = {}
+    raw_overrides = payload.get("sale_overrides")
+    if isinstance(raw_overrides, dict):
+        for order_id, item in raw_overrides.items():
+            if not isinstance(item, dict):
+                continue
+            key = _clean(order_id, 120)
+            amount = _to_float(item.get("amount"), 0.0)
+            unit = _to_float(item.get("unit"), 0.0)
+            if not key or amount <= 0 or unit <= 0:
+                continue
+            sale_overrides[key] = {
+                "amount": round(amount, 2),
+                "unit": round(unit, 4),
+                "note": _clean(item.get("note"), 120),
+            }
     value = {
         "entries": entries,
+        "sale_overrides": sale_overrides,
         "updated_at": _clean(payload.get("updated_at"), 32),
     }
     _SUPPLY_COST_CACHE["signature"] = signature
@@ -1812,13 +1829,21 @@ def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
     source = _clean(entry.get("source"), 20)
     weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
     amount = _to_float(weidian.get("amount"), 0.0)
-    sale_total = (
-        round(amount, 2)
-        if source in ASSOCIATION_SOURCES and amount > 0 and score > 0
-        else None
-    )
-    sale_avg = round(amount / score, 4) if sale_total is not None else None
     cost = _supply_cost_index()
+    order_id = _clean(weidian.get("order_id") or entry.get("source_id"), 120)
+    sale_override = (cost.get("sale_overrides") or {}).get(order_id) if order_id else None
+    if source in ASSOCIATION_SOURCES and sale_override:
+        sale_total = sale_override["amount"]
+        sale_avg = sale_override["unit"]
+        sale_note = sale_override.get("note") or ""
+    elif source in ASSOCIATION_SOURCES and amount > 0 and score > 0:
+        sale_total = round(amount, 2)
+        sale_avg = round(amount / score, 4)
+        sale_note = ""
+    else:
+        sale_total = None
+        sale_avg = None
+        sale_note = ""
     external = (
         (cost.get("entries") or {}).get(_clean(entry.get("id"), 80))
         if bool(entry.get("duplicate")) and method == "鸡腿"
@@ -1827,6 +1852,7 @@ def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
     return {
         "sale_total": sale_total,
         "sale_avg": sale_avg,
+        "sale_note": sale_note,
         "external_total": external.get("amount") if external else None,
         "external_avg": external.get("unit") if external else None,
         "external_lot": external.get("lot") if external else "",

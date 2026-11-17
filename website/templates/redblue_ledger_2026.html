@@ -1284,7 +1284,8 @@
     var price = entry.price || {};
     var lines = [];
     if (price.sale_total != null) {
-      lines.push('<div><span class="notice">售价</span> ' + money(price.sale_total) + ' / ' + money(price.sale_avg) + '/分</div>');
+      var saleTitle = price.sale_note ? ' title="' + esc(price.sale_note) + '"' : '';
+      lines.push('<div' + saleTitle + '><span class="notice">售价</span> ' + money(price.sale_total) + ' / ' + money(price.sale_avg) + '/分</div>');
     }
     if (price.external_total != null) {
       var lotTitle = price.external_lot ? ' title="供给批次：' + esc(price.external_lot) + '"' : '';
