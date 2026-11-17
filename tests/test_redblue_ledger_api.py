@@ -90,12 +90,24 @@ class RedblueLedgerApiTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        (self.tmp / "supply_cost.json").write_text(
+            json.dumps(
+                {
+                    "total_amount": 26325.20,
+                    "total_score": 926.4,
+                    "updated_at": "2026-11-17 13:30",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         self._old = {
             "password": cfg.REDBLUE_LEDGER_PASSWORD,
             "data": cfg.REDBLUE_LEDGER_DATA_PATH,
             "identity": cfg.REDBLUE_IDENTITY_INDEX_PATH,
             "fallback": cfg.REDBLUE_IDENTITY_FALLBACK_PATHS,
             "score": cfg.REDBLUE_SCORE_DATA_PATH,
+            "supply_cost": cfg.REDBLUE_SUPPLY_COST_PATH,
             "authority": cfg.REDBLUE_GIFT_AUTHORITY_PATH,
             "weidian": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
             "ai": cfg.REDBLUE_AI_QUEUE_DIR,
@@ -110,6 +122,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_IDENTITY_INDEX_PATH = str(self.tmp / "identity.json")
         cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = {}
         cfg.REDBLUE_SCORE_DATA_PATH = str(self.tmp / "score.json")
+        cfg.REDBLUE_SUPPLY_COST_PATH = str(self.tmp / "supply_cost.json")
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = str(self.tmp / "authority.json")
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = str(self.tmp / "weidian.json")
         cfg.REDBLUE_AI_QUEUE_DIR = str(self.tmp / "ai")
@@ -130,6 +143,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_IDENTITY_INDEX_PATH = self._old["identity"]
         cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = self._old["fallback"]
         cfg.REDBLUE_SCORE_DATA_PATH = self._old["score"]
+        cfg.REDBLUE_SUPPLY_COST_PATH = self._old["supply_cost"]
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = self._old["authority"]
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = self._old["weidian"]
         cfg.REDBLUE_AI_QUEUE_DIR = self._old["ai"]
@@ -1870,6 +1884,43 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(_weidian_order_score({**order, "score": 99}), 99.0)
         self.assertEqual(_weidian_order_score({**order, "amount": "26.25"}), 1.0)
         self.assertEqual(_weidian_order_score({"order_id": "O3", "quantity": 5}), 5.0)
+
+    def test_entry_price_uses_sale_and_external_average(self):
+        chicken = {
+            "id": "p1",
+            "source": "weidian",
+            "score": 2,
+            "scoring_method": "鸡腿",
+            "weidian": {"amount": 52.5},
+        }
+        price = api._entry_price(chicken)
+        self.assertEqual(price["sale_total"], 52.5)
+        self.assertAlmostEqual(price["sale_avg"], 26.25)
+        self.assertAlmostEqual(price["external_avg"], 28.4167, places=4)
+        self.assertAlmostEqual(price["external_total"], 56.83, places=2)
+
+        card = {
+            "id": "p2",
+            "source": "weidian",
+            "score": 18,
+            "scoring_method": "计分卡",
+            "weidian": {"amount": 288.0},
+        }
+        price = api._entry_price(card)
+        self.assertEqual(price["sale_total"], 288.0)
+        self.assertEqual(price["sale_avg"], 16.0)
+        self.assertIsNone(price["external_total"])
+        self.assertIsNone(price["external_avg"])
+
+        gift = {
+            "id": "p3",
+            "source": "room",
+            "score": 10,
+            "scoring_method": "鸡腿",
+        }
+        price = api._entry_price(gift)
+        self.assertIsNone(price["sale_total"])
+        self.assertAlmostEqual(price["external_total"], 284.17, places=2)
 
     def test_weidian_scoring_method_defaults_by_item(self):
         self.assertEqual(

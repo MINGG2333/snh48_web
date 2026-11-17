@@ -1742,6 +1742,78 @@ def _entry_scoring_method(entry: dict[str, Any]) -> str:
     return DEFAULT_SCORING_METHODS.get(_clean(entry.get("source"), 20), "计分卡")
 
 
+_SUPPLY_COST_CACHE: dict[str, Any] = {"signature": None, "value": None}
+
+
+def _supply_cost_basis() -> dict[str, Any]:
+    """Return the private supply-cost basis used for the per-entry price column."""
+    path = Path(
+        getattr(
+            cfg,
+            "REDBLUE_SUPPLY_COST_PATH",
+            Path(cfg.PROJECT_ROOT).parent
+            / "snh48-fan-hub"
+            / "private_handover"
+            / "web_state"
+            / "redblue_supply_cost_2026.json",
+        )
+    )
+    try:
+        stat = path.stat()
+    except OSError:
+        return {
+            "total_amount": 0.0,
+            "total_score": 0.0,
+            "average_per_point": 0.0,
+            "updated_at": "",
+        }
+    signature = (str(path), stat.st_mtime_ns, stat.st_size)
+    cached = _SUPPLY_COST_CACHE.get("value")
+    if cached is not None and _SUPPLY_COST_CACHE.get("signature") == signature:
+        return cached
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = {}
+    total_amount = _to_float(payload.get("total_amount"), 0.0)
+    total_score = _to_float(payload.get("total_score"), 0.0)
+    average = total_amount / total_score if total_score > 0 else 0.0
+    value = {
+        "total_amount": round(total_amount, 2),
+        "total_score": round(total_score, 4),
+        "average_per_point": round(average, 4),
+        "updated_at": _clean(payload.get("updated_at"), 32),
+    }
+    _SUPPLY_COST_CACHE["signature"] = signature
+    _SUPPLY_COST_CACHE["value"] = value
+    return value
+
+
+def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
+    """Price from the fan club perspective: sale to fans and external purchase cost."""
+    score = _to_float(entry.get("score"), 0.0)
+    method = _entry_scoring_method(entry)
+    source = _clean(entry.get("source"), 20)
+    weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
+    amount = _to_float(weidian.get("amount"), 0.0)
+    sale_total = round(amount, 2) if source == "weidian" and amount > 0 and score > 0 else None
+    sale_avg = round(amount / score, 4) if sale_total is not None else None
+    basis = _supply_cost_basis()
+    external_avg = (
+        _to_float(basis.get("average_per_point"), 0.0)
+        if method == "鸡腿" and score > 0
+        else 0.0
+    )
+    external_total = round(score * external_avg, 2) if external_avg > 0 else None
+    return {
+        "sale_total": sale_total,
+        "sale_avg": sale_avg,
+        "external_total": external_total,
+        "external_avg": round(external_avg, 4) if external_avg > 0 else None,
+        "basis_updated_at": _clean(basis.get("updated_at"), 32),
+    }
+
+
 def _new_entry(
     doc: dict[str, Any],
     *,
@@ -1872,6 +1944,7 @@ def _normalise_entry(entry: dict[str, Any], aliases: Iterable[dict[str, Any]] = 
         "raw_name": raw_name,
         "raw_id": raw_id,
         "score": round(_to_float(entry.get("score"), 0.0), 4),
+        "price": _entry_price(entry),
         "source": source,
         "source_label": SOURCE_LABELS.get(source, source),
         "scoring_method": scoring_method,

@@ -474,6 +474,16 @@ REDBLUE_LEDGER_DATA_PATH = os.getenv(
         / "redblue_ledger_2026.json"
     ),
 )
+REDBLUE_SUPPLY_COST_PATH = os.getenv(
+    "REDBLUE_SUPPLY_COST_PATH",
+    str(
+        PROJECT_ROOT.parent
+        / "snh48-fan-hub"
+        / "private_handover"
+        / "web_state"
+        / "redblue_supply_cost_2026.json"
+    ),
+)
 REDBLUE_SCORE_DATA_PATH = os.getenv(
     "REDBLUE_SCORE_DATA_PATH",
     SCORE_GIFTS_WINTER_DATA_PATH,
