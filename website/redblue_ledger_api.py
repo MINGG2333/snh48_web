@@ -1790,18 +1790,27 @@ def _supply_cost_basis() -> dict[str, Any]:
 
 
 def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
-    """Price from the fan club perspective: sale to fans and external purchase cost."""
+    """Price from the fan club perspective.
+
+    Sale price is shown only for association entries (what fans paid the fan
+    club). External purchase cost is shown only for duplicate entries (the
+    supply deliveries that cover the duplicate/代投), not for ordinary gifts.
+    """
     score = _to_float(entry.get("score"), 0.0)
     method = _entry_scoring_method(entry)
     source = _clean(entry.get("source"), 20)
     weidian = entry.get("weidian") if isinstance(entry.get("weidian"), dict) else {}
     amount = _to_float(weidian.get("amount"), 0.0)
-    sale_total = round(amount, 2) if source == "weidian" and amount > 0 and score > 0 else None
+    sale_total = (
+        round(amount, 2)
+        if source in ASSOCIATION_SOURCES and amount > 0 and score > 0
+        else None
+    )
     sale_avg = round(amount / score, 4) if sale_total is not None else None
     basis = _supply_cost_basis()
     external_avg = (
         _to_float(basis.get("average_per_point"), 0.0)
-        if method == "鸡腿" and score > 0
+        if bool(entry.get("duplicate")) and method == "鸡腿" and score > 0
         else 0.0
     )
     external_total = round(score * external_avg, 2) if external_avg > 0 else None

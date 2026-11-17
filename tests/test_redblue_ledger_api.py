@@ -1885,7 +1885,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(_weidian_order_score({**order, "amount": "26.25"}), 1.0)
         self.assertEqual(_weidian_order_score({"order_id": "O3", "quantity": 5}), 5.0)
 
-    def test_entry_price_uses_sale_and_external_average(self):
+    def test_entry_price_scopes_sale_to_association_and_external_to_duplicates(self):
         chicken = {
             "id": "p1",
             "source": "weidian",
@@ -1896,8 +1896,8 @@ class RedblueLedgerApiTests(unittest.TestCase):
         price = api._entry_price(chicken)
         self.assertEqual(price["sale_total"], 52.5)
         self.assertAlmostEqual(price["sale_avg"], 26.25)
-        self.assertAlmostEqual(price["external_avg"], 28.4167, places=4)
-        self.assertAlmostEqual(price["external_total"], 56.83, places=2)
+        self.assertIsNone(price["external_total"])
+        self.assertIsNone(price["external_avg"])
 
         card = {
             "id": "p2",
@@ -1910,17 +1910,29 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(price["sale_total"], 288.0)
         self.assertEqual(price["sale_avg"], 16.0)
         self.assertIsNone(price["external_total"])
-        self.assertIsNone(price["external_avg"])
 
-        gift = {
+        duplicate_chicken = {
             "id": "p3",
             "source": "room",
             "score": 10,
             "scoring_method": "鸡腿",
+            "duplicate": True,
         }
-        price = api._entry_price(gift)
+        price = api._entry_price(duplicate_chicken)
         self.assertIsNone(price["sale_total"])
         self.assertAlmostEqual(price["external_total"], 284.17, places=2)
+        self.assertAlmostEqual(price["external_avg"], 28.4167, places=4)
+
+        ordinary_gift = {
+            "id": "p4",
+            "source": "room",
+            "score": 10,
+            "scoring_method": "鸡腿",
+            "duplicate": False,
+        }
+        price = api._entry_price(ordinary_gift)
+        self.assertIsNone(price["sale_total"])
+        self.assertIsNone(price["external_total"])
 
     def test_weidian_scoring_method_defaults_by_item(self):
         self.assertEqual(
