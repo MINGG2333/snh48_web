@@ -1745,8 +1745,8 @@ def _entry_scoring_method(entry: dict[str, Any]) -> str:
 _SUPPLY_COST_CACHE: dict[str, Any] = {"signature": None, "value": None}
 
 
-def _supply_cost_basis() -> dict[str, Any]:
-    """Return the private supply-cost basis used for the per-entry price column."""
+def _supply_cost_index() -> dict[str, Any]:
+    """Load exact per-entry external costs from the private supply-lot mapping."""
     path = Path(
         getattr(
             cfg,
@@ -1761,12 +1761,7 @@ def _supply_cost_basis() -> dict[str, Any]:
     try:
         stat = path.stat()
     except OSError:
-        return {
-            "total_amount": 0.0,
-            "total_score": 0.0,
-            "average_per_point": 0.0,
-            "updated_at": "",
-        }
+        return {"entries": {}, "updated_at": ""}
     signature = (str(path), stat.st_mtime_ns, stat.st_size)
     cached = _SUPPLY_COST_CACHE.get("value")
     if cached is not None and _SUPPLY_COST_CACHE.get("signature") == signature:
@@ -1775,13 +1770,29 @@ def _supply_cost_basis() -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         payload = {}
-    total_amount = _to_float(payload.get("total_amount"), 0.0)
-    total_score = _to_float(payload.get("total_score"), 0.0)
-    average = total_amount / total_score if total_score > 0 else 0.0
+    entries: dict[str, dict[str, Any]] = {}
+    for lot in payload.get("lots") if isinstance(payload.get("lots"), list) else []:
+        if not isinstance(lot, dict):
+            continue
+        label = _clean(lot.get("label"), 80)
+        unit = _to_float(lot.get("unit"), 0.0)
+        for item in lot.get("entries") if isinstance(lot.get("entries"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            entry_id = _clean(item.get("entry_id"), 80)
+            if not entry_id:
+                continue
+            amount = _to_float(item.get("amount"), 0.0)
+            item_unit = _to_float(item.get("unit"), unit)
+            if amount <= 0 or item_unit <= 0:
+                continue
+            entries[entry_id] = {
+                "amount": round(amount, 2),
+                "unit": round(item_unit, 4),
+                "lot": label,
+            }
     value = {
-        "total_amount": round(total_amount, 2),
-        "total_score": round(total_score, 4),
-        "average_per_point": round(average, 4),
+        "entries": entries,
         "updated_at": _clean(payload.get("updated_at"), 32),
     }
     _SUPPLY_COST_CACHE["signature"] = signature
@@ -1793,8 +1804,8 @@ def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
     """Price from the fan club perspective.
 
     Sale price is shown only for association entries (what fans paid the fan
-    club). External purchase cost is shown only for duplicate entries (the
-    supply deliveries that cover the duplicate/代投), not for ordinary gifts.
+    club). External purchase cost is shown only for duplicate entries and comes
+    from the exact supply-lot mapping, never from a global average.
     """
     score = _to_float(entry.get("score"), 0.0)
     method = _entry_scoring_method(entry)
@@ -1807,20 +1818,21 @@ def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
         else None
     )
     sale_avg = round(amount / score, 4) if sale_total is not None else None
-    basis = _supply_cost_basis()
-    external_avg = (
-        _to_float(basis.get("average_per_point"), 0.0)
-        if bool(entry.get("duplicate")) and method == "鸡腿" and score > 0
-        else 0.0
+    cost = _supply_cost_index()
+    external = (
+        (cost.get("entries") or {}).get(_clean(entry.get("id"), 80))
+        if bool(entry.get("duplicate")) and method == "鸡腿"
+        else None
     )
-    external_total = round(score * external_avg, 2) if external_avg > 0 else None
     return {
         "sale_total": sale_total,
         "sale_avg": sale_avg,
-        "external_total": external_total,
-        "external_avg": round(external_avg, 4) if external_avg > 0 else None,
-        "basis_updated_at": _clean(basis.get("updated_at"), 32),
+        "external_total": external.get("amount") if external else None,
+        "external_avg": external.get("unit") if external else None,
+        "external_lot": external.get("lot") if external else "",
+        "basis_updated_at": _clean(cost.get("updated_at"), 32),
     }
+
 
 
 def _new_entry(

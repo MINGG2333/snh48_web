@@ -93,9 +93,17 @@ class RedblueLedgerApiTests(unittest.TestCase):
         (self.tmp / "supply_cost.json").write_text(
             json.dumps(
                 {
-                    "total_amount": 26325.20,
-                    "total_score": 926.4,
                     "updated_at": "2026-11-17 13:30",
+                    "lots": [
+                        {
+                            "id": "test-lot",
+                            "label": "测试供给批次",
+                            "unit": 28.4167,
+                            "entries": [
+                                {"entry_id": "p3", "score": 10, "amount": 284.17, "unit": 28.4167}
+                            ],
+                        }
+                    ],
                 },
                 ensure_ascii=False,
             ),
