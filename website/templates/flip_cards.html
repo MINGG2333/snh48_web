@@ -1328,12 +1328,44 @@
       return wrap;
     }
 
-    function attachMediaFallback(element, media) {
-      if (!media.fallback_url || media.fallback_url === media.url) return;
-      element.addEventListener("error", function handleMediaError() {
-        element.removeEventListener("error", handleMediaError);
-        element.src = media.fallback_url;
-        element.load();
+    const restoreRequested = new Set();
+
+    function requestMediaRestore(record, media) {
+      const kind = String(media.kind || "");
+      const filename = String(media.filename || "");
+      const key = kind + ":" + filename;
+      if (!kind || !filename || restoreRequested.has(key)) return;
+      restoreRequested.add(key);
+      apiJson("/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: kind,
+          filename: filename,
+          account_id: record.account_id || selectedAccountId || "",
+          question_id: record.question_id || ""
+        })
+      }).catch(function () {
+        restoreRequested.delete(key);
+      });
+    }
+
+    function attachMediaFallback(element, record, media, box) {
+      let phase = 0;
+      element.addEventListener("error", function () {
+        if (phase === 0 && media.fallback_url && media.fallback_url !== media.url) {
+          phase = 1;
+          element.src = media.fallback_url;
+          element.load();
+          return;
+        }
+        if (phase <= 1) {
+          phase = 2;
+          appendText(box, "text", "官方源不可用，已请求从 NAS 补充兜底媒体；稍后刷新页面重试。");
+          requestMediaRestore(record, media);
+        }
+      });
+    }
       });
     }
 
@@ -1346,8 +1378,8 @@
           const audio = document.createElement("audio");
           audio.controls = true;
           audio.preload = "none";
+          attachMediaFallback(audio, record, media, box);
           audio.src = media.url;
-          attachMediaFallback(audio, media);
           box.appendChild(audio);
           const transcript = createAudioTranscriptNode(record.audio_transcript, audio);
           if (transcript) box.appendChild(transcript);
@@ -1355,8 +1387,8 @@
           const video = document.createElement("video");
           video.controls = true;
           video.preload = "metadata";
+          attachMediaFallback(video, record, media, box);
           video.src = media.url;
-          attachMediaFallback(video, media);
           box.appendChild(video);
         }
       } else {

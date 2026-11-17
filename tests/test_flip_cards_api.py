@@ -175,6 +175,33 @@ class FlipCardsApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(media["url"].startswith("/api/flip-cards/flip_data/audio/voice.mp3?mt="))
         self.assertEqual(media["media_source"], "local")
 
+    async def test_official_url_is_primary_and_missing_fallback_enqueues_restore(self) -> None:
+        payload = json.loads(self.dataset_path.read_text(encoding="utf-8"))
+        payload["records"][0]["media"]["official_url"] = "https://mp4-new1.48.cn/example/voice.m4a"
+        self.dataset_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        data = await self.client.get("/api/flip-cards/data", headers=self.auth_headers)
+        self.assertEqual(data.status_code, 200)
+        media = data.json()["records"][0]["media"]
+        self.assertEqual(media["url"], "https://mp4-new1.48.cn/example/voice.m4a")
+        self.assertTrue(media["fallback_url"].startswith("/api/flip-cards/flip_data/audio/voice.mp3?mt="))
+
+        (self.data_dir / "audio" / "voice.mp3").unlink()
+        requests = self.root / "restore-requests"
+        with mock.patch("website.flip_cards_api.RESTORE_REQUEST_DIR", requests):
+            response = await self.client.post(
+                "/api/flip-cards/restore",
+                json={"kind": "audio", "filename": "voice.mp3", "question_id": "q1"},
+                headers=self.auth_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "queued")
+        files = list(requests.glob("*.json"))
+        self.assertEqual(len(files), 1)
+        request = json.loads(files[0].read_text(encoding="utf-8"))
+        self.assertEqual(request["kind"], "audio")
+        self.assertEqual(request["filename"], "voice.mp3")
+        self.assertEqual(request["target_path"], "flip_data/audio/voice.mp3")
+
     async def test_selects_account_scoped_dataset_and_media_from_manifest(self) -> None:
         account_id = "172884074"
         (self.data_dir / "web" / "accounts").mkdir()

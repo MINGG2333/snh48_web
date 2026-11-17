@@ -6,7 +6,9 @@ import asyncio
 import hashlib
 import hmac
 import json
+import os
 import re
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -28,6 +30,12 @@ router = APIRouter(prefix="/api/flip-cards", tags=["翻牌记录页"])
 # 不写 Cookie：刷新页面必须重新输入密码。媒体元素无法带请求头，改用短时签名 URL。
 MEDIA_TOKEN_TTL_SECONDS = 8 * 60 * 60
 MEDIA_TOKEN_PARAM = "mt"
+RESTORE_REQUEST_DIR = Path(
+    os.environ.get(
+        "FLIP_CARDS_FALLBACK_REQUESTS",
+        "/home/snh48-fan-hub/private_handover/web_state/media_fallback_requests",
+    )
+)
 MEDIA_SIGNATURE_PARAM = "ms"
 RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
 MEDIA_TYPES = {
@@ -89,6 +97,39 @@ def _media_token_valid(expires_text: str, signature: str) -> bool:
     if expires_at < time.time() or expires_at > time.time() + MEDIA_TOKEN_TTL_SECONDS + 60:
         return False
     return hmac.compare_digest(signature, _media_signature(expires_at))
+
+
+def _local_media_path(kind: str, filename: str, account_id: str = "") -> Path:
+    media_dir = _data_dir() / kind
+    if account_id:
+        media_dir = media_dir / _safe_account_id(account_id)
+    return media_dir / filename
+
+
+def _enqueue_restore(kind: str, filename: str, account_id: str = "", question_id: str = "") -> str:
+    """官方源不可用时，把缺失的兜底媒体请求落盘；台式机 worker 从 NAS 补回。"""
+    safe_filename = _safe_media_filename(filename, kind)
+    key = f"{kind}:{account_id}:{safe_filename}:{question_id}"
+    request_id = hashlib.sha1(key.encode("utf-8")).hexdigest()[:20]
+    RESTORE_REQUEST_DIR.mkdir(parents=True, exist_ok=True)
+    path = RESTORE_REQUEST_DIR / f"{request_id}.json"
+    if path.is_file():
+        return request_id
+    payload = {
+        "request_id": request_id,
+        "kind": kind,
+        "filename": safe_filename,
+        "account_id": account_id,
+        "question_id": question_id,
+        "server": os.environ.get("SNH48_NODE_ROLE") or socket.gethostname(),
+        "source_path": f"flip_data/{kind}/{account_id + '/' if account_id else ''}{safe_filename}",
+        "target_path": f"flip_data/{kind}/{account_id + '/' if account_id else ''}{safe_filename}",
+        "requested_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    return request_id
 
 
 def _data_dir() -> Path:
@@ -471,6 +512,27 @@ async def _file_iterator(path: Path, start: int, length: int) -> AsyncIterator[b
             yield chunk
 
 
+class RestoreMediaRequest(BaseModel):
+    kind: str
+    filename: str
+    account_id: str = ""
+    question_id: str = ""
+
+
+@router.post("/restore")
+async def restore_media(payload: RestoreMediaRequest, _=Depends(verify_flip_cards_auth)):
+    kind = str(payload.kind or "")
+    if kind not in MEDIA_TYPES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="翻牌媒体不存在")
+    safe_filename = _safe_media_filename(payload.filename, kind)
+    account_id = _safe_account_id(payload.account_id) if payload.account_id else ""
+    local = _local_media_path(kind, safe_filename, account_id)
+    if local.is_file():
+        return {"status": "ready", "filename": safe_filename}
+    request_id = _enqueue_restore(kind, safe_filename, account_id, str(payload.question_id or ""))
+    return {"status": "queued", "request_id": request_id}
+
+
 @router.get("/flip_data/{kind}/{filename}")
 async def stream_media(
     request: Request,
@@ -485,6 +547,7 @@ async def stream_media(
     media_dir = (_data_dir() / kind).resolve()
     path = (media_dir / safe_filename).resolve()
     if path.parent != media_dir or not path.is_file():
+        _enqueue_restore(kind, safe_filename)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=info["missing"])
     size = path.stat().st_size
     start, end, partial = _parse_range(request.headers.get("range", ""), size)
@@ -524,6 +587,7 @@ async def stream_account_media(
     media_dir = (_data_dir() / kind / selected).resolve()
     path = (media_dir / safe_filename).resolve()
     if path.parent != media_dir or not path.is_file():
+        _enqueue_restore(kind, safe_filename, selected)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=info["missing"])
     size = path.stat().st_size
     start, end, partial = _parse_range(request.headers.get("range", ""), size)
