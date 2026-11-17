@@ -33,7 +33,7 @@ MEDIA_TOKEN_PARAM = "mt"
 RESTORE_REQUEST_DIR = Path(
     os.environ.get(
         "FLIP_CARDS_FALLBACK_REQUESTS",
-        "/home/snh48-fan-hub/private_handover/web_state/media_fallback_requests",
+        "/home/snh48-fan-hub/media_fallback/requests",
     )
 )
 MEDIA_SIGNATURE_PARAM = "ms"
