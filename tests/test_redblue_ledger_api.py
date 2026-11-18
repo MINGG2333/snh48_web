@@ -496,7 +496,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             headers=self.headers,
             json={"job_id": job_id},
         ).json()["result"]
-        self.assertEqual(weidian, {"created": 1, "updated": 0})
+        self.assertEqual(weidian, {"created": 1, "updated": 0, "auto_covered": []})
         data = self.client.get("/api/redblue/data", headers=self.headers).json()
         self.assertEqual(data["summary"]["entry_count"], 3)
         self.assertEqual(data["summary"]["total_score"], 6.0)
@@ -1944,6 +1944,50 @@ class RedblueLedgerApiTests(unittest.TestCase):
         price = api._entry_price(ordinary_gift)
         self.assertIsNone(price["sale_total"])
         self.assertIsNone(price["external_total"])
+
+    def test_auto_settles_shipped_weidian_from_existing_remainder(self):
+        doc = {
+            "entries": [
+                {
+                    "id": "owner",
+                    "source": "room",
+                    "score": 10,
+                    "scoring_method": "鸡腿",
+                    "source_time": "2026-11-15 14:55:18",
+                    "duplicate": True,
+                    "settled": True,
+                    "proxy_settlement": {
+                        "method": "鸡腿",
+                        "covered": [],
+                        "covered_score": 0.0,
+                        "remainder": 118.0,
+                    },
+                },
+                {
+                    "id": "new-order",
+                    "source": "weidian",
+                    "score": 3,
+                    "scoring_method": "鸡腿",
+                    "source_time": "2026-11-17 18:58:43",
+                    "status": "shipped",
+                    "settled": False,
+                },
+            ],
+            "association_settlement": {
+                "remainder": {"鸡腿": 118.0},
+                "owner": {"鸡腿": "owner"},
+            },
+        }
+        covered = api._auto_settle_association_remainder(doc, "鸡腿")
+        self.assertEqual([item["entry_id"] for item in covered], ["new-order"])
+        entry = next(item for item in doc["entries"] if item["id"] == "new-order")
+        self.assertTrue(entry["settled"])
+        self.assertEqual(entry["status"], "settled")
+        self.assertEqual(entry["settled_by_duplicates"], ["owner"])
+        owner = next(item for item in doc["entries"] if item["id"] == "owner")
+        self.assertEqual(owner["proxy_settlement"]["remainder"], 115.0)
+        self.assertEqual(owner["proxy_settlement"]["covered_score"], 3.0)
+        self.assertEqual(doc["association_settlement"]["remainder"]["鸡腿"], 115.0)
 
     def test_filter_by_source_category_method_and_price(self):
         entries = [

@@ -463,6 +463,114 @@ def _mutator_settle_association(doc: dict[str, Any], payload: dict[str, Any]):
     }
 
 
+def _auto_settle_association_remainder(doc: dict[str, Any], method: str) -> list[dict[str, Any]]:
+    """Consume an existing duplicate remainder for newly shipped Weidian entries.
+
+    The manual duplicate/proxy flow computes a remainder when a room/live
+    duplicate is settled. If an association order is shipped later, that
+    remainder must be applied without requiring the operator to press the
+    duplicate button again. Only fully covered entries are marked settled; an
+    entry larger than the remainder stays pending.
+    """
+    method = _clean(method, 10)
+    if method not in SCORING_METHODS:
+        return []
+    block = _settlement_block(doc)
+    remainder = _settlement_remainder(doc, method)
+    if remainder <= 0.0001:
+        return []
+    owner_id = _clean(block["owner"].get(method), 80)
+    owner = next(
+        (
+            item
+            for item in doc.get("entries") or []
+            if isinstance(item, dict) and _clean(item.get("id"), 80) == owner_id
+        ),
+        None,
+    )
+    proxy = owner.get("proxy_settlement") if isinstance(owner, dict) else None
+    if not isinstance(proxy, dict) or not proxy:
+        return []
+    candidates = sorted(
+        (
+            item
+            for item in doc.get("entries") or []
+            if isinstance(item, dict)
+            and _clean(item.get("source"), 20) == "weidian"
+            and not item.get("duplicate")
+            and _entry_status(item) == "shipped"
+            and _entry_scoring_method(item) == method
+            and _to_float(item.get("score"), 0.0) > 0
+        ),
+        key=lambda item: (_entry_time(item), _clean(item.get("id"), 80)),
+    )
+    allocations: list[dict[str, Any]] = []
+    now = _now()
+    remaining = remainder
+    for candidate in candidates:
+        score = round(_to_float(candidate.get("score"), 0.0), 4)
+        if remaining + 0.0001 < score:
+            break
+        candidate["status"] = "settled"
+        candidate["settled"] = True
+        candidate["settled_at"] = now
+        sources = candidate.get("settled_by_duplicates")
+        if not isinstance(sources, list):
+            sources = []
+        if owner_id not in sources:
+            sources.append(owner_id)
+        candidate["settled_by_duplicates"] = sources
+        candidate["updated_at"] = now
+        allocations.append(
+            {
+                "entry_id": _clean(candidate.get("id"), 80),
+                "fan_name": _clean(candidate.get("fan_name") or candidate.get("raw_name") or "未登记", 120),
+                "source": "weidian",
+                "source_label": SOURCE_LABELS.get("weidian", "微店"),
+                "source_time": _entry_time(candidate),
+                "score": score,
+                "covered_score": score,
+                "auto": True,
+            }
+        )
+        remaining = round(remaining - score, 4)
+    if not allocations:
+        return []
+    covered = proxy.get("covered") if isinstance(proxy.get("covered"), list) else []
+    existing = {_clean(item.get("entry_id"), 80) for item in covered if isinstance(item, dict)}
+    for allocation in allocations:
+        if allocation["entry_id"] not in existing:
+            covered.append(allocation)
+    proxy["covered"] = covered
+    proxy["covered_score"] = round(
+        _to_float(proxy.get("covered_score"), 0.0)
+        + sum(item["covered_score"] for item in allocations),
+        4,
+    )
+    proxy["remainder"] = round(max(0.0, remaining), 4)
+    proxy["auto_settled_at"] = now
+    if isinstance(owner, dict):
+        owner["updated_at"] = now
+    block = _settlement_block(doc)
+    if remaining > 0.0001:
+        block["owner"][method] = owner_id
+    else:
+        block["owner"].pop(method, None)
+    block["remainder"][method] = round(max(0.0, remaining), 4)
+    block["updated_at"] = now
+    doc["association_settlement"] = block
+    return allocations
+
+
+def _mutator_auto_settle_association(doc: dict[str, Any], payload: dict[str, Any]):
+    method = _clean(payload.get("method"), 10)
+    methods = [method] if method in SCORING_METHODS else list(SCORING_METHODS)
+    covered: list[dict[str, Any]] = []
+    for candidate_method in methods:
+        covered.extend(_auto_settle_association_remainder(doc, candidate_method))
+    return doc, {"covered": covered, "count": len(covered)}
+
+
 def _business_option(value: Any, group: str | None = None) -> str:
     text = _clean(value, 80)
     allowed = BUSINESS_GROUP_VALUES.get(group, BUSINESS_OPTION_VALUES) if group else BUSINESS_OPTION_VALUES
@@ -3098,7 +3206,10 @@ def _mutator_upsert_weidian(doc: dict[str, Any], payload: dict[str, Any]):
         _, is_new = _upsert_entry(doc, candidate)
         created += int(is_new)
         updated += int(not is_new)
-    return doc, {"created": created, "updated": updated}
+    auto_covered: list[dict[str, Any]] = []
+    for candidate_method in SCORING_METHODS:
+        auto_covered.extend(_auto_settle_association_remainder(doc, candidate_method))
+    return doc, {"created": created, "updated": updated, "auto_covered": auto_covered}
 
 
 def _mutator_rename_weidian(doc: dict[str, Any], payload: dict[str, Any]):
@@ -3145,7 +3256,10 @@ def _mutator_mark_shipped(doc: dict[str, Any], payload: dict[str, Any]):
             weidian["shipped"] = True
             weidian["shipped_at"] = shipped_at
         updated += 1
-    return doc, {"updated": updated}
+    auto_covered: list[dict[str, Any]] = []
+    for candidate_method in SCORING_METHODS:
+        auto_covered.extend(_auto_settle_association_remainder(doc, candidate_method))
+    return doc, {"updated": updated, "auto_covered": auto_covered}
 
 
 def _mutator_migrate_manual_source(doc: dict[str, Any], payload: dict[str, Any]):
@@ -3171,6 +3285,7 @@ register_mutator(RESOURCE, "update", _mutator_update)
 register_mutator(RESOURCE, "delete", _mutator_delete)
 register_mutator(RESOURCE, "duplicate", _mutator_duplicate)
 register_mutator(RESOURCE, "settle_association", _mutator_settle_association)
+register_mutator(RESOURCE, "auto_settle_association", _mutator_auto_settle_association)
 register_mutator(RESOURCE, "apply_ai", _mutator_apply_ai)
 register_mutator(RESOURCE, "upsert_room_live", _mutator_upsert_room_live)
 register_mutator(RESOURCE, "upsert_weidian", _mutator_upsert_weidian)
@@ -3718,6 +3833,12 @@ def apply_association_settlement(request: Request, payload: dict[str, Any] = Bod
     if not entry_id:
         raise HTTPException(status_code=422, detail="缺少条目 ID")
     return _mutate("settle_association", {"entry_id": entry_id}, request)
+
+
+@router.post("/association/auto-settle")
+def auto_settle_association(request: Request, payload: dict[str, Any] = Body(default={}), _=Depends(verify_redblue_password)):
+    method = _clean(payload.get("method"), 10)
+    return _mutate("auto_settle_association", {"method": method}, request)
 
 
 @router.post("/scoring-overrides/preview")
