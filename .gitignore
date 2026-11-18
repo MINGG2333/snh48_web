@@ -70,3 +70,6 @@ img/
 .env.bak.*
 deploy/*.bak.*
 *.bak.*
+
+# 历史遗留 gitlink，内容在 NAS/台式机，不再作为 submodule 跟踪
+transcript_analyze/
