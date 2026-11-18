@@ -2849,8 +2849,8 @@
       ])) + '</div>';
       html += '<div class="finance-section"><h3>鸣谢</h3>';
       if ((d.subsidies || []).length) {
-        html += financeTable(["支持者", "档位", "备注"], (d.subsidies || []).map(function (item) {
-          return '<tr><td>' + esc(item.public_name || financeMask(item.name)) + '</td><td>支持</td><td>' + esc(item.note || "") + '</td></tr>';
+        html += financeTable(["支持者", "支持类型"], (d.subsidies || []).map(function (item) {
+          return '<tr><td>' + esc(item.public_name || financeMask(item.name)) + '</td><td>' + (item.price_support ? "正价支持" : "补贴支持") + '</td></tr>';
         }).join(""));
       } else {
         html += '<div class="finance-note">补贴明细待录入；录入后将在此显示打码昵称或匿名汇总。</div>';
@@ -2873,7 +2873,9 @@
       }
       html += '</div>';
     }
-    if ((d.notes || []).length) {
+    if (isWeibo) {
+      if (d.public_note) html += '<div class="finance-note">' + esc(d.public_note) + '</div>';
+    } else if ((d.notes || []).length) {
       html += '<div class="finance-note">' + d.notes.map(function (item) { return esc(item); }).join("<br>") + '</div>';
     }
     $("financeBody").innerHTML = html;
