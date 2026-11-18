@@ -112,6 +112,22 @@ class RedblueLedgerApiTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        (self.tmp / "finance.json").write_text(
+            json.dumps(
+                {
+                    "stage": "测试阶段",
+                    "cutoff": "2026-11-15 23:59:59",
+                    "income": [
+                        {"label": "微店实收", "amount": 100.0, "note": ""},
+                        {"label": "粉丝补贴", "amount": 10.0, "note": ""},
+                    ],
+                    "expenses": [{"label": "鸡腿采购", "amount": 60.0, "detail": ""}],
+                    "subsidies": [{"name": "测试粉丝", "public_name": "测**", "amount": 10.0, "note": ""}],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         self._old = {
             "password": cfg.REDBLUE_LEDGER_PASSWORD,
             "data": cfg.REDBLUE_LEDGER_DATA_PATH,
@@ -119,6 +135,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
             "fallback": cfg.REDBLUE_IDENTITY_FALLBACK_PATHS,
             "score": cfg.REDBLUE_SCORE_DATA_PATH,
             "supply_cost": cfg.REDBLUE_SUPPLY_COST_PATH,
+            "finance": cfg.REDBLUE_FINANCE_PATH,
             "authority": cfg.REDBLUE_GIFT_AUTHORITY_PATH,
             "weidian": cfg.REDBLUE_WEIDIAN_ORDERS_PATH,
             "ai": cfg.REDBLUE_AI_QUEUE_DIR,
@@ -134,6 +151,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = {}
         cfg.REDBLUE_SCORE_DATA_PATH = str(self.tmp / "score.json")
         cfg.REDBLUE_SUPPLY_COST_PATH = str(self.tmp / "supply_cost.json")
+        cfg.REDBLUE_FINANCE_PATH = str(self.tmp / "finance.json")
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = str(self.tmp / "authority.json")
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = str(self.tmp / "weidian.json")
         cfg.REDBLUE_AI_QUEUE_DIR = str(self.tmp / "ai")
@@ -155,6 +173,7 @@ class RedblueLedgerApiTests(unittest.TestCase):
         cfg.REDBLUE_IDENTITY_FALLBACK_PATHS = self._old["fallback"]
         cfg.REDBLUE_SCORE_DATA_PATH = self._old["score"]
         cfg.REDBLUE_SUPPLY_COST_PATH = self._old["supply_cost"]
+        cfg.REDBLUE_FINANCE_PATH = self._old["finance"]
         cfg.REDBLUE_GIFT_AUTHORITY_PATH = self._old["authority"]
         cfg.REDBLUE_WEIDIAN_ORDERS_PATH = self._old["weidian"]
         cfg.REDBLUE_AI_QUEUE_DIR = self._old["ai"]
@@ -2073,6 +2092,15 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in price], ["f3"])
         weidian_card = api._filter_entries(entries, source="weidian|计分卡")
         self.assertEqual([item["id"] for item in weidian_card], ["f4"])
+
+    def test_finance_summary(self):
+        data = self.client.get("/api/redblue/finance", headers=self.headers).json()
+        self.assertEqual(data["stage"], "测试阶段")
+        self.assertEqual(data["summary"]["known_income"], 100.0)
+        self.assertEqual(data["summary"]["subsidy_total"], 10.0)
+        self.assertEqual(data["summary"]["expense_total"], 60.0)
+        self.assertEqual(data["summary"]["balance"], 50.0)
+        self.assertFalse(data["summary"]["subsidy_pending"])
 
     def test_manual_association_chicken_is_priced_at_28_per_point(self):
         entry = {

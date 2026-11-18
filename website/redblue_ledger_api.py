@@ -1983,6 +1983,111 @@ def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 
+_FINANCE_CACHE: dict[str, Any] = {"signature": None, "value": None}
+
+
+def _finance_document() -> dict[str, Any]:
+    path = Path(
+        getattr(
+            cfg,
+            "REDBLUE_FINANCE_PATH",
+            Path(cfg.PROJECT_ROOT).parent
+            / "snh48-fan-hub"
+            / "private_handover"
+            / "web_state"
+            / "redblue_finance_2026.json",
+        )
+    )
+    try:
+        stat = path.stat()
+    except OSError:
+        return {"stage": "", "income": [], "expenses": [], "subsidies": [], "summary": {}}
+    signature = (str(path), stat.st_mtime_ns, stat.st_size)
+    cached = _FINANCE_CACHE.get("value")
+    if cached is not None and _FINANCE_CACHE.get("signature") == signature:
+        return cached
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = {}
+    income = []
+    for item in payload.get("income") if isinstance(payload.get("income"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        amount = item.get("amount")
+        income.append(
+            {
+                "label": _clean(item.get("label"), 80),
+                "amount": round(_to_float(amount, 0.0), 2) if amount is not None else None,
+                "pending": bool(item.get("pending")) or amount is None,
+                "note": _clean(item.get("note"), 200),
+            }
+        )
+    expenses = []
+    for item in payload.get("expenses") if isinstance(payload.get("expenses"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        expenses.append(
+            {
+                "label": _clean(item.get("label"), 80),
+                "amount": round(_to_float(item.get("amount"), 0.0), 2),
+                "detail": _clean(item.get("detail"), 160),
+            }
+        )
+    subsidies = []
+    for item in payload.get("subsidies") if isinstance(payload.get("subsidies"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        subsidies.append(
+            {
+                "name": _clean(item.get("name"), 120),
+                "public_name": _clean(item.get("public_name"), 120),
+                "amount": round(_to_float(item.get("amount"), 0.0), 2),
+                "note": _clean(item.get("note"), 200),
+                "price_support": bool(item.get("price_support")),
+            }
+        )
+    known_income = round(
+        sum(
+            item["amount"]
+            for item in income
+            if item["amount"] is not None and item["label"] != "粉丝补贴"
+        ),
+        2,
+    )
+    income_subsidy = round(
+        sum(
+            item["amount"]
+            for item in income
+            if item["amount"] is not None and item["label"] == "粉丝补贴"
+        ),
+        2,
+    )
+    subsidy_total = round(sum(item["amount"] for item in subsidies), 2) or income_subsidy
+    expense_total = round(sum(item["amount"] for item in expenses), 2)
+    value = {
+        "stage": _clean(payload.get("stage"), 40),
+        "cutoff": _clean(payload.get("cutoff"), 32),
+        "updated_at": _clean(payload.get("updated_at"), 32),
+        "income": income,
+        "expenses": expenses,
+        "subsidies": subsidies,
+        "notes": [_clean(item, 200) for item in (payload.get("notes") or []) if _clean(item, 200)],
+        "public_note": _clean(payload.get("public_note"), 300),
+        "summary": {
+            "known_income": known_income,
+            "subsidy_total": subsidy_total,
+            "income_total": round(known_income + subsidy_total, 2),
+            "expense_total": expense_total,
+            "balance": round(known_income + subsidy_total - expense_total, 2),
+            "subsidy_pending": any(item["pending"] for item in income if item["label"] == "粉丝补贴"),
+        },
+    }
+    _FINANCE_CACHE["signature"] = signature
+    _FINANCE_CACHE["value"] = value
+    return value
+
+
 def _new_entry(
     doc: dict[str, Any],
     *,
@@ -3767,6 +3872,11 @@ def _export_response(png: bytes, filename: str) -> Response:
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get("/finance")
+def get_redblue_finance(_=Depends(verify_redblue_password)):
+    return _finance_document()
 
 
 @router.get("/export/summary.png")

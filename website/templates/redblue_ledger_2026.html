@@ -190,6 +190,17 @@
     .modal-card { position: relative; width: min(620px,100%); max-height: 90vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
     .modal-card.wide { width: min(980px,100%); }
     .modal-card h2 { font-size: 19px; margin-bottom: 4px; }
+    .finance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0 16px; }
+    .finance-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .finance-card .label { color: var(--muted); font-size: 12px; }
+    .finance-card .value { color: var(--gold); font-size: 20px; font-weight: 760; margin-top: 4px; }
+    .finance-table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
+    .finance-table th, .finance-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; vertical-align: top; }
+    .finance-table th { color: var(--muted); font-weight: 600; }
+    .finance-table td.amount { text-align: right; white-space: nowrap; }
+    .finance-section { margin-top: 14px; }
+    .finance-section h3 { font-size: 15px; margin-bottom: 4px; }
+    .finance-note { color: var(--muted); font-size: 12px; line-height: 1.7; }
     .modal-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .form-grid .full { grid-column: 1 / -1; }
@@ -265,6 +276,7 @@
         <button class="btn gold" id="proxyBatchBtn">批量代投明细</button>
         <button class="btn" id="applySelectedAiBtn">应用选中 AI 建议</button>
         <button class="btn pink" id="shipSelectedBtn">批量无需物流发货</button>
+        <button class="btn gold" id="financeBtn">收支 / 鸣谢</button>
         <div class="spacer"></div>
       </div>
       <div class="filters">
@@ -495,6 +507,31 @@
     <div class="modal-actions">
       <button class="btn" data-close="nicknameModal">关闭</button>
       <button class="btn primary" id="copyNicknamesBtn">复制</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="financeModal">
+  <div class="modal-backdrop" data-close="financeModal"></div>
+  <div class="modal-card wide finance-modal-card">
+    <div class="daily-modal-head">
+      <div>
+        <h2>第一阶段收支与鸣谢</h2>
+        <div class="sub" id="financeSub">管理员视图：完整昵称与金额</div>
+      </div>
+      <div class="panel-actions">
+        <div class="daily-toggle" role="group" aria-label="收支公示视图">
+          <button class="btn mini active" id="financeAdminBtn" type="button">管理员</button>
+          <button class="btn mini" id="financeWeiboBtn" type="button">微博公示</button>
+          <button class="btn mini" id="financeArtistBtn" type="button">给陈嘉仪</button>
+        </div>
+        <button class="btn" type="button" data-close="financeModal">关闭</button>
+      </div>
+    </div>
+    <div id="financeBody"></div>
+    <div class="modal-actions">
+      <button class="btn" type="button" id="financeCopyBtn">复制当前视图</button>
+      <button class="btn primary" type="button" data-close="financeModal">关闭</button>
     </div>
   </div>
 </div>
@@ -2760,6 +2797,140 @@
     $("nicknameText").select();
   }
 
+  var financeData = null;
+  var financeView = "admin";
+
+  function financeMask(name) {
+    var text = String(name || "").trim();
+    if (!text) return "匿名支持者";
+    var chars = Array.from(text);
+    return chars[0] + (chars.length > 1 ? "**" : "*");
+  }
+
+  function financeAmount(value) {
+    return value == null ? "待录入" : money(value);
+  }
+
+  function financeRows(rows, amountClass) {
+    return rows.map(function (row) {
+      return "<tr><td>" + row[0] + "</td><td class=\"" + (amountClass || "amount") + "\">" + row[1] + "</td><td>" + (row[2] || "") + "</td></tr>";
+    }).join("");
+  }
+
+  function financeTable(headers, rows) {
+    return '<table class="finance-table"><thead><tr>' + headers.map(function (item) { return "<th>" + item + "</th>"; }).join("") + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function renderFinanceModal() {
+    if (!financeData) return;
+    var d = financeData;
+    var s = d.summary || {};
+    var isWeibo = financeView === "weibo";
+    var isArtist = financeView === "artist";
+    var title = isWeibo ? "微博公示：匿名/打码口径" : (isArtist ? "给陈嘉仪：完整昵称与金额" : "管理员视图：完整昵称与金额");
+    $("financeSub").textContent = title + (d.cutoff ? " · 截止 " + d.cutoff : "");
+    var cards = [
+      ["微店实收", money(s.known_income || 0)],
+      ["粉丝补贴", s.subsidy_pending ? "待录入" : money(s.subsidy_total || 0)],
+      ["对外支出", money(s.expense_total || 0)],
+      ["补贴前结余", money(s.balance || 0)]
+    ];
+    var html = '<div class="finance-grid">' + cards.map(function (item) {
+      return '<div class="finance-card"><div class="label">' + esc(item[0]) + '</div><div class="value">' + esc(item[1]) + '</div></div>';
+    }).join("") + '</div>';
+
+    if (isWeibo) {
+      html += '<div class="finance-section"><h3>收入</h3>' + financeTable(["项目", "金额", "说明"], financeRows([
+        ["微店实收", money(s.known_income || 0), "按实际售价汇总"],
+        ["粉丝补贴", s.subsidy_pending ? "待录入" : money(s.subsidy_total || 0), "用于降低第一阶段部分微店单价"]
+      ])) + '</div>';
+      html += '<div class="finance-section"><h3>支出</h3>' + financeTable(["项目", "金额", "说明"], financeRows([
+        ["鸡腿采购", money(s.expense_total || 0), "对外采购支出"]
+      ])) + '</div>';
+      html += '<div class="finance-section"><h3>鸣谢</h3>';
+      if ((d.subsidies || []).length) {
+        html += financeTable(["支持者", "档位", "备注"], (d.subsidies || []).map(function (item) {
+          return '<tr><td>' + esc(item.public_name || financeMask(item.name)) + '</td><td>支持</td><td>' + esc(item.note || "") + '</td></tr>';
+        }).join(""));
+      } else {
+        html += '<div class="finance-note">补贴明细待录入；录入后将在此显示打码昵称或匿名汇总。</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="finance-section"><h3>收入</h3>' + financeTable(["项目", "金额", "说明"], financeRows((d.income || []).map(function (item) {
+        return [esc(item.label), financeAmount(item.amount), esc(item.note || "")];
+      }))) + '</div>';
+      html += '<div class="finance-section"><h3>支出</h3>' + financeTable(["项目", "金额", "明细"], financeRows((d.expenses || []).map(function (item) {
+        return [esc(item.label), money(item.amount || 0), esc(item.detail || "")];
+      }))) + '</div>';
+      html += '<div class="finance-section"><h3>补贴鸣谢</h3>';
+      if ((d.subsidies || []).length) {
+        html += financeTable(["昵称", "金额", "备注"], (d.subsidies || []).map(function (item) {
+          return '<tr><td>' + esc(isArtist ? item.name : item.name) + '</td><td class="amount">' + money(item.amount || 0) + '</td><td>' + esc(item.note || "") + '</td></tr>';
+        }).join(""));
+      } else {
+        html += '<div class="finance-note">暂无补贴明细，待录入。</div>';
+      }
+      html += '</div>';
+    }
+    if ((d.notes || []).length) {
+      html += '<div class="finance-note">' + d.notes.map(function (item) { return esc(item); }).join("<br>") + '</div>';
+    }
+    $("financeBody").innerHTML = html;
+    [["financeAdminBtn", "admin"], ["financeWeiboBtn", "weibo"], ["financeArtistBtn", "artist"]].forEach(function (pair) {
+      $(pair[0]).classList.toggle("active", pair[1] === financeView);
+    });
+  }
+
+  async function openFinanceModal() {
+    try {
+      financeView = "admin";
+      financeData = await api("/api/redblue/finance");
+      renderFinanceModal();
+      $("financeModal").classList.remove("hidden");
+    } catch (error) {
+      showToast(error.message || "收支数据加载失败", true);
+    }
+  }
+
+  function setFinanceView(view) {
+    financeView = view;
+    renderFinanceModal();
+  }
+
+  async function copyFinanceView() {
+    if (!financeData) return;
+    var d = financeData;
+    var s = d.summary || {};
+    var lines = [d.stage || "第一阶段", "截止 " + (d.cutoff || "-"), ""];
+    lines.push("收入：微店实收 " + money(s.known_income || 0));
+    lines.push("粉丝补贴：" + (s.subsidy_pending ? "待录入" : money(s.subsidy_total || 0)));
+    lines.push("支出：" + money(s.expense_total || 0));
+    lines.push("补贴前结余：" + money(s.balance || 0));
+    if (financeView === "weibo") {
+      lines.push("", "鸣谢：");
+      (d.subsidies || []).forEach(function (item) {
+        lines.push("- " + (item.public_name || financeMask(item.name)));
+      });
+    } else {
+      lines.push("", "收入明细：");
+      (d.income || []).forEach(function (item) { lines.push("- " + item.label + " " + financeAmount(item.amount)); });
+      lines.push("支出明细：");
+      (d.expenses || []).forEach(function (item) { lines.push("- " + item.label + " " + money(item.amount || 0)); });
+      if ((d.subsidies || []).length) {
+        lines.push("补贴鸣谢：");
+        (d.subsidies || []).forEach(function (item) { lines.push("- " + item.name + " " + money(item.amount || 0)); });
+      }
+    }
+    var text = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("已复制当前视图");
+    } catch (error) {
+      showToast("复制失败，请手动选择文本", true);
+    }
+  }
+
   async function copyNicknames() {
     var text = $("nicknameText").value;
     if (!text) { showToast("暂无昵称", true); return; }
@@ -3313,6 +3484,11 @@
     });
     $("refreshBtn").addEventListener("click", function () { loadData().catch(function () {}); });
     $("resetFiltersBtn").addEventListener("click", resetFilters);
+    $("financeBtn").addEventListener("click", openFinanceModal);
+    $("financeAdminBtn").addEventListener("click", function () { setFinanceView("admin"); });
+    $("financeWeiboBtn").addEventListener("click", function () { setFinanceView("weibo"); });
+    $("financeArtistBtn").addEventListener("click", function () { setFinanceView("artist"); });
+    $("financeCopyBtn").addEventListener("click", copyFinanceView);
     $("exportSummaryBtn").addEventListener("click", function () { exportImage("summary"); });
     $("exportDailyBtn").addEventListener("click", exportDailyTrend);
     $("openDailyModalBtn").addEventListener("click", openDailyModal);
