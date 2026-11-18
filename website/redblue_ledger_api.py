@@ -2071,6 +2071,8 @@ def _filter_entries(
     entries: Iterable[dict[str, Any]],
     *,
     source: str = "all",
+    method_filter: str = "all",
+    price_filter: float = 0.0,
     status_filter: str = "all",
     keyword: str = "",
     date_from: str = "",
@@ -2081,17 +2083,34 @@ def _filter_entries(
     scores: set[float] | None = None,
     aliases: Iterable[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
-    source = _clean(source, 20).lower() or "all"
+    source = _clean(source, 40).lower() or "all"
+    method_filter = _clean(method_filter, 10) or "all"
+    if method_filter not in SCORING_METHODS:
+        method_filter = "all"
+    wanted_price = round(_to_float(price_filter, 0.0), 4)
     status_filter = _clean(status_filter, 20).lower() or "all"
     keyword = _clean(keyword, 120).casefold()
     wanted_scores = {round(value, 4) for value in (scores or set())}
+    source_part, _, source_method = source.partition("|")
     result: list[dict[str, Any]] = []
     for raw in entries:
         if not isinstance(raw, dict):
             continue
         item = _normalise_entry(raw, aliases)
-        if source != "all" and item["source"] != source:
+        if source != "all":
+            if item["source"] != source_part:
+                continue
+            if source_method and item["scoring_method"] != source_method:
+                continue
+        if method_filter != "all" and item["scoring_method"] != method_filter:
             continue
+        if wanted_price > 0:
+            price = item.get("price") or {}
+            unit = price.get("sale_avg")
+            if unit is None:
+                unit = price.get("external_avg")
+            if unit is None or round(_to_float(unit, 0.0), 4) != wanted_price:
+                continue
         if not include_duplicate and item["duplicate"]:
             continue
         if wanted_scores and round(_to_float(item.get("score"), 0.0), 4) not in wanted_scores:
@@ -2337,6 +2356,8 @@ def _load_filtered(
     sort: str,
     include_duplicate: bool,
     scores: set[float] | None = None,
+    method_filter: str = "all",
+    price_filter: float = 0.0,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
         doc = load_document(RESOURCE)
@@ -2346,6 +2367,8 @@ def _load_filtered(
     filtered = _filter_entries(
         doc.get("entries") or [],
         source=source,
+        method_filter=method_filter,
+        price_filter=price_filter,
         status_filter=status_filter,
         keyword=keyword,
         date_from=date_from,
@@ -3293,6 +3316,8 @@ def _weidian_changed(doc: dict[str, Any], orders: list[dict[str, Any]]) -> bool:
 def get_redblue_data(
     response: Response,
     source: str = Query("all"),
+    method: str = Query("all"),
+    price: str = Query(""),
     status_filter: str = Query("all", alias="status"),
     keyword: str = Query(""),
     date_from: str = Query(""),
@@ -3312,6 +3337,8 @@ def get_redblue_data(
     parsed_scores = _parse_scores(scores)
     doc, entries = _load_filtered(
         source=source,
+        method_filter=method,
+        price_filter=_to_float(price, 0.0),
         status_filter=status_filter,
         keyword=keyword,
         date_from=date_from,
@@ -3336,6 +3363,17 @@ def get_redblue_data(
             if _to_float(item.get("score"), 0.0) > 0
         }
     )
+    price_options = sorted(
+        {
+            round(_to_float(unit, 0.0), 4)
+            for item in all_entries
+            for unit in (
+                (item.get("price") or {}).get("sale_avg"),
+                (item.get("price") or {}).get("external_avg"),
+            )
+            if unit is not None and _to_float(unit, 0.0) > 0
+        }
+    )
     return {
         "generated_at": _clean(doc.get("updated_at"), 32),
         "summary": _summary(entries),
@@ -3344,12 +3382,15 @@ def get_redblue_data(
         "fan_summary": fan_summary,
         "entries": entries,
         "score_options": score_options,
+        "price_options": price_options,
         "business_options": BUSINESS_OPTIONS,
         "business_redemptions": redemptions,
         "weidian_sync": _weidian_sync_status(),
         "total": len(entries),
         "filters": {
-            "source": _clean(source, 20),
+            "source": _clean(source, 40),
+            "method": _clean(method, 10),
+            "price": _to_float(price, 0.0),
             "status": _clean(status_filter, 20),
             "keyword": _clean(keyword, 120),
             "date_from": date_from,
@@ -3366,6 +3407,8 @@ def get_redblue_data(
 def _export_context(
     *,
     source: str,
+    method: str,
+    price: str,
     status_filter: str,
     keyword: str,
     date_from: str,
@@ -3383,6 +3426,8 @@ def _export_context(
     parsed_scores = _parse_scores(scores)
     doc, entries = _load_filtered(
         source=source,
+        method_filter=method,
+        price_filter=_to_float(price, 0.0),
         status_filter=status_filter,
         keyword=keyword,
         date_from=date_from,
@@ -3411,7 +3456,19 @@ def _export_context(
     )
     filters = []
     if source != "all":
-        filters.append("来源：" + SCORING_SOURCE_LABELS.get(source, SOURCE_LABELS.get(source, source)))
+        source_key, _, source_method = source.partition("|")
+        if source_method:
+            label = next(
+                (item["label"] for item in DAILY_SCORING_CATEGORIES if item["key"] == source),
+                f"{SCORING_SOURCE_LABELS.get(source_key, SOURCE_LABELS.get(source_key, source_key))}·{source_method}",
+            )
+        else:
+            label = SCORING_SOURCE_LABELS.get(source_key, SOURCE_LABELS.get(source_key, source_key))
+        filters.append("来源：" + label)
+    if method and method != "all":
+        filters.append("计分方式：" + method)
+    if _to_float(price, 0.0) > 0:
+        filters.append(f"单价：¥{_to_float(price, 0.0):.2f}/分")
     if status_filter != "all":
         filters.append("状态：" + ENTRY_STATUS_LABELS.get(status_filter, status_filter))
     if keyword:
@@ -3471,6 +3528,8 @@ def _export_response(png: bytes, filename: str) -> Response:
 @router.get("/export/summary.png")
 def export_redblue_summary(
     source: str = Query("all"),
+    method: str = Query("all"),
+    price: str = Query(""),
     status_filter: str = Query("all", alias="status"),
     keyword: str = Query(""),
     date_from: str = Query(""),
@@ -3484,6 +3543,8 @@ def export_redblue_summary(
 ):
     entries, summary, period, filter_text, updated, revision = _export_context(
         source=source,
+        method=method,
+        price=price,
         status_filter=status_filter,
         keyword=keyword,
         date_from=date_from,
@@ -3498,6 +3559,8 @@ def export_redblue_summary(
         "summary",
         revision,
         source=source,
+        method=method,
+        price=price,
         status=status_filter,
         keyword=keyword,
         date_from=date_from,
@@ -3527,6 +3590,8 @@ def export_redblue_summary(
 @router.get("/export/entries.png")
 def export_redblue_entries(
     source: str = Query("all"),
+    method: str = Query("all"),
+    price: str = Query(""),
     status_filter: str = Query("all", alias="status"),
     keyword: str = Query(""),
     date_from: str = Query(""),
@@ -3540,6 +3605,8 @@ def export_redblue_entries(
 ):
     entries, summary, period, filter_text, updated, revision = _export_context(
         source=source,
+        method=method,
+        price=price,
         status_filter=status_filter,
         keyword=keyword,
         date_from=date_from,
@@ -3554,6 +3621,8 @@ def export_redblue_entries(
         "entries",
         revision,
         source=source,
+        method=method,
+        price=price,
         status=status_filter,
         keyword=keyword,
         date_from=date_from,

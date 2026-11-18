@@ -1945,6 +1945,22 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertIsNone(price["sale_total"])
         self.assertIsNone(price["external_total"])
 
+    def test_filter_by_source_category_method_and_price(self):
+        entries = [
+            {"id": "f1", "source": "room", "score": 1, "scoring_method": "计分卡", "source_time": "2026-11-01 10:00:00"},
+            {"id": "f2", "source": "room", "score": 1, "scoring_method": "鸡腿", "source_time": "2026-11-01 10:01:00"},
+            {"id": "f3", "source": "weidian", "score": 5, "scoring_method": "鸡腿", "source_time": "2026-11-01 10:02:00", "weidian": {"order_id": "OVR", "amount": 131.25}},
+            {"id": "f4", "source": "weidian", "score": 6, "scoring_method": "计分卡", "source_time": "2026-11-01 10:03:00", "weidian": {"order_id": "CARD", "amount": 96.0}},
+        ]
+        room_leg = api._filter_entries(entries, source="room|鸡腿")
+        self.assertEqual([item["id"] for item in room_leg], ["f2"])
+        card = api._filter_entries(entries, method_filter="计分卡")
+        self.assertEqual([item["id"] for item in card], ["f1", "f4"])
+        price = api._filter_entries(entries, price_filter=20.0)
+        self.assertEqual([item["id"] for item in price], ["f3"])
+        weidian_card = api._filter_entries(entries, source="weidian|计分卡")
+        self.assertEqual([item["id"] for item in weidian_card], ["f4"])
+
     def test_sale_override_uses_actual_refunded_amount(self):
         entry = {
             "id": "s1",

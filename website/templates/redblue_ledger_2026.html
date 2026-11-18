@@ -138,6 +138,8 @@
     tr.sub-row td.notice { color: var(--muted); font-size: 12px; }
     tr.sub-row .sub-score { color: var(--green); font-weight: 760; }
     .pill { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+    .pill.quick-filter { cursor: pointer; font: inherit; background: transparent; }
+    .pill.quick-filter:hover { filter: brightness(1.15); }
     .pill.manual { color: var(--gold); border-color: rgba(240,184,75,.4); }
     .pill.weidian { color: var(--pink); border-color: rgba(232,125,167,.4); }
     .pill.room { color: var(--blue); border-color: rgba(103,168,255,.4); }
@@ -266,7 +268,9 @@
         <div class="spacer"></div>
       </div>
       <div class="filters">
-        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="manual">暗票</option><option value="weidian">微店（自动）</option><option value="association_manual">手动</option><option value="room">房间</option><option value="live">直播</option></select></div>
+        <div class="field"><label>来源</label><select id="sourceFilter"><option value="all">全部</option><option value="room|计分卡">房间·计分卡</option><option value="room|鸡腿">房间·鸡腿</option><option value="live|计分卡">直播·计分卡</option><option value="live|鸡腿">直播·鸡腿</option><option value="weidian|计分卡">应援会·计分卡（微店）</option><option value="weidian|鸡腿">应援会·鸡腿（微店）</option><option value="association_manual|鸡腿">应援会·鸡腿（手动）</option><option value="manual|计分卡">暗票·计分卡</option></select></div>
+        <div class="field"><label>计分方式</label><select id="methodFilter"><option value="all">全部</option><option value="计分卡">计分卡</option><option value="鸡腿">鸡腿</option></select></div>
+        <div class="field"><label>单价</label><select id="priceFilter"><option value="all">全部单价</option></select></div>
         <div class="field"><label>状态</label><select id="statusFilter"><option value="all">全部</option><optgroup label="投送状态"><option value="pending">待投</option><option value="settled">已投</option></optgroup><optgroup label="订单状态"><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="paid">已付款</option></optgroup><optgroup label="异常"><option value="warning">身份待确认</option><option value="duplicate">重复</option></optgroup></select></div>
         <div class="field"><label>分数</label><div class="multi-select" id="scoreFilter"><button type="button" class="multi-select-toggle" id="scoreFilterToggle" aria-haspopup="listbox" aria-expanded="false">全部分数</button><div class="multi-select-menu hidden" id="scoreFilterMenu" role="listbox" aria-multiselectable="true"></div></div></div>
         <div class="field"><label>关键词</label><input id="keywordInput" placeholder="昵称 / ID / 备注"></div>
@@ -674,6 +678,17 @@
     return response.json();
   }
 
+  function renderPriceFilter() {
+    if (!data) return;
+    var select = $("priceFilter");
+    var current = select.value;
+    var options = (data.price_options || []).map(Number).filter(function (value) { return value > 0; });
+    select.innerHTML = '<option value="all">全部单价</option>' + options.map(function (value) {
+      return '<option value="' + esc(String(value)) + '">¥' + Number(value).toFixed(2) + '/分</option>';
+    }).join("");
+    select.value = current !== "all" && options.indexOf(Number(current)) >= 0 ? current : "all";
+  }
+
   function renderScoreFilter() {
     if (!data) return;
     var options = (data.score_options || []).map(Number).filter(function (value) { return value > 0; });
@@ -708,6 +723,8 @@
   function filterQuery() {
     var params = new URLSearchParams();
     params.set("source", $("sourceFilter").value);
+    params.set("method", $("methodFilter").value);
+    if ($("priceFilter").value !== "all") params.set("price", $("priceFilter").value);
     params.set("status", $("statusFilter").value);
     params.set("keyword", $("keywordInput").value.trim());
     params.set("date_from", $("dateFrom").value);
@@ -754,6 +771,7 @@
   function renderAll() {
     if (!data) return;
     businessOptions = data.business_options || [];
+    renderPriceFilter();
     renderScoreFilter();
     renderKpis();
     renderScoringSummary();
@@ -1348,8 +1366,8 @@
         '<td><input type="checkbox" data-select="' + esc(entry.id) + '" ' + (selected.has(entry.id) ? "checked" : "") + '></td>' +
         '<td>' + esc((entry.source_time || entry.created_at || "-").slice(0,16)) + '</td>' +
         '<td><strong>' + esc(name) + '</strong>' + warning + identityNote + '</td>' +
-        '<td><span class="pill ' + esc(entry.source) + '">' + esc(entry.source_label || sourceDisplay(entry.source)) + '</span></td>' +
-        '<td><span class="pill ' + scoringClass + '">' + esc(scoring || "-") + '</span>' + scoringNote + '</td>' +
+        '<td><button type="button" class="pill quick-filter ' + esc(entry.source) + '" data-quick-source="' + esc(entry.source + "|" + scoring) + '" title="按此来源筛选">' + esc(entry.source_label || sourceDisplay(entry.source)) + '</button></td>' +
+        '<td><button type="button" class="pill quick-filter ' + scoringClass + '" data-quick-method="' + esc(scoring) + '" title="按此计分方式筛选">' + esc(scoring || "-") + '</button>' + scoringNote + '</td>' +
         '<td style="color:var(--gold);font-weight:760;">' + score(displayScore) + '</td>' +
         '<td>' + priceCell(entry) + '</td>' +
         '<td>' + statusPills(entry) + '</td>' +
@@ -3301,7 +3319,7 @@
     $("shipSelectedBtn").addEventListener("click", shipSelected);
     $("proxyConfirmBtn").addEventListener("click", confirmProxySettlement);
     $("proxyBatchBtn").addEventListener("click", openProxyBatch);
-    ["sourceFilter","statusFilter","sortFilter","includeDuplicate"].forEach(function (id) {
+    ["sourceFilter","methodFilter","priceFilter","statusFilter","sortFilter","includeDuplicate"].forEach(function (id) {
       $(id).addEventListener("change", function () { loadData().catch(function () {}); });
     });
     ["dateFrom","dateTo"].forEach(function (id) {
@@ -3368,6 +3386,25 @@
       if (!event.target.closest("#scoreFilter")) {
         $("scoreFilterMenu").classList.add("hidden");
         $("scoreFilterToggle").setAttribute("aria-expanded", "false");
+      }
+      var quickSource = event.target.closest("[data-quick-source]");
+      if (quickSource) {
+        $("sourceFilter").value = quickSource.getAttribute("data-quick-source");
+        $("methodFilter").value = "all";
+        loadData().catch(function () {});
+        return;
+      }
+      var quickMethod = event.target.closest("[data-quick-method]");
+      if (quickMethod) {
+        var quickMethodValue = quickMethod.getAttribute("data-quick-method");
+        var quickSourceValue = $("sourceFilter").value;
+        if (quickSourceValue !== "all") {
+          var parts = quickSourceValue.split("|");
+          if (parts[1] && parts[1] !== quickMethodValue) $("sourceFilter").value = "all";
+        }
+        $("methodFilter").value = quickMethodValue;
+        loadData().catch(function () {});
+        return;
       }
       var close = event.target.closest("[data-close]");
       if (close) { $(close.getAttribute("data-close")).classList.add("hidden"); return; }
