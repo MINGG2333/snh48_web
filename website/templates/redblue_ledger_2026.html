@@ -2863,6 +2863,16 @@
       html += '<div class="finance-section"><h3>支出</h3>' + financeTable(["项目", "金额", "明细"], financeRows((d.expenses || []).map(function (item) {
         return [esc(item.label), money(item.amount || 0), esc(item.detail || "")];
       }))) + '</div>';
+      var cash = d.weidian_cash || {};
+      if (cash.cumulative_sales) {
+        html += '<div class="finance-section"><h3>微店资金（非收入口径）</h3>' + financeTable(["项目", "金额", "说明"], financeRows([
+          ["红蓝三商品累计销售", money(cash.cumulative_sales || 0), "含已提现"],
+          ["累计已提现", money(cash.withdrawn || 0), "3 笔"],
+          ["当前可用余额", money(cash.available || 0), "截至 " + (cash.as_of || "-")],
+          ["待结算", money(cash.pending || 0), ""],
+          ["手续费/退款/在途差额", money(cash.unreconciled || 0), cash.note || ""]
+        ])) + '</div>';
+      }
       html += '<div class="finance-section"><h3>补贴鸣谢</h3>';
       if ((d.subsidies || []).length) {
         html += financeTable(["昵称", "金额", "备注"], (d.subsidies || []).map(function (item) {
@@ -2919,6 +2929,10 @@
       (d.income || []).forEach(function (item) { lines.push("- " + item.label + " " + financeAmount(item.amount)); });
       lines.push("支出明细：");
       (d.expenses || []).forEach(function (item) { lines.push("- " + item.label + " " + money(item.amount || 0)); });
+      var cash = d.weidian_cash || {};
+      if (cash.cumulative_sales) {
+        lines.push("微店资金：累计销售 " + money(cash.cumulative_sales || 0) + "；已提现 " + money(cash.withdrawn || 0) + "；可用 " + money(cash.available || 0) + "；待结算 " + money(cash.pending || 0));
+      }
       if ((d.subsidies || []).length) {
         lines.push("补贴鸣谢：");
         (d.subsidies || []).forEach(function (item) { lines.push("- " + item.name + " " + money(item.amount || 0)); });

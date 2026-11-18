@@ -2072,6 +2072,7 @@ def _finance_document() -> dict[str, Any]:
         "income": income,
         "expenses": expenses,
         "subsidies": subsidies,
+        "weidian_cash": payload.get("weidian_cash") if isinstance(payload.get("weidian_cash"), dict) else {},
         "notes": [_clean(item, 200) for item in (payload.get("notes") or []) if _clean(item, 200)],
         "public_note": _clean(payload.get("public_note"), 300),
         "summary": {
