@@ -71,6 +71,7 @@ SCORING_SOURCE_LABELS = {
 SCORING_METHODS = ("计分卡", "鸡腿")
 # 应援会来源（微店/应援会手动）使用独立的履约状态；已投保留给未来使用。
 ASSOCIATION_SOURCES = {"weidian", "association_manual", "weidian_manual"}
+MANUAL_ASSOCIATION_UNIT_PRICE = 28.0
 ENTRY_STATUS_LABELS = {
     "unshipped": "未发货",
     "shipped": "已发货",
@@ -1949,7 +1950,11 @@ def _entry_price(entry: dict[str, Any]) -> dict[str, Any]:
     cost = _supply_cost_index()
     order_id = _clean(weidian.get("order_id") or entry.get("source_id"), 120)
     sale_override = (cost.get("sale_overrides") or {}).get(order_id) if order_id else None
-    if source in ASSOCIATION_SOURCES and sale_override:
+    if source in {"association_manual", "weidian_manual"} and method == "鸡腿" and score > 0:
+        sale_total = round(score * MANUAL_ASSOCIATION_UNIT_PRICE, 2)
+        sale_avg = MANUAL_ASSOCIATION_UNIT_PRICE
+        sale_note = "手动应援会统一28元/分"
+    elif source in ASSOCIATION_SOURCES and sale_override:
         sale_total = sale_override["amount"]
         sale_avg = sale_override["unit"]
         sale_note = sale_override.get("note") or ""

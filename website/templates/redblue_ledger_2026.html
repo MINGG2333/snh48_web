@@ -280,6 +280,7 @@
         <div class="field"><label>结束时间</label><input id="timeTo" type="time" step="60" disabled title="先选结束日期"></div>
         <div class="field"><label>排序</label><select id="sortFilter"><option value="time_asc">时间正序</option><option value="time_desc">时间倒序</option></select></div>
         <div class="field"><label>&nbsp;</label><label class="check"><input id="includeDuplicate" type="checkbox" checked> 显示重复</label></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn" id="resetFiltersBtn">重置筛选</button></div>
       </div>
     </section>
 
@@ -772,6 +773,20 @@
     $("timeTo").title = hasTo ? "不填则到 23:59 结束" : "先选结束日期";
     if (!hasFrom) $("timeFrom").value = "";
     if (!hasTo) $("timeTo").value = "";
+  }
+
+  function resetFilters() {
+    ["sourceFilter", "methodFilter", "priceFilter", "statusFilter"].forEach(function (id) {
+      $(id).value = "all";
+    });
+    $("keywordInput").value = "";
+    ["dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(function (id) { $(id).value = ""; });
+    $("sortFilter").value = "time_asc";
+    $("includeDuplicate").checked = true;
+    selectedScores.clear();
+    if (data) renderScoreFilter(); else updateScoreToggle();
+    syncTimeFilterInputs();
+    loadData().catch(function () {});
   }
 
   async function loadData(silent) {
@@ -3297,6 +3312,7 @@
       location.reload();
     });
     $("refreshBtn").addEventListener("click", function () { loadData().catch(function () {}); });
+    $("resetFiltersBtn").addEventListener("click", resetFilters);
     $("exportSummaryBtn").addEventListener("click", function () { exportImage("summary"); });
     $("exportDailyBtn").addEventListener("click", exportDailyTrend);
     $("openDailyModalBtn").addEventListener("click", openDailyModal);

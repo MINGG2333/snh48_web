@@ -2074,6 +2074,23 @@ class RedblueLedgerApiTests(unittest.TestCase):
         weidian_card = api._filter_entries(entries, source="weidian|计分卡")
         self.assertEqual([item["id"] for item in weidian_card], ["f4"])
 
+    def test_manual_association_chicken_is_priced_at_28_per_point(self):
+        entry = {
+            "id": "m1",
+            "source": "association_manual",
+            "score": 100,
+            "scoring_method": "鸡腿",
+            "weidian": {"amount": 0.0},
+        }
+        price = api._entry_price(entry)
+        self.assertEqual(price["sale_total"], 2800.0)
+        self.assertEqual(price["sale_avg"], 28.0)
+        entry["score"] = 48
+        entry["weidian"]["amount"] = 1344.0
+        price = api._entry_price(entry)
+        self.assertEqual(price["sale_total"], 1344.0)
+        self.assertEqual(price["sale_avg"], 28.0)
+
     def test_sale_override_uses_actual_refunded_amount(self):
         entry = {
             "id": "s1",
