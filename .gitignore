@@ -65,3 +65,8 @@ Thumbs.db
 
 ref/
 img/
+
+# 运行备份（2026-11-18）
+.env.bak.*
+deploy/*.bak.*
+*.bak.*
