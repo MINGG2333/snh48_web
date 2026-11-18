@@ -682,11 +682,32 @@
     if (!data) return;
     var select = $("priceFilter");
     var current = select.value;
+    var counts = (data.filter_counts || {}).price || {};
     var options = (data.price_options || []).map(Number).filter(function (value) { return value > 0; });
-    select.innerHTML = '<option value="all">全部单价</option>' + options.map(function (value) {
-      return '<option value="' + esc(String(value)) + '">¥' + Number(value).toFixed(2) + '/分</option>';
+    select.innerHTML = '<option value="all">全部单价' + (counts.all !== undefined ? " (" + counts.all + ")" : "") + '</option>' + options.map(function (value) {
+      var key = String(Number(value));
+      var count = counts[key];
+      return '<option value="' + esc(key) + '">¥' + Number(value).toFixed(2) + '/分' + (count !== undefined ? " (" + count + ")" : "") + '</option>';
     }).join("");
     select.value = current !== "all" && options.indexOf(Number(current)) >= 0 ? current : "all";
+  }
+
+  function renderFilterCounts() {
+    if (!data) return;
+    var counts = data.filter_counts || {};
+    [["sourceFilter", counts.source], ["methodFilter", counts.method], ["statusFilter", counts.status]].forEach(function (pair) {
+      var select = $(pair[0]);
+      var facet = pair[1] || {};
+      Array.from(select.options).forEach(function (option) {
+        var base = option.getAttribute("data-base-label");
+        if (base === null) {
+          base = option.textContent.replace(/\s*\(\d+\)$/, "");
+          option.setAttribute("data-base-label", base);
+        }
+        var count = facet[option.value];
+        option.textContent = base + (count !== undefined ? " (" + count + ")" : "");
+      });
+    });
   }
 
   function renderScoreFilter() {
@@ -695,13 +716,15 @@
     var seen = new Set(options);
     Array.from(selectedScores).forEach(function (value) { if (!seen.has(value)) selectedScores.delete(value); });
     var menu = $("scoreFilterMenu");
+    var counts = (data.filter_counts || {}).scores || {};
     var header = '<div class="multi-select-head"><span>按分数筛选</span><button type="button" data-score-clear>清除</button></div>';
     if (!options.length) {
       menu.innerHTML = header + '<div class="multi-select-empty">暂无可选分数</div>';
     } else {
       menu.innerHTML = header + options.map(function (value) {
         var checked = selectedScores.has(value) ? " checked" : "";
-        return '<label><input type="checkbox" data-score-value="' + esc(String(value)) + '"' + checked + '> ' + esc(score(value)) + ' 分</label>';
+        var count = counts[String(Number(value))];
+        return '<label><input type="checkbox" data-score-value="' + esc(String(value)) + '"' + checked + '> ' + esc(score(value)) + ' 分' + (count !== undefined ? " (" + count + ")" : "") + '</label>';
       }).join("");
     }
     updateScoreToggle();
@@ -712,7 +735,8 @@
     if (!toggle) return;
     var values = Array.from(selectedScores).sort(function (a, b) { return a - b; });
     if (!values.length) {
-      toggle.textContent = "全部分数";
+      var allCount = data && data.filter_counts && data.filter_counts.scores ? data.filter_counts.scores.all : undefined;
+      toggle.textContent = "全部分数" + (allCount !== undefined ? " (" + allCount + ")" : "");
     } else if (values.length <= 2) {
       toggle.textContent = values.map(function (value) { return score(value) + " 分"; }).join("、");
     } else {
@@ -756,6 +780,11 @@
     try {
       var payload = await api("/api/redblue/data?" + filterQuery());
       if (seq !== loadSeq) return;
+      var selectedPrice = $("priceFilter").value;
+      if (selectedPrice !== "all" && !(payload.price_options || []).some(function (value) { return Number(value) === Number(selectedPrice); })) {
+        $("priceFilter").value = "all";
+        return loadData(silent);
+      }
       data = payload;
       redemptionCache = null;
       selected.clear();
@@ -773,6 +802,7 @@
     businessOptions = data.business_options || [];
     renderPriceFilter();
     renderScoreFilter();
+    renderFilterCounts();
     renderKpis();
     renderScoringSummary();
     renderFanSummary();

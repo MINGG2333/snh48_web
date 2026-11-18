@@ -1989,6 +1989,75 @@ class RedblueLedgerApiTests(unittest.TestCase):
         self.assertEqual(owner["proxy_settlement"]["covered_score"], 3.0)
         self.assertEqual(doc["association_settlement"]["remainder"]["鸡腿"], 115.0)
 
+    def test_auto_settles_paid_manual_association_from_existing_remainder(self):
+        doc = {
+            "entries": [
+                {
+                    "id": "owner",
+                    "source": "room",
+                    "score": 10,
+                    "scoring_method": "鸡腿",
+                    "source_time": "2026-11-15 14:55:18",
+                    "duplicate": True,
+                    "settled": True,
+                    "proxy_settlement": {
+                        "method": "鸡腿",
+                        "covered": [],
+                        "covered_score": 0.0,
+                        "remainder": 10.0,
+                    },
+                },
+                {
+                    "id": "manual",
+                    "source": "association_manual",
+                    "score": 4,
+                    "scoring_method": "鸡腿",
+                    "source_time": "2026-11-18 09:00:00",
+                    "status": "paid",
+                    "settled": False,
+                },
+            ],
+            "association_settlement": {
+                "remainder": {"鸡腿": 10.0},
+                "owner": {"鸡腿": "owner"},
+            },
+        }
+        covered = api._auto_settle_association_remainder(doc, "鸡腿")
+        self.assertEqual([item["entry_id"] for item in covered], ["manual"])
+        entry = next(item for item in doc["entries"] if item["id"] == "manual")
+        self.assertTrue(entry["settled"])
+        self.assertEqual(entry["status"], "settled")
+        owner = next(item for item in doc["entries"] if item["id"] == "owner")
+        self.assertEqual(owner["proxy_settlement"]["remainder"], 6.0)
+        self.assertEqual(doc["association_settlement"]["remainder"]["鸡腿"], 6.0)
+
+    def test_facet_counts_exclude_own_filter(self):
+        entries = [
+            {"id": "r1", "source": "room", "score": 1, "scoring_method": "计分卡", "source_time": "2026-11-01 10:00:00"},
+            {"id": "r2", "source": "room", "score": 1, "scoring_method": "鸡腿", "source_time": "2026-11-01 10:01:00"},
+            {"id": "w1", "source": "weidian", "score": 5, "scoring_method": "鸡腿", "source_time": "2026-11-01 10:02:00", "weidian": {"order_id": "OVR", "amount": 131.25}},
+            {"id": "w2", "source": "weidian", "score": 6, "scoring_method": "计分卡", "source_time": "2026-11-01 10:03:00", "weidian": {"order_id": "CARD", "amount": 96.0}},
+        ]
+        counts = api._facet_counts(
+            entries,
+            source="weidian|计分卡",
+            method_filter="all",
+            price_filter=0.0,
+            status_filter="all",
+            keyword="",
+            date_from="",
+            date_to="",
+            time_from="",
+            time_to="",
+            include_duplicate=True,
+            scores=None,
+            aliases=(),
+        )
+        self.assertEqual(counts["source"]["all"], 4)
+        self.assertEqual(counts["source"]["weidian|计分卡"], 1)
+        self.assertEqual(counts["method"]["计分卡"], 1)
+        self.assertEqual(counts["price"]["16"], 1)
+
     def test_filter_by_source_category_method_and_price(self):
         entries = [
             {"id": "f1", "source": "room", "score": 1, "scoring_method": "计分卡", "source_time": "2026-11-01 10:00:00"},

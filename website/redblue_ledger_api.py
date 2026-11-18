@@ -491,14 +491,23 @@ def _auto_settle_association_remainder(doc: dict[str, Any], method: str) -> list
     proxy = owner.get("proxy_settlement") if isinstance(owner, dict) else None
     if not isinstance(proxy, dict) or not proxy:
         return []
+    def _eligible_association(item: dict[str, Any]) -> bool:
+        source = _clean(item.get("source"), 20)
+        status = _entry_status(item)
+        if source == "weidian":
+            return status == "shipped"
+        if source in {"association_manual", "weidian_manual"}:
+            return status == "paid"
+        return False
+
     candidates = sorted(
         (
             item
             for item in doc.get("entries") or []
             if isinstance(item, dict)
-            and _clean(item.get("source"), 20) == "weidian"
+            and _clean(item.get("source"), 20) in ASSOCIATION_SOURCES
             and not item.get("duplicate")
-            and _entry_status(item) == "shipped"
+            and _eligible_association(item)
             and _entry_scoring_method(item) == method
             and _to_float(item.get("score"), 0.0) > 0
         ),
@@ -525,8 +534,8 @@ def _auto_settle_association_remainder(doc: dict[str, Any], method: str) -> list
             {
                 "entry_id": _clean(candidate.get("id"), 80),
                 "fan_name": _clean(candidate.get("fan_name") or candidate.get("raw_name") or "未登记", 120),
-                "source": "weidian",
-                "source_label": SOURCE_LABELS.get("weidian", "微店"),
+                "source": _clean(candidate.get("source"), 20),
+                "source_label": SOURCE_LABELS.get(_clean(candidate.get("source"), 20), "应援会"),
                 "source_time": _entry_time(candidate),
                 "score": score,
                 "covered_score": score,
@@ -2269,6 +2278,105 @@ def _filter_entries(
     return result
 
 
+def _facet_counts(
+    all_entries: list[dict[str, Any]],
+    *,
+    source: str,
+    method_filter: str,
+    price_filter: float,
+    status_filter: str,
+    keyword: str,
+    date_from: str,
+    date_to: str,
+    time_from: str,
+    time_to: str,
+    include_duplicate: bool,
+    scores: set[float] | None,
+    aliases: Iterable[dict[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """Counts for filter options, excluding the facet being counted."""
+
+    def apply(**overrides: Any) -> list[dict[str, Any]]:
+        params = {
+            "source": source,
+            "method_filter": method_filter,
+            "price_filter": price_filter,
+            "status_filter": status_filter,
+            "keyword": keyword,
+            "date_from": date_from,
+            "date_to": date_to,
+            "time_from": time_from,
+            "time_to": time_to,
+            "include_duplicate": include_duplicate,
+            "scores": scores,
+            "aliases": aliases,
+        }
+        params.update(overrides)
+        return _filter_entries(all_entries, **params)
+
+    source_items = apply(source="all")
+    method_items = apply(method_filter="all")
+    price_items = apply(price_filter=0.0)
+    status_items = apply(status_filter="all")
+    score_items = apply(scores=None)
+
+    source_counts = {item["key"]: 0 for item in DAILY_SCORING_CATEGORIES}
+    source_counts["all"] = len(source_items)
+    for item in source_items:
+        key = f"{item.get('source') or ''}|{_entry_scoring_method(item)}"
+        if key in source_counts:
+            source_counts[key] += 1
+
+    method_counts = {method: 0 for method in SCORING_METHODS}
+    method_counts["all"] = len(method_items)
+    for item in method_items:
+        method = _entry_scoring_method(item)
+        if method in method_counts:
+            method_counts[method] += 1
+
+    price_counts: dict[str, int] = {"all": len(price_items)}
+    for item in price_items:
+        price = item.get("price") or {}
+        unit = price.get("sale_avg")
+        if unit is None:
+            unit = price.get("external_avg")
+        if unit is None:
+            continue
+        key = _format_score(unit)
+        price_counts[key] = price_counts.get(key, 0) + 1
+
+    status_counts = {
+        key: 0
+        for key in ("all", "pending", "settled", "unshipped", "shipped", "paid", "warning", "duplicate")
+    }
+    status_counts["all"] = len(status_items)
+    for item in status_items:
+        if item.get("settled"):
+            status_counts["settled"] += 1
+        else:
+            status_counts["pending"] += 1
+        status = _clean(item.get("status"), 20)
+        if status in status_counts:
+            status_counts[status] += 1
+        if item.get("warning"):
+            status_counts["warning"] += 1
+        if item.get("duplicate"):
+            status_counts["duplicate"] += 1
+
+    score_counts: dict[str, int] = {"all": len(score_items)}
+    for item in score_items:
+        key = _format_score(_to_float(item.get("score"), 0.0))
+        score_counts[key] = score_counts.get(key, 0) + 1
+
+    return {
+        "source": source_counts,
+        "method": method_counts,
+        "price": price_counts,
+        "status": status_counts,
+        "scores": score_counts,
+    }
+
+
 def _summary(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     all_items = [item for item in entries if isinstance(item, dict)]
     items = [item for item in all_items if not item.get("duplicate")]
@@ -2669,6 +2777,9 @@ def _mutator_add(doc: dict[str, Any], payload: dict[str, Any]):
         selected_business_bonus=_clean(payload.get("selected_business_bonus"), 80),
     )
     doc.setdefault("entries", []).append(entry)
+    if source in ASSOCIATION_SOURCES:
+        for candidate_method in SCORING_METHODS:
+            _auto_settle_association_remainder(doc, candidate_method)
     return doc, _normalise_entry(entry, doc.get("aliases") or [])
 
 
@@ -2718,6 +2829,9 @@ def _mutator_update(doc: dict[str, Any], payload: dict[str, Any]):
     if payload.get("selected_business_bonus") is not None:
         entry["selected_business_bonus"] = _business_option(payload.get("selected_business_bonus"), "bonus")
     entry["updated_at"] = _now()
+    if _clean(entry.get("source"), 20) in ASSOCIATION_SOURCES:
+        for candidate_method in SCORING_METHODS:
+            _auto_settle_association_remainder(doc, candidate_method)
     return doc, _normalise_entry(entry, doc.get("aliases") or [])
 
 
@@ -3478,16 +3592,25 @@ def get_redblue_data(
             if _to_float(item.get("score"), 0.0) > 0
         }
     )
+    filter_counts = _facet_counts(
+        all_entries,
+        source=source,
+        method_filter=method,
+        price_filter=_to_float(price, 0.0),
+        status_filter=status_filter,
+        keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
+        time_from=time_from,
+        time_to=time_to,
+        include_duplicate=include_duplicate,
+        scores=parsed_scores,
+        aliases=doc.get("aliases") or [],
+    )
     price_options = sorted(
-        {
-            round(_to_float(unit, 0.0), 4)
-            for item in all_entries
-            for unit in (
-                (item.get("price") or {}).get("sale_avg"),
-                (item.get("price") or {}).get("external_avg"),
-            )
-            if unit is not None and _to_float(unit, 0.0) > 0
-        }
+        float(key)
+        for key in filter_counts["price"]
+        if key != "all"
     )
     return {
         "generated_at": _clean(doc.get("updated_at"), 32),
@@ -3498,6 +3621,7 @@ def get_redblue_data(
         "entries": entries,
         "score_options": score_options,
         "price_options": price_options,
+        "filter_counts": filter_counts,
         "business_options": BUSINESS_OPTIONS,
         "business_redemptions": redemptions,
         "weidian_sync": _weidian_sync_status(),
