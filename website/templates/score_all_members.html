@@ -104,6 +104,10 @@
     .panel-head h2 { font-size: 15px; font-weight: 720; }
     .panel-head span { color: var(--faint); font-size: 12px; }
     .bar-list { padding: 12px 15px 15px; display: grid; gap: 10px; }
+    .panel-tools { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 15px 0; }
+    .panel-tools .segment { flex: 0 0 auto; }
+    .panel-tools .segment button { min-height: 28px; padding: 0 10px; font-size: 11px; white-space: nowrap; }
+    .panel-tools .segment button:disabled { opacity: .4; cursor: not-allowed; }
     .bar-row { display: grid; grid-template-columns: minmax(80px, 150px) 1fr 72px; gap: 10px; align-items: center; font-size: 13px; }
     .bar-track { height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
     .bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--blue)); }
@@ -290,6 +294,16 @@
       <section class="two-col">
         <div class="panel">
           <div class="panel-head"><h2>队伍分布</h2><span id="teamMeta">-</span></div>
+          <div class="panel-tools">
+            <div class="segment" id="teamGroupSegment" role="group" aria-label="队伍分布分组">
+              <button type="button" data-team-group="official" class="active">口袋48官方队伍</button>
+              <button type="button" data-team-group="participation" id="teamGroupParticipation">参赛队伍（挂靠后）</button>
+            </div>
+            <div class="segment" id="teamMetricSegment" role="group" aria-label="队伍分布口径">
+              <button type="button" data-team-metric="visible" class="active">明票</button>
+              <button type="button" data-team-metric="estimated">总分（估计）</button>
+            </div>
+          </div>
           <div class="bar-list" id="teamBars"><div class="empty">暂无数据</div></div>
         </div>
         <div class="panel">
@@ -381,6 +395,8 @@
       var pageSize = 1000;
       var totalPages = 1;
       var sourceFilter = "all";
+      var teamGroupMode = "official";
+      var teamMetric = "visible";
       var expanded = {};
       var SEASON_LABELS = {};
       var COVERAGE_NOTES = {};
@@ -423,6 +439,11 @@
       var closeFanBtn = document.getElementById("closeFanBtn");
       var memberHeadRow = document.getElementById("memberHeadRow");
       var scoreNavSelect = document.getElementById("scoreNavSelect");
+      var teamBars = document.getElementById("teamBars");
+      var teamMeta = document.getElementById("teamMeta");
+      var teamGroupSegment = document.getElementById("teamGroupSegment");
+      var teamGroupParticipation = document.getElementById("teamGroupParticipation");
+      var teamMetricSegment = document.getElementById("teamMetricSegment");
 
       function formatScore(value) {
         var n = Number(value || 0);
@@ -756,9 +777,13 @@
       function setText(el, text) {
         if (el && el.textContent !== text) el.textContent = text;
       }
-      function renderBars(container, rows, total, labelFn) {
-        var signature = JSON.stringify((rows || []).slice(0, 8).map(function (row) {
-          return [labelFn(row), Number(row.score || 0)];
+      function renderBars(container, rows, total, labelFn, options) {
+        options = options || {};
+        var metric = options.metric || "score";
+        var limit = options.limit || 8;
+        var titleFn = options.titleFn;
+        var signature = JSON.stringify((rows || []).slice(0, limit).map(function (row) {
+          return [labelFn(row), Number(row[metric] || 0)];
         }));
         if (container.dataset.signature === signature) return;
         container.dataset.signature = signature;
@@ -766,13 +791,65 @@
           container.innerHTML = '<div class="empty">暂无数据</div>';
           return;
         }
-        var max = Math.max.apply(null, rows.map(function (row) { return Number(row.score || 0); }).concat([1]));
-        container.innerHTML = rows.slice(0, 8).map(function (row) {
-          var width = Math.max(2, Number(row.score || 0) / max * 100);
-          return '<div class="bar-row"><div>' + escapeHtml(labelFn(row)) + '</div>' +
+        var max = Math.max.apply(null, rows.map(function (row) { return Number(row[metric] || 0); }).concat([1]));
+        container.innerHTML = rows.slice(0, limit).map(function (row) {
+          var value = Number(row[metric] || 0);
+          var width = Math.max(2, value / max * 100);
+          var title = titleFn ? titleFn(row) : "";
+          return '<div class="bar-row"' + (title ? ' title="' + escapeHtml(title) + '"' : '') + '><div>' + escapeHtml(labelFn(row)) + '</div>' +
             '<div class="bar-track"><div class="bar-fill" style="width:' + width.toFixed(2) + '%;transition:width .4s ease"></div></div>' +
-            '<div class="num">' + formatScore(row.score) + '</div></div>';
+            '<div class="num">' + formatScore(value) + '</div></div>';
         }).join("");
+      }
+      function teamRowLabel(row) {
+        if (teamGroupMode === "participation") {
+          return (row.group ? row.group + " · " : "") + (row.participation_team_label || row.participation_team || "未参赛");
+        }
+        return (row.group ? row.group + " · " : "") + (row.team_label || row.team || "未分组");
+      }
+      function renderTeamBars() {
+        if (!data) return;
+        var affiliationAvailable = Boolean((data.facets || {}).affiliation_available);
+        if (!affiliationAvailable && teamGroupMode === "participation") {
+          setTeamGroupMode("official");
+        }
+        teamGroupParticipation.disabled = !affiliationAvailable;
+        teamGroupParticipation.title = affiliationAvailable
+          ? "按本次活动的参赛队伍（SNH48/GNZ48 预备生并入官方挂靠队伍）分组"
+          : "当前赛季没有挂靠/参赛队伍数据";
+        var source = teamGroupMode === "participation"
+          ? (data.participation_team_distribution || [])
+          : (data.team_distribution || []);
+        var field = teamMetric === "estimated" ? "estimated_score" : "score";
+        var rows = source.slice().sort(function (a, b) {
+          return Number(b[field] || 0) - Number(a[field] || 0) ||
+            String(teamRowLabel(a)).localeCompare(String(teamRowLabel(b)), "zh-CN");
+        });
+        renderBars(teamBars, rows, 0, teamRowLabel, {
+          metric: field,
+          limit: rows.length,
+          titleFn: function (row) {
+            return "明票 " + formatScore(row.score) + " · 总分（估计）" + formatScore(row.estimated_score) +
+              " · " + formatNumber(row.members) + " 名成员";
+          }
+        });
+        var metricLabel = teamMetric === "estimated" ? "总分（估计）" : "明票";
+        teamMeta.textContent = rows.length + " 个队伍 · " + metricLabel;
+        teamMeta.title = teamMetric === "estimated"
+          ? "总分（估计）= 当前筛选范围内成员的完整赛季估计分之和；每人的最少暗票按完整赛季反推，不随日期/礼物/来源筛选变化"
+          : "明票 = 当前筛选范围内的计分礼物（鸡腿礼物折算）合计";
+      }
+      function setTeamGroupMode(mode) {
+        teamGroupMode = mode === "participation" ? "participation" : "official";
+        Array.prototype.forEach.call(teamGroupSegment.querySelectorAll("button"), function (btn) {
+          btn.classList.toggle("active", btn.getAttribute("data-team-group") === teamGroupMode);
+        });
+      }
+      function setTeamMetric(metric) {
+        teamMetric = metric === "estimated" ? "estimated" : "visible";
+        Array.prototype.forEach.call(teamMetricSegment.querySelectorAll("button"), function (btn) {
+          btn.classList.toggle("active", btn.getAttribute("data-team-metric") === teamMetric);
+        });
       }
       function rowNameHtml(row) {
         var id = escapeHtml(row.member_id);
@@ -1018,15 +1095,11 @@
         animateNumber(document.getElementById("kpiLive"), summary.live_score, formatScore, options.animate);
         renderSeasonKPIs();
         updateActiveFilters();
-        var teams = (data.team_distribution || []).slice();
         var gifts = (data.gift_distribution || []).slice();
-        renderBars(document.getElementById("teamBars"), teams, summary.total_score, function (row) {
-          return (row.group ? row.group + " · " : "") + (row.team_label || row.team || "未分组");
-        });
+        renderTeamBars();
         renderBars(document.getElementById("giftBars"), gifts, summary.total_score, function (row) {
           return row.gift_name || row.gift_id || "未命名礼物";
         });
-        document.getElementById("teamMeta").textContent = teams.length + " 个队伍有记录";
         document.getElementById("giftMeta").textContent = gifts.length + " 种计分礼物";
         document.getElementById("tableMeta").textContent = "共 " + formatNumber(data.total) + " 名成员";
         document.getElementById("pageMeta").textContent = "第 " + page + " / " + totalPages + " 页";
@@ -1261,6 +1334,18 @@
       groupSelect.addEventListener("change", function () { renderFacetOptions(true); updateActiveFilters(); });
       teamSelect.addEventListener("change", updateActiveFilters);
       participationTeamSelect.addEventListener("change", updateActiveFilters);
+      teamGroupSegment.addEventListener("click", function (event) {
+        var btn = event.target.closest("[data-team-group]");
+        if (!btn || btn.disabled) return;
+        setTeamGroupMode(btn.getAttribute("data-team-group") || "official");
+        renderTeamBars();
+      });
+      teamMetricSegment.addEventListener("click", function (event) {
+        var btn = event.target.closest("[data-team-metric]");
+        if (!btn) return;
+        setTeamMetric(btn.getAttribute("data-team-metric") || "visible");
+        renderTeamBars();
+      });
       qualificationSelect.addEventListener("change", function () { updateActiveFilters(); renderQualificationNotice(); });
       unitSelect.addEventListener("change", updateActiveFilters);
       seasonSelect.addEventListener("change", async function () {

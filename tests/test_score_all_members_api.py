@@ -12,10 +12,12 @@ from website import config as cfg
 from website.score_all_members_api import (
     _aggregate,
     _attach_dark_estimates,
+    _estimate_context,
     _facets,
     _fan_payload,
     _filter_cells,
     _load_board,
+    _merge_estimated_totals,
     _season_key,
     _season_visible_totals,
     _unit_rank_estimates,
@@ -450,6 +452,73 @@ class ScoreAllMembersApiTests(unittest.TestCase):
             {item["key"] for item in facets["participation_teams"]},
             {"SNH48|HII", "SNH48|SII"},
         )
+
+    def test_team_distribution_estimated_and_participation_grouping(self) -> None:
+        board = {
+            "latest_season": "2026-winter",
+            "seasons": {"2026-winter": {"key": "2026-winter", "label": "2026 红蓝歌会"}},
+            "members": [
+                {"member_id": "1", "member_name": "甲", "group": "SNH48", "team": "HII", "team_label": "HII队"},
+                {"member_id": "2", "member_name": "乙", "group": "SNH48", "team": "预备生", "team_label": "预备生"},
+                {"member_id": "3", "member_name": "丙", "group": "SNH48", "team": "SII", "team_label": "SII队"},
+                {"member_id": "5", "member_name": "戊", "group": "SNH48", "team": "SII", "team_label": "SII队"},
+            ],
+            "cells": [
+                {"season": "2026-winter", "member_id": "1", "score": 100.0},
+                {"season": "2026-winter", "member_id": "2", "score": 40.0},
+                {"season": "2026-winter", "member_id": "3", "score": 60.0},
+                {"season": "2026-winter", "member_id": "5", "score": 90.0},
+            ],
+            "affiliation": {
+                "season": "2026-winter",
+                "units": [{"key": "SNH-HII", "label": "SNH48 TEAM HII"}, {"key": "SNH-SII", "label": "SNH48 TEAM SII"}],
+                "members": {
+                    "1": {"participation_team": "HII", "participation_team_label": "HII队", "unit": "SNH-HII", "unit_rank": 1},
+                    "2": {
+                        "trainee": True,
+                        "affiliation_team": "HII",
+                        "affiliation_label": "HII队",
+                        "participation_team": "HII",
+                        "participation_team_label": "HII队",
+                        "unit": "SNH-HII",
+                        "unit_rank": 2,
+                    },
+                    "3": {"participation_team": "SII", "participation_team_label": "SII队", "unit": "SNH-SII", "unit_rank": 1},
+                    "5": {"unit": "SNH-HII", "unit_rank": 0},
+                },
+            },
+        }
+        visible_totals, estimates = _estimate_context(board, "2026-winter")
+        cells = _filter_cells(
+            board, season="2026-winter", group="", team="", member="",
+            gift_name="", source="all", date_from="", date_to="",
+        )
+        result = _aggregate(
+            board,
+            cells,
+            season="2026-winter",
+            estimated_totals=_merge_estimated_totals(visible_totals, estimates),
+        )
+        teams = {row["team_label"]: row for row in result["team_distribution"]}
+        # 官方队伍：挂靠预备生仍留在「预备生」行，估计分按完整赛季反推结果累加
+        self.assertEqual(teams["HII队"]["score"], 100.0)
+        self.assertEqual(teams["HII队"]["estimated_score"], 100.0)
+        self.assertEqual(teams["预备生"]["score"], 40.0)
+        self.assertEqual(teams["预备生"]["estimated_score"], 90.0)
+        self.assertEqual(teams["SII队"]["score"], 150.0)
+        self.assertEqual(teams["SII队"]["estimated_score"], 150.0)
+        participation = {
+            row["participation_team_label"]: row
+            for row in result["participation_team_distribution"]
+        }
+        # 参赛队伍：挂靠预备生并入挂靠队
+        self.assertEqual(participation["HII队"]["score"], 140.0)
+        self.assertEqual(participation["HII队"]["estimated_score"], 190.0)
+        self.assertEqual(participation["HII队"]["members"], 2)
+        self.assertEqual(participation["SII队"]["score"], 60.0)
+        # 有赛季计分但不在参赛名单/无参赛队伍的成员归到「未参赛」
+        self.assertEqual(participation["未参赛"]["score"], 90.0)
+        self.assertEqual(participation["未参赛"]["estimated_score"], 90.0)
 
     def test_official_rank_is_exposed_on_rows(self) -> None:
         board = {

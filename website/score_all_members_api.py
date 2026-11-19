@@ -352,11 +352,19 @@ def _aggregate(
     *,
     season: str = "",
     seed_member_ids: set[str] | None = None,
+    estimated_totals: dict[str, float] | None = None,
 ) -> dict[str, Any]:
+    """按计分 cell 聚合成员/礼物/队伍/日期分布。
+
+    ``estimated_totals`` 为「成员 → 完整赛季总分（估计）」，只用于给队伍分布
+    补充 ``estimated_score``（页面的「总分（估计）」口径）；不传时退化为
+    当前筛选范围内的明票合计，保持旧调用方（测试）行为不变。
+    """
     members = _member_index(board, season)
     by_member: dict[str, dict[str, Any]] = {}
     gift_distribution: dict[tuple[str, str], dict[str, Any]] = {}
     team_distribution: dict[tuple[str, str], dict[str, Any]] = {}
+    participation_team_distribution: dict[tuple[str, str], dict[str, Any]] = {}
     daily_distribution: dict[str, dict[str, Any]] = {}
 
     # Some older room events carry giftName but no giftId. Normalize them to
@@ -477,6 +485,28 @@ def _aggregate(
         team_row["count"] += count
         team_row["members"].add(member_id)
 
+        # 参赛队伍：挂靠预备生并入其挂靠队（official 队伍不变），未参与本次
+        # 活动的成员单独归为「未参赛」，避免挂靠视角把非参赛成员混进某队。
+        p_team = str(meta.get("participation_team") or "")
+        p_label = str(meta.get("participation_team_label") or "")
+        if not p_label:
+            p_label = "未参赛" if not p_team else p_team
+        p_key = (group, p_team or "未参赛")
+        participation_row = participation_team_distribution.setdefault(
+            p_key,
+            {
+                "group": group,
+                "participation_team": p_team,
+                "participation_team_label": p_label,
+                "score": 0.0,
+                "count": 0,
+                "members": set(),
+            },
+        )
+        participation_row["score"] += score
+        participation_row["count"] += count
+        participation_row["members"].add(member_id)
+
         if day:
             daily = daily_distribution.setdefault(day, {"date": day, "score": 0.0, "count": 0, "records": 0})
             daily["score"] += score
@@ -544,13 +574,40 @@ def _aggregate(
         gift_rows.append(item)
     gift_rows.sort(key=lambda item: (-float(item["score"]), str(item["gift_name"])))
 
-    team_rows = []
-    for row in team_distribution.values():
-        item = dict(row)
-        item["members"] = len(row["members"])
-        item["score"] = round(float(item["score"]), 6)
-        team_rows.append(item)
-    team_rows.sort(key=lambda item: (-float(item["score"]), str(item["group"]), str(item["team_label"])))
+    # 队伍维度同时给出明票（当前筛选内 cell 合计）与总分（估计）：
+    # 后者是该行成员各自的完整赛季估计分之和，成员集合仍由当前筛选决定。
+    member_estimated: dict[str, float] = {}
+    for row in member_rows:
+        member_id = str(row["member_id"])
+        if estimated_totals is None:
+            member_estimated[member_id] = float(row["total_score"])
+        else:
+            member_estimated[member_id] = float(
+                estimated_totals.get(member_id, row["total_score"]) or 0.0
+            )
+
+    def _team_rows(distribution: dict[tuple[str, str], dict[str, Any]]) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for row in distribution.values():
+            member_ids = row["members"]
+            item = {key: value for key, value in row.items() if key != "members"}
+            item["members"] = len(member_ids)
+            item["score"] = round(float(item["score"]), 6)
+            item["estimated_score"] = round(
+                sum(member_estimated.get(member_id, 0.0) for member_id in member_ids), 6
+            )
+            rows.append(item)
+        rows.sort(
+            key=lambda item: (
+                -float(item["score"]),
+                str(item.get("group") or ""),
+                str(item.get("team_label") or item.get("participation_team_label") or ""),
+            )
+        )
+        return rows
+
+    team_rows = _team_rows(team_distribution)
+    participation_team_rows = _team_rows(participation_team_distribution)
 
     daily_rows = sorted(daily_distribution.values(), key=lambda item: item["date"])
     for item in daily_rows:
@@ -582,8 +639,37 @@ def _aggregate(
         "members": member_rows,
         "gift_distribution": gift_rows,
         "team_distribution": team_rows,
+        "participation_team_distribution": participation_team_rows,
         "daily_distribution": daily_rows,
     }
+
+
+def _estimate_context(
+    board: dict[str, Any], season: str
+) -> tuple[dict[str, float], dict[str, dict[str, Any]]]:
+    """返回 (赛季明票合计, 每人估计)。挂靠数据缺失或赛季不符时都为空。"""
+    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
+    affiliation_season = str(affiliation.get("season") or "")
+    if not affiliation.get("members") or (
+        affiliation_season and season and affiliation_season != season
+    ):
+        return {}, {}
+    visible_totals = _season_visible_totals(board, season)
+    estimates = _unit_rank_estimates(board, season, visible_totals)
+    return visible_totals, estimates
+
+
+def _merge_estimated_totals(
+    visible_totals: dict[str, float], estimates: dict[str, dict[str, Any]]
+) -> dict[str, float]:
+    """合并「成员 → 总分（估计）」；未参与反推的成员用完整赛季明票。"""
+    totals = {
+        str(member_id): float(item.get("estimated_total_score") or 0.0)
+        for member_id, item in estimates.items()
+    }
+    for member_id, total in visible_totals.items():
+        totals.setdefault(str(member_id), float(total))
+    return totals
 
 
 def _season_visible_totals(board: dict[str, Any], season: str) -> dict[str, float]:
@@ -690,19 +776,17 @@ def _attach_dark_estimates(
     board: dict[str, Any],
     rows: list[dict[str, Any]],
     season: str,
+    *,
+    visible_totals: dict[str, float] | None = None,
+    estimates: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """给成员行补上明票/最少暗票/总分（估计）。
 
     明票、暗票与总分（估计）都以完整赛季的明票为基准，因此不受页面上的
     日期/礼物/来源筛选影响（筛选项只改变表格里「明票」列的展示值）。
     """
-    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
-    affiliation_season = str(affiliation.get("season") or "")
-    affiliation_available = bool(affiliation.get("members")) and not (
-        affiliation_season and season and affiliation_season != season
-    )
-    visible_totals = _season_visible_totals(board, season) if affiliation_available else {}
-    estimates = _unit_rank_estimates(board, season, visible_totals) if affiliation_available else {}
+    if visible_totals is None or estimates is None:
+        visible_totals, estimates = _estimate_context(board, season)
     for row in rows:
         member_id = str(row.get("member_id") or "")
         estimate = estimates.get(member_id)
@@ -1010,9 +1094,18 @@ def get_score_all_members_data(
                         continue
                 filtered.add(member_id)
             seed_ids = filtered
-    aggregated = _aggregate(board, cells, season=key, seed_member_ids=seed_ids)
+    visible_totals, estimates = _estimate_context(board, key)
+    aggregated = _aggregate(
+        board,
+        cells,
+        season=key,
+        seed_member_ids=seed_ids,
+        estimated_totals=_merge_estimated_totals(visible_totals, estimates),
+    )
     rows = aggregated["members"]
-    _attach_dark_estimates(board, rows, key)
+    _attach_dark_estimates(
+        board, rows, key, visible_totals=visible_totals, estimates=estimates
+    )
     if sort == "name_asc":
         rows.sort(key=lambda item: (str(item["group"]), str(item["team"]), str(item["member_name"])))
     elif sort == "team_asc":
@@ -1059,6 +1152,7 @@ def get_score_all_members_data(
         "members": rows[start:end],
         "gift_distribution": aggregated["gift_distribution"],
         "team_distribution": aggregated["team_distribution"],
+        "participation_team_distribution": aggregated["participation_team_distribution"],
         "daily_distribution": aggregated["daily_distribution"],
         "page": page,
         "page_size": page_size,
