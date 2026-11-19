@@ -17,6 +17,7 @@ from website.score_all_members_api import (
     _fan_payload,
     _filter_cells,
     _load_board,
+    _dark_conversion_totals,
     _dark_scores,
     _season_key,
     _season_visible_totals,
@@ -891,6 +892,62 @@ class DarkVoteEstimateTests(unittest.TestCase):
         self.assertEqual(sum(row["score"] for row in aggregated["team_distribution"]), 320.0)
         self.assertEqual(
             sum(row["estimated_score"] for row in aggregated["team_distribution"]), 400.0
+        )
+
+    def test_dark_conversion_totals_window_and_source(self) -> None:
+        board = {
+            **DARK_BOARD,
+            "dark_conversions": [
+                {"season": "2026-winter", "date": "2026-11-16", "member_id": "1", "source": "live", "count": 100},
+                {"season": "2026-winter", "date": "2026-11-18", "member_id": "1", "source": "room", "count": 50},
+                {"season": "2026-winter", "date": "2026-11-18", "member_id": "2", "source": "live", "count": 20},
+                {"season": "2026-winter", "date": "2026-11-15", "member_id": "3", "source": "room", "count": 999},
+                {"season": "2026-summer", "date": "2026-11-16", "member_id": "1", "source": "room", "count": 7},
+            ],
+        }
+        self.assertEqual(_dark_conversion_totals(board, "2026-winter"), {"1": 150.0, "2": 20.0})
+        self.assertEqual(
+            _dark_conversion_totals(board, "2026-winter", date_to="2026-11-16"), {"1": 100.0}
+        )
+        self.assertEqual(
+            _dark_conversion_totals(board, "2026-winter", source="room"), {"1": 50.0}
+        )
+        self.assertEqual(_dark_conversion_totals(board, "2026-winter", source="gnz"), {})
+
+    def test_estimated_total_subtracts_dark_conversions_with_floor(self) -> None:
+        board = {**DARK_BOARD, "members": []}
+        cells = _filter_cells(
+            board, season="2026-winter", group="", team="", member="",
+            gift_name="", source="all", date_from="", date_to="",
+        )
+        rows = _aggregate(board, cells)["members"]
+        _attach_dark_estimates(
+            board, rows, "2026-winter", dark_conversions={"3": 30.0, "2": 99.0}
+        )
+        by_id = {row["member_id"]: row for row in rows}
+        # 第 3 名暗票 50，已暗转明 30：估计 = 明票 40 + (50-30) = 60。
+        self.assertEqual(by_id["3"]["dark_to_visible_score"], 30.0)
+        self.assertEqual(by_id["3"]["estimated_total_score"], 60.0)
+        # 第 2 名暗票 30，暗转明 99 超过暗票：估计回落到明票 60，不会低于明票。
+        self.assertEqual(by_id["2"]["dark_to_visible_score"], 99.0)
+        self.assertEqual(by_id["2"]["estimated_total_score"], 60.0)
+
+    def test_team_estimated_score_subtracts_dark_conversions(self) -> None:
+        board = {**DARK_BOARD, "members": []}
+        cells = _filter_cells(
+            board, season="2026-winter", group="", team="", member="",
+            gift_name="", source="all", date_from="", date_to="",
+        )
+        aggregated = _aggregate(
+            board,
+            cells,
+            season="2026-winter",
+            dark_scores={"1": 0.0, "2": 30.0, "3": 50.0},
+            dark_conversions={"3": 50.0},
+        )
+        # 明票 360 + 暗票 80 - 已转换 50 = 390。
+        self.assertEqual(
+            sum(row["estimated_score"] for row in aggregated["team_distribution"]), 390.0
         )
 
 

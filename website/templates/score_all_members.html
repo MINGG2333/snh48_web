@@ -165,6 +165,7 @@
     .score-main { color: var(--gold); font-weight: 760; }
     .score-estimate { color: #f2d38b; font-weight: 700; }
     .score-dark { color: #c9a0ff; }
+    .score-convert { color: #7fd8c8; }
     .col-derived { cursor: help; }
     /* 全员榜是秒级增量更新的活表：禁止浏览器滚动锚定，滚动位置完全由页面脚本控制，
        避免行重排时浏览器自动挪动视口。 */
@@ -322,8 +323,8 @@
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num col-derived" title="当前筛选内明票 + 第一阶段结束时的最少暗票（暗票按第一阶段明票反推后固定，估计分完全跟随筛选）">总分（估计）</th><th class="num col-derived" title="第一阶段结束时按官方队内排名反推的最少暗票，之后固定不变（真实暗票可能更高）">暗票</th><th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
-            <tbody id="memberRows"><tr><td colspan="11" class="empty">加载中…</td></tr></tbody>
+            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num col-derived" title="当前筛选内明票 + max(0, 第一阶段固定的最少暗票 − 暗转明)；暗转明是已计入明票的兑换票，避免重复计算">总分（估计）</th><th class="num col-derived" title="第一阶段结束时按官方队内排名反推的最少暗票，之后固定不变（真实暗票可能更高）">暗票</th><th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th><th class="num col-derived" title="第一阶段结束（11-16 起）到筛选截止日用星梦值/EP 卡兑换出的弦月回响票数；已计入明票，总分（估计）会从暗票中扣除">暗转明</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
+            <tbody id="memberRows"><tr><td colspan="12" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
         <div class="pagination" style="display:none"><span id="pageMeta">-</span><div class="actions"><button class="btn" id="prevBtn" type="button">上一页</button><button class="btn" id="nextBtn" type="button">下一页</button></div></div>
@@ -836,7 +837,7 @@
         var metricLabel = teamMetric === "estimated" ? "总分（估计）" : "明票";
         teamMeta.textContent = rows.length + " 个队伍 · " + metricLabel;
         teamMeta.title = teamMetric === "estimated"
-          ? "总分（估计）= 当前筛选范围内成员的明票 + 第一阶段固定的最少暗票之和；暗票按第一阶段明票反推后固定，估计分完全跟随筛选"
+          ? "总分（估计）= 当前筛选范围内成员的明票 + max(0, 固定暗票 − 暗转明) 之和；暗转明是已计入明票的兑换票，不会重复计算"
           : "明票 = 当前筛选范围内的计分礼物（鸡腿礼物折算）合计";
       }
       function setTeamGroupMode(mode) {
@@ -915,9 +916,10 @@
         if (memberHeadRow) {
           memberHeadRow.innerHTML =
             '<th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th>' +
-            '<th class="num col-derived" title="当前筛选内明票 + 第一阶段结束时的最少暗票（暗票按第一阶段明票反推后固定，估计分完全跟随筛选）">总分（估计）</th>' +
+            '<th class="num col-derived" title="当前筛选内明票 + max(0, 第一阶段固定的最少暗票 − 暗转明)；暗转明是已计入明票的兑换票，避免重复计算">总分（估计）</th>' +
             '<th class="num col-derived" title="第一阶段结束时按官方队内排名反推的最少暗票，之后固定不变（真实暗票可能更高）">暗票</th>' +
             '<th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th>' +
+            '<th class="num col-derived" title="第一阶段结束（11-16 起）到筛选截止日用星梦值/EP 卡兑换出的弦月回响票数；已计入明票，总分（估计）会从暗票中扣除">暗转明</th>' +
             columns.map(function (column) {
               return '<th class="num gift-col" title="' + escapeHtml(column.name) + ' 计分">' + escapeHtml(column.name) + '</th>';
             }).join("") +
@@ -930,7 +932,7 @@
         return true;
       }
       function memberColSpan() {
-        return 11 + giftColumns.length;
+        return 12 + giftColumns.length;
       }
       function rowQualificationHtml(row) {
         var status = row.qualification || "";
@@ -965,6 +967,7 @@
           '<td class="num score-estimate col-derived" title="当前筛选内明票 + 第一阶段固定的最少暗票"></td>' +
           '<td class="num score-dark col-derived" title="第一阶段结束时的最少暗票（按官方队内排名反推后固定，真实暗票可能更高）"></td>' +
           '<td class="num score-main col-derived" title="鸡腿礼物折算的明票"></td>' +
+          '<td class="num score-convert col-derived" title="第一阶段结束（11-16 起）到筛选截止日用星梦值/EP 卡兑换出的弦月回响票数；已计入明票"></td>' +
           giftColumns.map(function () { return '<td class="num gift-cell"></td>'; }).join("") +
           '<td class="num score-room"></td><td class="num score-live"></td>' +
           '<td class="num score-count"></td><td class="num col-records score-records"></td>';
@@ -1012,12 +1015,12 @@
           (row.gifts || []).forEach(function (gift) { giftMap[giftKey(gift)] = gift; });
           giftColumns.forEach(function (column, index) {
             var gift = giftMap[column.key] || {};
-            var cell = cells[7 + index];
+            var cell = cells[8 + index];
             var text = Number(gift.score || 0) > 0 ? formatScore(gift.score) : "—";
             if (cell.textContent !== text) cell.textContent = text;
             cell.title = (gift.gift_name || column.name) + "：" + formatNumber(gift.count || 0) + " 个";
           });
-          var offset = 7 + giftColumns.length;
+          var offset = 8 + giftColumns.length;
           animateNumber(cells[4], row.estimated_total_score, formatScore, animate);
           var darkCell = cells[5];
           if (row.dark_min_score === null || row.dark_min_score === undefined) {
@@ -1033,6 +1036,10 @@
               : "未进入官方前 8 名，没有排名约束，最少暗票为 0";
           }
           animateNumber(cells[6], row.total_score, formatScore, animate);
+          animateNumber(cells[7], row.dark_to_visible_score || 0, formatScore, animate);
+          cells[7].title = row.dark_to_visible_score
+            ? "暗转明 " + formatScore(row.dark_to_visible_score) + " 票（11-16 至筛选截止日；已计入明票）"
+            : "11-16 至筛选截止日没有暗转明票";
           animateNumber(cells[offset], row.room_score, formatScore, animate);
           animateNumber(cells[offset + 1], row.live_score, formatScore, animate);
           animateNumber(cells[offset + 2], row.total_count, formatNumber, animate);

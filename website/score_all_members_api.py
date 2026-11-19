@@ -29,6 +29,9 @@ FAN_SCORES_FILENAME = "member_fan_scores.json"
 OFFICIAL_TEAMS_FILENAME = "official_member_teams.json"
 # 红蓝歌会第一阶段计分截止日（含当天）。暗票只用这天的明票反推一次，之后固定。
 STAGE1_SCORE_CUTOFF_DEFAULT = "2026-11-15"
+# 第一阶段结束后（次日起）用星梦值/EP 卡兑换出来的明票，单独统计为「暗转明」。
+DARK_CONVERSION_START_DEFAULT = "2026-11-16"
+DARK_CONVERSION_GIFT_NAME = "弦月回响"
 
 _cache_lock = threading.Lock()
 _cache_path = ""
@@ -355,12 +358,13 @@ def _aggregate(
     season: str = "",
     seed_member_ids: set[str] | None = None,
     dark_scores: dict[str, float] | None = None,
+    dark_conversions: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """按计分 cell 聚合成员/礼物/队伍/日期分布。
 
-    ``dark_scores`` 为「成员 → 固定暗票」，只用于给队伍分布补充
-    ``estimated_score``（页面的「总分（估计）」口径）。估计分完全跟随筛选：
-    该行当前筛选内的明票合计 + 固定暗票；不传时退化为当前明票合计。
+    ``dark_scores`` 为「成员 → 固定暗票」，``dark_conversions`` 为「成员 → 暗转明票数」，
+    只用于队伍分布的 ``estimated_score``：估计分 = 当前筛选内明票 +
+    max(0, 固定暗票 - 暗转明)。不传时估计分退化为当前明票。
     """
     members = _member_index(board, season)
     by_member: dict[str, dict[str, Any]] = {}
@@ -580,11 +584,12 @@ def _aggregate(
     # 后者是该行成员各自的完整赛季估计分之和，成员集合仍由当前筛选决定。
     member_estimated: dict[str, float] = {}
     dark_scores = dark_scores or {}
+    dark_conversions = dark_conversions or {}
     for row in member_rows:
         member_id = str(row["member_id"])
-        member_estimated[member_id] = float(row["total_score"]) + float(
-            dark_scores.get(member_id) or 0.0
-        )
+        dark = float(dark_scores.get(member_id) or 0.0)
+        converted = float(dark_conversions.get(member_id) or 0.0)
+        member_estimated[member_id] = float(row["total_score"]) + max(0.0, dark - converted)
 
     def _team_rows(distribution: dict[tuple[str, str], dict[str, Any]]) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -658,6 +663,49 @@ def _stage1_score_cutoff(board: dict[str, Any]) -> str:
         if DATE_RE.match(value[:10]):
             return value[:10]
     return STAGE1_SCORE_CUTOFF_DEFAULT
+
+
+def _dark_conversion_start(board: dict[str, Any]) -> str:
+    """「暗转明」统计起始日（含当天），默认第一阶段结束次日。"""
+    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
+    official = affiliation.get("official_result") if isinstance(affiliation.get("official_result"), dict) else {}
+    value = str(official.get("dark_conversion_start") or "").strip()
+    if DATE_RE.match(value[:10]):
+        return value[:10]
+    return DARK_CONVERSION_START_DEFAULT
+
+
+def _dark_conversion_totals(
+    board: dict[str, Any], season: str, *, date_to: str = "", source: str = "all"
+) -> dict[str, float]:
+    """按成员汇总「暗转明」票数。
+
+    窗口固定为第一阶段结束次日（2026-11-16）到筛选截止日 ``date_to``（不填=最新）；
+    ``date_from``、礼物筛选不影响，来源筛选为 room/live 时只统计对应来源。
+    """
+    rows = board.get("dark_conversions")
+    if not isinstance(rows, list):
+        return {}
+    start = _dark_conversion_start(board)
+    end = date_to or ""
+    if source not in {"all", "room", "live"}:
+        return {}
+    totals: dict[str, float] = {}
+    for row in rows:
+        if not isinstance(row, dict) or str(row.get("season") or "") != season:
+            continue
+        day = str(row.get("date") or "")
+        if not day or day < start:
+            continue
+        if end and day > end:
+            continue
+        if source in {"room", "live"} and str(row.get("source") or "") != source:
+            continue
+        member_id = str(row.get("member_id") or "")
+        if not member_id:
+            continue
+        totals[member_id] = totals.get(member_id, 0.0) + float(row.get("count") or 0)
+    return totals
 
 
 def _estimate_context(
@@ -821,26 +869,32 @@ def _attach_dark_estimates(
     *,
     visible_totals: dict[str, float] | None = None,
     estimates: dict[str, dict[str, Any]] | None = None,
+    dark_conversions: dict[str, float] | None = None,
 ) -> None:
-    """给成员行补上明票/最少暗票/总分（估计）。
+    """给成员行补上明票/最少暗票/暗转明/总分（估计）。
 
-    明票是该成员当前筛选内的合计；暗票按第一阶段截止日的明票反推后固定。
-    总分（估计）**完全跟随筛选**：该行当前明票 + 固定暗票（不再用完整赛季
-    明票补齐），因此日期/礼物/来源/成员筛选都会同步改变估计分。
+    明票是该成员当前筛选内的合计；暗票按第一阶段截止日的明票反推后固定；
+    「暗转明」是第一阶段结束后用星梦值/EP 卡兑换、已计入明票的弦月回响票数。
+    总分（估计）= 当前明票 + max(0, 固定暗票 - 暗转明)，避免同一批票被暗票
+    和明票重复计算。
     """
     if visible_totals is None or estimates is None:
         visible_totals, estimates = _estimate_context(board, season)
+    dark_conversions = dark_conversions or {}
     for row in rows:
         member_id = str(row.get("member_id") or "")
         estimate = estimates.get(member_id)
         visible_total = float(visible_totals.get(member_id, row.get("total_score") or 0.0))
         row["visible_total_score"] = round(visible_total, 6)
         filtered_total = float(row.get("total_score") or 0.0)
+        converted = float(dark_conversions.get(member_id) or 0.0)
+        row["dark_to_visible_score"] = round(converted, 6)
         if estimate:
+            dark = float(estimate["dark_min_score"])
             row["ranked_in_unit"] = bool(estimate.get("ranked_in_unit"))
-            row["dark_min_score"] = float(estimate["dark_min_score"])
+            row["dark_min_score"] = dark
             row["estimated_total_score"] = round(
-                filtered_total + float(estimate["dark_min_score"]), 6
+                filtered_total + max(0.0, dark - converted), 6
             )
         else:
             row["ranked_in_unit"] = False
@@ -1140,16 +1194,29 @@ def get_score_all_members_data(
                 filtered.add(member_id)
             seed_ids = filtered
     visible_totals, estimates = _estimate_context(board, key)
+    # 只筛其他礼物时，明票里没有暗转明票，列和修正都不应再扣。
+    if gift_name.strip() and gift_name.strip() != DARK_CONVERSION_GIFT_NAME:
+        dark_conversions: dict[str, float] = {}
+    else:
+        dark_conversions = _dark_conversion_totals(
+            board, key, date_to=date_to, source=source
+        )
     aggregated = _aggregate(
         board,
         cells,
         season=key,
         seed_member_ids=seed_ids,
         dark_scores=_dark_scores(estimates),
+        dark_conversions=dark_conversions,
     )
     rows = aggregated["members"]
     _attach_dark_estimates(
-        board, rows, key, visible_totals=visible_totals, estimates=estimates
+        board,
+        rows,
+        key,
+        visible_totals=visible_totals,
+        estimates=estimates,
+        dark_conversions=dark_conversions,
     )
     if sort == "name_asc":
         rows.sort(key=lambda item: (str(item["group"]), str(item["team"]), str(item["member_name"])))
