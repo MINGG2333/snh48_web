@@ -769,6 +769,84 @@ class DarkVoteEstimateTests(unittest.TestCase):
         self.assertEqual(by_id["6"]["estimated_total_score"], 40.0)
         self.assertFalse(by_id["6"]["ranked_in_unit"])
 
+    def test_dark_votes_frozen_at_stage1_cutoff(self) -> None:
+        """第一阶段结束后新增的明票只抬高总分（估计），不再改变暗票。"""
+        board = {
+            **DARK_BOARD,
+            "cells": [
+                {"season": "2026-winter", "member_id": "1", "score": 100.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "2", "score": 60.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 40.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "4", "score": 30.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "5", "score": 90.0, "date": "2026-11-10"},
+                # 11-15 之后的新增明票，不参与暗票反推。
+                {"season": "2026-winter", "member_id": "3", "score": 500.0, "date": "2026-11-18"},
+                {"season": "2026-winter", "member_id": "5", "score": 700.0, "date": "2026-11-18"},
+            ],
+        }
+        visible_totals, estimates = _estimate_context(board, "2026-winter")
+        # 暗票固定为第一阶段（<= 11-15）明票反推的结果。
+        self.assertEqual(estimates["3"]["dark_min_score"], 50.0)
+        self.assertEqual(estimates["3"]["stage1_visible_score"], 40.0)
+        self.assertEqual(estimates["2"]["dark_min_score"], 30.0)
+        # 总分（估计）= 当前明票 + 固定暗票。
+        self.assertEqual(visible_totals["3"], 540.0)
+        self.assertEqual(estimates["3"]["visible_total_score"], 540.0)
+        self.assertEqual(estimates["3"]["estimated_total_score"], 590.0)
+        # 未晋级成员赛后涨分不会抬高晋级末位的下界。
+        self.assertEqual(estimates["3"]["dark_min_score"], 50.0)
+
+    def test_dark_votes_respect_custom_cutoff_override(self) -> None:
+        board = {
+            **DARK_BOARD,
+            "cells": [
+                {"season": "2026-winter", "member_id": "1", "score": 100.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "2", "score": 60.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 40.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "4", "score": 30.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "5", "score": 90.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 500.0, "date": "2026-11-18"},
+            ],
+            "affiliation": {
+                **DARK_BOARD["affiliation"],
+                "official_result": {"score_cutoff": "2026-11-18"},
+            },
+        }
+        _, estimates = _estimate_context(board, "2026-winter")
+        # 截止日改到 11-18 时，新增明票参与反推，暗票随之为 0。
+        self.assertEqual(estimates["3"]["dark_min_score"], 0.0)
+        self.assertEqual(estimates["3"]["estimated_total_score"], 540.0)
+
+    def test_attach_dark_estimates_uses_dynamic_total(self) -> None:
+        board = {
+            **DARK_BOARD,
+            "cells": [
+                {"season": "2026-winter", "member_id": "1", "score": 100.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "2", "score": 60.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 40.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "4", "score": 30.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "5", "score": 90.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 500.0, "date": "2026-11-18"},
+            ],
+        }
+        cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="",
+        )
+        rows = _aggregate(board, cells)["members"]
+        _attach_dark_estimates(board, rows, "2026-winter")
+        by_id = {row["member_id"]: row for row in rows}
+        self.assertEqual(by_id["3"]["dark_min_score"], 50.0)
+        self.assertEqual(by_id["3"]["visible_total_score"], 540.0)
+        self.assertEqual(by_id["3"]["estimated_total_score"], 590.0)
+
 
 if __name__ == "__main__":
     unittest.main()

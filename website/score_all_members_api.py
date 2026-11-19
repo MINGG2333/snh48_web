@@ -27,6 +27,8 @@ QUALIFICATION_FILENAME = "redblue_stage1_qualification.json"
 AFFILIATION_FILENAME = "redblue_affiliation.json"
 FAN_SCORES_FILENAME = "member_fan_scores.json"
 OFFICIAL_TEAMS_FILENAME = "official_member_teams.json"
+# 红蓝歌会第一阶段计分截止日（含当天）。暗票只用这天的明票反推一次，之后固定。
+STAGE1_SCORE_CUTOFF_DEFAULT = "2026-11-15"
 
 _cache_lock = threading.Lock()
 _cache_path = ""
@@ -644,10 +646,33 @@ def _aggregate(
     }
 
 
+def _stage1_score_cutoff(board: dict[str, Any]) -> str:
+    """第一阶段计分截止日（含当天）。
+
+    暗票只代表第一阶段结束时的不可采集计分；用这一天的明票反推一次后固定，
+    后续新增的明票只抬高「总分（估计）」，不再改变暗票。挂靠文件可提供
+    ``official_result.score_cutoff`` 覆盖默认值。
+    """
+    affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
+    official = affiliation.get("official_result") if isinstance(affiliation.get("official_result"), dict) else {}
+    for field in ("score_cutoff", "stage1_score_cutoff"):
+        value = str(official.get(field) or "").strip()
+        if DATE_RE.match(value[:10]):
+            return value[:10]
+    return STAGE1_SCORE_CUTOFF_DEFAULT
+
+
 def _estimate_context(
     board: dict[str, Any], season: str
 ) -> tuple[dict[str, float], dict[str, dict[str, Any]]]:
-    """返回 (赛季明票合计, 每人估计)。挂靠数据缺失或赛季不符时都为空。"""
+    """返回 (当前完整赛季明票合计, 每人固定暗票与动态估计)。
+
+    * 明票合计 ``visible_totals``：赛季全部计分 cell（随采集持续增长）；
+    * 暗票：只用第一阶段截止日（含当天）的明票反推并固定，之后不再变化；
+    * 总分（估计）= 当前完整赛季明票 + 固定暗票（因此是动态的）。
+
+    挂靠数据缺失或赛季不符时都为空。
+    """
     affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
     affiliation_season = str(affiliation.get("season") or "")
     if not affiliation.get("members") or (
@@ -655,14 +680,28 @@ def _estimate_context(
     ):
         return {}, {}
     visible_totals = _season_visible_totals(board, season)
-    estimates = _unit_rank_estimates(board, season, visible_totals)
+    cutoff = _stage1_score_cutoff(board)
+    stage1_totals = (
+        _season_visible_totals(board, season, date_to=cutoff)
+        if cutoff
+        else visible_totals
+    )
+    estimates = _unit_rank_estimates(board, season, stage1_totals)
+    frozen_at = cutoff or "赛季全部"
+    for member_id, item in estimates.items():
+        visible = float(visible_totals.get(member_id) or 0.0)
+        dark = float(item.get("dark_min_score") or 0.0)
+        item["stage1_visible_score"] = round(float(item.get("visible_total_score") or 0.0), 6)
+        item["visible_total_score"] = round(visible, 6)
+        item["estimated_total_score"] = round(visible + dark, 6)
+        item["dark_frozen_at"] = frozen_at
     return visible_totals, estimates
 
 
 def _merge_estimated_totals(
     visible_totals: dict[str, float], estimates: dict[str, dict[str, Any]]
 ) -> dict[str, float]:
-    """合并「成员 → 总分（估计）」；未参与反推的成员用完整赛季明票。"""
+    """合并「成员 → 总分（估计）」；未参与反推的成员用当前完整赛季明票。"""
     totals = {
         str(member_id): float(item.get("estimated_total_score") or 0.0)
         for member_id, item in estimates.items()
@@ -672,11 +711,20 @@ def _merge_estimated_totals(
     return totals
 
 
-def _season_visible_totals(board: dict[str, Any], season: str) -> dict[str, float]:
-    """按成员汇总赛季全部计分 cell（明票，与筛选条件无关）。"""
+def _season_visible_totals(
+    board: dict[str, Any], season: str, *, date_to: str = ""
+) -> dict[str, float]:
+    """按成员汇总计分 cell（明票）。
+
+    ``date_to`` 非空时只统计该日期（含）之前的 cell，用于还原第一阶段结束时的
+    明票；不带日期信息的 cell 视为包含在内。
+    """
     totals: dict[str, float] = {}
     for cell in board.get("cells") or []:
         if not isinstance(cell, dict) or cell.get("season") != season:
+            continue
+        day = str(cell.get("date") or "")
+        if date_to and day and day > date_to:
             continue
         member_id = str(cell.get("member_id") or "")
         if not member_id:
@@ -693,15 +741,16 @@ def _unit_rank_estimates(
     """由官方队内排名反推每人「最少暗票」与「总分（估计）」。
 
     真实分 s = 明票 g + 暗票 d。官方 64 人名单只给出每个晋级单元前 8 名的
-    队内顺序（阶段一计分由高到低），因此只有前 8 名有硬约束：
+    队内顺序（第一阶段计分由高到低），因此只有前 8 名有硬约束：
 
     * s_i >= s_{i+1}（官方顺序，同分不排除，按 >= 处理）；
     * 晋级末位 s_8 还要不低于该单元所有未晋级参赛者的真实分，而后者又至少等于
       各自可见明票，所以 s_8 >= 未晋级成员的最高明票。
 
     从末位往上扫，取 s_i = max(g_i, s_{i+1})，即可得到每个人在满足官方顺序
-    前提下的最小暗票（逐分量最小解）。未晋级成员没有可用的排名约束，最少暗票
-    记为 0。
+    前提下的最小暗票（逐分量最小解）。这里的 ``visible_totals`` 是**第一阶段
+    截止日**的明票；调用方 ``_estimate_context`` 会把结果固定为暗票，再用当前
+    明票重算总分（估计）。未晋级成员没有可用的排名约束，最少暗票记为 0。
     """
     affiliation = board.get("affiliation") if isinstance(board.get("affiliation"), dict) else {}
     affiliation_season = str(affiliation.get("season") or "")
@@ -782,25 +831,27 @@ def _attach_dark_estimates(
 ) -> None:
     """给成员行补上明票/最少暗票/总分（估计）。
 
-    明票、暗票与总分（估计）都以完整赛季的明票为基准，因此不受页面上的
-    日期/礼物/来源筛选影响（筛选项只改变表格里「明票」列的展示值）。
+    明票是该成员当前完整赛季合计；暗票按第一阶段截止日的明票反推后固定，
+    因此两者都不受页面上的日期/礼物/来源筛选影响（筛选项只改变表格里
+    「明票」列的展示值）。总分（估计）= 当前完整赛季明票 + 固定暗票。
     """
     if visible_totals is None or estimates is None:
         visible_totals, estimates = _estimate_context(board, season)
     for row in rows:
         member_id = str(row.get("member_id") or "")
         estimate = estimates.get(member_id)
-        row["visible_total_score"] = round(
-            float(visible_totals.get(member_id, row.get("total_score") or 0.0)), 6
-        )
+        visible_total = float(visible_totals.get(member_id, row.get("total_score") or 0.0))
+        row["visible_total_score"] = round(visible_total, 6)
         if estimate:
             row["ranked_in_unit"] = bool(estimate.get("ranked_in_unit"))
             row["dark_min_score"] = float(estimate["dark_min_score"])
-            row["estimated_total_score"] = float(estimate["estimated_total_score"])
+            row["estimated_total_score"] = round(
+                visible_total + float(estimate["dark_min_score"]), 6
+            )
         else:
             row["ranked_in_unit"] = False
             row["dark_min_score"] = None
-            row["estimated_total_score"] = round(float(row.get("total_score") or 0.0), 6)
+            row["estimated_total_score"] = round(visible_total, 6)
 
 
 def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
