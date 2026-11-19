@@ -297,12 +297,12 @@
           <div class="panel-head"><h2>队伍分布</h2><span id="teamMeta">-</span></div>
           <div class="panel-tools">
             <div class="segment" id="teamGroupSegment" role="group" aria-label="队伍分布分组">
-              <button type="button" data-team-group="official" class="active">口袋48官方队伍</button>
-              <button type="button" data-team-group="participation" id="teamGroupParticipation">参赛队伍（挂靠后）</button>
+              <button type="button" data-team-group="official">口袋48官方队伍</button>
+              <button type="button" data-team-group="participation" id="teamGroupParticipation" class="active">参赛队伍（挂靠后）</button>
             </div>
             <div class="segment" id="teamMetricSegment" role="group" aria-label="队伍分布口径">
-              <button type="button" data-team-metric="visible" class="active">明票</button>
-              <button type="button" data-team-metric="estimated">总分（估计）</button>
+              <button type="button" data-team-metric="visible">明票</button>
+              <button type="button" data-team-metric="estimated" class="active">总分（估计）</button>
             </div>
           </div>
           <div class="bar-list" id="teamBars"><div class="empty">暂无数据</div></div>
@@ -396,8 +396,9 @@
       var pageSize = 1000;
       var totalPages = 1;
       var sourceFilter = "all";
-      var teamGroupMode = "official";
-      var teamMetric = "visible";
+      var teamGroupMode = "participation";
+      var teamMetric = "estimated";
+      var qualificationDoc = {};
       var expanded = {};
       var SEASON_LABELS = {};
       var COVERAGE_NOTES = {};
@@ -695,6 +696,7 @@
         render({ animate: Boolean(options.animate), preserveScroll: Boolean(options.preserveScroll) });
       }
       function renderSummary(summaryData) {
+        qualificationDoc = summaryData.qualification || {};
         SEASON_LABELS = summaryData.seasons || {};
         var current = summaryData.season || summaryData.latest_season || "";
         var seasons = summaryData.seasons || {};
@@ -851,6 +853,16 @@
         Array.prototype.forEach.call(teamMetricSegment.querySelectorAll("button"), function (btn) {
           btn.classList.toggle("active", btn.getAttribute("data-team-metric") === teamMetric);
         });
+      }
+      function defaultQualificationForSeason() {
+        var q = qualificationDoc || {};
+        var season = seasonSelect.value || "";
+        if (!season || !q.season || q.season !== season) return "all";
+        var counts = q.counts || {};
+        return Number(counts.qualified || 0) > 0 ? "qualified" : "all";
+      }
+      function applyDefaultQualification() {
+        qualificationSelect.value = defaultQualificationForSeason();
       }
       function rowNameHtml(row) {
         var id = escapeHtml(row.member_id);
@@ -1263,6 +1275,7 @@
           password = "cookie-session";
           var summaryData = await fetchSummary();
           renderSummary(summaryData);
+          applyDefaultQualification();
           await fetchData(1);
           loginOverlay.classList.add("hidden");
           pageEl.classList.add("ready");
@@ -1280,6 +1293,7 @@
           password = "cookie-session";
           var summaryData = await fetchSummary();
           renderSummary(summaryData);
+          applyDefaultQualification();
           await fetchData(1);
           loginOverlay.classList.add("hidden");
           pageEl.classList.add("ready");
@@ -1323,7 +1337,7 @@
       document.getElementById("resetBtn").addEventListener("click", function () {
         memberInput.value = "";
         giftSelect.value = "";
-        qualificationSelect.value = "all";
+        qualificationSelect.value = defaultQualificationForSeason();
         unitSelect.value = "";
         groupSelect.value = "";
         teamSelect.value = "";
@@ -1364,6 +1378,7 @@
           var summaryData = await fetchSummary();
           if (data) data.facets = summaryData.facets;
           renderSummary(summaryData);
+          applyDefaultQualification();
           renderFacetOptions();
           updateActiveFilters();
         } catch (err) {
