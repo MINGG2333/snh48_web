@@ -17,7 +17,7 @@ from website.score_all_members_api import (
     _fan_payload,
     _filter_cells,
     _load_board,
-    _merge_estimated_totals,
+    _dark_scores,
     _season_key,
     _season_visible_totals,
     _unit_rank_estimates,
@@ -497,7 +497,7 @@ class ScoreAllMembersApiTests(unittest.TestCase):
             board,
             cells,
             season="2026-winter",
-            estimated_totals=_merge_estimated_totals(visible_totals, estimates),
+            dark_scores=_dark_scores(estimates),
         )
         teams = {row["team_label"]: row for row in result["team_distribution"]}
         # 官方队伍：挂靠预备生仍留在「预备生」行，估计分按完整赛季反推结果累加
@@ -846,6 +846,52 @@ class DarkVoteEstimateTests(unittest.TestCase):
         self.assertEqual(by_id["3"]["dark_min_score"], 50.0)
         self.assertEqual(by_id["3"]["visible_total_score"], 540.0)
         self.assertEqual(by_id["3"]["estimated_total_score"], 590.0)
+
+    def test_estimated_total_follows_filters(self) -> None:
+        """估计总分 = 当前筛选内明票 + 固定暗票，完全跟随筛选。"""
+        board = {
+            **DARK_BOARD,
+            "cells": [
+                {"season": "2026-winter", "member_id": "1", "score": 100.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "2", "score": 60.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 40.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "4", "score": 30.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "5", "score": 90.0, "date": "2026-11-10"},
+                {"season": "2026-winter", "member_id": "3", "score": 500.0, "date": "2026-11-18"},
+            ],
+        }
+        visible_totals, estimates = _estimate_context(board, "2026-winter")
+        cells = _filter_cells(
+            board,
+            season="2026-winter",
+            group="",
+            team="",
+            member="",
+            gift_name="",
+            source="all",
+            date_from="",
+            date_to="2026-11-15",
+        )
+        aggregated = _aggregate(
+            board,
+            cells,
+            season="2026-winter",
+            dark_scores=_dark_scores(estimates),
+        )
+        rows = aggregated["members"]
+        _attach_dark_estimates(
+            board, rows, "2026-winter", visible_totals=visible_totals, estimates=estimates
+        )
+        by_id = {row["member_id"]: row for row in rows}
+        # 筛到 11-15：第 3 名明票只有 40，估计 = 40 + 50 = 90。
+        self.assertEqual(by_id["3"]["total_score"], 40.0)
+        self.assertEqual(by_id["3"]["dark_min_score"], 50.0)
+        self.assertEqual(by_id["3"]["estimated_total_score"], 90.0)
+        # 队伍分布的估计分同样跟随筛选：明票 320 + 暗票 80 = 400。
+        self.assertEqual(sum(row["score"] for row in aggregated["team_distribution"]), 320.0)
+        self.assertEqual(
+            sum(row["estimated_score"] for row in aggregated["team_distribution"]), 400.0
+        )
 
 
 if __name__ == "__main__":

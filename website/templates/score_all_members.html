@@ -322,7 +322,7 @@
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num col-derived" title="当前明票 + 第一阶段结束时的最少暗票（暗票按第一阶段明票反推后固定，总分随明票增长）">总分（估计）</th><th class="num col-derived" title="第一阶段结束时按官方队内排名反推的最少暗票，之后固定不变（真实暗票可能更高）">暗票</th><th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
+            <thead><tr id="memberHeadRow"><th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th><th class="num col-derived" title="当前筛选内明票 + 第一阶段结束时的最少暗票（暗票按第一阶段明票反推后固定，估计分完全跟随筛选）">总分（估计）</th><th class="num col-derived" title="第一阶段结束时按官方队内排名反推的最少暗票，之后固定不变（真实暗票可能更高）">暗票</th><th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th><th class="num">房间分</th><th class="num">直播分</th><th class="num">礼物数</th><th class="num col-records">记录</th></tr></thead>
             <tbody id="memberRows"><tr><td colspan="11" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
@@ -836,7 +836,7 @@
         var metricLabel = teamMetric === "estimated" ? "总分（估计）" : "明票";
         teamMeta.textContent = rows.length + " 个队伍 · " + metricLabel;
         teamMeta.title = teamMetric === "estimated"
-          ? "总分（估计）= 当前筛选范围内成员的当前明票 + 第一阶段固定的最少暗票之和；暗票按第一阶段明票反推后固定，不随日期/礼物/来源筛选变化"
+          ? "总分（估计）= 当前筛选范围内成员的明票 + 第一阶段固定的最少暗票之和；暗票按第一阶段明票反推后固定，估计分完全跟随筛选"
           : "明票 = 当前筛选范围内的计分礼物（鸡腿礼物折算）合计";
       }
       function setTeamGroupMode(mode) {
@@ -915,7 +915,7 @@
         if (memberHeadRow) {
           memberHeadRow.innerHTML =
             '<th class="num">#</th><th>成员</th><th>团体 / 队伍</th><th>红蓝歌会 / 晋级单元</th>' +
-            '<th class="num col-derived" title="当前明票 + 第一阶段结束时的最少暗票（暗票按第一阶段明票反推后固定，总分随明票增长）">总分（估计）</th>' +
+            '<th class="num col-derived" title="当前筛选内明票 + 第一阶段结束时的最少暗票（暗票按第一阶段明票反推后固定，估计分完全跟随筛选）">总分（估计）</th>' +
             '<th class="num col-derived" title="第一阶段结束时按官方队内排名反推的最少暗票，之后固定不变（真实暗票可能更高）">暗票</th>' +
             '<th class="num col-derived" title="鸡腿礼物折算的计分，即全员榜原始统计">明票</th>' +
             columns.map(function (column) {
@@ -962,7 +962,7 @@
         rowEl.className = "member-row";
         rowEl.setAttribute("data-member-id", row.member_id);
         rowEl.innerHTML = '<td class="num rank"></td><td></td><td></td><td></td>' +
-          '<td class="num score-estimate col-derived" title="当前明票 + 第一阶段固定的最少暗票"></td>' +
+          '<td class="num score-estimate col-derived" title="当前筛选内明票 + 第一阶段固定的最少暗票"></td>' +
           '<td class="num score-dark col-derived" title="第一阶段结束时的最少暗票（按官方队内排名反推后固定，真实暗票可能更高）"></td>' +
           '<td class="num score-main col-derived" title="鸡腿礼物折算的明票"></td>' +
           giftColumns.map(function () { return '<td class="num gift-cell"></td>'; }).join("") +

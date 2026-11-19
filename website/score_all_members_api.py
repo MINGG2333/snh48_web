@@ -354,13 +354,13 @@ def _aggregate(
     *,
     season: str = "",
     seed_member_ids: set[str] | None = None,
-    estimated_totals: dict[str, float] | None = None,
+    dark_scores: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """按计分 cell 聚合成员/礼物/队伍/日期分布。
 
-    ``estimated_totals`` 为「成员 → 完整赛季总分（估计）」，只用于给队伍分布
-    补充 ``estimated_score``（页面的「总分（估计）」口径）；不传时退化为
-    当前筛选范围内的明票合计，保持旧调用方（测试）行为不变。
+    ``dark_scores`` 为「成员 → 固定暗票」，只用于给队伍分布补充
+    ``estimated_score``（页面的「总分（估计）」口径）。估计分完全跟随筛选：
+    该行当前筛选内的明票合计 + 固定暗票；不传时退化为当前明票合计。
     """
     members = _member_index(board, season)
     by_member: dict[str, dict[str, Any]] = {}
@@ -579,14 +579,12 @@ def _aggregate(
     # 队伍维度同时给出明票（当前筛选内 cell 合计）与总分（估计）：
     # 后者是该行成员各自的完整赛季估计分之和，成员集合仍由当前筛选决定。
     member_estimated: dict[str, float] = {}
+    dark_scores = dark_scores or {}
     for row in member_rows:
         member_id = str(row["member_id"])
-        if estimated_totals is None:
-            member_estimated[member_id] = float(row["total_score"])
-        else:
-            member_estimated[member_id] = float(
-                estimated_totals.get(member_id, row["total_score"]) or 0.0
-            )
+        member_estimated[member_id] = float(row["total_score"]) + float(
+            dark_scores.get(member_id) or 0.0
+        )
 
     def _team_rows(distribution: dict[tuple[str, str], dict[str, Any]]) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -698,17 +696,12 @@ def _estimate_context(
     return visible_totals, estimates
 
 
-def _merge_estimated_totals(
-    visible_totals: dict[str, float], estimates: dict[str, dict[str, Any]]
-) -> dict[str, float]:
-    """合并「成员 → 总分（估计）」；未参与反推的成员用当前完整赛季明票。"""
-    totals = {
-        str(member_id): float(item.get("estimated_total_score") or 0.0)
+def _dark_scores(estimates: dict[str, dict[str, Any]]) -> dict[str, float]:
+    """从反推结果中取出「成员 → 固定暗票」，供筛选后的估计分使用。"""
+    return {
+        str(member_id): float(item.get("dark_min_score") or 0.0)
         for member_id, item in estimates.items()
     }
-    for member_id, total in visible_totals.items():
-        totals.setdefault(str(member_id), float(total))
-    return totals
 
 
 def _season_visible_totals(
@@ -831,9 +824,9 @@ def _attach_dark_estimates(
 ) -> None:
     """给成员行补上明票/最少暗票/总分（估计）。
 
-    明票是该成员当前完整赛季合计；暗票按第一阶段截止日的明票反推后固定，
-    因此两者都不受页面上的日期/礼物/来源筛选影响（筛选项只改变表格里
-    「明票」列的展示值）。总分（估计）= 当前完整赛季明票 + 固定暗票。
+    明票是该成员当前筛选内的合计；暗票按第一阶段截止日的明票反推后固定。
+    总分（估计）**完全跟随筛选**：该行当前明票 + 固定暗票（不再用完整赛季
+    明票补齐），因此日期/礼物/来源/成员筛选都会同步改变估计分。
     """
     if visible_totals is None or estimates is None:
         visible_totals, estimates = _estimate_context(board, season)
@@ -842,16 +835,17 @@ def _attach_dark_estimates(
         estimate = estimates.get(member_id)
         visible_total = float(visible_totals.get(member_id, row.get("total_score") or 0.0))
         row["visible_total_score"] = round(visible_total, 6)
+        filtered_total = float(row.get("total_score") or 0.0)
         if estimate:
             row["ranked_in_unit"] = bool(estimate.get("ranked_in_unit"))
             row["dark_min_score"] = float(estimate["dark_min_score"])
             row["estimated_total_score"] = round(
-                visible_total + float(estimate["dark_min_score"]), 6
+                filtered_total + float(estimate["dark_min_score"]), 6
             )
         else:
             row["ranked_in_unit"] = False
             row["dark_min_score"] = None
-            row["estimated_total_score"] = round(visible_total, 6)
+            row["estimated_total_score"] = round(filtered_total, 6)
 
 
 def _facets(board: dict[str, Any], season: str) -> dict[str, Any]:
@@ -1151,7 +1145,7 @@ def get_score_all_members_data(
         cells,
         season=key,
         seed_member_ids=seed_ids,
-        estimated_totals=_merge_estimated_totals(visible_totals, estimates),
+        dark_scores=_dark_scores(estimates),
     )
     rows = aggregated["members"]
     _attach_dark_estimates(
